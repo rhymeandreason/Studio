@@ -1,7 +1,7 @@
 # Studio — Project Plan (v0.1)
 
 ## What it is
-A Mac menu-bar app for designer-developers whose primary creative tool is Claude Code. Each "project" is a folder containing a code repo, design files, documentation media (screenshots, recordings, photos), and lightweight project notes. Studio activates a project's workspace (opens the right apps and files), shows a media-first panel of the project's documentation assets, provides quick image edit actions without launching Photoshop or Preview, and keeps a small set of project notes — free text, checklists, and a simple table.
+A Mac menu-bar app for designer-developers whose primary creative tool is Claude Code. Each "project" is a folder that gathers a code repo, a Figma design, documentation media (screenshots, recordings, photos), and lightweight project notes — some held inside the folder (media, notes), some referenced where they already live (the repo path, the Figma URL). Studio activates a project's workspace (opens the right apps and files), shows a media-first panel of the project's documentation assets, provides quick image edit actions without launching Photoshop or Preview, and keeps a small set of project notes — free text, checklists, and a simple table.
 
 ## Why it exists
 Adobe Creative Cloud promised a unified project surface across creative tools and never delivered. The gap has gotten worse for people whose workflow centers on Claude Code — code lives in a repo, designs live in Figma, documentation media (screenshots, screen recordings, photos of physical builds) scatter across Desktop / Downloads / random folders. No existing tool sees these as one thing. Studio fills that gap for a narrow but real user: designer-developers who work with Claude.
@@ -19,7 +19,7 @@ Adobe Creative Cloud promised a unified project surface across creative tools an
 - **Workspace = `.workspace.json` inside the project folder** — lists apps to launch, files to open, URLs, the Figma URL, and the repo path. Editable by hand or via Studio's UI. The project folder is a *hub*, not a container: it physically holds only the media, notes, and this manifest; the repo and Figma design live elsewhere and are referenced by path / URL.
 - **Repo = a path in the manifest.** `.workspace.json` carries a `repo` field that can point anywhere — a `repo/` subfolder inside the project (the default for newly-created projects) *or* an absolute path to a git directory that already lives elsewhere (e.g. `~/code/lamp-firmware`). Claude Code / the terminal is invoked against this path. The code repo does not have to live inside the project folder.
 - **Figma = a URL in the manifest, not a local file.** Figma files live in the cloud, so a project references its Figma design as a `figma` URL in `.workspace.json`, opened in the browser or Figma desktop app on activation. There is no local `.fig` file to manage.
-- **Media = anything matching image/video/audio extensions** anywhere in the project, surfaced in the media panel.
+- **Media = anything matching image/video/audio extensions** anywhere in the project hub (excluding noise dirs like `.git`, `node_modules`, `.studio`), surfaced in the media panel. Media inside an externally-referenced repo is not scanned — only what lives in the hub folder.
 - **Notes = `.studio/notes.json`** inside the project folder — a small collection of note items. Each note is one of three kinds: **text** (freeform markdown), **checklist** (a titled list of `{text, done}` items), or **table** (a titled grid of columns + rows). One file holds all of a project's notes.
 
 Suggested folder layout (not enforced, just convention):
@@ -112,11 +112,12 @@ Schema (example `.studio/notes.json`):
 ### 6. Project creation
 - "New Project" item in the menu bar dropdown.
 - Asks for a name. Creates `~/Projects/<name>/` with empty `media/`, `designs/`, a `.studio/notes.json` seeded with an empty notes list, and a default `.workspace.json`.
+- Leaves `repo` and `figma` blank in the new manifest. The user sets them afterward in the Workspace form — `repo` either by pointing at an existing git directory (`~/code/...`) or by creating a `repo/` subfolder. Studio does not `git init` for you.
 
 ## Explicitly out of v0.1
 - File browser / Finder replacement (do not try to compete with Finder).
 - Video editing beyond playback. Trim is v0.2 candidate.
-- Cross-disk projects, registered paths, project metadata in a separate location.
+- Registered/arbitrary *project-hub* locations. The hub folder is always discovered under `~/Projects/`. (The `repo` it references may live anywhere, including another disk — that's the one path allowed to point outside.)
 - Multi-project simultaneous state.
 - iCloud / Dropbox / Drive sync awareness.
 - Tag-based hardware triggers (Runes integration — see future section).
@@ -138,7 +139,7 @@ Schema (example `.studio/notes.json`):
 
 1. **M1: Tauri scaffold + menu bar.** Icon in menu bar. Dropdown lists hardcoded "Hello." Clicking opens an empty Studio window. *Goal: prove the shell.*
 2. **M2: Project discovery.** Scan `~/Projects/`. Menu bar dropdown shows real folder names. Clicking one stores it as "active." Studio window header shows active project name. *Goal: real project model.*
-3. **M3: Media panel.** Window shows a thumbnail grid of images in the active project's folder (recursive, image extensions only). Click → preview at full size. *Goal: first useful surface.*
+3. **M3: Media panel.** Window shows a thumbnail grid of images in the active project's folder (recursive, image extensions only). Skip noise dirs — `.git`, `node_modules`, `.studio` — so an in-folder `repo/` doesn't flood the grid. Click → preview at full size. *Goal: first useful surface.*
 4. **M4: Crop / resize.** Right-click an image → modal with canvas + crop handles. Save back or save-as. *Goal: first documentation action.*
 5. **M5: Annotation.** Konva-based overlay. Arrows + text + boxes. Export as `-annotated.png`. *Goal: the action you'll actually use most.*
 6. **M6: Notes tab.** Read/write `.studio/notes.json`. Text notes first (markdown render + inline edit), then checklists, then the table. Autosave. *Goal: lightweight project notes.*
@@ -149,7 +150,7 @@ Schema (example `.studio/notes.json`):
 1. **Name.** Studio is the working title. Could be Atelier, Workshop, Notebook, anything.
 2. **Activation behavior.** Activating a project: does it open in the existing Studio window or always pop a new one? Recommend: always open the active project in the one window.
 3. **What counts as "media."** Just images and video? Audio? PDFs? Recommend: images + video + audio for v0.1. PDFs are their own rabbit hole.
-4. **Claude Code launch.** Should the workspace launcher open a terminal and run `claude` in the repo subfolder? It's nice but requires Terminal/iTerm automation. Recommend: yes for v0.1, via AppleScript to whichever terminal is set as default. Configurable.
+4. **Claude Code launch.** Should the workspace launcher open a terminal and run `claude` at the manifest's `repo` path (wherever it lives)? It's nice but requires Terminal/iTerm automation. Recommend: yes for v0.1, via AppleScript to whichever terminal is set as default. Configurable.
 5. **Notes storage.** One `.studio/notes.json` per project holding all note kinds (chosen here). Alternative: one file per note, or per-kind files. Recommend: single JSON file for v0.1 — simplest to load/save, easy to diff. Revisit if notes get large.
 6. **Editing in place vs save-as.** Crop/annotate: default to save-as (non-destructive) or overwrite? Recommend: save-as by default, "Replace Original" as a checkbox.
 7. **Distribution.** Just for the human or eventually shareable? Affects whether to invest in code signing / notarization. Recommend: don't worry about signing until v0.2.
