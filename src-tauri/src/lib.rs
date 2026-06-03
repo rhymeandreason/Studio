@@ -1,11 +1,134 @@
+use std::path::PathBuf;
+use std::sync::Mutex;
+
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem},
+    menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    Manager,
+    AppHandle, Emitter, Manager, Wry,
 };
 
-/// Show and focus the main Studio window, creating nothing new — there is only one.
-fn show_studio(app: &tauri::AppHandle) {
+/// A discovered project: a folder directly under ~/Projects/.
+#[derive(Clone, serde::Serialize)]
+struct Project {
+    name: String,
+    path: String,
+}
+
+/// App-wide state: which project is currently active (if any).
+#[derive(Default)]
+struct AppState {
+    active: Mutex<Option<Project>>,
+}
+
+const TRAY_ID: &str = "studio-tray";
+const PROJECT_PREFIX: &str = "proj:";
+
+/// ~/Projects — the single folder Studio scans for projects.
+fn projects_root(app: &AppHandle) -> Option<PathBuf> {
+    app.path().home_dir().ok().map(|home| home.join("Projects"))
+}
+
+/// Scan ~/Projects for immediate subfolders, skipping hidden dirs, sorted by name.
+fn scan_projects(app: &AppHandle) -> Vec<Project> {
+    let mut projects = Vec::new();
+    if let Some(root) = projects_root(app) {
+        if let Ok(entries) = std::fs::read_dir(&root) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                    continue;
+                };
+                if name.starts_with('.') {
+                    continue;
+                }
+                projects.push(Project {
+                    name: name.to_string(),
+                    path: path.to_string_lossy().to_string(),
+                });
+            }
+        }
+    }
+    projects.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    projects
+}
+
+/// Build the tray menu: optional active-project header, Open Studio, the project
+/// list (active one check-marked), then Quit.
+fn build_tray_menu(
+    app: &AppHandle,
+    projects: &[Project],
+    active: Option<&str>,
+) -> tauri::Result<Menu<Wry>> {
+    let mut items: Vec<Box<dyn IsMenuItem<Wry>>> = Vec::new();
+
+    if let Some(active_path) = active {
+        let name = projects
+            .iter()
+            .find(|p| p.path == active_path)
+            .map(|p| p.name.as_str())
+            .unwrap_or("(active)");
+        items.push(Box::new(MenuItem::with_id(
+            app,
+            "active_header",
+            format!("● {name}"),
+            false,
+            None::<&str>,
+        )?));
+        items.push(Box::new(PredefinedMenuItem::separator(app)?));
+    }
+
+    items.push(Box::new(MenuItem::with_id(
+        app,
+        "open_studio",
+        "Open Studio",
+        true,
+        None::<&str>,
+    )?));
+    items.push(Box::new(PredefinedMenuItem::separator(app)?));
+
+    if projects.is_empty() {
+        items.push(Box::new(MenuItem::with_id(
+            app,
+            "no_projects",
+            "No projects in ~/Projects",
+            false,
+            None::<&str>,
+        )?));
+    } else {
+        for p in projects {
+            let label = if Some(p.path.as_str()) == active {
+                format!("✓ {}", p.name)
+            } else {
+                format!("   {}", p.name)
+            };
+            items.push(Box::new(MenuItem::with_id(
+                app,
+                format!("{PROJECT_PREFIX}{}", p.path),
+                label,
+                true,
+                None::<&str>,
+            )?));
+        }
+    }
+
+    items.push(Box::new(PredefinedMenuItem::separator(app)?));
+    items.push(Box::new(MenuItem::with_id(
+        app,
+        "quit",
+        "Quit Studio",
+        true,
+        None::<&str>,
+    )?));
+
+    let refs: Vec<&dyn IsMenuItem<Wry>> = items.iter().map(|b| b.as_ref()).collect();
+    Menu::with_items(app, &refs)
+}
+
+/// Show and focus the single Studio window.
+fn show_studio(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
         let _ = win.unminimize();
@@ -13,10 +136,37 @@ fn show_studio(app: &tauri::AppHandle) {
     }
 }
 
+/// Activate a project: store it, refresh the tray, open the window, notify the UI.
+fn activate_project(app: &AppHandle, path: &str) {
+    let projects = scan_projects(app);
+    let Some(project) = projects.iter().find(|p| p.path == path).cloned() else {
+        return;
+    };
+
+    *app.state::<AppState>().active.lock().unwrap() = Some(project.clone());
+
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        if let Ok(menu) = build_tray_menu(app, &projects, Some(&project.path)) {
+            let _ = tray.set_menu(Some(menu));
+        }
+    }
+
+    show_studio(app);
+    let _ = app.emit("project-activated", &project);
+}
+
+/// Frontend calls this on load to render the currently-active project (if any).
+#[tauri::command]
+fn get_active_project(state: tauri::State<AppState>) -> Option<Project> {
+    state.active.lock().unwrap().clone()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(AppState::default())
+        .invoke_handler(tauri::generate_handler![get_active_project])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.
         .on_window_event(|window, event| {
@@ -30,29 +180,24 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            // --- Tray menu ---------------------------------------------------
-            // M1: a hardcoded "Hello" stands in for the project list (M2 makes it real).
-            let open_item = MenuItem::with_id(app, "open_studio", "Open Studio", true, None::<&str>)?;
-            let sep1 = PredefinedMenuItem::separator(app)?;
-            let hello_item = MenuItem::with_id(app, "proj_hello", "Hello", true, None::<&str>)?;
-            let sep2 = PredefinedMenuItem::separator(app)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit Studio", true, None::<&str>)?;
+            let handle = app.handle().clone();
+            let projects = scan_projects(&handle);
+            let menu = build_tray_menu(&handle, &projects, None)?;
 
-            let menu = Menu::with_items(
-                app,
-                &[&open_item, &sep1, &hello_item, &sep2, &quit_item],
-            )?;
-
-            let _tray = TrayIconBuilder::with_id("studio-tray")
+            TrayIconBuilder::with_id(TRAY_ID)
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .show_menu_on_left_click(true)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "open_studio" => show_studio(app),
-                    // Clicking a project opens it in the one Studio window (M2 wires real activation).
-                    "proj_hello" => show_studio(app),
-                    "quit" => app.exit(0),
-                    _ => {}
+                .on_menu_event(|app, event| {
+                    let id = event.id.as_ref();
+                    match id {
+                        "open_studio" => show_studio(app),
+                        "quit" => app.exit(0),
+                        _ if id.starts_with(PROJECT_PREFIX) => {
+                            activate_project(app, &id[PROJECT_PREFIX.len()..]);
+                        }
+                        _ => {}
+                    }
                 })
                 .build(app)?;
 

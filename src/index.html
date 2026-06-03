@@ -13,11 +13,22 @@
       <span class="titlebar__title" data-tauri-drag-region>Studio</span>
     </header>
 
+    <div class="projhead" id="project-header" hidden>
+      <h1 class="projhead__name" id="project-name"></h1>
+      <p class="projhead__path" id="project-path"></p>
+    </div>
+
     <main class="window">
       <div class="empty" id="empty-state">
         <div class="empty__mark">◑</div>
         <p class="empty__headline">No project active</p>
         <p class="empty__hint">Pick a project from the menu&nbsp;bar to begin.</p>
+      </div>
+
+      <div class="content" id="project-content" hidden>
+        <p class="content__placeholder">
+          Media, notes, and workspace panels arrive in later milestones.
+        </p>
       </div>
     </main>
   </body>
