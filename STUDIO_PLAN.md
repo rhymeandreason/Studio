@@ -16,21 +16,24 @@ Adobe Creative Cloud promised a unified project surface across creative tools an
 
 ## Core model
 - **Project = a folder** under `~/Projects/` (auto-discovered by scanning the directory).
-- **Workspace = `.workspace.json` inside the project folder** — lists apps to launch, files to open, URLs, Figma file. Editable by hand or via Studio's UI.
-- **Repo = a `repo/` subfolder, if present.** Studio assumes Claude Code is invoked against this path.
+- **Workspace = `.workspace.json` inside the project folder** — lists apps to launch, files to open, URLs, the Figma URL, and the repo path. Editable by hand or via Studio's UI. The project folder is a *hub*, not a container: it physically holds only the media, notes, and this manifest; the repo and Figma design live elsewhere and are referenced by path / URL.
+- **Repo = a path in the manifest.** `.workspace.json` carries a `repo` field that can point anywhere — a `repo/` subfolder inside the project (the default for newly-created projects) *or* an absolute path to a git directory that already lives elsewhere (e.g. `~/code/lamp-firmware`). Claude Code / the terminal is invoked against this path. The code repo does not have to live inside the project folder.
+- **Figma = a URL in the manifest, not a local file.** Figma files live in the cloud, so a project references its Figma design as a `figma` URL in `.workspace.json`, opened in the browser or Figma desktop app on activation. There is no local `.fig` file to manage.
 - **Media = anything matching image/video/audio extensions** anywhere in the project, surfaced in the media panel.
 - **Notes = `.studio/notes.json`** inside the project folder — a small collection of note items. Each note is one of three kinds: **text** (freeform markdown), **checklist** (a titled list of `{text, done}` items), or **table** (a titled grid of columns + rows). One file holds all of a project's notes.
 
 Suggested folder layout (not enforced, just convention):
 ```
 ~/Projects/lamp-prototype/
-├── repo/              ← git lives here
-├── designs/           ← Figma exports, mood boards
+├── repo/              ← git, IF the repo lives inside the project (optional;
+│                        the manifest's `repo` may instead point to ~/code/...)
+├── designs/           ← local design scraps, mood boards (Figma itself is cloud)
 ├── media/             ← screenshots, recordings, workshop photos
 ├── .studio/
 │   └── notes.json     ← text notes, checklists, tables
-└── .workspace.json    ← what to launch
+└── .workspace.json    ← what to launch (apps, repo path, figma URL, files, urls)
 ```
+The repo and the Figma design are *referenced* by the manifest, not necessarily stored here. A minimal project folder is really just `media/`, `.studio/notes.json`, and `.workspace.json`.
 
 ## v0.1 scope (the smallest sharp version)
 
@@ -47,14 +50,19 @@ Suggested folder layout (not enforced, just convention):
   ```json
   {
     "apps": ["Cursor", "Figma"],
-    "files": ["repo/", "designs/main.fig"],
+    "repo": "~/code/lamp-firmware",
+    "figma": "https://figma.com/file/abc/Lamp",
+    "files": ["designs/moodboard.png"],
     "urls": ["https://github.com/user/lamp-prototype"],
     "terminal": {
       "command": "claude",
-      "cwd": "repo/"
+      "cwd": "{repo}"
     }
   }
   ```
+  - `repo` may be an absolute path (repo living elsewhere) or a path relative to the project folder (e.g. `"repo/"` for new projects).
+  - `figma` is a cloud URL, opened in the browser / Figma app — not a local file.
+  - `terminal.cwd` defaults to `{repo}` so Claude Code launches against the repo wherever it lives.
 - For v0.1, "deactivating" the previous project does *not* close its apps (too risky). Activating just opens the new project's stuff on top.
 
 ### 3. Studio window (one per app, shows active project)
