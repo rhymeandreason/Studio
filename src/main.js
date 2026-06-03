@@ -6,6 +6,23 @@
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
+// --- Native file/folder pickers --------------------------------------------
+
+async function pickPath(opts = {}) {
+  const dialog = window.__TAURI__.dialog;
+  if (!dialog || !dialog.open) {
+    console.error("Dialog plugin not available on window.__TAURI__.dialog");
+    return null;
+  }
+  const result = await dialog.open({ multiple: false, ...opts });
+  return typeof result === "string" ? result : null;
+}
+
+function appNameFromPath(path) {
+  const base = path.split("/").pop() || path;
+  return base.replace(/\.app$/i, "");
+}
+
 let activeProject = null;
 
 // --- Project rendering -----------------------------------------------------
@@ -89,6 +106,28 @@ function initTabs() {
   });
 }
 
+// --- Workspace launch ------------------------------------------------------
+
+function initLaunch() {
+  const btn = document.getElementById("launch-btn");
+  btn.addEventListener("click", async () => {
+    if (!activeProject) return;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Launching…";
+    try {
+      await invoke("launch_workspace", { path: activeProject.path });
+      btn.textContent = "Launched ✓";
+    } catch (err) {
+      btn.textContent = `Error: ${err}`;
+    }
+    setTimeout(() => {
+      btn.textContent = original;
+      btn.disabled = false;
+    }, 1500);
+  });
+}
+
 // --- Workspace form --------------------------------------------------------
 
 function listContainer(list) {
@@ -102,12 +141,33 @@ function addRow(list, value = "") {
   const input = document.createElement("input");
   input.className = "field__input";
   input.value = value;
+  row.append(input);
+
+  // Files and apps get a native picker; URLs are typed.
+  if (list === "files" || list === "apps") {
+    const browse = document.createElement("button");
+    browse.type = "button";
+    browse.className = "btn-browse";
+    browse.textContent = "Browse…";
+    browse.addEventListener("click", async () => {
+      const picked =
+        list === "apps"
+          ? await pickPath({
+              defaultPath: "/Applications",
+              filters: [{ name: "Applications", extensions: ["app"] }],
+            })
+          : await pickPath({});
+      if (picked) input.value = list === "apps" ? appNameFromPath(picked) : picked;
+    });
+    row.append(browse);
+  }
+
   const remove = document.createElement("button");
   remove.type = "button";
   remove.className = "btn-remove";
   remove.textContent = "✕";
   remove.addEventListener("click", () => row.remove());
-  row.append(input, remove);
+  row.append(remove);
   rows.append(row);
 }
 
@@ -125,6 +185,7 @@ function setList(list, values) {
 async function loadWorkspace(path) {
   const ws = await invoke("read_workspace", { path });
   document.getElementById("ws-repo").value = ws.repo || "";
+  document.getElementById("ws-editor").value = ws.editor || "";
   document.getElementById("ws-figma").value = ws.figma || "";
   document.getElementById("ws-claude").value =
     ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
@@ -143,6 +204,7 @@ async function saveWorkspace(e) {
   if (!activeProject) return;
   const workspace = {
     repo: document.getElementById("ws-repo").value.trim(),
+    editor: document.getElementById("ws-editor").value.trim(),
     figma: document.getElementById("ws-figma").value.trim(),
     claude: { mode: document.getElementById("ws-claude").value },
     apps: readList("apps"),
@@ -165,6 +227,17 @@ function initWorkspaceForm() {
         addRow(btn.closest(".listfield").dataset.list)
       )
     );
+  document.getElementById("ws-repo-browse").addEventListener("click", async () => {
+    const picked = await pickPath({ directory: true });
+    if (picked) document.getElementById("ws-repo").value = picked;
+  });
+  document.getElementById("ws-editor-browse").addEventListener("click", async () => {
+    const picked = await pickPath({
+      defaultPath: "/Applications",
+      filters: [{ name: "Applications", extensions: ["app"] }],
+    });
+    if (picked) document.getElementById("ws-editor").value = appNameFromPath(picked);
+  });
   document.getElementById("ws-form").addEventListener("submit", saveWorkspace);
 }
 
@@ -217,6 +290,7 @@ function initNewModal() {
 
 window.addEventListener("DOMContentLoaded", async () => {
   initTabs();
+  initLaunch();
   initWorkspaceForm();
   initNewModal();
 

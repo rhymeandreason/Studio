@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
@@ -30,6 +31,9 @@ struct Workspace {
     apps: Vec<String>,
     #[serde(default)]
     repo: String,
+    /// Code editor to open the repo in. Blank = Zed (the default).
+    #[serde(default)]
+    editor: String,
     #[serde(default)]
     figma: String,
     #[serde(default)]
@@ -260,10 +264,86 @@ fn save_workspace(path: String, workspace: Workspace) -> Result<(), String> {
     std::fs::write(&file, text).map_err(|e| e.to_string())
 }
 
+/// Resolve a manifest path entry: expand `~`, leave absolute paths, and treat
+/// everything else as relative to the project folder.
+fn resolve_path(home: &Path, project_dir: &Path, raw: &str) -> PathBuf {
+    let raw = raw.trim();
+    if let Some(rest) = raw.strip_prefix("~/") {
+        home.join(rest)
+    } else if raw == "~" {
+        home.to_path_buf()
+    } else if Path::new(raw).is_absolute() {
+        PathBuf::from(raw)
+    } else {
+        project_dir.join(raw)
+    }
+}
+
+/// Launch a project's workspace: open apps, files, URLs, the Figma design, and
+/// (per claude.mode) drop into `claude` in a terminal at the repo path.
+#[tauri::command]
+fn launch_workspace(app: AppHandle, path: String) -> Result<(), String> {
+    let project_dir = PathBuf::from(&path);
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    let ws = read_workspace(path.clone())?;
+
+    // Apps: open -a "AppName"
+    for app_name in ws.apps.iter().filter(|a| !a.trim().is_empty()) {
+        let _ = Command::new("open").args(["-a", app_name.trim()]).spawn();
+    }
+
+    // Files: resolved relative to the project folder.
+    for file in ws.files.iter().filter(|f| !f.trim().is_empty()) {
+        let resolved = resolve_path(&home, &project_dir, file);
+        let _ = Command::new("open").arg(resolved).spawn();
+    }
+
+    // URLs + Figma: hand off to the default handler.
+    for url in ws.urls.iter().filter(|u| !u.trim().is_empty()) {
+        let _ = Command::new("open").arg(url.trim()).spawn();
+    }
+    if !ws.figma.trim().is_empty() {
+        let _ = Command::new("open").arg(ws.figma.trim()).spawn();
+    }
+
+    // Repo location, if set. Used for both the editor and the Claude terminal.
+    let repo = if ws.repo.trim().is_empty() {
+        None
+    } else {
+        Some(resolve_path(&home, &project_dir, &ws.repo))
+    };
+
+    // Open the repo in the code editor (Zed unless the project overrides it).
+    if let Some(repo_path) = &repo {
+        let editor = if ws.editor.trim().is_empty() {
+            "Zed"
+        } else {
+            ws.editor.trim()
+        };
+        let _ = Command::new("open").args(["-a", editor]).arg(repo_path).spawn();
+    }
+
+    // Claude: open Terminal cd'd into the repo and run `claude`.
+    if ws.claude.mode == "terminal" {
+        let cwd = repo.clone().unwrap_or_else(|| project_dir.clone());
+        let repo_str = cwd.to_string_lossy().replace('\'', "'\\''");
+        let script = format!(
+            "tell application \"Terminal\"\nactivate\ndo script \"cd '{repo_str}' && claude\"\nend tell"
+        );
+        Command::new("osascript")
+            .args(["-e", &script])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             get_active_project,
@@ -271,7 +351,8 @@ pub fn run() {
             open_project,
             create_project,
             read_workspace,
-            save_workspace
+            save_workspace,
+            launch_workspace
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.

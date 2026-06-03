@@ -14,8 +14,13 @@
     </header>
 
     <div class="projhead" id="project-header" hidden>
-      <h1 class="projhead__name" id="project-name"></h1>
-      <p class="projhead__path" id="project-path"></p>
+      <div class="projhead__row">
+        <div>
+          <h1 class="projhead__name" id="project-name"></h1>
+          <p class="projhead__path" id="project-path"></p>
+        </div>
+        <button class="btn-launch" id="launch-btn">Launch workspace</button>
+      </div>
       <nav class="tabs" id="tabs">
         <button class="tab" data-tab="media">Media</button>
         <button class="tab" data-tab="notes">Notes</button>
@@ -53,7 +58,18 @@
           <form class="ws" id="ws-form">
             <label class="field">
               <span class="field__label">Repo path</span>
-              <input class="field__input" id="ws-repo" placeholder="repo/  or  ~/code/my-repo" />
+              <div class="field__withbtn">
+                <input class="field__input" id="ws-repo" placeholder="repo/  or  ~/code/my-repo" />
+                <button type="button" class="btn-browse" id="ws-repo-browse">Browse…</button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span class="field__label">Code editor</span>
+              <div class="field__withbtn">
+                <input class="field__input" id="ws-editor" placeholder="Zed (default)" />
+                <button type="button" class="btn-browse" id="ws-editor-browse">Browse…</button>
+              </div>
             </label>
 
             <label class="field">
