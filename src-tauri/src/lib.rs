@@ -264,6 +264,24 @@ fn save_workspace(path: String, workspace: Workspace) -> Result<(), String> {
     std::fs::write(&file, text).map_err(|e| e.to_string())
 }
 
+/// Read a project's notes.json (defaults to an empty collection if absent).
+#[tauri::command]
+fn read_notes(path: String) -> Result<serde_json::Value, String> {
+    let file = PathBuf::from(&path).join("notes.json");
+    match std::fs::read_to_string(&file) {
+        Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
+        Err(_) => Ok(serde_json::json!({ "version": 1, "notes": [] })),
+    }
+}
+
+/// Write a project's notes.json (pretty-printed).
+#[tauri::command]
+fn save_notes(path: String, notes: serde_json::Value) -> Result<(), String> {
+    let file = PathBuf::from(&path).join("notes.json");
+    let text = serde_json::to_string_pretty(&notes).map_err(|e| e.to_string())?;
+    std::fs::write(&file, text).map_err(|e| e.to_string())
+}
+
 /// Resolve a manifest path entry: expand `~`, leave absolute paths, and treat
 /// everything else as relative to the project folder.
 fn resolve_path(home: &Path, project_dir: &Path, raw: &str) -> PathBuf {
@@ -352,7 +370,9 @@ pub fn run() {
             create_project,
             read_workspace,
             save_workspace,
-            launch_workspace
+            launch_workspace,
+            read_notes,
+            save_notes
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.

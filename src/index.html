@@ -5,6 +5,7 @@
     <link rel="stylesheet" href="styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Studio</title>
+    <script src="/vendor/marked.min.js"></script>
     <script type="module" src="/main.js" defer></script>
   </head>
 
@@ -51,7 +52,13 @@
         </section>
 
         <section class="panel" data-panel="notes" hidden>
-          <p class="placeholder">Notes panel arrives in a later milestone.</p>
+          <div class="notes-toolbar">
+            <button type="button" class="btn-add" data-new-note="text">+ Text</button>
+            <button type="button" class="btn-add" data-new-note="checklist">+ Checklist</button>
+            <button type="button" class="btn-add" data-new-note="table">+ Table</button>
+            <span class="notes-status" id="notes-status"></span>
+          </div>
+          <div class="notes-list" id="notes-list"></div>
         </section>
 
         <section class="panel" data-panel="workspace">
@@ -104,7 +111,6 @@
             </div>
 
             <div class="ws__actions">
-              <button type="submit" class="btn-save">Save</button>
               <span class="ws__status" id="ws-status"></span>
             </div>
           </form>

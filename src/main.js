@@ -43,10 +43,13 @@ function render(project) {
     empty.hidden = true;
     content.hidden = false;
     loadWorkspace(project.path);
+    loadNotes(project.path);
   } else {
     header.hidden = true;
     empty.hidden = false;
     content.hidden = true;
+    notesProjectPath = null;
+    notesData = { version: 1, notes: [] };
   }
 }
 
@@ -157,7 +160,10 @@ function addRow(list, value = "") {
               filters: [{ name: "Applications", extensions: ["app"] }],
             })
           : await pickPath({});
-      if (picked) input.value = list === "apps" ? appNameFromPath(picked) : picked;
+      if (picked) {
+        input.value = list === "apps" ? appNameFromPath(picked) : picked;
+        scheduleWorkspaceSave();
+      }
     });
     row.append(browse);
   }
@@ -166,7 +172,10 @@ function addRow(list, value = "") {
   remove.type = "button";
   remove.className = "btn-remove";
   remove.textContent = "✕";
-  remove.addEventListener("click", () => row.remove());
+  remove.addEventListener("click", () => {
+    row.remove();
+    scheduleWorkspaceSave();
+  });
   row.append(remove);
   rows.append(row);
 }
@@ -199,10 +208,10 @@ function setStatus(text) {
   document.getElementById("ws-status").textContent = text;
 }
 
-async function saveWorkspace(e) {
-  e.preventDefault();
-  if (!activeProject) return;
-  const workspace = {
+let wsSaveTimer = null;
+
+function readWorkspaceForm() {
+  return {
     repo: document.getElementById("ws-repo").value.trim(),
     editor: document.getElementById("ws-editor").value.trim(),
     figma: document.getElementById("ws-figma").value.trim(),
@@ -211,12 +220,26 @@ async function saveWorkspace(e) {
     files: readList("files"),
     urls: readList("urls"),
   };
+}
+
+async function saveWorkspaceNow() {
+  if (!activeProject) return;
   try {
-    await invoke("save_workspace", { path: activeProject.path, workspace });
+    await invoke("save_workspace", {
+      path: activeProject.path,
+      workspace: readWorkspaceForm(),
+    });
     setStatus("Saved ✓");
   } catch (err) {
     setStatus(`Error: ${err}`);
   }
+}
+
+function scheduleWorkspaceSave() {
+  if (!activeProject) return;
+  setStatus("Saving…");
+  clearTimeout(wsSaveTimer);
+  wsSaveTimer = setTimeout(saveWorkspaceNow, 400);
 }
 
 function initWorkspaceForm() {
@@ -229,16 +252,27 @@ function initWorkspaceForm() {
     );
   document.getElementById("ws-repo-browse").addEventListener("click", async () => {
     const picked = await pickPath({ directory: true });
-    if (picked) document.getElementById("ws-repo").value = picked;
+    if (picked) {
+      document.getElementById("ws-repo").value = picked;
+      scheduleWorkspaceSave();
+    }
   });
   document.getElementById("ws-editor-browse").addEventListener("click", async () => {
     const picked = await pickPath({
       defaultPath: "/Applications",
       filters: [{ name: "Applications", extensions: ["app"] }],
     });
-    if (picked) document.getElementById("ws-editor").value = appNameFromPath(picked);
+    if (picked) {
+      document.getElementById("ws-editor").value = appNameFromPath(picked);
+      scheduleWorkspaceSave();
+    }
   });
-  document.getElementById("ws-form").addEventListener("submit", saveWorkspace);
+
+  // Autosave: any typing or selection change in the form persists (debounced).
+  const form = document.getElementById("ws-form");
+  form.addEventListener("input", scheduleWorkspaceSave);
+  form.addEventListener("change", scheduleWorkspaceSave);
+  form.addEventListener("submit", (e) => e.preventDefault());
 }
 
 // --- New project modal -----------------------------------------------------
@@ -286,12 +320,307 @@ function initNewModal() {
   });
 }
 
+// --- Notes -----------------------------------------------------------------
+
+let notesData = { version: 1, notes: [] };
+let notesProjectPath = null;
+let notesSaveTimer = null;
+
+function el(tag, className, props = {}) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  Object.assign(node, props);
+  return node;
+}
+
+function genId() {
+  return "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function setNotesStatus(text) {
+  document.getElementById("notes-status").textContent = text;
+}
+
+async function loadNotes(path) {
+  notesProjectPath = path;
+  const data = await invoke("read_notes", { path });
+  notesData = data && Array.isArray(data.notes) ? data : { version: 1, notes: [] };
+  setNotesStatus("");
+  renderNotes();
+}
+
+function scheduleNotesSave() {
+  if (!notesProjectPath) return;
+  setNotesStatus("Saving…");
+  clearTimeout(notesSaveTimer);
+  notesSaveTimer = setTimeout(async () => {
+    try {
+      await invoke("save_notes", { path: notesProjectPath, notes: notesData });
+      setNotesStatus("Saved ✓");
+    } catch (err) {
+      setNotesStatus(`Error: ${err}`);
+    }
+  }, 400);
+}
+
+function newNote(kind) {
+  const note = { id: genId(), kind, title: "" };
+  if (kind === "text") note.body = "";
+  if (kind === "checklist") note.items = [];
+  if (kind === "table") {
+    note.columns = ["Column"];
+    note.rows = [];
+  }
+  notesData.notes.push(note);
+  renderNotes();
+  scheduleNotesSave();
+}
+
+function noteHeader(note) {
+  const head = el("div", "notecard__head");
+  const title = el("input", "notecard__title", {
+    value: note.title || "",
+    placeholder: "Untitled",
+  });
+  title.addEventListener("input", () => {
+    note.title = title.value;
+    scheduleNotesSave();
+  });
+
+  // Per-note width: how many grid columns the card spans (1–3).
+  const width = el("select", "notecard__width", { title: "Width" });
+  [1, 2, 3].forEach((n) =>
+    width.append(el("option", null, { value: String(n), textContent: `${n}×` }))
+  );
+  width.value = String(note.span || 1);
+  width.addEventListener("change", () => {
+    note.span = Number(width.value);
+    const card = width.closest(".notecard");
+    if (card) card.style.gridColumn = `span ${note.span}`;
+    scheduleNotesSave();
+  });
+
+  const del = el("button", "btn-remove", { type: "button", textContent: "✕" });
+  del.addEventListener("click", () => {
+    notesData.notes = notesData.notes.filter((n) => n.id !== note.id);
+    renderNotes();
+    scheduleNotesSave();
+  });
+  head.append(title, width, del);
+  return head;
+}
+
+function buildTextNote(note) {
+  const card = el("div", "notecard");
+  card.append(noteHeader(note));
+  const view = el("div", "notecard__md");
+  const textarea = el("textarea", "notecard__textarea", { value: note.body || "" });
+  textarea.hidden = true;
+
+  const renderView = () => {
+    view.innerHTML = note.body
+      ? marked.parse(note.body)
+      : '<span class="notecard__empty">Empty — click to edit</span>';
+  };
+  renderView();
+
+  view.addEventListener("click", () => {
+    view.hidden = true;
+    textarea.hidden = false;
+    textarea.focus();
+  });
+  textarea.addEventListener("input", () => {
+    note.body = textarea.value;
+    scheduleNotesSave();
+  });
+  textarea.addEventListener("blur", () => {
+    note.body = textarea.value;
+    renderView();
+    textarea.hidden = true;
+    view.hidden = false;
+    scheduleNotesSave();
+  });
+
+  card.append(view, textarea);
+  return card;
+}
+
+function buildChecklist(note) {
+  const card = el("div", "notecard");
+  card.append(noteHeader(note));
+
+  const count = el("div", "notecard__count");
+  const updateCount = () => {
+    const done = note.items.filter((i) => i.done).length;
+    count.textContent = `${done} of ${note.items.length} done`;
+  };
+
+  const list = el("div", "checklist");
+  note.items.forEach((item, idx) => {
+    const row = el("div", "checklist__row");
+    const cb = el("input", null, { type: "checkbox", checked: !!item.done });
+    cb.addEventListener("change", () => {
+      item.done = cb.checked;
+      updateCount();
+      scheduleNotesSave();
+    });
+    const txt = el("input", "field__input", {
+      value: item.text || "",
+      placeholder: "Item",
+    });
+    txt.addEventListener("input", () => {
+      item.text = txt.value;
+      scheduleNotesSave();
+    });
+    const rm = el("button", "btn-remove", { type: "button", textContent: "✕" });
+    rm.addEventListener("click", () => {
+      note.items.splice(idx, 1);
+      renderNotes();
+      scheduleNotesSave();
+    });
+    row.append(cb, txt, rm);
+    list.append(row);
+  });
+
+  const add = el("button", "btn-add", { type: "button", textContent: "+ Add item" });
+  add.addEventListener("click", () => {
+    note.items.push({ text: "", done: false });
+    renderNotes();
+    scheduleNotesSave();
+  });
+
+  updateCount();
+  card.append(count, list, add);
+  return card;
+}
+
+function buildTable(note) {
+  const card = el("div", "notecard");
+  card.append(noteHeader(note));
+
+  const table = el("table", "ntable");
+  const thead = el("thead");
+  const htr = el("tr");
+  note.columns.forEach((col, ci) => {
+    const th = el("th");
+    const inp = el("input", "ntable__colinput", { value: col, placeholder: "Column" });
+    inp.addEventListener("input", () => {
+      note.columns[ci] = inp.value;
+      scheduleNotesSave();
+    });
+    const rm = el("button", "ntable__x", {
+      type: "button",
+      textContent: "✕",
+      title: "Remove column",
+    });
+    rm.addEventListener("click", () => {
+      note.columns.splice(ci, 1);
+      note.rows.forEach((r) => r.splice(ci, 1));
+      renderNotes();
+      scheduleNotesSave();
+    });
+    th.append(inp, rm);
+    htr.append(th);
+  });
+  htr.append(el("th", "ntable__spacer"));
+  thead.append(htr);
+  table.append(thead);
+
+  const tbody = el("tbody");
+  note.rows.forEach((row, ri) => {
+    const tr = el("tr");
+    note.columns.forEach((_, ci) => {
+      const td = el("td");
+      const inp = el("input", "ntable__cell", { value: row[ci] || "" });
+      inp.addEventListener("input", () => {
+        row[ci] = inp.value;
+        scheduleNotesSave();
+      });
+      td.append(inp);
+      tr.append(td);
+    });
+    const tdx = el("td");
+    const rm = el("button", "ntable__x", {
+      type: "button",
+      textContent: "✕",
+      title: "Remove row",
+    });
+    rm.addEventListener("click", () => {
+      note.rows.splice(ri, 1);
+      renderNotes();
+      scheduleNotesSave();
+    });
+    tdx.append(rm);
+    tr.append(tdx);
+    tbody.append(tr);
+  });
+  table.append(tbody);
+
+  const actions = el("div", "ntable__actions");
+  const addRow = el("button", "btn-add", { type: "button", textContent: "+ Row" });
+  addRow.addEventListener("click", () => {
+    note.rows.push(note.columns.map(() => ""));
+    renderNotes();
+    scheduleNotesSave();
+  });
+  const addCol = el("button", "btn-add", { type: "button", textContent: "+ Column" });
+  addCol.addEventListener("click", () => {
+    note.columns.push("Column");
+    note.rows.forEach((r) => r.push(""));
+    renderNotes();
+    scheduleNotesSave();
+  });
+  actions.append(addRow, addCol);
+
+  card.append(table, actions);
+  return card;
+}
+
+function renderNotes() {
+  const listEl = document.getElementById("notes-list");
+  listEl.innerHTML = "";
+
+  if (!notesData.notes.length) {
+    listEl.append(
+      el("p", "placeholder", {
+        textContent: "No notes yet. Add a text note, checklist, or table above.",
+      })
+    );
+    return;
+  }
+
+  for (const note of notesData.notes) {
+    let card;
+    if (note.kind === "text") {
+      card = buildTextNote(note);
+    } else if (note.kind === "checklist") {
+      if (!Array.isArray(note.items)) note.items = [];
+      card = buildChecklist(note);
+    } else if (note.kind === "table") {
+      if (!Array.isArray(note.columns)) note.columns = ["Column"];
+      if (!Array.isArray(note.rows)) note.rows = [];
+      card = buildTable(note);
+    } else {
+      continue;
+    }
+    card.style.gridColumn = `span ${note.span || 1}`;
+    listEl.append(card);
+  }
+}
+
+function initNotes() {
+  document.querySelectorAll("[data-new-note]").forEach((btn) => {
+    btn.addEventListener("click", () => newNote(btn.dataset.newNote));
+  });
+}
+
 // --- Boot ------------------------------------------------------------------
 
 window.addEventListener("DOMContentLoaded", async () => {
   initTabs();
   initLaunch();
   initWorkspaceForm();
+  initNotes();
   initNewModal();
 
   render(await invoke("get_active_project"));
