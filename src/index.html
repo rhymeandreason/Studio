@@ -16,20 +16,98 @@
     <div class="projhead" id="project-header" hidden>
       <h1 class="projhead__name" id="project-name"></h1>
       <p class="projhead__path" id="project-path"></p>
+      <nav class="tabs" id="tabs">
+        <button class="tab" data-tab="media">Media</button>
+        <button class="tab" data-tab="notes">Notes</button>
+        <button class="tab is-active" data-tab="workspace">Workspace</button>
+      </nav>
     </div>
 
     <main class="window">
+      <!-- All-projects overview -->
+      <div class="overview" id="overview" hidden>
+        <h1 class="overview__title">Projects</h1>
+        <div class="overview__grid" id="overview-grid"></div>
+      </div>
+
+      <!-- No project -->
       <div class="empty" id="empty-state">
         <div class="empty__mark">◑</div>
         <p class="empty__headline">No project active</p>
-        <p class="empty__hint">Pick a project from the menu&nbsp;bar to begin.</p>
-      </div>
-
-      <div class="content" id="project-content" hidden>
-        <p class="content__placeholder">
-          Media, notes, and workspace panels arrive in later milestones.
+        <p class="empty__hint">
+          Pick a project from the menu&nbsp;bar — or create a new&nbsp;one.
         </p>
       </div>
+
+      <!-- Project content -->
+      <div class="content" id="project-content" hidden>
+        <section class="panel" data-panel="media" hidden>
+          <p class="placeholder">Media panel arrives in a later milestone.</p>
+        </section>
+
+        <section class="panel" data-panel="notes" hidden>
+          <p class="placeholder">Notes panel arrives in a later milestone.</p>
+        </section>
+
+        <section class="panel" data-panel="workspace">
+          <form class="ws" id="ws-form">
+            <label class="field">
+              <span class="field__label">Repo path</span>
+              <input class="field__input" id="ws-repo" placeholder="repo/  or  ~/code/my-repo" />
+            </label>
+
+            <label class="field">
+              <span class="field__label">Figma URL</span>
+              <input class="field__input" id="ws-figma" placeholder="https://figma.com/file/…" />
+            </label>
+
+            <label class="field">
+              <span class="field__label">Claude</span>
+              <select class="field__input" id="ws-claude">
+                <option value="terminal">Run in terminal (cd into repo)</option>
+                <option value="off">Don't launch</option>
+              </select>
+            </label>
+
+            <div class="listfield" data-list="apps">
+              <span class="field__label">Apps to launch</span>
+              <div class="listfield__rows" data-rows></div>
+              <button type="button" class="btn-add" data-add>+ Add app</button>
+            </div>
+
+            <div class="listfield" data-list="files">
+              <span class="field__label">Files to open</span>
+              <div class="listfield__rows" data-rows></div>
+              <button type="button" class="btn-add" data-add>+ Add file</button>
+            </div>
+
+            <div class="listfield" data-list="urls">
+              <span class="field__label">URLs to open</span>
+              <div class="listfield__rows" data-rows></div>
+              <button type="button" class="btn-add" data-add>+ Add URL</button>
+            </div>
+
+            <div class="ws__actions">
+              <button type="submit" class="btn-save">Save</button>
+              <span class="ws__status" id="ws-status"></span>
+            </div>
+          </form>
+        </section>
+      </div>
     </main>
+
+    <!-- New project modal -->
+    <div class="modal" id="new-modal" hidden>
+      <div class="modal__card">
+        <h2 class="modal__title">New project</h2>
+        <p class="modal__hint">Creates a folder in ~/Projects.</p>
+        <input class="field__input" id="new-name" placeholder="project-name" autocomplete="off" />
+        <p class="modal__error" id="new-error" hidden></p>
+        <div class="modal__actions">
+          <button class="btn-ghost" id="new-cancel">Cancel</button>
+          <button class="btn-save" id="new-create">Create</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

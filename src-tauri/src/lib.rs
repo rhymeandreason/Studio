@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
@@ -8,10 +9,35 @@ use tauri::{
 };
 
 /// A discovered project: a folder directly under ~/Projects/.
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, Serialize)]
 struct Project {
     name: String,
     path: String,
+}
+
+/// The `claude` block of a workspace manifest.
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct ClaudeCfg {
+    #[serde(default)]
+    mode: String,
+}
+
+/// workspace.json — the project's launch manifest. Missing fields default,
+/// so partial / hand-edited manifests load fine.
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct Workspace {
+    #[serde(default)]
+    apps: Vec<String>,
+    #[serde(default)]
+    repo: String,
+    #[serde(default)]
+    figma: String,
+    #[serde(default)]
+    files: Vec<String>,
+    #[serde(default)]
+    urls: Vec<String>,
+    #[serde(default)]
+    claude: ClaudeCfg,
 }
 
 /// App-wide state: which project is currently active (if any).
@@ -55,8 +81,8 @@ fn scan_projects(app: &AppHandle) -> Vec<Project> {
     projects
 }
 
-/// Build the tray menu: optional active-project header, Open Studio, the project
-/// list (active one check-marked), then Quit.
+/// Build the tray menu: optional active-project header, Open Studio, New Project,
+/// the project list (active one check-marked), then Quit.
 fn build_tray_menu(
     app: &AppHandle,
     projects: &[Project],
@@ -64,26 +90,17 @@ fn build_tray_menu(
 ) -> tauri::Result<Menu<Wry>> {
     let mut items: Vec<Box<dyn IsMenuItem<Wry>>> = Vec::new();
 
-    if let Some(active_path) = active {
-        let name = projects
-            .iter()
-            .find(|p| p.path == active_path)
-            .map(|p| p.name.as_str())
-            .unwrap_or("(active)");
-        items.push(Box::new(MenuItem::with_id(
-            app,
-            "active_header",
-            format!("● {name}"),
-            false,
-            None::<&str>,
-        )?));
-        items.push(Box::new(PredefinedMenuItem::separator(app)?));
-    }
-
     items.push(Box::new(MenuItem::with_id(
         app,
         "open_studio",
-        "Open Studio",
+        "All Projects",
+        true,
+        None::<&str>,
+    )?));
+    items.push(Box::new(MenuItem::with_id(
+        app,
+        "new_project",
+        "New Project…",
         true,
         None::<&str>,
     )?));
@@ -127,6 +144,16 @@ fn build_tray_menu(
     Menu::with_items(app, &refs)
 }
 
+/// Refresh the tray menu to reflect the current project list and active project.
+fn refresh_tray(app: &AppHandle, active: Option<&str>) {
+    let projects = scan_projects(app);
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        if let Ok(menu) = build_tray_menu(app, &projects, active) {
+            let _ = tray.set_menu(Some(menu));
+        }
+    }
+}
+
 /// Show and focus the single Studio window.
 fn show_studio(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
@@ -144,13 +171,7 @@ fn activate_project(app: &AppHandle, path: &str) {
     };
 
     *app.state::<AppState>().active.lock().unwrap() = Some(project.clone());
-
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        if let Ok(menu) = build_tray_menu(app, &projects, Some(&project.path)) {
-            let _ = tray.set_menu(Some(menu));
-        }
-    }
-
+    refresh_tray(app, Some(&project.path));
     show_studio(app);
     let _ = app.emit("project-activated", &project);
 }
@@ -161,12 +182,97 @@ fn get_active_project(state: tauri::State<AppState>) -> Option<Project> {
     state.active.lock().unwrap().clone()
 }
 
+/// All projects under ~/Projects — backs the overview screen.
+#[tauri::command]
+fn list_projects(app: AppHandle) -> Vec<Project> {
+    scan_projects(&app)
+}
+
+/// Activate a project from the UI (e.g. clicking a card in the overview).
+#[tauri::command]
+fn open_project(app: AppHandle, path: String) {
+    activate_project(&app, &path);
+}
+
+/// Create a new project folder under ~/Projects and activate it.
+#[tauri::command]
+fn create_project(app: AppHandle, name: String) -> Result<Project, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Project name can't be empty.".into());
+    }
+    if name.contains('/') || name.contains('\\') || name.starts_with('.') {
+        return Err("Project name can't contain slashes or start with a dot.".into());
+    }
+
+    let root = projects_root(&app).ok_or("Could not locate ~/Projects.")?;
+    let dir = root.join(name);
+    if dir.exists() {
+        return Err(format!("A project named “{name}” already exists."));
+    }
+
+    std::fs::create_dir_all(dir.join("media")).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(dir.join("designs")).map_err(|e| e.to_string())?;
+
+    let notes = serde_json::json!({ "version": 1, "notes": [] });
+    std::fs::write(
+        dir.join("notes.json"),
+        serde_json::to_string_pretty(&notes).unwrap(),
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Default manifest: repo/figma left blank for the user to fill in.
+    let workspace = Workspace {
+        claude: ClaudeCfg {
+            mode: "terminal".into(),
+        },
+        ..Default::default()
+    };
+    std::fs::write(
+        dir.join("workspace.json"),
+        serde_json::to_string_pretty(&workspace).unwrap(),
+    )
+    .map_err(|e| e.to_string())?;
+
+    let path = dir.to_string_lossy().to_string();
+    activate_project(&app, &path);
+    Ok(Project {
+        name: name.to_string(),
+        path,
+    })
+}
+
+/// Read a project's workspace.json (defaults if absent/partial).
+#[tauri::command]
+fn read_workspace(path: String) -> Result<Workspace, String> {
+    let file = PathBuf::from(&path).join("workspace.json");
+    match std::fs::read_to_string(&file) {
+        Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
+        Err(_) => Ok(Workspace::default()),
+    }
+}
+
+/// Write a project's workspace.json (pretty-printed).
+#[tauri::command]
+fn save_workspace(path: String, workspace: Workspace) -> Result<(), String> {
+    let file = PathBuf::from(&path).join("workspace.json");
+    let text = serde_json::to_string_pretty(&workspace).map_err(|e| e.to_string())?;
+    std::fs::write(&file, text).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![get_active_project])
+        .invoke_handler(tauri::generate_handler![
+            get_active_project,
+            list_projects,
+            open_project,
+            create_project,
+            read_workspace,
+            save_workspace
+        ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.
         .on_window_event(|window, event| {
@@ -191,7 +297,14 @@ pub fn run() {
                 .on_menu_event(|app, event| {
                     let id = event.id.as_ref();
                     match id {
-                        "open_studio" => show_studio(app),
+                        "open_studio" => {
+                            show_studio(app);
+                            let _ = app.emit("show-overview", ());
+                        }
+                        "new_project" => {
+                            show_studio(app);
+                            let _ = app.emit("new-project-request", ());
+                        }
                         "quit" => app.exit(0),
                         _ if id.starts_with(PROJECT_PREFIX) => {
                             activate_project(app, &id[PROJECT_PREFIX.len()..]);
