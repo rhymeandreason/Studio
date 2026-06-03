@@ -16,11 +16,11 @@ Adobe Creative Cloud promised a unified project surface across creative tools an
 
 ## Core model
 - **Project = a folder** under `~/Projects/` (auto-discovered by scanning the directory).
-- **Workspace = `.workspace.json` inside the project folder** — lists apps to launch, files to open, URLs, the Figma URL, and the repo path. Editable by hand or via Studio's UI. The project folder is a *hub*, not a container: it physically holds only the media, notes, and this manifest; the repo and Figma design live elsewhere and are referenced by path / URL.
-- **Repo = a path in the manifest.** `.workspace.json` carries a `repo` field that can point anywhere — a `repo/` subfolder inside the project (the default for newly-created projects) *or* an absolute path to a git directory that already lives elsewhere (e.g. `~/code/lamp-firmware`). Claude Code / the terminal is invoked against this path. The code repo does not have to live inside the project folder.
-- **Figma = a URL in the manifest, not a local file.** Figma files live in the cloud, so a project references its Figma design as a `figma` URL in `.workspace.json`, opened in the browser or Figma desktop app on activation. There is no local `.fig` file to manage.
-- **Media = anything matching image/video/audio extensions** anywhere in the project hub (excluding noise dirs like `.git`, `node_modules`, `.studio`), surfaced in the media panel. Media inside an externally-referenced repo is not scanned — only what lives in the hub folder.
-- **Notes = `.studio/notes.json`** inside the project folder — a small collection of note items. Each note is one of three kinds: **text** (freeform markdown), **checklist** (a titled list of `{text, done}` items), or **table** (a titled grid of columns + rows). One file holds all of a project's notes.
+- **Workspace = `workspace.json` inside the project folder** — lists apps to launch, files to open, URLs, the Figma URL, and the repo path. Editable by hand or via Studio's UI. The project folder is a *hub*, not a container: it physically holds only the media, notes, and this manifest; the repo and Figma design live elsewhere and are referenced by path / URL.
+- **Repo = a path in the manifest.** `workspace.json` carries a `repo` field that can point anywhere — a `repo/` subfolder inside the project (the default for newly-created projects) *or* an absolute path to a git directory that already lives elsewhere (e.g. `~/code/lamp-firmware`). Claude Code / the terminal is invoked against this path. The code repo does not have to live inside the project folder.
+- **Figma = a URL in the manifest, not a local file.** Figma files live in the cloud, so a project references its Figma design as a `figma` URL in `workspace.json`, opened in the browser or Figma desktop app on activation. There is no local `.fig` file to manage.
+- **Media = anything matching image/video/audio extensions** anywhere in the project hub (excluding noise dirs like `.git`, `node_modules`), surfaced in the media panel. Media inside an externally-referenced repo is not scanned — only what lives in the hub folder.
+- **Notes = `notes.json`** inside the project folder — a small collection of note items. Each note is one of three kinds: **text** (freeform markdown), **checklist** (a titled list of `{text, done}` items), or **table** (a titled grid of columns + rows). One file holds all of a project's notes.
 
 Suggested folder layout (not enforced, just convention):
 ```
@@ -29,11 +29,10 @@ Suggested folder layout (not enforced, just convention):
 │                        the manifest's `repo` may instead point to ~/code/...)
 ├── designs/           ← local design scraps, mood boards (Figma itself is cloud)
 ├── media/             ← screenshots, recordings, workshop photos
-├── .studio/
-│   └── notes.json     ← text notes, checklists, tables
-└── .workspace.json    ← what to launch (apps, repo path, figma URL, files, urls)
+├── notes.json         ← text notes, checklists, tables
+└── workspace.json     ← what to launch (apps, repo path, figma URL, files, urls)
 ```
-The repo and the Figma design are *referenced* by the manifest, not necessarily stored here. A minimal project folder is really just `media/`, `.studio/notes.json`, and `.workspace.json`.
+The repo and the Figma design are *referenced* by the manifest, not necessarily stored here. A minimal project folder is really just `media/`, `notes.json`, and `workspace.json`.
 
 ## v0.1 scope (the smallest sharp version)
 
@@ -44,7 +43,7 @@ The repo and the Figma design are *referenced* by the manifest, not necessarily 
 - Shows currently active project at the top.
 
 ### 2. Workspace launcher
-- Reads `.workspace.json` from the activated project.
+- Reads `workspace.json` from the activated project.
 - Opens apps, files, URLs listed in it.
 - Schema (example):
   ```json
@@ -70,7 +69,7 @@ The repo and the Figma design are *referenced* by the manifest, not necessarily 
 - Three tabs or panels:
   - **Media** (default) — thumbnail grid of images/videos in the project, sorted by modified date desc.
   - **Notes** — a list of the project's notes (text, checklists, tables). Add, edit, reorder, delete.
-  - **Workspace** — view/edit `.workspace.json` (form-based UI, not raw JSON).
+  - **Workspace** — view/edit `workspace.json` (form-based UI, not raw JSON).
 
 ### 4. Media panel actions
 On right-click (or selection + toolbar):
@@ -80,14 +79,14 @@ On right-click (or selection + toolbar):
 - **Show in Finder** — standard reveal.
 
 ### 5. Notes panel
-A single scrollable list of note items belonging to the active project, persisted to `.studio/notes.json`. Three note kinds:
+A single scrollable list of note items belonging to the active project, persisted to `notes.json`. Three note kinds:
 - **Text note** — a title + freeform markdown body. Click-to-edit inline; renders markdown when not focused.
 - **Checklist** — a title + a list of items, each a checkbox + label. Add/remove/reorder items, check items off. Shows a small "n of m done" count.
 - **Table** — a title + named columns + rows. Add/remove columns and rows, edit any cell as plain text. No formulas, no types — just a grid of strings. Deliberately minimal (think a few columns, a handful of rows), not a spreadsheet engine.
 
 Toolbar at the top of the panel: **+ Text**, **+ Checklist**, **+ Table**. Each note can be renamed, reordered (drag), and deleted. All edits autosave to `notes.json` (debounced).
 
-Schema (example `.studio/notes.json`):
+Schema (example `notes.json`):
 ```json
 {
   "version": 1,
@@ -111,7 +110,7 @@ Schema (example `.studio/notes.json`):
 
 ### 6. Project creation
 - "New Project" item in the menu bar dropdown.
-- Asks for a name. Creates `~/Projects/<name>/` with empty `media/`, `designs/`, a `.studio/notes.json` seeded with an empty notes list, and a default `.workspace.json`.
+- Asks for a name. Creates `~/Projects/<name>/` with empty `media/`, `designs/`, a `notes.json` seeded with an empty notes list, and a default `workspace.json`.
 - Leaves `repo` and `figma` blank in the new manifest. The user sets them afterward in the Workspace form — `repo` either by pointing at an existing git directory (`~/code/...`) or by creating a `repo/` subfolder. Studio does not `git init` for you.
 
 ## Explicitly out of v0.1
@@ -131,7 +130,7 @@ Schema (example `.studio/notes.json`):
 - **Image editing in the browser: HTML `<canvas>`.** Use [Konva.js](https://konvajs.org/) for the annotation layer (arrows, text, transforms).
 - **Markdown rendering (text notes): [`marked`](https://marked.js.org/)** or similar lightweight library.
 - **Menu bar: `tauri-plugin-positioner` + `tray-icon`** (both standard Tauri ecosystem).
-- **No database.** All project state lives in the project folder's `.workspace.json` and `.studio/notes.json`. Studio's own config (recently-used project, settings) goes in `~/Library/Application Support/Studio/config.json`.
+- **No database.** All project state lives in the project folder's `workspace.json` and `notes.json`. Studio's own config (recently-used project, settings) goes in `~/Library/Application Support/Studio/config.json`.
 - **App launching: `osascript`** (AppleScript via subprocess) for now. It's how every Mac automation tool does it.
 
 ## Build order
@@ -139,19 +138,19 @@ Schema (example `.studio/notes.json`):
 
 1. **M1: Tauri scaffold + menu bar.** Icon in menu bar. Dropdown lists hardcoded "Hello." Clicking opens an empty Studio window. *Goal: prove the shell.*
 2. **M2: Project discovery.** Scan `~/Projects/`. Menu bar dropdown shows real folder names. Clicking one stores it as "active." Studio window header shows active project name. *Goal: real project model.*
-3. **M3: Media panel.** Window shows a thumbnail grid of images in the active project's folder (recursive, image extensions only). Skip noise dirs — `.git`, `node_modules`, `.studio` — so an in-folder `repo/` doesn't flood the grid. Click → preview at full size. *Goal: first useful surface.*
+3. **M3: Media panel.** Window shows a thumbnail grid of images in the active project's folder (recursive, image extensions only). Skip noise dirs — `.git`, `node_modules` — so an in-folder `repo/` doesn't flood the grid. Click → preview at full size. *Goal: first useful surface.*
 4. **M4: Crop / resize.** Right-click an image → modal with canvas + crop handles. Save back or save-as. *Goal: first documentation action.*
 5. **M5: Annotation.** Konva-based overlay. Arrows + text + boxes. Export as `-annotated.png`. *Goal: the action you'll actually use most.*
-6. **M6: Notes tab.** Read/write `.studio/notes.json`. Text notes first (markdown render + inline edit), then checklists, then the table. Autosave. *Goal: lightweight project notes.*
-7. **M7: Workspace launcher.** Read `.workspace.json`. Open apps via `osascript`. Open files. Open URLs. *Goal: the Workspaces.app replacement.*
-8. **M8: New project flow + workspace UI.** Create new projects from menu bar. Edit `.workspace.json` via a form, not raw JSON. *Goal: shippable to yourself.*
+6. **M6: Notes tab.** Read/write `notes.json`. Text notes first (markdown render + inline edit), then checklists, then the table. Autosave. *Goal: lightweight project notes.*
+7. **M7: Workspace launcher.** Read `workspace.json`. Open apps via `osascript`. Open files. Open URLs. *Goal: the Workspaces.app replacement.*
+8. **M8: New project flow + workspace UI.** Create new projects from menu bar. Edit `workspace.json` via a form, not raw JSON. *Goal: shippable to yourself.*
 
 ## Open questions for the human to decide (before / during build)
 1. **Name.** Studio is the working title. Could be Atelier, Workshop, Notebook, anything.
 2. **Activation behavior.** Activating a project: does it open in the existing Studio window or always pop a new one? Recommend: always open the active project in the one window.
 3. **What counts as "media."** Just images and video? Audio? PDFs? Recommend: images + video + audio for v0.1. PDFs are their own rabbit hole.
 4. **Claude Code launch.** Should the workspace launcher open a terminal and run `claude` at the manifest's `repo` path (wherever it lives)? It's nice but requires Terminal/iTerm automation. Recommend: yes for v0.1, via AppleScript to whichever terminal is set as default. Configurable.
-5. **Notes storage.** One `.studio/notes.json` per project holding all note kinds (chosen here). Alternative: one file per note, or per-kind files. Recommend: single JSON file for v0.1 — simplest to load/save, easy to diff. Revisit if notes get large.
+5. **Notes storage.** One `notes.json` per project holding all note kinds (chosen here). Alternative: one file per note, or per-kind files. Recommend: single JSON file for v0.1 — simplest to load/save, easy to diff. Revisit if notes get large.
 6. **Editing in place vs save-as.** Crop/annotate: default to save-as (non-destructive) or overwrite? Recommend: save-as by default, "Replace Original" as a checkbox.
 7. **Distribution.** Just for the human or eventually shareable? Affects whether to invest in code signing / notarization. Recommend: don't worry about signing until v0.2.
 8. **Annotation save format.** PNG only, or also keep an editable Konva JSON next to the image so you can re-edit later? Recommend: PNG for v0.1, editable JSON in v0.2 if you find yourself re-annotating.
@@ -166,7 +165,7 @@ Schema (example `.studio/notes.json`):
 Not in v0.1 scope, but mentioned so the architecture leaves room:
 - A separate background process (Runes) watches an NFC reader and emits `tag_scanned: {uid}` events.
 - Studio will subscribe to these events (HTTP or WebSocket) and map UID → "activate project X."
-- Tag management UI will become a panel in Studio. Each project's `.workspace.json` could gain a `tags: [uid1, uid2]` field.
+- Tag management UI will become a panel in Studio. Each project's `workspace.json` could gain a `tags: [uid1, uid2]` field.
 - For v0.1, design the workspace activation function so it can be triggered programmatically (not only from the UI menu). That's the only forward-compatibility work needed.
 
 ## What a fresh Claude session needs to know to start
