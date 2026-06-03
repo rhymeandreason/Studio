@@ -17,6 +17,14 @@ fn show_studio(app: &tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Closing the window should NOT quit Studio — it lives in the menu bar.
+        // Hide the window instead of destroying it; only "Quit Studio" exits.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .setup(|app| {
             // Menu-bar app: no Dock icon, lives in the system tray.
             #[cfg(target_os = "macos")]
