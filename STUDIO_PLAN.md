@@ -17,7 +17,7 @@ Adobe Creative Cloud promised a unified project surface across creative tools an
 ## Core model
 - **Project = a folder** under `~/Projects/` (auto-discovered by scanning the directory).
 - **Workspace = `workspace.json` inside the project folder** — lists apps to launch, files to open, URLs, the Figma URL, and the repo path. Editable by hand or via Studio's UI. The project folder is a *hub*, not a container: it physically holds only the media, notes, and this manifest; the repo and Figma design live elsewhere and are referenced by path / URL.
-- **Repo = a path in the manifest.** `workspace.json` carries a `repo` field that can point anywhere — a `repo/` subfolder inside the project (the default for newly-created projects) *or* an absolute path to a git directory that already lives elsewhere (e.g. `~/code/lamp-firmware`). Claude Code / the terminal is invoked against this path. The code repo does not have to live inside the project folder.
+- **Repo = a path in the manifest.** `workspace.json` carries a `repo` field that can point anywhere — a `repo/` subfolder inside the project (the default for newly-created projects) *or* an absolute path to a git directory that already lives elsewhere (e.g. `~/code/lamp-firmware`). Claude is pointed at this path on activation (see `claude.mode`). The code repo does not have to live inside the project folder.
 - **Figma = a URL in the manifest, not a local file.** Figma files live in the cloud, so a project references its Figma design as a `figma` URL in `workspace.json`, opened in the browser or Figma desktop app on activation. There is no local `.fig` file to manage.
 - **Media = anything matching image/video/audio extensions** anywhere in the project hub (excluding noise dirs like `.git`, `node_modules`), surfaced in the media panel. Media inside an externally-referenced repo is not scanned — only what lives in the hub folder.
 - **Notes = `notes.json`** inside the project folder — a small collection of note items. Each note is one of three kinds: **text** (freeform markdown), **checklist** (a titled list of `{text, done}` items), or **table** (a titled grid of columns + rows). One file holds all of a project's notes.
@@ -53,15 +53,14 @@ The repo and the Figma design are *referenced* by the manifest, not necessarily 
     "figma": "https://figma.com/file/abc/Lamp",
     "files": ["designs/moodboard.png"],
     "urls": ["https://github.com/user/lamp-prototype"],
-    "terminal": {
-      "command": "claude",
-      "cwd": "{repo}"
-    }
+    "claude": { "mode": "terminal" }
   }
   ```
   - `repo` may be an absolute path (repo living elsewhere) or a path relative to the project folder (e.g. `"repo/"` for new projects).
   - `figma` is a cloud URL, opened in the browser / Figma app — not a local file.
-  - `terminal.cwd` defaults to `{repo}` so Claude Code launches against the repo wherever it lives.
+  - `claude.mode` controls how Claude is launched on activation:
+    - `"terminal"` (default) — run the `claude` CLI in the default terminal, already `cd`'d into `repo` (auto cwd, via AppleScript to whichever terminal is set as default).
+    - `"off"` — don't launch Claude; just open apps/files/URLs.
 - For v0.1, "deactivating" the previous project does *not* close its apps (too risky). Activating just opens the new project's stuff on top.
 
 ### 3. Studio window (one per app, shows active project)
@@ -72,10 +71,51 @@ The repo and the Figma design are *referenced* by the manifest, not necessarily 
   - **Workspace** — view/edit `workspace.json` (form-based UI, not raw JSON).
 
 ### 4. Media panel actions
-On right-click (or selection + toolbar):
-- **Crop / resize** — opens an inline editor (HTML canvas), saves back to the original path or "Save As."
+The grid is the entry point; double-click (or select + "Edit") opens an **image editor** in the Studio window. Quick actions live on right-click / a selection toolbar; deeper editing lives in the editor.
+
+#### 4a. Non-destructive adjustment model
+The editor is **non-destructive**. Adjustments are stored as a small settings object, not baked into the file, until the user explicitly exports. This is what makes copy/paste-settings and re-editing possible.
+- Adjustments for an image are kept in a sidecar: `<image>.studio.json` next to the original (e.g. `hero.png` → `hero.png.studio.json`).
+- The original file is never modified by adjustments. "Export" / "Save As" renders the adjusted result to a new file; "Replace Original" (opt-in) overwrites.
+- If no sidecar exists, the image shows unedited. Deleting the sidecar resets to original.
+
+#### 4b. Adjustments (the editor)
+A right-hand panel. Live canvas preview; **Reset** per-slider (double-click) and **Reset all**.
+
+**Main items** (top of the panel, always visible):
+- **Rotate** — 90° steps + horizontal/vertical flip.
+- **Crop** — drag handles with aspect-ratio presets (free, 1:1, 16:9, 4:5…).
+
+**Sliders** (always visible, each centered at 0):
+- Exposure
+- Contrast
+- Saturation
+- Temperature
+- Tint
+- Highlights
+- Shadows
+
+**Expanded panel** (collapsed by default, "More" disclosure):
+- **Curves** — RGB master curve plus per-channel (R/G/B) curves.
+- (Room to grow: straighten angle, whites/blacks, sharpening — added later only if wanted.)
+
+#### 4c. Copy / paste settings
+- **Copy adjustments** on one image → **Paste adjustments** onto one or more selected images. Writes/merges the source's `.studio.json` into each target's sidecar.
+- Paste options: paste all, or paste a subset (e.g. just white balance + exposure) — useful for batch-correcting a set of screenshots or photos shot under the same light.
+
+#### 4d. Remove background
+- One-click **Remove background** → produces a transparent-background result.
+- Runs **locally** (no upload) via an in-browser segmentation model (WASM). Result is previewed; export writes a PNG (transparency-preserving).
+- Manual touch-up (add/erase mask) is a v0.2 candidate — v0.1 ships the automatic pass only.
+
+#### 4e. Convert & export
+- **Convert HEIC → PNG/JPG** — common for iPhone photos. One action, writes a sibling file (`IMG_1234.heic` → `IMG_1234.jpg`), original kept. Also offered automatically as a hint when a HEIC is opened.
+- **Export for web** — resize to a target max dimension, pick format (WebP / JPG / PNG), quality slider, optional strip-metadata. Shows the resulting file size before saving. Writes a new file (e.g. `hero@web.webp`); never touches the original.
+
+#### 4f. Quick actions (right-click, no editor)
 - **Annotate** — overlay arrows, text, boxes. Exports as PNG next to the original (`screenshot.png` → `screenshot-annotated.png`).
 - **Copy path** — copies the absolute file path to clipboard, ready to paste into Claude Code.
+- **Copy image** — copies the (adjusted) image to the clipboard.
 - **Show in Finder** — standard reveal.
 
 ### 5. Notes panel
@@ -127,33 +167,50 @@ Schema (example `notes.json`):
 ## Tech stack
 - **[Tauri v2](https://v2.tauri.app/) (Rust backend + web frontend)** — small bundle, fast cold start (<500ms), good macOS integration, transparent/decoration-free windows for the menu bar dropdown, file system access via `tauri-plugin-fs`.
 - **Frontend: vanilla JS + HTML + CSS to start.** Add Svelte if state management gets painful, but don't reach for React.
-- **Image editing in the browser: HTML `<canvas>`.** Use [Konva.js](https://konvajs.org/) for the annotation layer (arrows, text, transforms).
+- **Image editing in the browser: HTML `<canvas>`.** Use [Konva.js](https://konvajs.org/) for the annotation layer (arrows, text, transforms). Tonal adjustments (exposure/contrast/curves/white balance) run as WebGL/canvas pixel operations; a small shader-based pipeline (or a lib like [glfx.js](https://github.com/evanw/glfx.js)) keeps the live preview fast.
+- **Adjustments are non-destructive**, stored per-image in a `<image>.studio.json` sidecar. Export bakes them via canvas `toBlob`.
+- **Background removal: local, in-browser.** [`@imgly/background-removal`](https://github.com/imgly/background-removal-js) (ONNX/WASM, runs offline). No image leaves the machine. First run downloads the model once and caches it.
+- **HEIC conversion: macOS `sips`** via subprocess (`sips -s format jpeg in.heic --out out.jpg`) — built into macOS, no dependency. Same path can power "Export for web" resizing if canvas encoding proves limiting.
 - **Markdown rendering (text notes): [`marked`](https://marked.js.org/)** or similar lightweight library.
 - **Menu bar: `tauri-plugin-positioner` + `tray-icon`** (both standard Tauri ecosystem).
 - **No database.** All project state lives in the project folder's `workspace.json` and `notes.json`. Studio's own config (recently-used project, settings) goes in `~/Library/Application Support/Studio/config.json`.
 - **App launching: `osascript`** (AppleScript via subprocess) for now. It's how every Mac automation tool does it.
 
 ## Build order
-**Days are loose — call them "milestones." Realistic timeline is 1–2 weeks of evening/weekend work.**
+**Days are loose — call them "milestones."** Realistic timeline is ~3–4 weeks of evening/weekend work, the bulk of it the media editor (M7–M12). The order front-loads the **project-hub daily driver** (M1–M5): after M5 Studio is genuinely usable — activate a project, launch its apps/Claude, keep notes — even before any image editing exists. The media editor then layers on as a self-contained block. Natural cut line for a first usable build: ship **M1–M6**, treat the editor (M7+) as a fast-follow.
 
+*Project hub (makes Studio a usable daily driver):*
 1. **M1: Tauri scaffold + menu bar.** Icon in menu bar. Dropdown lists hardcoded "Hello." Clicking opens an empty Studio window. *Goal: prove the shell.*
 2. **M2: Project discovery.** Scan `~/Projects/`. Menu bar dropdown shows real folder names. Clicking one stores it as "active." Studio window header shows active project name. *Goal: real project model.*
-3. **M3: Media panel.** Window shows a thumbnail grid of images in the active project's folder (recursive, image extensions only). Skip noise dirs — `.git`, `node_modules` — so an in-folder `repo/` doesn't flood the grid. Click → preview at full size. *Goal: first useful surface.*
-4. **M4: Crop / resize.** Right-click an image → modal with canvas + crop handles. Save back or save-as. *Goal: first documentation action.*
-5. **M5: Annotation.** Konva-based overlay. Arrows + text + boxes. Export as `-annotated.png`. *Goal: the action you'll actually use most.*
-6. **M6: Notes tab.** Read/write `notes.json`. Text notes first (markdown render + inline edit), then checklists, then the table. Autosave. *Goal: lightweight project notes.*
-7. **M7: Workspace launcher.** Read `workspace.json`. Open apps via `osascript`. Open files. Open URLs. *Goal: the Workspaces.app replacement.*
-8. **M8: New project flow + workspace UI.** Create new projects from menu bar. Edit `workspace.json` via a form, not raw JSON. *Goal: shippable to yourself.*
+3. **M3: New project flow + workspace UI.** Create new projects from the menu bar (scaffold `media/`, `designs/`, `notes.json`, default `workspace.json`). Edit `workspace.json` via a form (apps, repo, figma, files, urls, `claude.mode`), not raw JSON. *Goal: produce real, valid manifests from inside the app — the thing M4 consumes.*
+4. **M4: Workspace launcher.** Read `workspace.json`. Open apps via `osascript`, open files/URLs, and launch Claude per `claude.mode` (default: run `claude` in the default terminal, `cd`'d into `repo`). *Goal: the core activation loop — the Workspaces.app replacement.*
+5. **M5: Notes tab.** Read/write `notes.json`. Text notes first (markdown render + inline edit), then checklists, then the table. Autosave. *Goal: completes the hub — Studio is now dogfoodable.*
 
-## Open questions for the human to decide (before / during build)
-1. **Name.** Studio is the working title. Could be Atelier, Workshop, Notebook, anything.
-2. **Activation behavior.** Activating a project: does it open in the existing Studio window or always pop a new one? Recommend: always open the active project in the one window.
-3. **What counts as "media."** Just images and video? Audio? PDFs? Recommend: images + video + audio for v0.1. PDFs are their own rabbit hole.
-4. **Claude Code launch.** Should the workspace launcher open a terminal and run `claude` at the manifest's `repo` path (wherever it lives)? It's nice but requires Terminal/iTerm automation. Recommend: yes for v0.1, via AppleScript to whichever terminal is set as default. Configurable.
-5. **Notes storage.** One `notes.json` per project holding all note kinds (chosen here). Alternative: one file per note, or per-kind files. Recommend: single JSON file for v0.1 — simplest to load/save, easy to diff. Revisit if notes get large.
-6. **Editing in place vs save-as.** Crop/annotate: default to save-as (non-destructive) or overwrite? Recommend: save-as by default, "Replace Original" as a checkbox.
-7. **Distribution.** Just for the human or eventually shareable? Affects whether to invest in code signing / notarization. Recommend: don't worry about signing until v0.2.
-8. **Annotation save format.** PNG only, or also keep an editable Konva JSON next to the image so you can re-edit later? Recommend: PNG for v0.1, editable JSON in v0.2 if you find yourself re-annotating.
+*Media editor (the documentation workhorse):*
+6. **M6: Media grid + HEIC.** Thumbnail grid of images in the active project (recursive, image extensions only; skip `.git`, `node_modules`). HEIC decode/convert via `sips` happens here — it's a prerequisite for showing or editing iPhone photos at all, not a late add-on. Click → full-size preview. *Goal: first media surface, working on real iPhone files.*
+7. **M7: Editor shell + crop/rotate + sidecar.** Open an image in the editor. Crop, straighten, rotate/flip. Establish the non-destructive `<image>.studio.json` sidecar and the Export / Replace-Original flow. *Goal: the editor skeleton + the file model everything else hangs on.*
+8. **M8: Tonal adjustments.** The seven sliders — exposure, contrast, saturation, temperature, tint, highlights, shadows — with live canvas preview. Curves in the expanded panel. *Goal: real photo correction.*
+9. **M9: Copy / paste settings.** Copy adjustments from one image, paste (all or subset) onto a selection. *Goal: batch consistency.*
+10. **M10: Export for web.** Resize + format (WebP/JPG/PNG) + quality + size readout, writing a new file. *Goal: get images out in the right format.* (HEIC→PNG/JPG already landed in M6.)
+11. **M11: Remove background.** Local WASM segmentation, transparent-PNG export. *Goal: the headline trick.*
+12. **M12: Annotation.** Konva overlay — arrows + text + boxes. Export as `-annotated.png`. *Goal: fast markup.*
+
+## Decisions (settled) & open questions
+
+**Settled:**
+1. **Name.** Studio. (Working title kept as the real name for now.)
+2. **Activation behavior.** One window — activating a project swaps its contents in the single Studio window.
+3. **What counts as "media."** Images (incl. HEIC, converted on demand) + video + audio. No PDFs in v0.1.
+4. **Claude launch.** Default `claude.mode: "terminal"` — run the `claude` CLI in the default terminal, auto-`cd`'d into `repo` (AppleScript). Per-project override to `"off"`. (Desktop-app launch dropped for v0.1 — terminal gives automatic cwd and avoids the folder-deep-link unknown.)
+5. **Notes storage.** Single `notes.json` per project holding all note kinds. Revisit if notes get large.
+6. **Editing model.** Non-destructive; adjustments in a visible `<image>.studio.json` sidecar; export writes a new file, "Replace Original" opt-in. Revisit sidecar clutter if it gets noisy.
+7. **Background-removal model.** `@imgly/background-removal`, fetch-and-cache on first use (not bundled).
+8. **Export-for-web encoding.** Start with canvas `toBlob`; switch to `sips`/`cwebp` only if quality/size disappoints.
+9. **Distribution.** Personal use for v0.1; no code signing / notarization until v0.2.
+10. **Annotation save format.** PNG only for v0.1; editable Konva JSON deferred to v0.2 if re-annotating becomes common.
+
+**Still open:**
+- *(None outstanding — the Claude desktop deep-link question is moot now that terminal mode is the default.)*
 
 ## What Studio explicitly does *not* do (and where the limits are)
 - It does not replace Figma, Photoshop, Cursor, or Claude Code. It orchestrates them.
