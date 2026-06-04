@@ -15,12 +15,6 @@ Current impl (on `main`): native macOS **Vision** via a Swift helper
 compiled by `build.rs` and shelled out to by `remove_background`. Fast, offline,
 no model download. The portable `ort`/ISNet version is preserved at tag
 `bg-removal-ort`.
-- **Bundle the Swift helper for `tauri build`.** The compiled `bgremove` binary
-  currently lives in `target/.../build/.../out/` (path injected via `BGREMOVE_BIN`)
-  — fine for `tauri dev`, but a packaged app won't have that path. Before
-  shipping: bundle it as a resource (or `.app` sidecar) and resolve it at runtime
-  instead of `env!("BGREMOVE_BIN")`. Also hardcodes `-target arm64` — add x86_64
-  if a universal build is ever needed.
 - **macOS 14+ requirement.** The Vision API and the Swift helper target
   `macosx14.0`. The helper exits non-zero on older OSes; set the app's minimum
   system version and/or surface a friendlier message.
@@ -37,3 +31,33 @@ no model download. The portable `ort`/ISNet version is preserved at tag
   per session — first view of a project with many edited images is still heavy.
   Optimize by baking adjustments on a downscaled base in Rust and/or persisting
   the baked thumbnails on disk (`$APPCACHE`) keyed by path + sidecar mtime.
+
+## Packaging (before shipping a real `.app`)
+- **Bundle the Swift helpers.** Three helpers — `bgremove`, `qlthumb`, `pbimage`
+  — are compiled by `build.rs` into `target/.../build/.../out/` and located via
+  `env!("…_BIN")`. Fine for `tauri dev`, but a packaged `tauri build` won't have
+  those paths. Ship them as bundled resources / `.app` sidecars and resolve at
+  runtime. They also hardcode `-target arm64`; add x86_64 for a universal build.
+- **App minimum system version.** Set it to macOS 14 (Vision foreground mask),
+  or gate that one feature and lower the floor.
+- **Code signing / notarization.** Per the plan, deferred until there's a reason
+  to distribute.
+
+## Native macOS feature ideas (not started)
+Studio is a thin native surface over your files, so prefer macOS frameworks.
+- **Vision OCR** (`VNRecognizeTextRequest`, same framework as background
+  removal). Extract text from screenshots → a "Copy text" action in the lightbox,
+  and eventually make media searchable by their recognized text. High relevance
+  for designer-devs who screenshot errors/UIs.
+- **NSWorkspace for the launcher.** Replace `open`/`osascript` with NSWorkspace;
+  pull real **app icons** (`icon(forFile:)`) to show in the Workspace form, and
+  the running-apps list. Makes the launcher feel native.
+- **Capture into project** (`screencapture` CLI / ScreenCaptureKit). A button to
+  grab a screenshot straight into the active project's `media/`.
+- **Share sheet** (`NSSharingServicePicker`). Native AirDrop/Messages/Mail on an
+  exported image or background-removed cutout.
+- **Core Image for export-quality tonal** (`CIFilter`, color-managed/GPU). Keep
+  the WebGL pipeline for *live* preview (zero IPC latency); optionally use Core
+  Image only for the final baked export. Quality upgrade, not a replacement.
+- **AVFoundation video** (`AVAssetImageGenerator` poster frames; trimming). For
+  when video editing enters scope — the plan's v0.2 "trim" candidate.
