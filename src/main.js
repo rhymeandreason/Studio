@@ -396,6 +396,19 @@ async function mediaSrc(item) {
   return convert(item.path);
 }
 
+// Paste an image from the clipboard into the active project's media/.
+async function pasteImageFromClipboard() {
+  if (!activeProject) return;
+  try {
+    await invoke("paste_image", { projectPath: activeProject.path });
+    selectTab("media");
+    loadMedia(activeProject.path);
+  } catch (err) {
+    // Usually just "No image in clipboard" — ignore quietly.
+    console.debug("paste_image:", err);
+  }
+}
+
 // Shared offscreen GL canvas for rendering edited thumbnails (one context).
 const thumbGLCanvas = document.createElement("canvas");
 // Cache of baked thumbnail data URLs by image path; invalidated when its edits
@@ -1424,10 +1437,16 @@ function initMedia() {
       }
       return;
     }
-    // Grid context: Cmd+V pastes onto the selected tiles.
-    if (mod && (e.key === "v" || e.key === "V") && mediaSelection.size) {
+    // Grid context: Cmd+V pastes onto selected tiles, or a clipboard image
+    // into the project. Leave text fields alone so normal paste still works.
+    if (mod && (e.key === "v" || e.key === "V")) {
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT" || ae.isContentEditable)) {
+        return;
+      }
       e.preventDefault();
-      batchPaste();
+      if (mediaSelection.size) batchPaste();
+      else if (activeProject) pasteImageFromClipboard();
     }
   });
   document.getElementById("lb-close").addEventListener("click", closeLightbox);

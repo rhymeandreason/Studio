@@ -691,6 +691,28 @@ fn remove_background(png_base64: String) -> Result<String, String> {
     Ok(STANDARD.encode(&png))
 }
 
+/// Paste an image from the clipboard into a project's media/ folder (PNG).
+/// Returns the new file path; errors if the clipboard has no image.
+#[tauri::command]
+fn paste_image(project_path: String) -> Result<String, String> {
+    let media = PathBuf::from(&project_path).join("media");
+    std::fs::create_dir_all(&media).map_err(|e| e.to_string())?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let dest = media.join(format!("pasted-{stamp}.png"));
+
+    let status = Command::new(env!("PBIMAGE_BIN"))
+        .arg(&dest)
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !status.success() {
+        return Err("No image in clipboard".into());
+    }
+    Ok(dest.to_string_lossy().to_string())
+}
+
 /// Reveal a file in Finder.
 #[tauri::command]
 fn reveal_in_finder(path: String) -> Result<(), String> {
@@ -817,6 +839,7 @@ pub fn run() {
             heic_preview,
             convert_heic,
             import_media,
+            paste_image,
             reveal_in_finder,
             remove_background,
             encode_webp,

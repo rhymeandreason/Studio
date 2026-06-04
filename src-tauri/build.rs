@@ -19,6 +19,13 @@ fn main() {
     println!("cargo:rustc-env=QLTHUMB_BIN={}", ql_bin.display());
     println!("cargo:rerun-if-changed={ql_src}");
 
+    // Clipboard-image helper (NSPasteboard → PNG).
+    let pb_src = "swift/pbimage.swift";
+    let pb_bin = Path::new(&out_dir).join("pbimage");
+    swiftc(pb_src, &pb_bin, "macosx11.0");
+    println!("cargo:rustc-env=PBIMAGE_BIN={}", pb_bin.display());
+    println!("cargo:rerun-if-changed={pb_src}");
+
     tauri_build::build();
 }
 
