@@ -178,7 +178,15 @@
       <div class="lightbox__stage" id="lb-stage">
         <div class="editor" id="editor">
           <div class="editor__canvas-wrap" id="editor-canvas-wrap">
-            <canvas id="editor-canvas"></canvas>
+            <div class="canvasstack" id="canvasstack">
+              <canvas id="editor-canvas"></canvas>
+              <div class="crop" id="crop">
+                <span class="crop__h" data-h="nw"></span>
+                <span class="crop__h" data-h="ne"></span>
+                <span class="crop__h" data-h="sw"></span>
+                <span class="crop__h" data-h="se"></span>
+              </div>
+            </div>
           </div>
           <aside class="editor__panel">
             <div class="editgroup">
@@ -197,6 +205,19 @@
                   <span class="mi" style="transform: rotate(90deg)">flip</span>
                 </button>
               </div>
+            </div>
+
+            <div class="editgroup">
+              <span class="editgroup__label">Crop</span>
+              <div class="editbtns editbtns--wrap">
+                <button class="chip" data-aspect="free">Free</button>
+                <button class="chip" data-aspect="1">1:1</button>
+                <button class="chip" data-aspect="1.7778">16:9</button>
+                <button class="chip" data-aspect="0.8">4:5</button>
+              </div>
+              <button class="chip chip--reset" id="ed-cropreset">
+                <span class="mi mi-sm">crop_free</span>Reset crop
+              </button>
             </div>
 
             <div class="editgroup">

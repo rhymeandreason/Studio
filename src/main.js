@@ -445,7 +445,19 @@ let editState = null; // current adjustments
 let editSaveTimer = null;
 
 function defaultEdits() {
-  return { version: 1, rotate: 0, flipH: false, flipV: false, straighten: 0 };
+  return {
+    version: 1,
+    rotate: 0,
+    flipH: false,
+    flipV: false,
+    straighten: 0,
+    crop: null, // { x, y, w, h } as fractions of the oriented image; null = full
+    cropAspect: null, // width/height ratio for locked resizing; null = free
+  };
+}
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
 }
 
 // Minimum uniform scale so rotating a w×h frame by `deg` leaves no empty corners.
@@ -502,6 +514,151 @@ function renderEditorPreview() {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(oriented, 0, 0, canvas.width, canvas.height);
+  positionCrop();
+}
+
+// --- Crop overlay ----------------------------------------------------------
+
+function currentCrop() {
+  return editState.crop || { x: 0, y: 0, w: 1, h: 1 };
+}
+
+function positionCrop() {
+  const canvas = document.getElementById("editor-canvas");
+  const el = document.getElementById("crop");
+  const c = currentCrop();
+  el.style.left = `${c.x * canvas.width}px`;
+  el.style.top = `${c.y * canvas.height}px`;
+  el.style.width = `${c.w * canvas.width}px`;
+  el.style.height = `${c.h * canvas.height}px`;
+}
+
+let cropDrag = null;
+let suppressLightboxClick = false;
+
+function onCropPointerDown(e) {
+  const canvas = document.getElementById("editor-canvas");
+  const c = currentCrop();
+  cropDrag = {
+    mode: e.target.dataset.h || "move",
+    startX: e.clientX,
+    startY: e.clientY,
+    cw: canvas.width,
+    ch: canvas.height,
+    rect: {
+      x: c.x * canvas.width,
+      y: c.y * canvas.height,
+      w: c.w * canvas.width,
+      h: c.h * canvas.height,
+    },
+  };
+  e.preventDefault();
+  window.addEventListener("pointermove", onCropPointerMove);
+  window.addEventListener("pointerup", onCropPointerUp);
+}
+
+function onCropPointerMove(e) {
+  if (!cropDrag) return;
+  const { cw, ch, mode } = cropDrag;
+  const dx = e.clientX - cropDrag.startX;
+  const dy = e.clientY - cropDrag.startY;
+  const R = editState.cropAspect;
+  const MIN = 24;
+  let { x, y, w, h } = cropDrag.rect;
+
+  if (mode === "move") {
+    x = clamp(x + dx, 0, cw - w);
+    y = clamp(y + dy, 0, ch - h);
+  } else {
+    let left = x;
+    let top = y;
+    let right = x + w;
+    let bottom = y + h;
+    if (mode.includes("w")) left = clamp(x + dx, 0, right - MIN);
+    if (mode.includes("e")) right = clamp(x + w + dx, left + MIN, cw);
+    if (mode.includes("n")) top = clamp(y + dy, 0, bottom - MIN);
+    if (mode.includes("s")) bottom = clamp(y + h + dy, top + MIN, ch);
+
+    if (R) {
+      // Lock ratio: derive height from width, anchored to the dragged corner.
+      let nw = right - left;
+      let nh = nw / R;
+      if (mode.includes("n")) top = bottom - nh;
+      else bottom = top + nh;
+      if (top < 0) {
+        top = 0;
+        nh = bottom - top;
+        nw = nh * R;
+        if (mode.includes("w")) left = right - nw;
+        else right = left + nw;
+      }
+      if (bottom > ch) {
+        bottom = ch;
+        nh = bottom - top;
+        nw = nh * R;
+        if (mode.includes("w")) left = right - nw;
+        else right = left + nw;
+      }
+    }
+    x = left;
+    y = top;
+    w = right - left;
+    h = bottom - top;
+  }
+
+  editState.crop = { x: x / cw, y: y / ch, w: w / cw, h: h / ch };
+  positionCrop();
+}
+
+function onCropPointerUp() {
+  window.removeEventListener("pointermove", onCropPointerMove);
+  window.removeEventListener("pointerup", onCropPointerUp);
+  cropDrag = null;
+  // The synthetic click after a drag can land on the stage and would otherwise
+  // trigger backdrop-close. Swallow it.
+  suppressLightboxClick = true;
+  scheduleEditsSave();
+}
+
+function highlightAspect(R) {
+  document.querySelectorAll("[data-aspect]").forEach((b) => {
+    const v = b.dataset.aspect === "free" ? null : Number(b.dataset.aspect);
+    b.classList.toggle("is-active", v === R);
+  });
+}
+
+function applyAspect(R) {
+  editState.cropAspect = R;
+  if (R) {
+    const canvas = document.getElementById("editor-canvas");
+    const cw = canvas.width;
+    const ch = canvas.height;
+    let w, h;
+    if (cw / ch > R) {
+      h = ch;
+      w = ch * R;
+    } else {
+      w = cw;
+      h = cw / R;
+    }
+    editState.crop = {
+      x: (cw - w) / 2 / cw,
+      y: (ch - h) / 2 / ch,
+      w: w / cw,
+      h: h / ch,
+    };
+  }
+  positionCrop();
+  highlightAspect(R);
+  scheduleEditsSave();
+}
+
+function resetCrop() {
+  editState.crop = null;
+  editState.cropAspect = null;
+  positionCrop();
+  highlightAspect(null);
+  scheduleEditsSave();
 }
 
 function setEditStatus(text) {
@@ -525,6 +682,7 @@ function scheduleEditsSave() {
 function syncEditorControls() {
   document.getElementById("ed-straighten").value = editState.straighten || 0;
   document.getElementById("ed-straighten-val").textContent = `${editState.straighten || 0}°`;
+  highlightAspect(editState.cropAspect ?? null);
 }
 
 function blobToBase64(blob) {
@@ -543,8 +701,23 @@ async function exportEdited(replace) {
   const mime = jpeg ? "image/jpeg" : "image/png";
   const outExt = jpeg ? "jpg" : "png";
 
+  // Apply crop (fractions of the oriented image).
+  let out = oriented;
+  const c = editState.crop;
+  if (c && (c.x > 0 || c.y > 0 || c.w < 1 || c.h < 1)) {
+    const sx = Math.round(c.x * oriented.width);
+    const sy = Math.round(c.y * oriented.height);
+    const sw = Math.max(1, Math.round(c.w * oriented.width));
+    const sh = Math.max(1, Math.round(c.h * oriented.height));
+    const cropped = document.createElement("canvas");
+    cropped.width = sw;
+    cropped.height = sh;
+    cropped.getContext("2d").drawImage(oriented, sx, sy, sw, sh, 0, 0, sw, sh);
+    out = cropped;
+  }
+
   try {
-    const blob = await new Promise((res) => oriented.toBlob(res, mime, 0.92));
+    const blob = await new Promise((res) => out.toBlob(res, mime, 0.92));
     const b64 = await blobToBase64(blob);
     const dest = replace
       ? editItem.path
@@ -591,6 +764,15 @@ function initEditor() {
     syncEditorControls();
     apply();
   });
+
+  // Crop interactions.
+  document.getElementById("crop").addEventListener("pointerdown", onCropPointerDown);
+  document.querySelectorAll("[data-aspect]").forEach((b) =>
+    b.addEventListener("click", () =>
+      applyAspect(b.dataset.aspect === "free" ? null : Number(b.dataset.aspect))
+    )
+  );
+  document.getElementById("ed-cropreset").addEventListener("click", resetCrop);
   window.addEventListener("resize", () => {
     if (editImg) renderEditorPreview();
   });
@@ -605,6 +787,10 @@ function initMedia() {
   });
   document.getElementById("lb-close").addEventListener("click", closeLightbox);
   document.getElementById("lightbox").addEventListener("click", (e) => {
+    if (suppressLightboxClick) {
+      suppressLightboxClick = false;
+      return;
+    }
     if (e.target.id === "lightbox" || e.target.classList.contains("lightbox__stage")) {
       closeLightbox();
     }
