@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -534,136 +534,46 @@ fn encode_webp(png_base64: String, quality: f32) -> Result<String, String> {
     Ok(STANDARD.encode(&*out))
 }
 
-// --- Background removal (native ONNX Runtime + ISNet) ----------------------
+// --- Background removal (macOS Vision framework) ---------------------------
 
-// IS-Net general-use model (Apache-2.0, permissive). Downloaded once into the
-// app cache; not bundled in git.
-const ISNET_URL: &str =
-    "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx";
-const ISNET_SIZE: u32 = 1024;
-
-static BG_SESSION: OnceLock<Mutex<Option<ort::session::Session>>> = OnceLock::new();
-
-/// Ensure the ISNet model is present locally (download once), return its path.
-fn ensure_model(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?
-        .join("models");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = dir.join("isnet-general-use.onnx");
-    if !path.exists() {
-        let resp = ureq::get(ISNET_URL).call().map_err(|e| e.to_string())?;
-        let tmp = path.with_extension("downloading");
-        let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
-        std::io::copy(&mut resp.into_reader(), &mut file).map_err(|e| e.to_string())?;
-        std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
-    }
-    Ok(path)
-}
-
-/// Whether the ISNet model has already been downloaded (so the UI can show a
-/// download hint only on the genuine first run).
+/// Remove the background from a PNG (base64) using the bundled Swift helper
+/// (Apple's Vision foreground-instance mask — the tech behind Finder's
+/// Remove Background). Returns a transparent PNG (base64).
 #[tauri::command]
-fn bg_model_ready(app: AppHandle) -> bool {
-    app.path()
-        .app_cache_dir()
-        .map(|d| d.join("models/isnet-general-use.onnx").exists())
-        .unwrap_or(false)
-}
-
-/// Run ISNet on a 1024×1024 CHW-normalized input; returns the raw mask plane.
-fn run_isnet(app: &AppHandle, input: Vec<f32>) -> Result<Vec<f32>, String> {
-    let cell = BG_SESSION.get_or_init(|| Mutex::new(None));
-    let mut guard = cell.lock().unwrap();
-    if guard.is_none() {
-        let path = ensure_model(app)?;
-        let session = ort::session::Session::builder()
-            .map_err(|e| e.to_string())?
-            .commit_from_file(path)
-            .map_err(|e| e.to_string())?;
-        *guard = Some(session);
-    }
-    let session = guard.as_mut().unwrap();
-    let input_name = session.inputs()[0].name().to_string();
-    let n = (ISNET_SIZE * ISNET_SIZE) as usize;
-    let tensor =
-        ort::value::Tensor::from_array(([1usize, 3, ISNET_SIZE as usize, ISNET_SIZE as usize], input))
-            .map_err(|e| e.to_string())?;
-    let outputs = session
-        .run(ort::inputs![input_name => tensor])
-        .map_err(|e| e.to_string())?;
-    let (_, data) = outputs[0]
-        .try_extract_tensor::<f32>()
-        .map_err(|e| e.to_string())?;
-    Ok(data[..n].to_vec())
-}
-
-/// Remove the background from a PNG (base64), returning a transparent PNG (base64).
-#[tauri::command]
-fn remove_background(app: AppHandle, png_base64: String) -> Result<String, String> {
+fn remove_background(png_base64: String) -> Result<String, String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
-    use image::imageops::FilterType;
 
     let bytes = STANDARD.decode(png_base64.as_bytes()).map_err(|e| e.to_string())?;
-    let orig = image::load_from_memory(&bytes)
-        .map_err(|e| e.to_string())?
-        .to_rgb8();
-    let (ow, oh) = orig.dimensions();
-    let size = ISNET_SIZE;
-    let plane = (size * size) as usize;
 
-    // Preprocess: resize → CHW, normalize (x/255 - 0.5).
-    let small = image::imageops::resize(&orig, size, size, FilterType::Triangle);
-    let mut input = vec![0f32; 3 * plane];
-    for y in 0..size {
-        for x in 0..size {
-            let p = small.get_pixel(x, y);
-            let idx = (y * size + x) as usize;
-            input[idx] = p[0] as f32 / 255.0 - 0.5;
-            input[plane + idx] = p[1] as f32 / 255.0 - 0.5;
-            input[2 * plane + idx] = p[2] as f32 / 255.0 - 0.5;
-        }
+    // The Vision helper reads/writes files; use unique temp paths.
+    let dir = std::env::temp_dir();
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let in_path = dir.join(format!("studio-bg-{stamp}-in.png"));
+    let out_path = dir.join(format!("studio-bg-{stamp}-out.png"));
+
+    std::fs::write(&in_path, &bytes).map_err(|e| e.to_string())?;
+    let result = Command::new(env!("BGREMOVE_BIN"))
+        .arg(&in_path)
+        .arg(&out_path)
+        .output();
+    let _ = std::fs::remove_file(&in_path);
+
+    let output = result.map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        let _ = std::fs::remove_file(&out_path);
+        let msg = String::from_utf8_lossy(&output.stderr);
+        return Err(if msg.trim().is_empty() {
+            "background removal failed".into()
+        } else {
+            msg.trim().to_string()
+        });
     }
 
-    let mask = run_isnet(&app, input)?;
-
-    // Normalize mask to 0..1 and build a grayscale alpha at model resolution.
-    let (mut mn, mut mx) = (f32::MAX, f32::MIN);
-    for &v in &mask {
-        mn = mn.min(v);
-        mx = mx.max(v);
-    }
-    let range = (mx - mn).max(1e-6);
-    let mut mask_img = image::GrayImage::new(size, size);
-    for y in 0..size {
-        for x in 0..size {
-            let v = (mask[(y * size + x) as usize] - mn) / range;
-            mask_img.put_pixel(x, y, image::Luma([(v * 255.0).clamp(0.0, 255.0) as u8]));
-        }
-    }
-    let mask_full = image::imageops::resize(&mask_img, ow, oh, FilterType::Triangle);
-
-    // Compose RGBA: original colour + ISNet mask as alpha.
-    let mut out = image::RgbaImage::new(ow, oh);
-    for y in 0..oh {
-        for x in 0..ow {
-            let rgb = orig.get_pixel(x, y);
-            let a = mask_full.get_pixel(x, y)[0];
-            out.put_pixel(x, y, image::Rgba([rgb[0], rgb[1], rgb[2], a]));
-        }
-    }
-
-    let mut png = Vec::new();
-    image::ImageEncoder::write_image(
-        image::codecs::png::PngEncoder::new(&mut png),
-        &out,
-        ow,
-        oh,
-        image::ExtendedColorType::Rgba8,
-    )
-    .map_err(|e| e.to_string())?;
+    let png = std::fs::read(&out_path).map_err(|e| e.to_string())?;
+    let _ = std::fs::remove_file(&out_path);
     Ok(STANDARD.encode(&png))
 }
 
@@ -793,7 +703,6 @@ pub fn run() {
             import_media,
             reveal_in_finder,
             remove_background,
-            bg_model_ready,
             encode_webp,
             read_image_data,
             read_edits,

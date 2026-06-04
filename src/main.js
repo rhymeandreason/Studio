@@ -1287,8 +1287,7 @@ async function removeBg() {
   if (!editImg) return;
   const btn = document.getElementById("ed-removebg");
   btn.disabled = true;
-  const ready = await invoke("bg_model_ready");
-  setEditStatus(ready ? "Removing background…" : "Downloading model (~170 MB)…");
+  setEditStatus("Removing background…");
   try {
     // Bake at full resolution, hand the PNG to the native ISNet command.
     const canvas = bakeCanvas(editImg, editState, { maxDim: 0, format: "png", quality: 100 });
