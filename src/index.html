@@ -267,10 +267,33 @@
               </div>
             </div>
 
+            <div class="editgroup">
+              <span class="editgroup__label">Background</span>
+              <button class="chip chip--reset" id="ed-removebg">
+                <span class="mi mi-sm">auto_fix_high</span>Remove background
+              </button>
+            </div>
+
             <button class="btn-ghost editreset" id="ed-reset">
               <span class="mi mi-sm">restart_alt</span>Reset all
             </button>
           </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- Background-removal cutout preview -->
+    <div class="modal cutout" id="cutout" hidden>
+      <div class="modal__card cutout__card">
+        <h2 class="modal__title">Background removed</h2>
+        <div class="cutout__stage">
+          <img class="cutout__img" id="cutout-img" alt="cutout" />
+        </div>
+        <div class="modal__actions">
+          <button class="btn-ghost" id="cutout-cancel">Cancel</button>
+          <button class="btn-save" id="cutout-save">
+            <span class="mi mi-sm">save</span>Save cutout
+          </button>
         </div>
       </div>
     </div>

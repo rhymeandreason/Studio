@@ -193,7 +193,6 @@ Schema (example `notes.json`):
 9. **M9: Copy / paste settings.** Copy adjustments from one image, paste (all or subset) onto a selection. *Goal: batch consistency.*
 10. **M10: Export for web.** Resize + format (WebP/JPG/PNG) + quality + size readout, writing a new file. *Goal: get images out in the right format.* (HEIC→PNG/JPG already landed in M6.)
 11. **M11: Remove background.** Local WASM segmentation, transparent-PNG export. *Goal: the headline trick.*
-12. **M12: Annotation.** Konva overlay — arrows + text + boxes. Export as `-annotated.png`. *Goal: fast markup.*
 
 ## Decisions (settled) & open questions
 
