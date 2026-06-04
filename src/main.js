@@ -473,57 +473,86 @@ async function qlSrc(item) {
 
 const KIND_ICONS = { video: "play_circle", audio: "music_note", doc: "description" };
 
+// Build a media tile (queues its thumbnail load). `edited` collects edited
+// images to bake after the grid is laid out.
+function buildMediaTile(item, edited) {
+  const isImage = item.kind === "image";
+  const tile = el("button", "mediatile", { type: "button", title: item.name });
+  tile.dataset.path = item.path;
+  tile.dataset.sig = `${item.modified}|${item.edits_mtime}`;
+  const img = el("img", "mediatile__img", { loading: "lazy", alt: item.name });
+  if (item.is_heic) tile.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
+  if (!isImage) tile.append(el("span", "mediatile__kind", { innerHTML: mi(KIND_ICONS[item.kind] || "insert_drive_file") }));
+  tile.append(img);
+
+  if (isImage) {
+    const check = el("span", "mediatile__check", { title: "Select" });
+    check.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleSelect(item.path, tile);
+    });
+    tile.append(check);
+  }
+  if (mediaSelection.has(item.path)) tile.classList.add("is-selected");
+
+  tile.addEventListener("click", () => {
+    if (isImage) openLightbox(item);
+    else invoke("open_path", { path: item.path });
+  });
+
+  if (isImage && item.has_edits) {
+    if (thumbCache.has(item.path)) img.src = thumbCache.get(item.path);
+    else edited.push({ item, img });
+  } else {
+    qlSrc(item).then((src) => {
+      if (src) img.src = src;
+    });
+  }
+  return tile;
+}
+
+// Reconcile the grid against the project's media — reuse unchanged tiles so the
+// grid doesn't blank-and-rebuild (which caused a flicker on every refresh).
 async function loadMedia(path) {
   mediaProjectPath = path;
-  clearSelection();
   const grid = document.getElementById("media-grid");
-  grid.innerHTML = "";
   const items = await invoke("list_media", { path });
+
+  // Prune selection to files that still exist.
+  const present = new Set(items.map((i) => i.path));
+  for (const p of [...mediaSelection]) if (!present.has(p)) mediaSelection.delete(p);
+  updateSelbar();
 
   if (!items.length) {
     grid.innerHTML = `<p class="placeholder">No media in this project yet.</p>`;
     return;
   }
 
+  const existing = new Map();
+  grid.querySelectorAll(".mediatile").forEach((t) => existing.set(t.dataset.path, t));
+
   const edited = [];
+  const desired = [];
   for (const item of items) {
-    const isImage = item.kind === "image";
-    const tile = el("button", "mediatile", { type: "button", title: item.name });
-    const img = el("img", "mediatile__img", { loading: "lazy", alt: item.name });
-    if (item.is_heic) tile.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
-    if (!isImage) tile.append(el("span", "mediatile__kind", { innerHTML: mi(KIND_ICONS[item.kind] || "insert_drive_file") }));
-    tile.append(img);
-
-    // Selection (for adjustments) only applies to images.
-    if (isImage) {
-      const check = el("span", "mediatile__check", { title: "Select" });
-      check.addEventListener("click", (e) => {
-        e.stopPropagation();
-        toggleSelect(item.path, tile);
-      });
-      tile.append(check);
-    }
-
-    // Images open in the editor; other media open in their default app.
-    tile.addEventListener("click", () => {
-      if (isImage) openLightbox(item);
-      else invoke("open_path", { path: item.path });
-    });
-    grid.append(tile);
-
-    // Edited images: bake through the pipeline (reflects the sidecar).
-    // Everything else: a QuickLook thumbnail.
-    if (isImage && item.has_edits) {
-      if (thumbCache.has(item.path)) img.src = thumbCache.get(item.path);
-      else edited.push({ item, img });
+    const sig = `${item.modified}|${item.edits_mtime}`;
+    const reuse = existing.get(item.path);
+    if (reuse && reuse.dataset.sig === sig) {
+      existing.delete(item.path);
+      reuse.classList.toggle("is-selected", mediaSelection.has(item.path));
+      desired.push(reuse);
     } else {
-      qlSrc(item).then((src) => {
-        if (src) img.src = src;
-      });
+      if (reuse) existing.delete(item.path);
+      desired.push(buildMediaTile(item, edited));
     }
   }
 
-  // Render uncached edited thumbnails one at a time, then cache them.
+  const placeholder = grid.querySelector(".placeholder");
+  if (placeholder) placeholder.remove();
+  for (const [, stale] of existing) stale.remove(); // removed files
+  desired.forEach((tile, i) => {
+    if (grid.children[i] !== tile) grid.insertBefore(tile, grid.children[i] || null);
+  });
+
   for (const { item, img } of edited) {
     try {
       const url = await renderThumb(item);
