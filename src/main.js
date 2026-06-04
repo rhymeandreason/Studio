@@ -1280,60 +1280,39 @@ function initWebExport() {
 
 // --- Remove background (local WASM segmentation) ---------------------------
 
-let bgRemover = null;
-let cutoutBlob = null;
+let cutoutB64 = null;
 let cutoutSourcePath = null;
-
-// The model + wasm are vendored locally under src/vendor/imgly/data (gitignored,
-// populated by `npm run setup:bg`) and served via publicPath, so the heavy data
-// never re-downloads. The JS library itself loads from the CDN once per session
-// (esm.sh resolves its bare deps like onnxruntime-web); it's small.
-const IMGLY_PUBLIC_PATH = new URL("vendor/imgly/data/", location.href).href;
-
-async function getRemover() {
-  if (!bgRemover) {
-    const mod = await import("https://esm.sh/@imgly/background-removal@1.7.0");
-    bgRemover = mod.removeBackground;
-  }
-  return bgRemover;
-}
 
 async function removeBg() {
   if (!editImg) return;
   const btn = document.getElementById("ed-removebg");
   btn.disabled = true;
-  setEditStatus("Removing background…");
+  const ready = await invoke("bg_model_ready");
+  setEditStatus(ready ? "Removing background…" : "Downloading model (~170 MB)…");
   try {
-    // Run on the fully-baked image at full resolution.
+    // Bake at full resolution, hand the PNG to the native ISNet command.
     const canvas = bakeCanvas(editImg, editState, { maxDim: 0, format: "png", quality: 100 });
-    const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-    const removeBackground = await getRemover();
-    cutoutBlob = await removeBackground(blob, {
-      publicPath: IMGLY_PUBLIC_PATH,
-      model: "isnet_quint8",
-    });
+    const pngB64 = await canvasToBase64(canvas, "image/png");
+    cutoutB64 = await invoke("remove_background", { pngBase64: pngB64 });
     cutoutSourcePath = editItem.path;
-    document.getElementById("cutout-img").src = URL.createObjectURL(cutoutBlob);
+    document.getElementById("cutout-img").src = `data:image/png;base64,${cutoutB64}`;
     document.getElementById("cutout").hidden = false;
     setEditStatus("");
   } catch (err) {
     console.error("Background removal failed:", err);
-    const msg = (err && (err.message || err.toString())) || "unknown error";
-    setEditStatus(`BG failed: ${msg}`);
-    alert(`Background removal failed:\n\n${msg}`);
+    setEditStatus(`BG failed: ${err}`);
   } finally {
     btn.disabled = false;
   }
 }
 
 async function saveCutout() {
-  if (!cutoutBlob || !cutoutSourcePath) return;
-  const b64 = await blobToBase64(cutoutBlob);
+  if (!cutoutB64 || !cutoutSourcePath) return;
   const dest = cutoutSourcePath.replace(/\.[^/.]+$/, "") + "-cutout.png";
   try {
-    await invoke("write_image", { path: dest, dataBase64: b64 });
+    await invoke("write_image", { path: dest, dataBase64: cutoutB64 });
     document.getElementById("cutout").hidden = true;
-    cutoutBlob = null;
+    cutoutB64 = null;
     if (mediaProjectPath) loadMedia(mediaProjectPath);
   } catch (err) {
     console.error("Saving cutout failed:", err);
@@ -1345,7 +1324,7 @@ function initRemoveBg() {
   document.getElementById("cutout-save").addEventListener("click", saveCutout);
   document.getElementById("cutout-cancel").addEventListener("click", () => {
     document.getElementById("cutout").hidden = true;
-    cutoutBlob = null;
+    cutoutB64 = null;
   });
 }
 

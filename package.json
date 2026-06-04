@@ -6,14 +6,9 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build",
-    "setup:bg": "node scripts/fetch-bg-model.mjs",
-    "postinstall": "node scripts/fetch-bg-model.mjs"
+    "build": "tauri build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
-  },
-  "dependencies": {
-    "@imgly/background-removal": "^1.7.0"
   }
 }

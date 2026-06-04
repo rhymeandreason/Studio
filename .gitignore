@@ -23,5 +23,3 @@ dist-ssr
 *.sln
 *.sw?
 
-# Vendored background-removal model + lib (large; populated by `npm run setup:bg`)
-src/vendor/imgly/
