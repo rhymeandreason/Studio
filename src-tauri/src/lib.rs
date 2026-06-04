@@ -264,6 +264,195 @@ fn save_workspace(path: String, workspace: Workspace) -> Result<(), String> {
     std::fs::write(&file, text).map_err(|e| e.to_string())
 }
 
+/// Image extensions surfaced in the media grid.
+const IMAGE_EXTS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif", "heic", "heif", "svg",
+];
+
+/// One image found in a project.
+#[derive(Clone, Serialize)]
+struct MediaItem {
+    name: String,
+    path: String,
+    ext: String,
+    is_heic: bool,
+    modified: u64,
+}
+
+/// Recursively collect images under `dir`, skipping noise/hidden directories.
+fn walk_media(dir: &Path, out: &mut Vec<MediaItem>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let raw_name = entry.file_name();
+        let name = raw_name.to_string_lossy();
+        if path.is_dir() {
+            if name == ".git" || name == "node_modules" || name.starts_with('.') {
+                continue;
+            }
+            walk_media(&path, out);
+            continue;
+        }
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+            continue;
+        };
+        let ext = ext.to_lowercase();
+        if !IMAGE_EXTS.contains(&ext.as_str()) {
+            continue;
+        }
+        let modified = entry
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        out.push(MediaItem {
+            name: name.to_string(),
+            path: path.to_string_lossy().to_string(),
+            is_heic: ext == "heic" || ext == "heif",
+            ext,
+            modified,
+        });
+    }
+}
+
+/// List every image in a project, newest first.
+#[tauri::command]
+fn list_media(path: String) -> Vec<MediaItem> {
+    let mut out = Vec::new();
+    walk_media(Path::new(&path), &mut out);
+    out.sort_by(|a, b| b.modified.cmp(&a.modified));
+    out
+}
+
+/// Convert a HEIC to a cached JPEG (in the app cache dir) so the webview can
+/// display it. Returns the cached file path; the frontend asset-resolves it.
+#[tauri::command]
+fn heic_preview(app: AppHandle, path: String) -> Result<String, String> {
+    use std::hash::{Hash, Hasher};
+
+    let src = PathBuf::from(&path);
+    let mtime = std::fs::metadata(&src)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut hasher);
+    mtime.hash(&mut hasher);
+    let key = hasher.finish();
+
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("thumbs");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let out = dir.join(format!("{key:x}.jpg"));
+
+    if !out.exists() {
+        let status = Command::new("sips")
+            .args(["-s", "format", "jpeg"])
+            .arg(&src)
+            .arg("--out")
+            .arg(&out)
+            .status()
+            .map_err(|e| e.to_string())?;
+        if !status.success() {
+            return Err("HEIC conversion (sips) failed".into());
+        }
+    }
+    Ok(out.to_string_lossy().to_string())
+}
+
+/// Convert a HEIC to a permanent PNG/JPG sibling next to the original.
+#[tauri::command]
+fn convert_heic(path: String, format: String) -> Result<String, String> {
+    let src = PathBuf::from(&path);
+    let (fmt, ext) = if format == "png" {
+        ("png", "png")
+    } else {
+        ("jpeg", "jpg")
+    };
+    let out = src.with_extension(ext);
+    let status = Command::new("sips")
+        .args(["-s", "format", fmt])
+        .arg(&src)
+        .arg("--out")
+        .arg(&out)
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !status.success() {
+        return Err("HEIC conversion (sips) failed".into());
+    }
+    Ok(out.to_string_lossy().to_string())
+}
+
+/// Move dropped image files into a project's media/ folder. Non-image files are
+/// skipped. Returns the paths of the files actually imported.
+#[tauri::command]
+fn import_media(project_path: String, files: Vec<String>) -> Result<Vec<String>, String> {
+    let media_dir = PathBuf::from(&project_path).join("media");
+    std::fs::create_dir_all(&media_dir).map_err(|e| e.to_string())?;
+
+    let mut imported = Vec::new();
+    for file in files {
+        let src = PathBuf::from(&file);
+        let is_image = src
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| IMAGE_EXTS.contains(&e.to_lowercase().as_str()))
+            .unwrap_or(false);
+        if !is_image {
+            continue;
+        }
+        let Some(fname) = src.file_name() else {
+            continue;
+        };
+
+        // Avoid clobbering an existing file: name.ext → name-1.ext, name-2.ext…
+        let mut dest = media_dir.join(fname);
+        if dest.exists() {
+            let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("image");
+            let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("");
+            let mut n = 1;
+            loop {
+                let candidate = media_dir.join(format!("{stem}-{n}.{ext}"));
+                if !candidate.exists() {
+                    dest = candidate;
+                    break;
+                }
+                n += 1;
+            }
+        }
+
+        // Move within the same volume via rename; fall back to copy+delete
+        // across volumes (rename fails with EXDEV there).
+        if std::fs::rename(&src, &dest).is_err() {
+            std::fs::copy(&src, &dest).map_err(|e| e.to_string())?;
+            std::fs::remove_file(&src).map_err(|e| e.to_string())?;
+        }
+        imported.push(dest.to_string_lossy().to_string());
+    }
+    Ok(imported)
+}
+
+/// Reveal a file in Finder.
+#[tauri::command]
+fn reveal_in_finder(path: String) -> Result<(), String> {
+    Command::new("open")
+        .args(["-R"])
+        .arg(&path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Read a project's notes.json (defaults to an empty collection if absent).
 #[tauri::command]
 fn read_notes(path: String) -> Result<serde_json::Value, String> {
@@ -372,7 +561,12 @@ pub fn run() {
             save_workspace,
             launch_workspace,
             read_notes,
-            save_notes
+            save_notes,
+            list_media,
+            heic_preview,
+            convert_heic,
+            import_media,
+            reveal_in_finder
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.

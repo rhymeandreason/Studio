@@ -54,7 +54,7 @@
       <!-- Project content -->
       <div class="content" id="project-content" hidden>
         <section class="panel" data-panel="media" hidden>
-          <p class="placeholder">Media panel arrives in a later milestone.</p>
+          <div class="media-grid" id="media-grid"></div>
         </section>
 
         <section class="panel" data-panel="notes" hidden>
@@ -139,6 +139,38 @@
         </section>
       </div>
     </main>
+
+    <!-- Drag-and-drop overlay -->
+    <div class="dropzone" id="dropzone" hidden>
+      <div class="dropzone__inner">
+        <span class="mi">add_photo_alternate</span>
+        Drop images to add them to this project
+      </div>
+    </div>
+
+    <!-- Media lightbox -->
+    <div class="lightbox" id="lightbox" hidden>
+      <div class="lightbox__bar">
+        <span class="lightbox__name" id="lightbox-name"></span>
+        <div class="lightbox__actions">
+          <button class="btn-ghost" id="lb-convert" hidden>
+            <span class="mi mi-sm">image</span>Convert to JPG
+          </button>
+          <button class="btn-ghost" id="lb-copy">
+            <span class="mi mi-sm">content_copy</span>Copy path
+          </button>
+          <button class="btn-ghost" id="lb-reveal">
+            <span class="mi mi-sm">folder_open</span>Show in Finder
+          </button>
+          <button class="btn-ghost" id="lb-close">
+            <span class="mi mi-sm">close</span>Close
+          </button>
+        </div>
+      </div>
+      <div class="lightbox__stage">
+        <img class="lightbox__img" id="lightbox-img" alt="" />
+      </div>
+    </div>
 
     <!-- New project modal -->
     <div class="modal" id="new-modal" hidden>

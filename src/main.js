@@ -49,6 +49,7 @@ function render(project) {
     content.hidden = false;
     loadWorkspace(project.path);
     loadNotes(project.path);
+    loadMedia(project.path);
   } else {
     header.hidden = true;
     empty.hidden = false;
@@ -323,6 +324,125 @@ function initNewModal() {
   document.getElementById("new-name").addEventListener("keydown", (e) => {
     if (e.key === "Enter") createProject();
     if (e.key === "Escape") closeNewModal();
+  });
+}
+
+// --- Media -----------------------------------------------------------------
+
+let mediaProjectPath = null;
+let currentMedia = null;
+
+// Resolve a displayable asset URL for a media item (HEIC gets a cached JPEG).
+async function mediaSrc(item) {
+  const convert = window.__TAURI__.core.convertFileSrc;
+  if (item.is_heic) {
+    try {
+      const jpg = await invoke("heic_preview", { path: item.path });
+      return convert(jpg);
+    } catch (err) {
+      console.error("HEIC preview failed:", err);
+      return "";
+    }
+  }
+  return convert(item.path);
+}
+
+async function loadMedia(path) {
+  mediaProjectPath = path;
+  const grid = document.getElementById("media-grid");
+  grid.innerHTML = "";
+  const items = await invoke("list_media", { path });
+
+  if (!items.length) {
+    grid.innerHTML = `<p class="placeholder">No images in this project yet.</p>`;
+    return;
+  }
+
+  for (const item of items) {
+    const tile = el("button", "mediatile", { type: "button", title: item.name });
+    const img = el("img", "mediatile__img", { loading: "lazy", alt: item.name });
+    if (item.is_heic) tile.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
+    tile.append(img);
+    tile.addEventListener("click", () => openLightbox(item));
+    grid.append(tile);
+    mediaSrc(item).then((src) => {
+      if (src) img.src = src;
+    });
+  }
+}
+
+async function openLightbox(item) {
+  currentMedia = item;
+  document.getElementById("lightbox-name").textContent = item.name;
+  document.getElementById("lb-convert").hidden = !item.is_heic;
+  const img = document.getElementById("lightbox-img");
+  img.src = "";
+  img.src = await mediaSrc(item);
+  document.getElementById("lightbox").hidden = false;
+}
+
+function closeLightbox() {
+  document.getElementById("lightbox").hidden = true;
+  currentMedia = null;
+}
+
+// Native file drag-and-drop → copy images into the active project's media/.
+async function initDragDrop() {
+  const { listen } = window.__TAURI__.event;
+  const zone = document.getElementById("dropzone");
+  const show = () => {
+    if (activeProject) zone.hidden = false;
+  };
+  await listen("tauri://drag-enter", show);
+  await listen("tauri://drag-over", show);
+  await listen("tauri://drag-leave", () => (zone.hidden = true));
+  await listen("tauri://drag-drop", async (e) => {
+    zone.hidden = true;
+    if (!activeProject) return;
+    const paths = (e.payload && e.payload.paths) || [];
+    if (!paths.length) return;
+    try {
+      const imported = await invoke("import_media", {
+        projectPath: activeProject.path,
+        files: paths,
+      });
+      if (imported.length) {
+        selectTab("media");
+        loadMedia(activeProject.path);
+      }
+    } catch (err) {
+      console.error("Import failed:", err);
+    }
+  });
+}
+
+function initMedia() {
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !document.getElementById("lightbox").hidden) {
+      closeLightbox();
+    }
+  });
+  document.getElementById("lb-close").addEventListener("click", closeLightbox);
+  document.getElementById("lightbox").addEventListener("click", (e) => {
+    if (e.target.id === "lightbox" || e.target.classList.contains("lightbox__stage")) {
+      closeLightbox();
+    }
+  });
+  document.getElementById("lb-copy").addEventListener("click", () => {
+    if (currentMedia) navigator.clipboard.writeText(currentMedia.path);
+  });
+  document.getElementById("lb-reveal").addEventListener("click", () => {
+    if (currentMedia) invoke("reveal_in_finder", { path: currentMedia.path });
+  });
+  document.getElementById("lb-convert").addEventListener("click", async () => {
+    if (!currentMedia) return;
+    try {
+      await invoke("convert_heic", { path: currentMedia.path, format: "jpg" });
+      closeLightbox();
+      if (mediaProjectPath) loadMedia(mediaProjectPath);
+    } catch (err) {
+      console.error("Convert failed:", err);
+    }
   });
 }
 
@@ -641,6 +761,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   initLaunch();
   initWorkspaceForm();
   initNotes();
+  initMedia();
+  initDragDrop();
   initNewModal();
 
   render(await invoke("get_active_project"));
