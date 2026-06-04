@@ -371,19 +371,40 @@ async function loadMedia(path) {
   }
 }
 
+// Opening a media item drops straight into the editor (canvas + controls).
 async function openLightbox(item) {
   currentMedia = item;
+  editItem = item;
   document.getElementById("lightbox-name").textContent = item.name;
   document.getElementById("lb-convert").hidden = !item.is_heic;
-  const img = document.getElementById("lightbox-img");
-  img.src = "";
-  img.src = await mediaSrc(item);
+
+  const ext = (item.ext || "").toLowerCase();
+  document.getElementById("lb-replace").hidden = !["png", "jpg", "jpeg"].includes(ext);
+
   document.getElementById("lightbox").hidden = false;
+  setEditStatus("Loading…");
+
+  const dataUrl = await invoke("read_image_data", { path: item.path });
+  editImg = new Image();
+  await new Promise((resolve, reject) => {
+    editImg.onload = resolve;
+    editImg.onerror = reject;
+    editImg.src = dataUrl;
+  });
+
+  const saved = await invoke("read_edits", { path: item.path });
+  editState = { ...defaultEdits(), ...saved };
+  setEditStatus("");
+  syncEditorControls();
+  renderEditorPreview();
 }
 
 function closeLightbox() {
   document.getElementById("lightbox").hidden = true;
   currentMedia = null;
+  editItem = null;
+  editImg = null;
+  editState = null;
 }
 
 // Native file drag-and-drop → copy images into the active project's media/.
@@ -416,7 +437,167 @@ async function initDragDrop() {
   });
 }
 
+// --- Image editor (non-destructive, sidecar-backed) ------------------------
+
+let editItem = null; // the MediaItem being edited
+let editImg = null; // full-res HTMLImageElement
+let editState = null; // current adjustments
+let editSaveTimer = null;
+
+function defaultEdits() {
+  return { version: 1, rotate: 0, flipH: false, flipV: false, straighten: 0 };
+}
+
+// Minimum uniform scale so rotating a w×h frame by `deg` leaves no empty corners.
+function coverScale(w, h, deg) {
+  const r = (Math.abs(deg) * Math.PI) / 180;
+  if (!r) return 1;
+  const cos = Math.cos(r);
+  const sin = Math.sin(r);
+  return Math.max((w * cos + h * sin) / w, (w * sin + h * cos) / h);
+}
+
+// Render the oriented (rotate + flip + straighten) image to a full-res canvas.
+function renderOriented(img, edits) {
+  const rot = (((edits.rotate || 0) % 360) + 360) % 360;
+  const swap = rot === 90 || rot === 270;
+  const ow = swap ? img.naturalHeight : img.naturalWidth;
+  const oh = swap ? img.naturalWidth : img.naturalHeight;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = ow;
+  canvas.height = oh;
+  const ctx = canvas.getContext("2d");
+
+  // Straighten: rotate around center, scaled to cover the frame.
+  const sdeg = edits.straighten || 0;
+  if (sdeg) {
+    const s = coverScale(ow, oh, sdeg);
+    ctx.translate(ow / 2, oh / 2);
+    ctx.rotate((sdeg * Math.PI) / 180);
+    ctx.scale(s, s);
+    ctx.translate(-ow / 2, -oh / 2);
+  }
+  // Orientation: 90° rotation + flips, image drawn centered.
+  ctx.translate(ow / 2, oh / 2);
+  ctx.rotate((rot * Math.PI) / 180);
+  ctx.scale(edits.flipH ? -1 : 1, edits.flipV ? -1 : 1);
+  ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+
+  return canvas;
+}
+
+function renderEditorPreview() {
+  if (!editImg) return;
+  const oriented = renderOriented(editImg, editState);
+  const canvas = document.getElementById("editor-canvas");
+  const wrap = document.getElementById("editor-canvas-wrap");
+  const scale = Math.min(
+    wrap.clientWidth / oriented.width,
+    wrap.clientHeight / oriented.height,
+    1
+  );
+  canvas.width = Math.max(1, Math.round(oriented.width * scale));
+  canvas.height = Math.max(1, Math.round(oriented.height * scale));
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(oriented, 0, 0, canvas.width, canvas.height);
+}
+
+function setEditStatus(text) {
+  document.getElementById("edit-status").textContent = text;
+}
+
+function scheduleEditsSave() {
+  if (!editItem) return;
+  setEditStatus("Saving…");
+  clearTimeout(editSaveTimer);
+  editSaveTimer = setTimeout(async () => {
+    try {
+      await invoke("save_edits", { path: editItem.path, edits: editState });
+      setEditStatus("Saved ✓");
+    } catch (err) {
+      setEditStatus(`Error: ${err}`);
+    }
+  }, 400);
+}
+
+function syncEditorControls() {
+  document.getElementById("ed-straighten").value = editState.straighten || 0;
+  document.getElementById("ed-straighten-val").textContent = `${editState.straighten || 0}°`;
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(",")[1]);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function exportEdited(replace) {
+  if (!editImg) return;
+  const oriented = renderOriented(editImg, editState); // full resolution
+  const ext = (editItem.ext || "png").toLowerCase();
+  const jpeg = ext === "jpg" || ext === "jpeg";
+  const mime = jpeg ? "image/jpeg" : "image/png";
+  const outExt = jpeg ? "jpg" : "png";
+
+  try {
+    const blob = await new Promise((res) => oriented.toBlob(res, mime, 0.92));
+    const b64 = await blobToBase64(blob);
+    const dest = replace
+      ? editItem.path
+      : editItem.path.replace(/\.[^/.]+$/, "") + "-edited." + outExt;
+    await invoke("write_image", { path: dest, dataBase64: b64 });
+    setEditStatus(replace ? "Replaced ✓" : "Exported ✓");
+    if (mediaProjectPath) loadMedia(mediaProjectPath);
+  } catch (err) {
+    setEditStatus(`Error: ${err}`);
+  }
+}
+
+function initEditor() {
+  document.getElementById("lb-export").addEventListener("click", () => exportEdited(false));
+  document.getElementById("lb-replace").addEventListener("click", () => exportEdited(true));
+
+  const apply = () => {
+    renderEditorPreview();
+    scheduleEditsSave();
+  };
+  document.getElementById("ed-rotl").addEventListener("click", () => {
+    editState.rotate = (editState.rotate - 90 + 360) % 360;
+    apply();
+  });
+  document.getElementById("ed-rotr").addEventListener("click", () => {
+    editState.rotate = (editState.rotate + 90) % 360;
+    apply();
+  });
+  document.getElementById("ed-fliph").addEventListener("click", () => {
+    editState.flipH = !editState.flipH;
+    apply();
+  });
+  document.getElementById("ed-flipv").addEventListener("click", () => {
+    editState.flipV = !editState.flipV;
+    apply();
+  });
+  document.getElementById("ed-straighten").addEventListener("input", (e) => {
+    editState.straighten = Number(e.target.value);
+    document.getElementById("ed-straighten-val").textContent = `${editState.straighten}°`;
+    apply();
+  });
+  document.getElementById("ed-reset").addEventListener("click", () => {
+    editState = defaultEdits();
+    syncEditorControls();
+    apply();
+  });
+  window.addEventListener("resize", () => {
+    if (editImg) renderEditorPreview();
+  });
+}
+
 function initMedia() {
+  initEditor();
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !document.getElementById("lightbox").hidden) {
       closeLightbox();

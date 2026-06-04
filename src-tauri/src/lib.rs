@@ -442,6 +442,78 @@ fn import_media(project_path: String, files: Vec<String>) -> Result<Vec<String>,
     Ok(imported)
 }
 
+/// MIME type for an image extension (used for data URLs).
+fn mime_for(ext: &str) -> &'static str {
+    match ext {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "tiff" | "tif" => "image/tiff",
+        "svg" => "image/svg+xml",
+        _ => "application/octet-stream",
+    }
+}
+
+/// Read an image as a `data:` URL for the editor canvas. HEIC is converted to
+/// JPEG first. Loading via data URL (rather than the asset protocol) keeps the
+/// canvas untainted so it can be exported with toBlob.
+#[tauri::command]
+fn read_image_data(app: AppHandle, path: String) -> Result<String, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+
+    let ext = Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+
+    let (bytes, mime) = if ext == "heic" || ext == "heif" {
+        let jpg = heic_preview(app, path.clone())?;
+        (
+            std::fs::read(&jpg).map_err(|e| e.to_string())?,
+            "image/jpeg",
+        )
+    } else {
+        (
+            std::fs::read(&path).map_err(|e| e.to_string())?,
+            mime_for(&ext),
+        )
+    };
+
+    Ok(format!("data:{mime};base64,{}", STANDARD.encode(bytes)))
+}
+
+/// Read an image's edit sidecar (`<image>.studio.json`); empty object if none.
+#[tauri::command]
+fn read_edits(path: String) -> Result<serde_json::Value, String> {
+    let sidecar = format!("{path}.studio.json");
+    match std::fs::read_to_string(&sidecar) {
+        Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
+        Err(_) => Ok(serde_json::json!({})),
+    }
+}
+
+/// Write an image's edit sidecar.
+#[tauri::command]
+fn save_edits(path: String, edits: serde_json::Value) -> Result<(), String> {
+    let sidecar = format!("{path}.studio.json");
+    let text = serde_json::to_string_pretty(&edits).map_err(|e| e.to_string())?;
+    std::fs::write(&sidecar, text).map_err(|e| e.to_string())
+}
+
+/// Write exported image bytes (base64) to a path. Used by the editor's
+/// Export / Replace-original flow.
+#[tauri::command]
+fn write_image(path: String, data_base64: String) -> Result<(), String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let bytes = STANDARD
+        .decode(data_base64.as_bytes())
+        .map_err(|e| e.to_string())?;
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())
+}
+
 /// Reveal a file in Finder.
 #[tauri::command]
 fn reveal_in_finder(path: String) -> Result<(), String> {
@@ -566,7 +638,11 @@ pub fn run() {
             heic_preview,
             convert_heic,
             import_media,
-            reveal_in_finder
+            reveal_in_finder,
+            read_image_data,
+            read_edits,
+            save_edits,
+            write_image
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.

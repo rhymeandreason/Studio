@@ -153,6 +153,13 @@
       <div class="lightbox__bar">
         <span class="lightbox__name" id="lightbox-name"></span>
         <div class="lightbox__actions">
+          <span class="edit-status" id="edit-status"></span>
+          <button class="btn-ghost" id="lb-export">
+            <span class="mi mi-sm">save</span>Export copy
+          </button>
+          <button class="btn-ghost" id="lb-replace">
+            <span class="mi mi-sm">published_with_changes</span>Replace original
+          </button>
           <button class="btn-ghost" id="lb-convert" hidden>
             <span class="mi mi-sm">image</span>Convert to JPG
           </button>
@@ -167,8 +174,51 @@
           </button>
         </div>
       </div>
-      <div class="lightbox__stage">
-        <img class="lightbox__img" id="lightbox-img" alt="" />
+
+      <div class="lightbox__stage" id="lb-stage">
+        <div class="editor" id="editor">
+          <div class="editor__canvas-wrap" id="editor-canvas-wrap">
+            <canvas id="editor-canvas"></canvas>
+          </div>
+          <aside class="editor__panel">
+            <div class="editgroup">
+              <span class="editgroup__label">Rotate &amp; flip</span>
+              <div class="editbtns">
+                <button class="iconbtn" id="ed-rotl" title="Rotate left">
+                  <span class="mi">rotate_left</span>
+                </button>
+                <button class="iconbtn" id="ed-rotr" title="Rotate right">
+                  <span class="mi">rotate_right</span>
+                </button>
+                <button class="iconbtn" id="ed-fliph" title="Flip horizontal">
+                  <span class="mi">flip</span>
+                </button>
+                <button class="iconbtn" id="ed-flipv" title="Flip vertical">
+                  <span class="mi" style="transform: rotate(90deg)">flip</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="editgroup">
+              <span class="editgroup__label">
+                Straighten <em id="ed-straighten-val">0°</em>
+              </span>
+              <input
+                class="slider"
+                type="range"
+                id="ed-straighten"
+                min="-15"
+                max="15"
+                step="0.5"
+                value="0"
+              />
+            </div>
+
+            <button class="btn-ghost editreset" id="ed-reset">
+              <span class="mi mi-sm">restart_alt</span>Reset all
+            </button>
+          </aside>
+        </div>
       </div>
     </div>
 

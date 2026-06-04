@@ -921,6 +921,124 @@ select.field__input {
   box-shadow: var(--shadow-md);
 }
 
+/* Image editor (in the lightbox) */
+.edit-status {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.editor {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  gap: 16px;
+}
+
+.editor__canvas-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.editor__canvas-wrap canvas {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+}
+
+.editor__panel {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 18px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow-y: auto;
+}
+
+.editgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editgroup__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.editgroup__label em {
+  font-style: normal;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.editbtns {
+  display: flex;
+  gap: 6px;
+}
+
+.iconbtn {
+  flex: 1 1 0;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--elevated);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.iconbtn:hover {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.iconbtn:active {
+  background: var(--accent-soft);
+}
+
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--hairline-strong);
+  outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--elevated);
+  box-shadow: var(--shadow-sm);
+}
+
+.editreset {
+  margin-top: auto;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
 /* New project modal */
 .modal {
   position: fixed;
