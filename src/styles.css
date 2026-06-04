@@ -30,6 +30,7 @@
   font-family: "Material Symbols Rounded";
   font-weight: normal;
   font-style: normal;
+  font-size: 18px;
   line-height: 1;
   letter-spacing: normal;
   text-transform: none;
@@ -39,6 +40,10 @@
   -webkit-font-feature-settings: "liga";
   -webkit-font-smoothing: antialiased;
   font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+}
+
+.mi-sm {
+  font-size: 16px;
 }
 
 * {
@@ -195,6 +200,9 @@ body {
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: transparent;
   border: none;
   color: var(--text-muted);
@@ -205,6 +213,10 @@ body {
   border-bottom: 2px solid transparent;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
+}
+
+.tab .mi {
+  font-size: 17px;
 }
 
 .tab:hover {
@@ -401,6 +413,9 @@ select.field__input {
 
 .btn-browse {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: var(--elevated);
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-sm);
@@ -460,6 +475,9 @@ select.field__input {
 
 .btn-add {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: transparent;
   border: 1px dashed var(--hairline-strong);
   border-radius: var(--radius-sm);
@@ -527,6 +545,20 @@ select.field__input {
   align-items: center;
 }
 
+/* Width toggle + delete reveal only on card hover (or keyboard focus) */
+.notecard__width,
+.notecard__head .btn-remove {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.notecard:hover .notecard__width,
+.notecard:hover .notecard__head .btn-remove,
+.notecard:focus-within .notecard__width,
+.notecard:focus-within .notecard__head .btn-remove {
+  opacity: 1;
+}
+
 .notecard__title {
   flex: 1 1 auto;
   background: transparent;
@@ -539,21 +571,35 @@ select.field__input {
   outline: none;
 }
 
+.notecard__footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 2px;
+  min-height: 16px;
+}
+
 .notecard__width {
   flex: 0 0 auto;
-  background: var(--bg);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-family: var(--sans);
-  font-size: 11px;
-  padding: 3px 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  padding: 4px 8px;
   cursor: pointer;
   outline: none;
 }
 
-.notecard__width:focus {
-  border-color: var(--accent);
+.notecard__width .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-soft);
+  transition: background 0.15s;
+}
+
+.notecard__width:hover .dot {
+  background: var(--accent);
 }
 
 .notecard__md {
@@ -613,10 +659,25 @@ select.field__input {
   color: var(--text-muted);
 }
 
+/* Round, borderless delete on note cards */
+.notecard__head .btn-remove {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.notecard__head .btn-remove:hover {
+  color: var(--rose);
+  background: rgba(168, 90, 74, 0.1);
+  border: none;
+}
+
 .checklist {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 
 .checklist__row {
@@ -630,6 +691,34 @@ select.field__input {
   width: 16px;
   height: 16px;
   accent-color: var(--accent);
+}
+
+/* Minimal checklist rows: no borders on the text input or the remove button */
+.checklist__row .field__input {
+  border: none;
+  background: transparent;
+  height: 28px;
+  padding: 0;
+}
+
+.checklist__row .field__input:hover,
+.checklist__row .field__input:focus {
+  border: none;
+  box-shadow: none;
+}
+
+.checklist__row .btn-remove {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+}
+
+.checklist__row .btn-remove:hover {
+  color: var(--rose);
+  background: transparent;
+  border: none;
 }
 
 /* Table note */

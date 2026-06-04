@@ -23,6 +23,11 @@ function appNameFromPath(path) {
   return base.replace(/\.app$/i, "");
 }
 
+// Material Symbols icon markup.
+function mi(name, sm = true) {
+  return `<span class="mi${sm ? " mi-sm" : ""}">${name}</span>`;
+}
+
 let activeProject = null;
 
 // --- Project rendering -----------------------------------------------------
@@ -111,21 +116,22 @@ function initTabs() {
 
 // --- Workspace launch ------------------------------------------------------
 
+const LAUNCH_LABEL = `${mi("rocket_launch")}Launch workspace`;
+
 function initLaunch() {
   const btn = document.getElementById("launch-btn");
   btn.addEventListener("click", async () => {
     if (!activeProject) return;
-    const original = btn.textContent;
     btn.disabled = true;
-    btn.textContent = "Launching…";
+    btn.innerHTML = `${mi("hourglass_top")}Launching…`;
     try {
       await invoke("launch_workspace", { path: activeProject.path });
-      btn.textContent = "Launched ✓";
+      btn.innerHTML = `${mi("check")}Launched`;
     } catch (err) {
-      btn.textContent = `Error: ${err}`;
+      btn.innerHTML = `${mi("error")}Error`;
     }
     setTimeout(() => {
-      btn.textContent = original;
+      btn.innerHTML = LAUNCH_LABEL;
       btn.disabled = false;
     }, 1500);
   });
@@ -151,7 +157,7 @@ function addRow(list, value = "") {
     const browse = document.createElement("button");
     browse.type = "button";
     browse.className = "btn-browse";
-    browse.textContent = "Browse…";
+    browse.innerHTML = `${mi(list === "apps" ? "apps" : "description")}Browse…`;
     browse.addEventListener("click", async () => {
       const picked =
         list === "apps"
@@ -171,7 +177,7 @@ function addRow(list, value = "") {
   const remove = document.createElement("button");
   remove.type = "button";
   remove.className = "btn-remove";
-  remove.textContent = "✕";
+  remove.innerHTML = mi("close");
   remove.addEventListener("click", () => {
     row.remove();
     scheduleWorkspaceSave();
@@ -387,27 +393,34 @@ function noteHeader(note) {
     scheduleNotesSave();
   });
 
-  // Per-note width: how many grid columns the card spans (1–3).
-  const width = el("select", "notecard__width", { title: "Width" });
-  [1, 2, 3].forEach((n) =>
-    width.append(el("option", null, { value: String(n), textContent: `${n}×` }))
-  );
-  width.value = String(note.span || 1);
-  width.addEventListener("change", () => {
-    note.span = Number(width.value);
-    const card = width.closest(".notecard");
-    if (card) card.style.gridColumn = `span ${note.span}`;
-    scheduleNotesSave();
-  });
-
-  const del = el("button", "btn-remove", { type: "button", textContent: "✕" });
+  const del = el("button", "btn-remove", { type: "button", innerHTML: mi("close") });
   del.addEventListener("click", () => {
     notesData.notes = notesData.notes.filter((n) => n.id !== note.id);
     renderNotes();
     scheduleNotesSave();
   });
-  head.append(title, width, del);
+  head.append(title, del);
   return head;
+}
+
+// Width toggle, shown centered at the bottom of every note card. 1–3 dots =
+// how many grid columns the card spans; clicking cycles 1 → 2 → 3 → 1.
+function noteFooter(note) {
+  const footer = el("div", "notecard__footer");
+  const width = el("button", "notecard__width", { type: "button", title: "Width" });
+  const renderDots = () => {
+    width.innerHTML = '<span class="dot"></span>'.repeat(note.span || 1);
+  };
+  renderDots();
+  width.addEventListener("click", () => {
+    note.span = ((note.span || 1) % 3) + 1;
+    renderDots();
+    const card = width.closest(".notecard");
+    if (card) card.style.gridColumn = `span ${note.span}`;
+    scheduleNotesSave();
+  });
+  footer.append(width);
+  return footer;
 }
 
 function buildTextNote(note) {
@@ -445,15 +458,23 @@ function buildTextNote(note) {
   return card;
 }
 
+function addChecklistItem(note) {
+  note.items.push({ text: "", done: false });
+  renderNotes();
+  scheduleNotesSave();
+  // Focus the freshly-added item's input.
+  const card = document.querySelector(`.notecard[data-note-id="${note.id}"]`);
+  const inputs = card?.querySelectorAll(".checklist__row .field__input");
+  if (inputs && inputs.length) inputs[inputs.length - 1].focus();
+}
+
 function buildChecklist(note) {
   const card = el("div", "notecard");
   card.append(noteHeader(note));
 
-  const count = el("div", "notecard__count");
-  const updateCount = () => {
-    const done = note.items.filter((i) => i.done).length;
-    count.textContent = `${done} of ${note.items.length} done`;
-  };
+  // Always keep at least one row so there's an input to type into (Enter adds
+  // more). The "Add item" button is intentionally gone.
+  if (!note.items.length) note.items.push({ text: "", done: false });
 
   const list = el("div", "checklist");
   note.items.forEach((item, idx) => {
@@ -461,7 +482,6 @@ function buildChecklist(note) {
     const cb = el("input", null, { type: "checkbox", checked: !!item.done });
     cb.addEventListener("change", () => {
       item.done = cb.checked;
-      updateCount();
       scheduleNotesSave();
     });
     const txt = el("input", "field__input", {
@@ -472,7 +492,13 @@ function buildChecklist(note) {
       item.text = txt.value;
       scheduleNotesSave();
     });
-    const rm = el("button", "btn-remove", { type: "button", textContent: "✕" });
+    txt.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addChecklistItem(note);
+      }
+    });
+    const rm = el("button", "btn-remove", { type: "button", innerHTML: mi("close") });
     rm.addEventListener("click", () => {
       note.items.splice(idx, 1);
       renderNotes();
@@ -482,15 +508,7 @@ function buildChecklist(note) {
     list.append(row);
   });
 
-  const add = el("button", "btn-add", { type: "button", textContent: "+ Add item" });
-  add.addEventListener("click", () => {
-    note.items.push({ text: "", done: false });
-    renderNotes();
-    scheduleNotesSave();
-  });
-
-  updateCount();
-  card.append(count, list, add);
+  card.append(list);
   return card;
 }
 
@@ -510,7 +528,7 @@ function buildTable(note) {
     });
     const rm = el("button", "ntable__x", {
       type: "button",
-      textContent: "✕",
+      innerHTML: mi("close"),
       title: "Remove column",
     });
     rm.addEventListener("click", () => {
@@ -542,7 +560,7 @@ function buildTable(note) {
     const tdx = el("td");
     const rm = el("button", "ntable__x", {
       type: "button",
-      textContent: "✕",
+      innerHTML: mi("close"),
       title: "Remove row",
     });
     rm.addEventListener("click", () => {
@@ -557,13 +575,13 @@ function buildTable(note) {
   table.append(tbody);
 
   const actions = el("div", "ntable__actions");
-  const addRow = el("button", "btn-add", { type: "button", textContent: "+ Row" });
+  const addRow = el("button", "btn-add", { type: "button", innerHTML: `${mi("add")}Row` });
   addRow.addEventListener("click", () => {
     note.rows.push(note.columns.map(() => ""));
     renderNotes();
     scheduleNotesSave();
   });
-  const addCol = el("button", "btn-add", { type: "button", textContent: "+ Column" });
+  const addCol = el("button", "btn-add", { type: "button", innerHTML: `${mi("add")}Column` });
   addCol.addEventListener("click", () => {
     note.columns.push("Column");
     note.rows.forEach((r) => r.push(""));
@@ -603,6 +621,8 @@ function renderNotes() {
     } else {
       continue;
     }
+    card.append(noteFooter(note));
+    card.dataset.noteId = note.id;
     card.style.gridColumn = `span ${note.span || 1}`;
     listEl.append(card);
   }

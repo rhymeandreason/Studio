@@ -16,9 +16,7 @@
   </head>
 
   <body>
-    <header class="titlebar" data-tauri-drag-region>
-      <span class="titlebar__title" data-tauri-drag-region>Studio</span>
-    </header>
+    <header class="titlebar" data-tauri-drag-region></header>
 
     <div class="projhead" id="project-header" hidden>
       <div class="projhead__row">
@@ -26,12 +24,14 @@
           <h1 class="projhead__name" id="project-name"></h1>
           <p class="projhead__path" id="project-path"></p>
         </div>
-        <button class="btn-launch" id="launch-btn">Launch workspace</button>
+        <button class="btn-launch" id="launch-btn">
+          <span class="mi mi-sm">rocket_launch</span>Launch workspace
+        </button>
       </div>
       <nav class="tabs" id="tabs">
-        <button class="tab" data-tab="media">Media</button>
-        <button class="tab" data-tab="notes">Notes</button>
-        <button class="tab is-active" data-tab="workspace">Workspace</button>
+        <button class="tab" data-tab="media"><span class="mi">image</span>Media</button>
+        <button class="tab" data-tab="notes"><span class="mi">sticky_note_2</span>Notes</button>
+        <button class="tab is-active" data-tab="workspace"><span class="mi">tune</span>Workspace</button>
       </nav>
     </div>
 
@@ -59,9 +59,15 @@
 
         <section class="panel" data-panel="notes" hidden>
           <div class="notes-toolbar">
-            <button type="button" class="btn-add" data-new-note="text">+ Text</button>
-            <button type="button" class="btn-add" data-new-note="checklist">+ Checklist</button>
-            <button type="button" class="btn-add" data-new-note="table">+ Table</button>
+            <button type="button" class="btn-add" data-new-note="text">
+              <span class="mi mi-sm">subject</span>Text
+            </button>
+            <button type="button" class="btn-add" data-new-note="checklist">
+              <span class="mi mi-sm">checklist</span>Checklist
+            </button>
+            <button type="button" class="btn-add" data-new-note="table">
+              <span class="mi mi-sm">table_chart</span>Table
+            </button>
             <span class="notes-status" id="notes-status"></span>
           </div>
           <div class="notes-list" id="notes-list"></div>
@@ -73,7 +79,9 @@
               <span class="field__label">Repo path</span>
               <div class="field__withbtn">
                 <input class="field__input" id="ws-repo" placeholder="repo/  or  ~/code/my-repo" />
-                <button type="button" class="btn-browse" id="ws-repo-browse">Browse…</button>
+                <button type="button" class="btn-browse" id="ws-repo-browse">
+                  <span class="mi mi-sm">folder_open</span>Browse…
+                </button>
               </div>
             </label>
 
@@ -81,7 +89,9 @@
               <span class="field__label">Code editor</span>
               <div class="field__withbtn">
                 <input class="field__input" id="ws-editor" placeholder="Zed (default)" />
-                <button type="button" class="btn-browse" id="ws-editor-browse">Browse…</button>
+                <button type="button" class="btn-browse" id="ws-editor-browse">
+                  <span class="mi mi-sm">apps</span>Browse…
+                </button>
               </div>
             </label>
 
@@ -101,19 +111,25 @@
             <div class="listfield" data-list="apps">
               <span class="field__label">Apps to launch</span>
               <div class="listfield__rows" data-rows></div>
-              <button type="button" class="btn-add" data-add>+ Add app</button>
+              <button type="button" class="btn-add" data-add>
+                <span class="mi mi-sm">add</span>Add app
+              </button>
             </div>
 
             <div class="listfield" data-list="files">
               <span class="field__label">Files to open</span>
               <div class="listfield__rows" data-rows></div>
-              <button type="button" class="btn-add" data-add>+ Add file</button>
+              <button type="button" class="btn-add" data-add>
+                <span class="mi mi-sm">add</span>Add file
+              </button>
             </div>
 
             <div class="listfield" data-list="urls">
               <span class="field__label">URLs to open</span>
               <div class="listfield__rows" data-rows></div>
-              <button type="button" class="btn-add" data-add>+ Add URL</button>
+              <button type="button" class="btn-add" data-add>
+                <span class="mi mi-sm">add</span>Add URL
+              </button>
             </div>
 
             <div class="ws__actions">
@@ -133,7 +149,9 @@
         <p class="modal__error" id="new-error" hidden></p>
         <div class="modal__actions">
           <button class="btn-ghost" id="new-cancel">Cancel</button>
-          <button class="btn-save" id="new-create">Create</button>
+          <button class="btn-save" id="new-create">
+            <span class="mi mi-sm">add</span>Create
+          </button>
         </div>
       </div>
     </div>
