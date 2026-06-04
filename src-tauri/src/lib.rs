@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -158,6 +159,48 @@ fn refresh_tray(app: &AppHandle, active: Option<&str>) {
     }
 }
 
+// Kept alive for the app's lifetime so file watching keeps running.
+type Watcher = notify_debouncer_mini::Debouncer<notify_debouncer_mini::notify::RecommendedWatcher>;
+static WATCHER: OnceLock<Mutex<Option<Watcher>>> = OnceLock::new();
+
+/// Watch ~/Projects (recursively) and, on relevant changes, rebuild the tray
+/// project list and tell the frontend to refresh. Noise dirs are ignored.
+fn start_watching(app: &AppHandle) {
+    use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
+
+    let Some(root) = projects_root(app) else {
+        return;
+    };
+    let _ = std::fs::create_dir_all(&root);
+    let handle = app.clone();
+
+    let debouncer = new_debouncer(
+        Duration::from_millis(400),
+        move |res: DebounceEventResult| {
+            let Ok(events) = res else {
+                return;
+            };
+            let relevant = events.iter().any(|e| {
+                let p = e.path.to_string_lossy();
+                !p.contains("/node_modules/") && !p.contains("/.git/")
+            });
+            if !relevant {
+                return;
+            }
+            // Project list may have changed — rebuild the tray, keep active.
+            let active = handle.state::<AppState>().active.lock().unwrap().clone();
+            refresh_tray(&handle, active.as_ref().map(|p| p.path.as_str()));
+            let _ = handle.emit("fs-changed", ());
+        },
+    );
+
+    if let Ok(mut d) = debouncer {
+        if d.watcher().watch(root.as_path(), RecursiveMode::Recursive).is_ok() {
+            let _ = WATCHER.set(Mutex::new(Some(d)));
+        }
+    }
+}
+
 /// Show and focus the single Studio window.
 fn show_studio(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
@@ -264,17 +307,36 @@ fn save_workspace(path: String, workspace: Workspace) -> Result<(), String> {
     std::fs::write(&file, text).map_err(|e| e.to_string())
 }
 
-/// Image extensions surfaced in the media grid.
+/// Media extensions surfaced in the grid, by kind.
 const IMAGE_EXTS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif", "heic", "heif", "svg",
 ];
+const VIDEO_EXTS: &[&str] = &["mp4", "mov", "m4v", "webm", "avi", "mkv"];
+const AUDIO_EXTS: &[&str] = &["mp3", "wav", "m4a", "aiff", "aif", "flac", "aac"];
+const DOC_EXTS: &[&str] = &["pdf"];
 
-/// One image found in a project.
+/// Classify a (lowercase) extension into a media kind, or None if not media.
+fn media_kind(ext: &str) -> Option<&'static str> {
+    if IMAGE_EXTS.contains(&ext) {
+        Some("image")
+    } else if VIDEO_EXTS.contains(&ext) {
+        Some("video")
+    } else if AUDIO_EXTS.contains(&ext) {
+        Some("audio")
+    } else if DOC_EXTS.contains(&ext) {
+        Some("doc")
+    } else {
+        None
+    }
+}
+
+/// One media file found in a project.
 #[derive(Clone, Serialize)]
 struct MediaItem {
     name: String,
     path: String,
     ext: String,
+    kind: String,
     is_heic: bool,
     modified: u64,
     has_edits: bool,
@@ -300,9 +362,9 @@ fn walk_media(dir: &Path, out: &mut Vec<MediaItem>) {
             continue;
         };
         let ext = ext.to_lowercase();
-        if !IMAGE_EXTS.contains(&ext.as_str()) {
+        let Some(kind) = media_kind(&ext) else {
             continue;
-        }
+        };
         let modified = entry
             .metadata()
             .ok()
@@ -315,6 +377,7 @@ fn walk_media(dir: &Path, out: &mut Vec<MediaItem>) {
         out.push(MediaItem {
             name: name.to_string(),
             path: path_str,
+            kind: kind.to_string(),
             is_heic: ext == "heic" || ext == "heif",
             ext,
             modified,
@@ -330,6 +393,57 @@ fn list_media(path: String) -> Vec<MediaItem> {
     walk_media(Path::new(&path), &mut out);
     out.sort_by(|a, b| b.modified.cmp(&a.modified));
     out
+}
+
+/// Generate a QuickLook thumbnail (any file type) into the app cache, returning
+/// the cached PNG path (asset-resolved by the frontend). Cached by path+mtime+size.
+#[tauri::command]
+fn quicklook_thumb(app: AppHandle, path: String, size: u32) -> Result<String, String> {
+    use std::hash::{Hash, Hasher};
+
+    let src = PathBuf::from(&path);
+    let mtime = std::fs::metadata(&src)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut hasher);
+    mtime.hash(&mut hasher);
+    size.hash(&mut hasher);
+    let key = hasher.finish();
+
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("qlthumbs");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let out = dir.join(format!("{key:x}.png"));
+
+    if !out.exists() {
+        let status = Command::new(env!("QLTHUMB_BIN"))
+            .arg(&src)
+            .arg(size.to_string())
+            .arg(&out)
+            .status()
+            .map_err(|e| e.to_string())?;
+        if !status.success() {
+            return Err("QuickLook thumbnail failed".into());
+        }
+    }
+    Ok(out.to_string_lossy().to_string())
+}
+
+/// Open a file with its default application.
+#[tauri::command]
+fn open_path(path: String) -> Result<(), String> {
+    Command::new("open")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Convert a HEIC to a cached JPEG (in the app cache dir) so the webview can
@@ -698,6 +812,8 @@ pub fn run() {
             read_notes,
             save_notes,
             list_media,
+            quicklook_thumb,
+            open_path,
             heic_preview,
             convert_heic,
             import_media,
@@ -749,6 +865,9 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // Live-refresh when files change in ~/Projects (Finder, other apps).
+            start_watching(&handle);
 
             Ok(())
         })

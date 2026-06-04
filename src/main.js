@@ -447,6 +447,19 @@ async function renderThumb(item) {
   return thumbGLCanvas.toDataURL("image/png");
 }
 
+// QuickLook thumbnail (any file type) → asset URL, via the OS thumbnail service.
+async function qlSrc(item) {
+  try {
+    const p = await invoke("quicklook_thumb", { path: item.path, size: 400 });
+    return window.__TAURI__.core.convertFileSrc(p);
+  } catch (err) {
+    console.error("QuickLook thumb failed:", err);
+    return "";
+  }
+}
+
+const KIND_ICONS = { video: "play_circle", audio: "music_note", doc: "description" };
+
 async function loadMedia(path) {
   mediaProjectPath = path;
   clearSelection();
@@ -455,42 +468,49 @@ async function loadMedia(path) {
   const items = await invoke("list_media", { path });
 
   if (!items.length) {
-    grid.innerHTML = `<p class="placeholder">No images in this project yet.</p>`;
+    grid.innerHTML = `<p class="placeholder">No media in this project yet.</p>`;
     return;
   }
 
   const edited = [];
   for (const item of items) {
+    const isImage = item.kind === "image";
     const tile = el("button", "mediatile", { type: "button", title: item.name });
     const img = el("img", "mediatile__img", { loading: "lazy", alt: item.name });
     if (item.is_heic) tile.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
+    if (!isImage) tile.append(el("span", "mediatile__kind", { innerHTML: mi(KIND_ICONS[item.kind] || "insert_drive_file") }));
     tile.append(img);
 
-    // Selection checkbox (doesn't open the editor).
-    const check = el("span", "mediatile__check", { title: "Select" });
-    check.addEventListener("click", (e) => {
-      e.stopPropagation();
-      toggleSelect(item.path, tile);
-    });
-    tile.append(check);
+    // Selection (for adjustments) only applies to images.
+    if (isImage) {
+      const check = el("span", "mediatile__check", { title: "Select" });
+      check.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleSelect(item.path, tile);
+      });
+      tile.append(check);
+    }
 
-    tile.addEventListener("click", () => openLightbox(item));
+    // Images open in the editor; other media open in their default app.
+    tile.addEventListener("click", () => {
+      if (isImage) openLightbox(item);
+      else invoke("open_path", { path: item.path });
+    });
     grid.append(tile);
 
-    if (item.has_edits) {
-      if (thumbCache.has(item.path)) {
-        img.src = thumbCache.get(item.path); // cached — instant
-      } else {
-        edited.push({ item, img }); // render below (shared GL canvas)
-      }
+    // Edited images: bake through the pipeline (reflects the sidecar).
+    // Everything else: a QuickLook thumbnail.
+    if (isImage && item.has_edits) {
+      if (thumbCache.has(item.path)) img.src = thumbCache.get(item.path);
+      else edited.push({ item, img });
     } else {
-      mediaSrc(item).then((src) => {
+      qlSrc(item).then((src) => {
         if (src) img.src = src;
       });
     }
   }
 
-  // Render only the uncached edited thumbnails, one at a time, then cache them.
+  // Render uncached edited thumbnails one at a time, then cache them.
   for (const { item, img } of edited) {
     try {
       const url = await renderThumb(item);
@@ -498,7 +518,7 @@ async function loadMedia(path) {
       img.src = url;
     } catch (err) {
       console.error("Thumbnail render failed:", err);
-      mediaSrc(item).then((src) => {
+      qlSrc(item).then((src) => {
         if (src) img.src = src;
       });
     }
@@ -1763,4 +1783,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   await listen("project-activated", (event) => render(event.payload));
   await listen("new-project-request", openNewModal);
   await listen("show-overview", showOverview);
+
+  // Files changed on disk (Finder, other apps) — refresh the media grid and the
+  // overview if visible. Notes/workspace forms are left alone (avoid clobbering
+  // in-progress edits).
+  await listen("fs-changed", () => {
+    if (activeProject && !document.getElementById("project-content").hidden) {
+      loadMedia(activeProject.path);
+    }
+    if (!document.getElementById("overview").hidden) {
+      showOverview();
+    }
+  });
 });

@@ -31,10 +31,9 @@ no model download. The portable `ort`/ISNet version is preserved at tag
   `#[cfg(target_os)]`).
 
 ## Performance
-- **Downscaled thumbnails in Rust.** Edited thumbnails are currently baked on
-  the frontend by reading each image's *full-resolution* pixels (read_image_data
-  → base64 → decode → WebGL pipeline → toDataURL), cached per session. First view
-  of a project with many edited images is still heavy. Optimize by having Rust
-  generate a small downscaled base (e.g. `sips -Z 512` or the `image` crate) and
-  applying adjustments on that, and/or persist a thumbnail cache on disk
-  (under `$APPCACHE`) keyed by path + sidecar mtime so it survives restarts.
+- **Edited-thumbnail baking.** Unedited media now use QuickLook thumbnails
+  (cheap, OS-cached). *Edited* images are still baked on the frontend by reading
+  full-resolution pixels (read_image_data → decode → WebGL → toDataURL), cached
+  per session — first view of a project with many edited images is still heavy.
+  Optimize by baking adjustments on a downscaled base in Rust and/or persisting
+  the baked thumbnails on disk (`$APPCACHE`) keyed by path + sidecar mtime.

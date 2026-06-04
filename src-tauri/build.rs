@@ -8,16 +8,26 @@ fn main() {
     let bin = Path::new(&out_dir).join("bgremove");
     let src = "swift/bgremove.swift";
 
-    let status = Command::new("swiftc")
-        .args(["-O", src, "-o"])
-        .arg(&bin)
-        .args(["-target", "arm64-apple-macosx14.0"])
-        .status()
-        .expect("failed to invoke swiftc — are the Xcode command-line tools installed?");
-    assert!(status.success(), "swiftc failed to build {src}");
-
+    swiftc(src, &bin, "macosx14.0"); // Vision foreground mask needs macOS 14
     println!("cargo:rustc-env=BGREMOVE_BIN={}", bin.display());
     println!("cargo:rerun-if-changed={src}");
 
+    // QuickLook thumbnail helper (any file type → PNG).
+    let ql_src = "swift/qlthumb.swift";
+    let ql_bin = Path::new(&out_dir).join("qlthumb");
+    swiftc(ql_src, &ql_bin, "macosx11.0");
+    println!("cargo:rustc-env=QLTHUMB_BIN={}", ql_bin.display());
+    println!("cargo:rerun-if-changed={ql_src}");
+
     tauri_build::build();
+}
+
+fn swiftc(src: &str, bin: &Path, target: &str) {
+    let status = Command::new("swiftc")
+        .args(["-O", src, "-o"])
+        .arg(bin)
+        .args(["-target", &format!("arm64-apple-{target}")])
+        .status()
+        .expect("failed to invoke swiftc — are the Xcode command-line tools installed?");
+    assert!(status.success(), "swiftc failed to build {src}");
 }
