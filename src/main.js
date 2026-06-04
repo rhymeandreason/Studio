@@ -394,6 +394,8 @@ async function openLightbox(item) {
 
   const saved = await invoke("read_edits", { path: item.path });
   editState = { ...defaultEdits(), ...saved };
+  orientedCache = null; // new image — invalidate geometry cache
+  orientedSig = "";
   setEditStatus("");
   syncEditorControls();
   renderEditorPreview();
@@ -453,8 +455,27 @@ function defaultEdits() {
     straighten: 0,
     crop: null, // { x, y, w, h } as fractions of the oriented image; null = full
     cropAspect: null, // width/height ratio for locked resizing; null = free
+    // Tonal adjustments, each -100..100 (0 = no change).
+    exposure: 0,
+    contrast: 0,
+    saturation: 0,
+    temperature: 0,
+    tint: 0,
+    highlights: 0,
+    shadows: 0,
   };
 }
+
+// The seven always-visible tonal sliders.
+const TONAL = [
+  { key: "exposure", label: "Exposure" },
+  { key: "contrast", label: "Contrast" },
+  { key: "saturation", label: "Saturation" },
+  { key: "temperature", label: "Temperature" },
+  { key: "tint", label: "Tint" },
+  { key: "highlights", label: "Highlights" },
+  { key: "shadows", label: "Shadows" },
+];
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
@@ -499,9 +520,136 @@ function renderOriented(img, edits) {
   return canvas;
 }
 
+// Cache the oriented (geometry-only) canvas; recompute just when geometry changes.
+let orientedCache = null;
+let orientedSig = "";
+// Reused offscreen canvas for full-res export (avoids leaking WebGL contexts).
+const exportGLCanvas = document.createElement("canvas");
+
+function getOriented() {
+  const sig = [
+    editState.rotate,
+    editState.flipH,
+    editState.flipV,
+    editState.straighten,
+  ].join("|");
+  if (!orientedCache || sig !== orientedSig) {
+    orientedCache = renderOriented(editImg, editState);
+    orientedSig = sig;
+  }
+  return orientedCache;
+}
+
+// --- WebGL tonal-adjustment pipeline ---------------------------------------
+
+const TONAL_FRAG = `
+  precision mediump float;
+  varying vec2 v_uv;
+  uniform sampler2D u_tex;
+  uniform float u_exposure, u_contrast, u_saturation, u_temp, u_tint,
+                u_highlights, u_shadows;
+  const vec3 LUMA = vec3(0.299, 0.587, 0.114);
+  void main() {
+    vec4 t = texture2D(u_tex, v_uv);
+    vec3 c = t.rgb;
+    c *= u_exposure;                       // exposure (factor)
+    c.r += u_temp * 0.1; c.b -= u_temp * 0.1; // temperature
+    c.g += u_tint * 0.1;                   // tint
+    c = (c - 0.5) * u_contrast + 0.5;      // contrast
+    float l1 = dot(clamp(c, 0.0, 1.0), LUMA);
+    c += u_shadows * (1.0 - smoothstep(0.0, 0.5, l1));    // lift/lower shadows
+    c += u_highlights * smoothstep(0.5, 1.0, l1);         // recover/boost highlights
+    float l2 = dot(clamp(c, 0.0, 1.0), LUMA);
+    c = mix(vec3(l2), c, u_saturation);    // saturation
+    gl_FragColor = vec4(clamp(c, 0.0, 1.0), t.a);
+  }`;
+
+const TONAL_VERT = `
+  attribute vec2 a_pos;
+  varying vec2 v_uv;
+  void main() {
+    v_uv = (a_pos + 1.0) * 0.5;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+  }`;
+
+function compileShader(gl, type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    throw new Error(gl.getShaderInfoLog(sh));
+  }
+  return sh;
+}
+
+function getGL(canvas) {
+  if (canvas._glctx) return canvas._glctx;
+  const gl = canvas.getContext("webgl", {
+    preserveDrawingBuffer: true,
+    premultipliedAlpha: false,
+  });
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compileShader(gl, gl.VERTEX_SHADER, TONAL_VERT));
+  gl.attachShader(prog, compileShader(gl, gl.FRAGMENT_SHADER, TONAL_FRAG));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, "a_pos");
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+  const u = (n) => gl.getUniformLocation(prog, n);
+  canvas._glctx = {
+    gl,
+    tex,
+    lastSource: null,
+    u: {
+      exposure: u("u_exposure"),
+      contrast: u("u_contrast"),
+      saturation: u("u_saturation"),
+      temp: u("u_temp"),
+      tint: u("u_tint"),
+      highlights: u("u_highlights"),
+      shadows: u("u_shadows"),
+    },
+  };
+  return canvas._glctx;
+}
+
+// Draw `source` (a canvas) into `canvas` with the tonal adjustments applied.
+function glAdjust(canvas, source, ed) {
+  const ctx = getGL(canvas);
+  const { gl, u, tex } = ctx;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  if (ctx.lastSource !== source) {
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    ctx.lastSource = source;
+  }
+  gl.uniform1f(u.exposure, Math.pow(2, (ed.exposure || 0) / 100));
+  gl.uniform1f(u.contrast, 1 + (ed.contrast || 0) / 100);
+  gl.uniform1f(u.saturation, 1 + (ed.saturation || 0) / 100);
+  gl.uniform1f(u.temp, (ed.temperature || 0) / 100);
+  gl.uniform1f(u.tint, (ed.tint || 0) / 100);
+  gl.uniform1f(u.highlights, ((ed.highlights || 0) / 100) * 0.5);
+  gl.uniform1f(u.shadows, ((ed.shadows || 0) / 100) * 0.5);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
 function renderEditorPreview() {
   if (!editImg) return;
-  const oriented = renderOriented(editImg, editState);
+  const oriented = getOriented();
   const canvas = document.getElementById("editor-canvas");
   const wrap = document.getElementById("editor-canvas-wrap");
   const scale = Math.min(
@@ -511,9 +659,7 @@ function renderEditorPreview() {
   );
   canvas.width = Math.max(1, Math.round(oriented.width * scale));
   canvas.height = Math.max(1, Math.round(oriented.height * scale));
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(oriented, 0, 0, canvas.width, canvas.height);
+  glAdjust(canvas, oriented, editState);
   positionCrop();
 }
 
@@ -679,10 +825,43 @@ function scheduleEditsSave() {
   }, 400);
 }
 
+function buildTonalSliders() {
+  const container = document.getElementById("tonal-sliders");
+  container.innerHTML = "";
+  for (const { key, label } of TONAL) {
+    const row = el("div", "sliderrow");
+    const head = el("div", "sliderrow__head");
+    head.append(el("span", null, { textContent: label }));
+    const val = el("em", "sliderrow__val", { textContent: "0" });
+    head.append(val);
+    const input = el("input", "slider", {
+      type: "range",
+      min: "-100",
+      max: "100",
+      step: "1",
+      value: "0",
+    });
+    input.dataset.key = key;
+    input.addEventListener("input", () => {
+      editState[key] = Number(input.value);
+      val.textContent = input.value;
+      renderEditorPreview();
+      scheduleEditsSave();
+    });
+    row.append(head, input);
+    container.append(row);
+  }
+}
+
 function syncEditorControls() {
   document.getElementById("ed-straighten").value = editState.straighten || 0;
   document.getElementById("ed-straighten-val").textContent = `${editState.straighten || 0}°`;
   highlightAspect(editState.cropAspect ?? null);
+  document.querySelectorAll("#tonal-sliders input[data-key]").forEach((inp) => {
+    const v = editState[inp.dataset.key] || 0;
+    inp.value = v;
+    inp.previousElementSibling.querySelector(".sliderrow__val").textContent = v;
+  });
 }
 
 function blobToBase64(blob) {
@@ -695,24 +874,29 @@ function blobToBase64(blob) {
 
 async function exportEdited(replace) {
   if (!editImg) return;
-  const oriented = renderOriented(editImg, editState); // full resolution
+  const oriented = getOriented(); // geometry, full resolution
   const ext = (editItem.ext || "png").toLowerCase();
   const jpeg = ext === "jpg" || ext === "jpeg";
   const mime = jpeg ? "image/jpeg" : "image/png";
   const outExt = jpeg ? "jpg" : "png";
 
+  // Apply tonal adjustments at full resolution via the shader.
+  exportGLCanvas.width = oriented.width;
+  exportGLCanvas.height = oriented.height;
+  glAdjust(exportGLCanvas, oriented, editState);
+
   // Apply crop (fractions of the oriented image).
-  let out = oriented;
+  let out = exportGLCanvas;
   const c = editState.crop;
   if (c && (c.x > 0 || c.y > 0 || c.w < 1 || c.h < 1)) {
-    const sx = Math.round(c.x * oriented.width);
-    const sy = Math.round(c.y * oriented.height);
-    const sw = Math.max(1, Math.round(c.w * oriented.width));
-    const sh = Math.max(1, Math.round(c.h * oriented.height));
+    const sx = Math.round(c.x * exportGLCanvas.width);
+    const sy = Math.round(c.y * exportGLCanvas.height);
+    const sw = Math.max(1, Math.round(c.w * exportGLCanvas.width));
+    const sh = Math.max(1, Math.round(c.h * exportGLCanvas.height));
     const cropped = document.createElement("canvas");
     cropped.width = sw;
     cropped.height = sh;
-    cropped.getContext("2d").drawImage(oriented, sx, sy, sw, sh, 0, 0, sw, sh);
+    cropped.getContext("2d").drawImage(exportGLCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
     out = cropped;
   }
 
@@ -731,6 +915,7 @@ async function exportEdited(replace) {
 }
 
 function initEditor() {
+  buildTonalSliders();
   document.getElementById("lb-export").addEventListener("click", () => exportEdited(false));
   document.getElementById("lb-replace").addEventListener("click", () => exportEdited(true));
 

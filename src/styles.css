@@ -1110,6 +1110,30 @@ select.field__input {
   box-shadow: var(--shadow-sm);
 }
 
+#tonal-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.sliderrow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sliderrow__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.sliderrow__val {
+  font-style: normal;
+  color: var(--text);
+}
+
 .editreset {
   margin-top: auto;
   align-self: stretch;
