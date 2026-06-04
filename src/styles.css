@@ -1031,6 +1031,71 @@ select.field__input {
   align-self: flex-start;
 }
 
+.chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.chip:disabled:hover {
+  color: var(--text-muted);
+  border-color: var(--hairline-strong);
+}
+
+/* Paste-subset chooser */
+.ppmodal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(42, 42, 40, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ppmodal__card {
+  background: var(--elevated);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 18px;
+  width: 280px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ppmodal__title {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ppmodal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ppmodal__list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ppmodal__list input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+}
+
+.ppmodal__sep {
+  height: 1px;
+  background: var(--hairline);
+  margin: 2px 0;
+}
+
 .editor__panel {
   flex: 0 0 240px;
   display: flex;

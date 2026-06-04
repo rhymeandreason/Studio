@@ -807,6 +807,45 @@ function resetCrop() {
   scheduleEditsSave();
 }
 
+// --- Copy / paste adjustments ----------------------------------------------
+
+const ADJ_FIELDS = [
+  "rotate", "flipH", "flipV", "straighten", "crop", "cropAspect",
+  "exposure", "contrast", "saturation", "temperature", "tint", "highlights", "shadows",
+];
+
+let copiedEdits = null;
+
+function loadCopiedEdits() {
+  try {
+    copiedEdits = JSON.parse(localStorage.getItem("studio_copied_edits") || "null");
+  } catch {
+    copiedEdits = null;
+  }
+}
+
+function copyAdjustments() {
+  const snap = {};
+  for (const k of ADJ_FIELDS) snap[k] = editState[k];
+  copiedEdits = JSON.parse(JSON.stringify(snap));
+  localStorage.setItem("studio_copied_edits", JSON.stringify(copiedEdits));
+  document.getElementById("ed-paste").disabled = false;
+  setEditStatus("Copied ✓");
+}
+
+function pasteAdjustments() {
+  if (!copiedEdits || !editState) return;
+  for (const f of ADJ_FIELDS) {
+    if (f in copiedEdits) editState[f] = copiedEdits[f];
+  }
+  orientedCache = null; // geometry may have changed
+  orientedSig = "";
+  syncEditorControls();
+  renderEditorPreview();
+  scheduleEditsSave();
+  setEditStatus("Pasted ✓");
+}
+
 function setEditStatus(text) {
   document.getElementById("edit-status").textContent = text;
 }
@@ -958,6 +997,12 @@ function initEditor() {
     )
   );
   document.getElementById("ed-cropreset").addEventListener("click", resetCrop);
+
+  // Copy / paste adjustments.
+  loadCopiedEdits();
+  document.getElementById("ed-paste").disabled = !copiedEdits;
+  document.getElementById("ed-copy").addEventListener("click", copyAdjustments);
+  document.getElementById("ed-paste").addEventListener("click", pasteAdjustments);
   window.addEventListener("resize", () => {
     if (editImg) renderEditorPreview();
   });
@@ -966,8 +1011,18 @@ function initEditor() {
 function initMedia() {
   initEditor();
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !document.getElementById("lightbox").hidden) {
+    if (document.getElementById("lightbox").hidden) return;
+    if (e.key === "Escape") {
       closeLightbox();
+      return;
+    }
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && (e.key === "c" || e.key === "C")) {
+      e.preventDefault();
+      copyAdjustments();
+    } else if (mod && (e.key === "v" || e.key === "V")) {
+      e.preventDefault();
+      pasteAdjustments();
     }
   });
   document.getElementById("lb-close").addEventListener("click", closeLightbox);
