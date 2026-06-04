@@ -513,6 +513,44 @@ function buildMediaTile(item, edited) {
 
 // Reconcile the grid against the project's media — reuse unchanged tiles so the
 // grid doesn't blank-and-rebuild (which caused a flicker on every refresh).
+// Resolve an edited image's thumbnail: in-memory cache → on-disk cache →
+// bake via the WebGL pipeline (and persist to disk). Returns an asset URL.
+async function ensureEditedThumb(item) {
+  if (thumbCache.has(item.path)) return thumbCache.get(item.path);
+  const convert = window.__TAURI__.core.convertFileSrc;
+
+  try {
+    const cached = await invoke("edited_thumb", {
+      path: item.path,
+      editsMtime: item.edits_mtime,
+    });
+    if (cached) {
+      const url = convert(cached);
+      thumbCache.set(item.path, url);
+      return url;
+    }
+  } catch (err) {
+    console.error("edited_thumb:", err);
+  }
+
+  // Miss — bake it (slow) and persist for next time.
+  const dataUrl = await renderThumb(item);
+  try {
+    const saved = await invoke("save_edited_thumb", {
+      path: item.path,
+      editsMtime: item.edits_mtime,
+      dataBase64: dataUrl.split(",")[1],
+    });
+    const url = convert(saved);
+    thumbCache.set(item.path, url);
+    return url;
+  } catch (err) {
+    console.error("save_edited_thumb:", err);
+    thumbCache.set(item.path, dataUrl);
+    return dataUrl;
+  }
+}
+
 async function loadMedia(path) {
   mediaProjectPath = path;
   const grid = document.getElementById("media-grid");
@@ -555,9 +593,7 @@ async function loadMedia(path) {
 
   for (const { item, img } of edited) {
     try {
-      const url = await renderThumb(item);
-      thumbCache.set(item.path, url);
-      img.src = url;
+      img.src = await ensureEditedThumb(item);
     } catch (err) {
       console.error("Thumbnail render failed:", err);
       qlSrc(item).then((src) => {

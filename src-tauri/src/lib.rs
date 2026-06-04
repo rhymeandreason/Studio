@@ -443,6 +443,47 @@ fn quicklook_thumb(app: AppHandle, path: String, size: u32) -> Result<String, St
     Ok(out.to_string_lossy().to_string())
 }
 
+/// Path of the on-disk cache file for an edited image's baked thumbnail,
+/// keyed by image path + sidecar mtime (so it invalidates when edits change).
+fn edited_thumb_file(app: &AppHandle, path: &str, edits_mtime: u64) -> Result<PathBuf, String> {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut hasher);
+    edits_mtime.hash(&mut hasher);
+    let key = hasher.finish();
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("edited-thumbs");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join(format!("{key:x}.png")))
+}
+
+/// Return the cached baked-thumbnail path for an edited image, if present.
+#[tauri::command]
+fn edited_thumb(app: AppHandle, path: String, edits_mtime: u64) -> Option<String> {
+    edited_thumb_file(&app, &path, edits_mtime)
+        .ok()
+        .filter(|f| f.exists())
+        .map(|f| f.to_string_lossy().to_string())
+}
+
+/// Persist a baked thumbnail (base64 PNG) for an edited image; return its path.
+#[tauri::command]
+fn save_edited_thumb(
+    app: AppHandle,
+    path: String,
+    edits_mtime: u64,
+    data_base64: String,
+) -> Result<String, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let file = edited_thumb_file(&app, &path, edits_mtime)?;
+    let bytes = STANDARD.decode(data_base64.as_bytes()).map_err(|e| e.to_string())?;
+    std::fs::write(&file, bytes).map_err(|e| e.to_string())?;
+    Ok(file.to_string_lossy().to_string())
+}
+
 /// Open a file with its default application.
 #[tauri::command]
 fn open_path(path: String) -> Result<(), String> {
@@ -842,6 +883,8 @@ pub fn run() {
             save_notes,
             list_media,
             quicklook_thumb,
+            edited_thumb,
+            save_edited_thumb,
             open_path,
             heic_preview,
             convert_heic,
