@@ -518,6 +518,22 @@ fn write_image(path: String, data_base64: String) -> Result<(), String> {
     std::fs::write(&path, bytes).map_err(|e| e.to_string())
 }
 
+/// Encode a PNG (base64) to WebP at the given quality, returning WebP base64.
+/// WKWebView's canvas can't encode WebP, so the frontend hands us PNG and we
+/// re-encode via libwebp.
+#[tauri::command]
+fn encode_webp(png_base64: String, quality: f32) -> Result<String, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let png = STANDARD.decode(png_base64.as_bytes()).map_err(|e| e.to_string())?;
+    let img = image::load_from_memory(&png)
+        .map_err(|e| e.to_string())?
+        .to_rgba8();
+    let (w, h) = img.dimensions();
+    let encoder = webp::Encoder::from_rgba(img.as_raw(), w, h);
+    let out = encoder.encode(quality.clamp(1.0, 100.0));
+    Ok(STANDARD.encode(&*out))
+}
+
 /// Reveal a file in Finder.
 #[tauri::command]
 fn reveal_in_finder(path: String) -> Result<(), String> {
@@ -643,6 +659,7 @@ pub fn run() {
             convert_heic,
             import_media,
             reveal_in_finder,
+            encode_webp,
             read_image_data,
             read_edits,
             save_edits,

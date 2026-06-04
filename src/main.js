@@ -1114,6 +1114,170 @@ async function exportEdited(replace) {
   }
 }
 
+// --- Export for web (single + batch) ---------------------------------------
+
+const webGLCanvas = document.createElement("canvas");
+let webExportCtx = null;
+const webSettings = { format: "webp", maxDim: 1280, quality: 82 };
+
+function webName(path, fmt, longSide) {
+  const ext = fmt === "png" ? "png" : fmt === "jpeg" ? "jpg" : "webp";
+  return `${path.replace(/\.[^/.]+$/, "")}x${longSide}.${ext}`;
+}
+
+function cropToCanvas(oriented, crop) {
+  if (crop && (crop.x > 0 || crop.y > 0 || crop.w < 1 || crop.h < 1)) {
+    const sx = Math.round(crop.x * oriented.width);
+    const sy = Math.round(crop.y * oriented.height);
+    const sw = Math.max(1, Math.round(crop.w * oriented.width));
+    const sh = Math.max(1, Math.round(crop.h * oriented.height));
+    const cc = document.createElement("canvas");
+    cc.width = sw;
+    cc.height = sh;
+    cc.getContext("2d").drawImage(oriented, sx, sy, sw, sh, 0, 0, sw, sh);
+    return cc;
+  }
+  return oriented;
+}
+
+// Bake an image (geometry + crop + tonal) and resize → final canvas.
+function bakeCanvas(img, edits, settings) {
+  const oriented = renderOriented(img, edits);
+  const cropped = cropToCanvas(oriented, edits.crop);
+
+  webGLCanvas.width = cropped.width;
+  webGLCanvas.height = cropped.height;
+  glAdjust(webGLCanvas, cropped, edits);
+
+  const md = settings.maxDim;
+  if (md && Math.max(webGLCanvas.width, webGLCanvas.height) > md) {
+    const s = md / Math.max(webGLCanvas.width, webGLCanvas.height);
+    const rw = Math.max(1, Math.round(webGLCanvas.width * s));
+    const rh = Math.max(1, Math.round(webGLCanvas.height * s));
+    const rc = document.createElement("canvas");
+    rc.width = rw;
+    rc.height = rh;
+    const ctx = rc.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(webGLCanvas, 0, 0, rw, rh);
+    return rc;
+  }
+  return webGLCanvas;
+}
+
+function canvasToBase64(canvas, mime, q) {
+  return new Promise((resolve) =>
+    canvas.toBlob(async (b) => resolve(await blobToBase64(b)), mime, q)
+  );
+}
+
+function base64Size(b64) {
+  const pad = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+  return Math.floor((b64.length * 3) / 4) - pad;
+}
+
+// Encode a baked canvas to the chosen format → { b64, size }.
+// JPG/PNG use the canvas; WebP is encoded in Rust (WKWebView can't do WebP).
+async function encodeFinal(canvas, settings) {
+  if (settings.format === "webp") {
+    const pngB64 = await canvasToBase64(canvas, "image/png");
+    const webpB64 = await invoke("encode_webp", { pngBase64: pngB64, quality: settings.quality });
+    return { b64: webpB64, size: base64Size(webpB64) };
+  }
+  const mime = settings.format === "png" ? "image/png" : "image/jpeg";
+  const blob = await new Promise((res) => canvas.toBlob(res, mime, settings.quality / 100));
+  return { b64: await blobToBase64(blob), size: blob.size };
+}
+
+function highlightFmt() {
+  document.querySelectorAll("#webexport [data-fmt]").forEach((b) =>
+    b.classList.toggle("is-active", b.dataset.fmt === webSettings.format)
+  );
+  document.getElementById("web-quality-field").style.display =
+    webSettings.format === "png" ? "none" : "";
+}
+
+function openWebExport(ctx) {
+  webExportCtx = ctx;
+  highlightFmt();
+  document.getElementById("web-maxdim").value = String(webSettings.maxDim);
+  document.getElementById("web-quality").value = webSettings.quality;
+  document.getElementById("web-quality-val").textContent = webSettings.quality;
+  document.getElementById("web-context").textContent =
+    ctx.mode === "batch" ? `${ctx.items.length} images` : ctx.items[0].name;
+  document.getElementById("webexport").hidden = false;
+}
+
+function closeWebExport() {
+  document.getElementById("webexport").hidden = true;
+  webExportCtx = null;
+}
+
+// Close the dialog immediately and run the export in the background.
+function doWebExport() {
+  if (!webExportCtx) return;
+  const ctx = webExportCtx;
+  const settings = { ...webSettings };
+  closeWebExport();
+  runWebExport(ctx, settings);
+}
+
+async function runWebExport(ctx, settings) {
+  try {
+    if (ctx.mode === "single") {
+      const it = ctx.items[0];
+      const canvas = bakeCanvas(it.img, it.edits, settings);
+      const long = Math.max(canvas.width, canvas.height);
+      const { b64 } = await encodeFinal(canvas, settings);
+      await invoke("write_image", { path: webName(it.path, settings.format, long), dataBase64: b64 });
+    } else {
+      for (const it of ctx.items) {
+        const img = await loadImage(await invoke("read_image_data", { path: it.path }));
+        const edits = { ...defaultEdits(), ...(await invoke("read_edits", { path: it.path })) };
+        const canvas = bakeCanvas(img, edits, settings);
+        const long = Math.max(canvas.width, canvas.height);
+        const { b64 } = await encodeFinal(canvas, settings);
+        await invoke("write_image", { path: webName(it.path, settings.format, long), dataBase64: b64 });
+      }
+    }
+    if (mediaProjectPath) loadMedia(mediaProjectPath);
+  } catch (err) {
+    console.error("Web export failed:", err);
+  }
+}
+
+function initWebExport() {
+  document.getElementById("lb-webexport").addEventListener("click", () => {
+    if (!editItem) return;
+    openWebExport({
+      mode: "single",
+      items: [{ path: editItem.path, name: editItem.name, edits: editState, img: editImg }],
+    });
+  });
+  document.getElementById("sel-webexport").addEventListener("click", () => {
+    if (!mediaSelection.size) return;
+    openWebExport({
+      mode: "batch",
+      items: [...mediaSelection].map((p) => ({ path: p, name: p.split("/").pop() })),
+    });
+  });
+  document.querySelectorAll("#webexport [data-fmt]").forEach((b) =>
+    b.addEventListener("click", () => {
+      webSettings.format = b.dataset.fmt;
+      highlightFmt();
+    })
+  );
+  document.getElementById("web-maxdim").addEventListener("change", (e) => {
+    webSettings.maxDim = Number(e.target.value);
+  });
+  document.getElementById("web-quality").addEventListener("input", (e) => {
+    webSettings.quality = Number(e.target.value);
+    document.getElementById("web-quality-val").textContent = e.target.value;
+  });
+  document.getElementById("web-cancel").addEventListener("click", closeWebExport);
+  document.getElementById("web-export").addEventListener("click", doWebExport);
+}
+
 function initEditor() {
   buildTonalSliders();
   document.getElementById("lb-export").addEventListener("click", () => exportEdited(false));
@@ -1171,6 +1335,7 @@ function initEditor() {
 
 function initMedia() {
   initEditor();
+  initWebExport();
   document.getElementById("sel-paste").addEventListener("click", batchPaste);
   document.getElementById("sel-clear").addEventListener("click", clearSelection);
 

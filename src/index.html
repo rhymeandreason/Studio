@@ -60,6 +60,9 @@
               <button class="btn-ghost" id="sel-paste">
                 <span class="mi mi-sm">content_paste</span>Paste adjustments
               </button>
+              <button class="btn-ghost" id="sel-webexport">
+                <span class="mi mi-sm">photo_size_select_large</span>Export for web
+              </button>
               <button class="btn-ghost" id="sel-clear">Clear</button>
             </div>
           </div>
@@ -166,6 +169,9 @@
           <button class="btn-ghost" id="lb-export">
             <span class="mi mi-sm">save</span>Export copy
           </button>
+          <button class="btn-ghost" id="lb-webexport">
+            <span class="mi mi-sm">photo_size_select_large</span>Export for web
+          </button>
           <button class="btn-ghost" id="lb-replace">
             <span class="mi mi-sm">published_with_changes</span>Replace original
           </button>
@@ -265,6 +271,47 @@
               <span class="mi mi-sm">restart_alt</span>Reset all
             </button>
           </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export for web -->
+    <div class="modal webexport" id="webexport" hidden>
+      <div class="modal__card">
+        <h2 class="modal__title">Export for web</h2>
+        <p class="modal__hint" id="web-context"></p>
+
+        <div class="field">
+          <span class="field__label">Format</span>
+          <div class="editbtns">
+            <button class="chip" data-fmt="webp">WebP</button>
+            <button class="chip" data-fmt="jpeg">JPG</button>
+            <button class="chip" data-fmt="png">PNG</button>
+          </div>
+        </div>
+
+        <label class="field">
+          <span class="field__label">Max size (longest side)</span>
+          <select class="field__input" id="web-maxdim">
+            <option value="0">Original</option>
+            <option value="2560">2560 px</option>
+            <option value="1920">1920 px</option>
+            <option value="1280">1280 px</option>
+            <option value="1024">1024 px</option>
+            <option value="640">640 px</option>
+          </select>
+        </label>
+
+        <div class="field" id="web-quality-field">
+          <span class="field__label">Quality <em id="web-quality-val">82</em></span>
+          <input class="slider" type="range" id="web-quality" min="1" max="100" value="82" />
+        </div>
+
+        <div class="modal__actions">
+          <button class="btn-ghost" id="web-cancel">Cancel</button>
+          <button class="btn-save" id="web-export">
+            <span class="mi mi-sm">save</span>Export
+          </button>
         </div>
       </div>
     </div>
