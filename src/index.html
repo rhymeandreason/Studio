@@ -54,6 +54,15 @@
       <!-- Project content -->
       <div class="content" id="project-content" hidden>
         <section class="panel" data-panel="media" hidden>
+          <div class="selbar" id="selbar" hidden>
+            <span class="selbar__count" id="sel-count">0 selected</span>
+            <div class="selbar__actions">
+              <button class="btn-ghost" id="sel-paste">
+                <span class="mi mi-sm">content_paste</span>Paste adjustments
+              </button>
+              <button class="btn-ghost" id="sel-clear">Clear</button>
+            </div>
+          </div>
           <div class="media-grid" id="media-grid"></div>
         </section>
 

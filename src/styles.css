@@ -827,6 +827,83 @@ select.field__input {
   border-radius: 999px;
 }
 
+.mediatile__check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--hairline-strong);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.mediatile:hover .mediatile__check,
+.mediatile.is-selected .mediatile__check {
+  opacity: 1;
+}
+
+.mediatile.is-selected .mediatile__check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.mediatile.is-selected .mediatile__check::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 4px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.mediatile.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Selection bar */
+.selbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.selbar__count {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.selbar__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.selbar .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  font-size: 12px;
+}
+
+.selbar .btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* Drag-and-drop overlay */
 .dropzone {
   position: fixed;

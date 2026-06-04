@@ -277,6 +277,7 @@ struct MediaItem {
     ext: String,
     is_heic: bool,
     modified: u64,
+    has_edits: bool,
 }
 
 /// Recursively collect images under `dir`, skipping noise/hidden directories.
@@ -309,12 +310,15 @@ fn walk_media(dir: &Path, out: &mut Vec<MediaItem>) {
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
+        let path_str = path.to_string_lossy().to_string();
+        let has_edits = Path::new(&format!("{path_str}.studio.json")).exists();
         out.push(MediaItem {
             name: name.to_string(),
-            path: path.to_string_lossy().to_string(),
+            path: path_str,
             is_heic: ext == "heic" || ext == "heif",
             ext,
             modified,
+            has_edits,
         });
     }
 }

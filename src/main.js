@@ -331,6 +331,55 @@ function initNewModal() {
 
 let mediaProjectPath = null;
 let currentMedia = null;
+const mediaSelection = new Set();
+
+function updateSelbar() {
+  const n = mediaSelection.size;
+  document.getElementById("selbar").hidden = n === 0;
+  document.getElementById("sel-count").textContent = `${n} selected`;
+  document.getElementById("sel-paste").disabled = !copiedEdits || n === 0;
+}
+
+function toggleSelect(path, tile) {
+  if (mediaSelection.has(path)) {
+    mediaSelection.delete(path);
+    tile.classList.remove("is-selected");
+  } else {
+    mediaSelection.add(path);
+    tile.classList.add("is-selected");
+  }
+  updateSelbar();
+}
+
+function clearSelection() {
+  mediaSelection.clear();
+  document.querySelectorAll(".mediatile.is-selected").forEach((t) =>
+    t.classList.remove("is-selected")
+  );
+  updateSelbar();
+}
+
+// Write the copied adjustments onto every selected image's sidecar.
+async function batchPaste() {
+  if (!copiedEdits || !mediaSelection.size) return;
+  const fields = {};
+  for (const f of ADJ_FIELDS) if (f in copiedEdits) fields[f] = copiedEdits[f];
+
+  const paths = [...mediaSelection];
+  for (const path of paths) {
+    const existing = await invoke("read_edits", { path });
+    await invoke("save_edits", { path, edits: { version: 1, ...existing, ...fields } });
+    invalidateThumb(path);
+  }
+
+  const n = paths.length;
+  document.getElementById("sel-count").textContent = `Pasted to ${n} image${n > 1 ? "s" : ""} ✓`;
+  document.getElementById("sel-paste").disabled = true;
+  setTimeout(() => {
+    clearSelection();
+    if (mediaProjectPath) loadMedia(mediaProjectPath); // refresh thumbnails
+  }, 1400);
+}
 
 // Resolve a displayable asset URL for a media item (HEIC gets a cached JPEG).
 async function mediaSrc(item) {
@@ -347,8 +396,60 @@ async function mediaSrc(item) {
   return convert(item.path);
 }
 
+// Shared offscreen GL canvas for rendering edited thumbnails (one context).
+const thumbGLCanvas = document.createElement("canvas");
+// Cache of baked thumbnail data URLs by image path; invalidated when its edits
+// change so we don't re-render the whole grid on every close / batch paste.
+const thumbCache = new Map();
+
+function invalidateThumb(path) {
+  thumbCache.delete(path);
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+// Render an edited image's thumbnail (geometry + crop + tonal baked) as a data URL.
+async function renderThumb(item) {
+  const [dataUrl, saved] = await Promise.all([
+    invoke("read_image_data", { path: item.path }),
+    invoke("read_edits", { path: item.path }),
+  ]);
+  const img = await loadImage(dataUrl);
+  const edits = { ...defaultEdits(), ...saved };
+
+  const oriented = renderOriented(img, edits);
+  let base = oriented;
+  const c = edits.crop;
+  if (c && (c.x > 0 || c.y > 0 || c.w < 1 || c.h < 1)) {
+    const sx = Math.round(c.x * oriented.width);
+    const sy = Math.round(c.y * oriented.height);
+    const sw = Math.max(1, Math.round(c.w * oriented.width));
+    const sh = Math.max(1, Math.round(c.h * oriented.height));
+    const cc = document.createElement("canvas");
+    cc.width = sw;
+    cc.height = sh;
+    cc.getContext("2d").drawImage(oriented, sx, sy, sw, sh, 0, 0, sw, sh);
+    base = cc;
+  }
+
+  const MAX = 400;
+  const scale = Math.min(1, MAX / Math.max(base.width, base.height));
+  thumbGLCanvas.width = Math.max(1, Math.round(base.width * scale));
+  thumbGLCanvas.height = Math.max(1, Math.round(base.height * scale));
+  glAdjust(thumbGLCanvas, base, edits);
+  return thumbGLCanvas.toDataURL("image/png");
+}
+
 async function loadMedia(path) {
   mediaProjectPath = path;
+  clearSelection();
   const grid = document.getElementById("media-grid");
   grid.innerHTML = "";
   const items = await invoke("list_media", { path });
@@ -358,16 +459,49 @@ async function loadMedia(path) {
     return;
   }
 
+  const edited = [];
   for (const item of items) {
     const tile = el("button", "mediatile", { type: "button", title: item.name });
     const img = el("img", "mediatile__img", { loading: "lazy", alt: item.name });
     if (item.is_heic) tile.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
     tile.append(img);
+
+    // Selection checkbox (doesn't open the editor).
+    const check = el("span", "mediatile__check", { title: "Select" });
+    check.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleSelect(item.path, tile);
+    });
+    tile.append(check);
+
     tile.addEventListener("click", () => openLightbox(item));
     grid.append(tile);
-    mediaSrc(item).then((src) => {
-      if (src) img.src = src;
-    });
+
+    if (item.has_edits) {
+      if (thumbCache.has(item.path)) {
+        img.src = thumbCache.get(item.path); // cached — instant
+      } else {
+        edited.push({ item, img }); // render below (shared GL canvas)
+      }
+    } else {
+      mediaSrc(item).then((src) => {
+        if (src) img.src = src;
+      });
+    }
+  }
+
+  // Render only the uncached edited thumbnails, one at a time, then cache them.
+  for (const { item, img } of edited) {
+    try {
+      const url = await renderThumb(item);
+      thumbCache.set(item.path, url);
+      img.src = url;
+    } catch (err) {
+      console.error("Thumbnail render failed:", err);
+      mediaSrc(item).then((src) => {
+        if (src) img.src = src;
+      });
+    }
   }
 }
 
@@ -401,12 +535,23 @@ async function openLightbox(item) {
   renderEditorPreview();
 }
 
-function closeLightbox() {
+async function closeLightbox() {
+  // Flush any pending edit save so the grid thumbnail reflects it.
+  if (editItem && editState) {
+    clearTimeout(editSaveTimer);
+    try {
+      await invoke("save_edits", { path: editItem.path, edits: editState });
+    } catch (err) {
+      console.error("Edit save on close failed:", err);
+    }
+    invalidateThumb(editItem.path); // this image's thumbnail may have changed
+  }
   document.getElementById("lightbox").hidden = true;
   currentMedia = null;
   editItem = null;
   editImg = null;
   editState = null;
+  if (mediaProjectPath) loadMedia(mediaProjectPath);
 }
 
 // Native file drag-and-drop → copy images into the active project's media/.
@@ -946,6 +1091,22 @@ async function exportEdited(replace) {
       ? editItem.path
       : editItem.path.replace(/\.[^/.]+$/, "") + "-edited." + outExt;
     await invoke("write_image", { path: dest, dataBase64: b64 });
+    invalidateThumb(editItem.path);
+    if (replace) {
+      // Edits are now baked into the file — reset the sidecar so they aren't
+      // re-applied on top of the baked pixels, and reload from the new file.
+      editState = defaultEdits();
+      orientedCache = null;
+      orientedSig = "";
+      await invoke("save_edits", { path: editItem.path, edits: editState });
+      syncEditorControls();
+      try {
+        editImg = await loadImage(await invoke("read_image_data", { path: editItem.path }));
+      } catch (err) {
+        console.error("Reload after replace failed:", err);
+      }
+      renderEditorPreview();
+    }
     setEditStatus(replace ? "Replaced ✓" : "Exported ✓");
     if (mediaProjectPath) loadMedia(mediaProjectPath);
   } catch (err) {
@@ -1010,19 +1171,28 @@ function initEditor() {
 
 function initMedia() {
   initEditor();
+  document.getElementById("sel-paste").addEventListener("click", batchPaste);
+  document.getElementById("sel-clear").addEventListener("click", clearSelection);
+
   document.addEventListener("keydown", (e) => {
-    if (document.getElementById("lightbox").hidden) return;
-    if (e.key === "Escape") {
-      closeLightbox();
+    const mod = e.metaKey || e.ctrlKey;
+    if (!document.getElementById("lightbox").hidden) {
+      // Editor is open.
+      if (e.key === "Escape") {
+        closeLightbox();
+      } else if (mod && (e.key === "c" || e.key === "C")) {
+        e.preventDefault();
+        copyAdjustments();
+      } else if (mod && (e.key === "v" || e.key === "V")) {
+        e.preventDefault();
+        pasteAdjustments();
+      }
       return;
     }
-    const mod = e.metaKey || e.ctrlKey;
-    if (mod && (e.key === "c" || e.key === "C")) {
+    // Grid context: Cmd+V pastes onto the selected tiles.
+    if (mod && (e.key === "v" || e.key === "V") && mediaSelection.size) {
       e.preventDefault();
-      copyAdjustments();
-    } else if (mod && (e.key === "v" || e.key === "V")) {
-      e.preventDefault();
-      pasteAdjustments();
+      batchPaste();
     }
   });
   document.getElementById("lb-close").addEventListener("click", closeLightbox);
