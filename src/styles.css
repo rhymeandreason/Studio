@@ -827,6 +827,10 @@ select.field__input {
   border-radius: 999px;
 }
 
+.mediatile__badge--web {
+  background: var(--sage);
+}
+
 /* Kind overlay for non-image media (video/audio/pdf) */
 .mediatile__kind {
   position: absolute;

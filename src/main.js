@@ -473,6 +473,12 @@ async function qlSrc(item) {
 
 const KIND_ICONS = { video: "play_circle", audio: "music_note", doc: "description" };
 
+// Any .webp is a web format; also the export naming ("<name>x<longest>.jpg/png"
+// or the legacy "@web").
+function isWebExport(name) {
+  return /\.webp$/i.test(name) || /x\d+\.(?:jpe?g|png)$/i.test(name) || name.includes("@web");
+}
+
 // Build a media tile (queues its thumbnail load). `edited` collects edited
 // images to bake after the grid is laid out.
 function buildMediaTile(item, edited) {
@@ -481,7 +487,11 @@ function buildMediaTile(item, edited) {
   tile.dataset.path = item.path;
   tile.dataset.sig = `${item.modified}|${item.edits_mtime}`;
   const img = el("img", "mediatile__img", { loading: "lazy", alt: item.name });
-  if (item.is_heic) tile.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
+  if (item.is_heic) {
+    tile.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
+  } else if (isImage && isWebExport(item.name)) {
+    tile.append(el("span", "mediatile__badge mediatile__badge--web", { textContent: "WEB" }));
+  }
   if (!isImage) tile.append(el("span", "mediatile__kind", { innerHTML: mi(KIND_ICONS[item.kind] || "insert_drive_file") }));
   tile.append(img);
 
