@@ -1614,8 +1614,8 @@ function newNote(kind) {
   if (kind === "text") note.body = "";
   if (kind === "checklist") note.items = [];
   if (kind === "table") {
-    note.columns = ["Column"];
-    note.rows = [];
+    note.columns = ["Column", "Column"];
+    note.rows = [["", ""], ["", ""]];
   }
   notesData.notes.push(note);
   renderNotes();

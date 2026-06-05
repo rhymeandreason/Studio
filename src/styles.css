@@ -647,6 +647,7 @@ select.field__input {
     flex-direction: column;
     gap: 10px;
     box-shadow: var(--shadow-sm);
+    min-height: 190px;
 }
 
 .notecard__head {
