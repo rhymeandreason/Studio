@@ -1569,6 +1569,45 @@ function initMedia() {
 // --- Notes -----------------------------------------------------------------
 
 let notesData = { version: 1, notes: [] };
+let selectedCol = null; // { note, ci, thEls, tdEls }
+let selectedRow = null; // { note, ri, trEl }
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Delete" && e.key !== "Backspace") return;
+  if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+  if (selectedCol) {
+    const { note, ci } = selectedCol;
+    note.columns.splice(ci, 1);
+    note.rows.forEach((r) => r.splice(ci, 1));
+    selectedCol = null;
+    renderNotes();
+    scheduleNotesSave();
+  } else if (selectedRow) {
+    const { note, ri } = selectedRow;
+    note.rows.splice(ri, 1);
+    selectedRow = null;
+    renderNotes();
+    scheduleNotesSave();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".ntable__col-handle")) clearColSelection();
+  if (!e.target.closest(".ntable__row-handle")) clearRowSelection();
+});
+
+function clearColSelection() {
+  if (!selectedCol) return;
+  selectedCol.thEls.forEach((el) => el.classList.remove("is-col-selected"));
+  selectedCol.tdEls.forEach((el) => el.classList.remove("is-col-selected"));
+  selectedCol = null;
+}
+
+function clearRowSelection() {
+  if (!selectedRow) return;
+  selectedRow.trEl.classList.remove("is-row-selected");
+  selectedRow = null;
+}
 let notesProjectPath = null;
 let notesSaveTimer = null;
 
@@ -1617,7 +1656,7 @@ function newNote(kind) {
     note.columns = ["Column", "Column"];
     note.rows = [["", ""], ["", ""]];
   }
-  notesData.notes.push(note);
+  notesData.notes.unshift(note);
   renderNotes();
   scheduleNotesSave();
 }
@@ -1768,8 +1807,22 @@ function buildTable(note) {
   const table = el("table", "ntable");
   const thead = el("thead");
   const htr = el("tr");
+  const thEls = [];
   note.columns.forEach((col, ci) => {
     const th = el("th");
+    thEls.push(th);
+
+    const handle = el("div", "ntable__col-handle");
+    handle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      clearColSelection();
+      clearRowSelection();
+      const tdEls = [...tbody.querySelectorAll(`td:nth-child(${ci + 1})`)];
+      selectedCol = { note, ci, thEls: [th], tdEls };
+      th.classList.add("is-col-selected");
+      tdEls.forEach((td) => td.classList.add("is-col-selected"));
+    });
+
     const inp = el("input", "ntable__colinput", { value: col, placeholder: "Column" });
     inp.addEventListener("input", () => {
       note.columns[ci] = inp.value;
@@ -1783,10 +1836,11 @@ function buildTable(note) {
     rm.addEventListener("click", () => {
       note.columns.splice(ci, 1);
       note.rows.forEach((r) => r.splice(ci, 1));
+      selectedCol = null;
       renderNotes();
       scheduleNotesSave();
     });
-    th.append(inp, rm);
+    th.append(handle, inp, rm);
     htr.append(th);
   });
   htr.append(el("th", "ntable__spacer"));
@@ -1796,9 +1850,25 @@ function buildTable(note) {
   const tbody = el("tbody");
   note.rows.forEach((row, ri) => {
     const tr = el("tr");
+    let firstTd = null;
+
     note.columns.forEach((_, ci) => {
       const td = el("td");
       const inp = el("input", "ntable__cell", { value: row[ci] || "" });
+
+      if (ci === 0) {
+        firstTd = td;
+        td.style.position = "relative";
+        const handle = el("div", "ntable__row-handle");
+        handle.addEventListener("click", (e) => {
+          e.stopPropagation();
+          clearRowSelection();
+          clearColSelection();
+          selectedRow = { note, ri, trEl: tr };
+          tr.classList.add("is-row-selected");
+        });
+        td.append(handle);
+      }
       inp.addEventListener("input", () => {
         row[ci] = inp.value;
         scheduleNotesSave();
