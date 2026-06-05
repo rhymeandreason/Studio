@@ -1817,16 +1817,35 @@ async function pasteFromClipboard() {
 
   if (text.includes("\t")) {
     // TSV → table note; first row becomes column headers.
-    const rows = text.trimEnd().split(/\r?\n/).map((r) => r.split("\t"));
+    const rows = text
+      .trimEnd()
+      .split(/\r?\n/)
+      .map((r) => r.split("\t"));
     const columns = rows[0].map((h) => h.trim() || "Column");
-    const dataRows = rows.slice(1).map((r) => columns.map((_, ci) => (r[ci] ?? "").trim()));
-    notesData.notes.unshift({ id: genId(), kind: "table", title: "", columns, rows: dataRows, totals: [] });
+    const dataRows = rows
+      .slice(1)
+      .map((r) => columns.map((_, ci) => (r[ci] ?? "").trim()));
+    notesData.notes.unshift({
+      id: genId(),
+      kind: "table",
+      title: "",
+      columns,
+      rows: dataRows,
+      totals: [],
+      createdAt: new Date().toISOString(),
+    });
     renderNotes();
     scheduleNotesSave();
     selectTab("notes");
   } else if (text.trim()) {
     // Plain text → text note.
-    notesData.notes.unshift({ id: genId(), kind: "text", title: "", body: text.trim() });
+    notesData.notes.unshift({
+      id: genId(),
+      kind: "text",
+      title: "",
+      body: text.trim(),
+      createdAt: new Date().toISOString(),
+    });
     renderNotes();
     scheduleNotesSave();
     selectTab("notes");
@@ -1837,7 +1856,7 @@ async function pasteFromClipboard() {
 }
 
 function newNote(kind) {
-  const note = { id: genId(), kind, title: "" };
+  const note = { id: genId(), kind, title: "", createdAt: new Date().toISOString() };
   if (kind === "text") note.body = "";
   if (kind === "checklist") note.items = [];
   if (kind === "table") {
@@ -1857,7 +1876,7 @@ function noteHeader(note) {
   const head = el("div", "notecard__head");
   const title = el("input", "notecard__title", {
     value: note.title || "",
-    placeholder: "Untitled",
+    placeholder: "^_^",
   });
   title.addEventListener("input", () => {
     note.title = title.value;
@@ -1881,6 +1900,13 @@ function noteHeader(note) {
 // how many grid columns the card spans; clicking cycles 1 → 2 → 3 → 1.
 function noteFooter(note) {
   const footer = el("div", "notecard__footer");
+
+  if (note.createdAt) {
+    const d = new Date(note.createdAt);
+    const dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    footer.append(el("span", "notecard__date", { textContent: dateStr }));
+  }
+
   const width = el("button", "notecard__width", {
     type: "button",
     title: "Width",
@@ -1893,7 +1919,15 @@ function noteFooter(note) {
     note.span = ((note.span || 1) % 3) + 1;
     renderDots();
     const card = width.closest(".notecard");
-    if (card) card.style.gridColumn = `span ${note.span}`;
+    if (card) {
+      card.style.gridColumn = `span ${note.span}`;
+      requestAnimationFrame(() => {
+        card.querySelectorAll("textarea").forEach((ta) => {
+          ta.style.height = "auto";
+          ta.style.height = ta.scrollHeight + "px";
+        });
+      });
+    }
     scheduleNotesSave();
   });
   footer.append(width);
@@ -1904,7 +1938,9 @@ function buildTextNote(note) {
   const card = el("div", "notecard");
   card.append(noteHeader(note));
 
-  const textarea = el("textarea", "notecard__textarea", { placeholder: "Write something…" });
+  const textarea = el("textarea", "notecard__textarea", {
+    placeholder: "Write something…",
+  });
   textarea.value = note.body || "";
 
   const resizeTextarea = () => {
@@ -1948,20 +1984,27 @@ function buildChecklist(note) {
       item.done = cb.checked;
       scheduleNotesSave();
     });
-    const txt = el("input", "field__input", {
-      value: item.text || "",
+    const txt = el("textarea", "field__input", {
       placeholder: "Item",
+      rows: 1,
     });
+    txt.value = item.text || "";
+    const resizeTxt = () => {
+      txt.style.height = "auto";
+      txt.style.height = txt.scrollHeight + "px";
+    };
     txt.addEventListener("input", () => {
       item.text = txt.value;
+      resizeTxt();
       scheduleNotesSave();
     });
     txt.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         addChecklistItem(note);
       }
     });
+    requestAnimationFrame(resizeTxt);
     const rm = el("button", "btn-remove", {
       type: "button",
       innerHTML: mi("close"),
@@ -2166,7 +2209,6 @@ function initNotes() {
   // Paste on the notes panel is handled via the keydown Cmd+V path calling pasteIntoNotes()
   // so that navigator.clipboard.readText() can be used (e.clipboardData is empty in Tauri
   // on non-editable elements). The paste event still handles pastes inside inputs/textareas.
-
 }
 
 // --- Boot ------------------------------------------------------------------
