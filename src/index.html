@@ -16,8 +16,6 @@
     </head>
 
     <body>
-        <header class="titlebar" data-tauri-drag-region></header>
-
         <div class="projhead" id="project-header" hidden>
             <div class="projhead__row">
                 <div>
@@ -116,19 +114,41 @@
                 <section class="panel" data-panel="workspace">
                     <form class="ws" id="ws-form">
                         <div class="ws-toolbar">
-                            <button type="button" class="btn-add" data-add-list="repo" data-singleton>
+                            <button
+                                type="button"
+                                class="btn-add"
+                                data-add-list="repo"
+                                data-singleton
+                            >
                                 <span class="mi mi-sm">folder_open</span>Repo
                             </button>
-                            <button type="button" class="btn-add" data-add-list="figma" data-singleton>
+                            <button
+                                type="button"
+                                class="btn-add"
+                                data-add-list="figma"
+                                data-singleton
+                            >
                                 <span class="mi mi-sm">pentagon</span>Figma
                             </button>
-                            <button type="button" class="btn-add" data-add-list="apps">
+                            <button
+                                type="button"
+                                class="btn-add"
+                                data-add-list="apps"
+                            >
                                 <span class="mi mi-sm">apps</span>App
                             </button>
-                            <button type="button" class="btn-add" data-add-list="files">
+                            <button
+                                type="button"
+                                class="btn-add"
+                                data-add-list="files"
+                            >
                                 <span class="mi mi-sm">description</span>File
                             </button>
-                            <button type="button" class="btn-add" data-add-list="urls">
+                            <button
+                                type="button"
+                                class="btn-add"
+                                data-add-list="urls"
+                            >
                                 <span class="mi mi-sm">link</span>URL
                             </button>
                             <span class="ws__status" id="ws-status"></span>
