@@ -618,7 +618,6 @@ async function openLightbox(item) {
   currentMedia = item;
   editItem = item;
   document.getElementById("lightbox-name").textContent = item.name;
-  document.getElementById("lb-convert").hidden = !item.is_heic;
 
   const ext = (item.ext || "").toLowerCase();
   document.getElementById("lb-replace").hidden = !["png", "jpg", "jpeg"].includes(ext);
@@ -1222,15 +1221,20 @@ async function exportEdited(replace) {
   }
 }
 
-// --- Export for web (single + batch) ---------------------------------------
+// --- Export (single + batch): format / max size / quality ------------------
 
 const webGLCanvas = document.createElement("canvas");
 let webExportCtx = null;
 const webSettings = { format: "webp", maxDim: 1280, quality: 82 };
 
+// Output filename. At Original size (longSide null) it's a clean `name.ext`;
+// resized exports append the size. Avoids overwriting the source file.
 function webName(path, fmt, longSide) {
   const ext = fmt === "png" ? "png" : fmt === "jpeg" ? "jpg" : "webp";
-  return `${path.replace(/\.[^/.]+$/, "")}x${longSide}.${ext}`;
+  const base = path.replace(/\.[^/.]+$/, "");
+  let dest = longSide ? `${base}x${longSide}.${ext}` : `${base}.${ext}`;
+  if (dest === path) dest = `${base}-export.${ext}`; // don't clobber the original
+  return dest;
 }
 
 function cropToCanvas(oriented, crop) {
@@ -1335,7 +1339,7 @@ async function runWebExport(ctx, settings) {
     if (ctx.mode === "single") {
       const it = ctx.items[0];
       const canvas = bakeCanvas(it.img, it.edits, settings);
-      const long = Math.max(canvas.width, canvas.height);
+      const long = settings.maxDim ? Math.max(canvas.width, canvas.height) : null;
       const { b64 } = await encodeFinal(canvas, settings);
       await invoke("write_image", { path: webName(it.path, settings.format, long), dataBase64: b64 });
     } else {
@@ -1343,7 +1347,7 @@ async function runWebExport(ctx, settings) {
         const img = await loadImage(await invoke("read_image_data", { path: it.path }));
         const edits = { ...defaultEdits(), ...(await invoke("read_edits", { path: it.path })) };
         const canvas = bakeCanvas(img, edits, settings);
-        const long = Math.max(canvas.width, canvas.height);
+        const long = settings.maxDim ? Math.max(canvas.width, canvas.height) : null;
         const { b64 } = await encodeFinal(canvas, settings);
         await invoke("write_image", { path: webName(it.path, settings.format, long), dataBase64: b64 });
       }
@@ -1539,16 +1543,6 @@ function initMedia() {
   });
   document.getElementById("lb-reveal").addEventListener("click", () => {
     if (currentMedia) invoke("reveal_in_finder", { path: currentMedia.path });
-  });
-  document.getElementById("lb-convert").addEventListener("click", async () => {
-    if (!currentMedia) return;
-    try {
-      await invoke("convert_heic", { path: currentMedia.path, format: "jpg" });
-      closeLightbox();
-      if (mediaProjectPath) loadMedia(mediaProjectPath);
-    } catch (err) {
-      console.error("Convert failed:", err);
-    }
   });
 }
 

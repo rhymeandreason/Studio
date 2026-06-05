@@ -536,29 +536,6 @@ fn heic_preview(app: AppHandle, path: String) -> Result<String, String> {
     Ok(out.to_string_lossy().to_string())
 }
 
-/// Convert a HEIC to a permanent PNG/JPG sibling next to the original.
-#[tauri::command]
-fn convert_heic(path: String, format: String) -> Result<String, String> {
-    let src = PathBuf::from(&path);
-    let (fmt, ext) = if format == "png" {
-        ("png", "png")
-    } else {
-        ("jpeg", "jpg")
-    };
-    let out = src.with_extension(ext);
-    let status = Command::new("sips")
-        .args(["-s", "format", fmt])
-        .arg(&src)
-        .arg("--out")
-        .arg(&out)
-        .status()
-        .map_err(|e| e.to_string())?;
-    if !status.success() {
-        return Err("HEIC conversion (sips) failed".into());
-    }
-    Ok(out.to_string_lossy().to_string())
-}
-
 /// Move dropped image files into a project's media/ folder. Non-image files are
 /// skipped. Returns the paths of the files actually imported.
 #[tauri::command]
@@ -887,7 +864,6 @@ pub fn run() {
             save_edited_thumb,
             open_path,
             heic_preview,
-            convert_heic,
             import_media,
             paste_image,
             reveal_in_finder,

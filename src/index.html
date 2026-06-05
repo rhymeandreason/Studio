@@ -1,358 +1,458 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Studio</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,300,0,0"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="styles.css" />
-    <script src="/vendor/marked.min.js"></script>
-    <script type="module" src="/main.js" defer></script>
-  </head>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Studio</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,300,0,0"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="styles.css" />
+        <script src="/vendor/marked.min.js"></script>
+        <script type="module" src="/main.js" defer></script>
+    </head>
 
-  <body>
-    <header class="titlebar" data-tauri-drag-region></header>
+    <body>
+        <header class="titlebar" data-tauri-drag-region></header>
 
-    <div class="projhead" id="project-header" hidden>
-      <div class="projhead__row">
-        <div>
-          <h1 class="projhead__name" id="project-name"></h1>
-          <p class="projhead__path" id="project-path"></p>
-        </div>
-        <button class="btn-launch" id="launch-btn">
-          <span class="mi mi-sm">rocket_launch</span>Launch workspace
-        </button>
-      </div>
-      <nav class="tabs" id="tabs">
-        <button class="tab" data-tab="media"><span class="mi">image</span>Media</button>
-        <button class="tab" data-tab="notes"><span class="mi">sticky_note_2</span>Notes</button>
-        <button class="tab is-active" data-tab="workspace"><span class="mi">tune</span>Workspace</button>
-      </nav>
-    </div>
-
-    <main class="window">
-      <!-- All-projects overview -->
-      <div class="overview" id="overview" hidden>
-        <h1 class="overview__title">Projects</h1>
-        <div class="overview__grid" id="overview-grid"></div>
-      </div>
-
-      <!-- No project -->
-      <div class="empty" id="empty-state">
-        <div class="empty__mark"><span class="mi">workspaces</span></div>
-        <p class="empty__headline">No project active</p>
-        <p class="empty__hint">
-          Pick a project from the menu&nbsp;bar — or create a new&nbsp;one.
-        </p>
-      </div>
-
-      <!-- Project content -->
-      <div class="content" id="project-content" hidden>
-        <section class="panel" data-panel="media" hidden>
-          <div class="selbar" id="selbar" hidden>
-            <span class="selbar__count" id="sel-count">0 selected</span>
-            <div class="selbar__actions">
-              <button class="btn-ghost" id="sel-paste">
-                <span class="mi mi-sm">content_paste</span>Paste adjustments
-              </button>
-              <button class="btn-ghost" id="sel-webexport">
-                <span class="mi mi-sm">photo_size_select_large</span>Export for web
-              </button>
-              <button class="btn-ghost" id="sel-clear">Clear</button>
-            </div>
-          </div>
-          <div class="media-grid" id="media-grid"></div>
-        </section>
-
-        <section class="panel" data-panel="notes" hidden>
-          <div class="notes-toolbar">
-            <button type="button" class="btn-add" data-new-note="text">
-              <span class="mi mi-sm">subject</span>Text
-            </button>
-            <button type="button" class="btn-add" data-new-note="checklist">
-              <span class="mi mi-sm">checklist</span>Checklist
-            </button>
-            <button type="button" class="btn-add" data-new-note="table">
-              <span class="mi mi-sm">table_chart</span>Table
-            </button>
-            <span class="notes-status" id="notes-status"></span>
-          </div>
-          <div class="notes-list" id="notes-list"></div>
-        </section>
-
-        <section class="panel" data-panel="workspace">
-          <form class="ws" id="ws-form">
-            <label class="field">
-              <span class="field__label">Repo path</span>
-              <div class="field__withbtn">
-                <input class="field__input" id="ws-repo" placeholder="repo/  or  ~/code/my-repo" />
-                <button type="button" class="btn-browse" id="ws-repo-browse">
-                  <span class="mi mi-sm">folder_open</span>Browse…
+        <div class="projhead" id="project-header" hidden>
+            <div class="projhead__row">
+                <div>
+                    <h1 class="projhead__name" id="project-name"></h1>
+                    <p class="projhead__path" id="project-path"></p>
+                </div>
+                <button class="btn-launch" id="launch-btn">
+                    <span class="mi mi-sm">rocket_launch</span>Launch workspace
                 </button>
-              </div>
-            </label>
-
-            <label class="field">
-              <span class="field__label">Code editor</span>
-              <div class="field__withbtn">
-                <input class="field__input" id="ws-editor" placeholder="Zed (default)" />
-                <button type="button" class="btn-browse" id="ws-editor-browse">
-                  <span class="mi mi-sm">apps</span>Browse…
+            </div>
+            <nav class="tabs" id="tabs">
+                <button class="tab" data-tab="media">
+                    <span class="mi">image</span>Media
                 </button>
-              </div>
-            </label>
-
-            <label class="field">
-              <span class="field__label">Figma URL</span>
-              <input class="field__input" id="ws-figma" placeholder="https://figma.com/file/…" />
-            </label>
-
-            <label class="field">
-              <span class="field__label">Claude</span>
-              <select class="field__input" id="ws-claude">
-                <option value="terminal">Run in terminal (cd into repo)</option>
-                <option value="off">Don't launch</option>
-              </select>
-            </label>
-
-            <div class="listfield" data-list="apps">
-              <span class="field__label">Apps to launch</span>
-              <div class="listfield__rows" data-rows></div>
-              <button type="button" class="btn-add" data-add>
-                <span class="mi mi-sm">add</span>Add app
-              </button>
-            </div>
-
-            <div class="listfield" data-list="files">
-              <span class="field__label">Files to open</span>
-              <div class="listfield__rows" data-rows></div>
-              <button type="button" class="btn-add" data-add>
-                <span class="mi mi-sm">add</span>Add file
-              </button>
-            </div>
-
-            <div class="listfield" data-list="urls">
-              <span class="field__label">URLs to open</span>
-              <div class="listfield__rows" data-rows></div>
-              <button type="button" class="btn-add" data-add>
-                <span class="mi mi-sm">add</span>Add URL
-              </button>
-            </div>
-
-            <div class="ws__actions">
-              <span class="ws__status" id="ws-status"></span>
-            </div>
-          </form>
-        </section>
-      </div>
-    </main>
-
-    <!-- Drag-and-drop overlay -->
-    <div class="dropzone" id="dropzone" hidden>
-      <div class="dropzone__inner">
-        <span class="mi">add_photo_alternate</span>
-        Drop images to add them to this project
-      </div>
-    </div>
-
-    <!-- Media lightbox -->
-    <div class="lightbox" id="lightbox" hidden>
-      <div class="lightbox__bar">
-        <span class="lightbox__name" id="lightbox-name"></span>
-        <div class="lightbox__actions">
-          <span class="edit-status" id="edit-status"></span>
-          <button class="btn-ghost" id="lb-export">
-            <span class="mi mi-sm">save</span>Export copy
-          </button>
-          <button class="btn-ghost" id="lb-webexport">
-            <span class="mi mi-sm">photo_size_select_large</span>Export for web
-          </button>
-          <button class="btn-ghost" id="lb-replace">
-            <span class="mi mi-sm">published_with_changes</span>Replace original
-          </button>
-          <button class="btn-ghost" id="lb-convert" hidden>
-            <span class="mi mi-sm">image</span>Convert to JPG
-          </button>
-          <button class="btn-ghost" id="lb-copy">
-            <span class="mi mi-sm">content_copy</span>Copy path
-          </button>
-          <button class="btn-ghost" id="lb-reveal">
-            <span class="mi mi-sm">folder_open</span>Show in Finder
-          </button>
-          <button class="btn-ghost" id="lb-close">
-            <span class="mi mi-sm">close</span>Close
-          </button>
-        </div>
-      </div>
-
-      <div class="lightbox__stage" id="lb-stage">
-        <div class="editor" id="editor">
-          <div class="editor__canvas-wrap" id="editor-canvas-wrap">
-            <div class="canvasstack" id="canvasstack">
-              <canvas id="editor-canvas"></canvas>
-              <div class="crop" id="crop">
-                <span class="crop__h" data-h="nw"></span>
-                <span class="crop__h" data-h="ne"></span>
-                <span class="crop__h" data-h="sw"></span>
-                <span class="crop__h" data-h="se"></span>
-              </div>
-            </div>
-          </div>
-          <aside class="editor__panel">
-            <div class="editgroup">
-              <span class="editgroup__label">Rotate &amp; flip</span>
-              <div class="editbtns">
-                <button class="iconbtn" id="ed-rotl" title="Rotate left">
-                  <span class="mi">rotate_left</span>
+                <button class="tab" data-tab="notes">
+                    <span class="mi">sticky_note_2</span>Notes
                 </button>
-                <button class="iconbtn" id="ed-rotr" title="Rotate right">
-                  <span class="mi">rotate_right</span>
+                <button class="tab is-active" data-tab="workspace">
+                    <span class="mi">tune</span>Workspace
                 </button>
-                <button class="iconbtn" id="ed-fliph" title="Flip horizontal">
-                  <span class="mi">flip</span>
-                </button>
-                <button class="iconbtn" id="ed-flipv" title="Flip vertical">
-                  <span class="mi" style="transform: rotate(90deg)">flip</span>
-                </button>
-              </div>
+            </nav>
+        </div>
+
+        <main class="window">
+            <!-- All-projects overview -->
+            <div class="overview" id="overview" hidden>
+                <h1 class="overview__title">Projects</h1>
+                <div class="overview__grid" id="overview-grid"></div>
             </div>
 
-            <div class="editgroup">
-              <span class="editgroup__label">Crop</span>
-              <div class="editbtns editbtns--wrap">
-                <button class="chip" data-aspect="free">Free</button>
-                <button class="chip" data-aspect="1">1:1</button>
-                <button class="chip" data-aspect="1.7778">16:9</button>
-                <button class="chip" data-aspect="0.8">4:5</button>
-              </div>
-              <button class="chip chip--reset" id="ed-cropreset">
-                <span class="mi mi-sm">crop_free</span>Reset crop
-              </button>
+            <!-- No project -->
+            <div class="empty" id="empty-state">
+                <div class="empty__mark">
+                    <span class="mi">workspaces</span>
+                </div>
+                <p class="empty__headline">No project active</p>
+                <p class="empty__hint">
+                    Pick a project from the menu&nbsp;bar — or create a
+                    new&nbsp;one.
+                </p>
             </div>
 
-            <div class="editgroup">
-              <span class="editgroup__label">
-                Straighten <em id="ed-straighten-val">0°</em>
-              </span>
-              <input
-                class="slider"
-                type="range"
-                id="ed-straighten"
-                min="-15"
-                max="15"
-                step="0.5"
-                value="0"
-              />
+            <!-- Project content -->
+            <div class="content" id="project-content" hidden>
+                <section class="panel" data-panel="media" hidden>
+                    <div class="selbar" id="selbar" hidden>
+                        <span class="selbar__count" id="sel-count"
+                            >0 selected</span
+                        >
+                        <div class="selbar__actions">
+                            <button class="btn-ghost" id="sel-paste">
+                                <span class="mi mi-sm">content_paste</span>Paste
+                                adjustments
+                            </button>
+                            <button class="btn-ghost" id="sel-webexport">
+                                <span class="mi mi-sm"
+                                    >photo_size_select_large</span
+                                >Export
+                            </button>
+                            <button class="btn-ghost" id="sel-clear">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="media-grid" id="media-grid"></div>
+                </section>
+
+                <section class="panel" data-panel="notes" hidden>
+                    <div class="notes-toolbar">
+                        <button
+                            type="button"
+                            class="btn-add"
+                            data-new-note="text"
+                        >
+                            <span class="mi mi-sm">subject</span>Text
+                        </button>
+                        <button
+                            type="button"
+                            class="btn-add"
+                            data-new-note="checklist"
+                        >
+                            <span class="mi mi-sm">checklist</span>Checklist
+                        </button>
+                        <button
+                            type="button"
+                            class="btn-add"
+                            data-new-note="table"
+                        >
+                            <span class="mi mi-sm">table_chart</span>Table
+                        </button>
+                        <span class="notes-status" id="notes-status"></span>
+                    </div>
+                    <div class="notes-list" id="notes-list"></div>
+                </section>
+
+                <section class="panel" data-panel="workspace">
+                    <form class="ws" id="ws-form">
+                        <label class="field">
+                            <span class="field__label">Repo path</span>
+                            <div class="field__withbtn">
+                                <input
+                                    class="field__input"
+                                    id="ws-repo"
+                                    placeholder="repo/  or  ~/code/my-repo"
+                                />
+                                <button
+                                    type="button"
+                                    class="btn-browse"
+                                    id="ws-repo-browse"
+                                >
+                                    <span class="mi mi-sm">folder_open</span
+                                    >Browse…
+                                </button>
+                            </div>
+                        </label>
+
+                        <label class="field">
+                            <span class="field__label">Code editor</span>
+                            <div class="field__withbtn">
+                                <input
+                                    class="field__input"
+                                    id="ws-editor"
+                                    placeholder="Zed (default)"
+                                />
+                                <button
+                                    type="button"
+                                    class="btn-browse"
+                                    id="ws-editor-browse"
+                                >
+                                    <span class="mi mi-sm">apps</span>Browse…
+                                </button>
+                            </div>
+                        </label>
+
+                        <label class="field">
+                            <span class="field__label">Figma URL</span>
+                            <input
+                                class="field__input"
+                                id="ws-figma"
+                                placeholder="https://figma.com/file/…"
+                            />
+                        </label>
+
+                        <label class="field">
+                            <span class="field__label">Claude</span>
+                            <select class="field__input" id="ws-claude">
+                                <option value="terminal">
+                                    Run in terminal (cd into repo)
+                                </option>
+                                <option value="off">Don't launch</option>
+                            </select>
+                        </label>
+
+                        <div class="listfield" data-list="apps">
+                            <span class="field__label">Apps to launch</span>
+                            <div class="listfield__rows" data-rows></div>
+                            <button type="button" class="btn-add" data-add>
+                                <span class="mi mi-sm">add</span>Add app
+                            </button>
+                        </div>
+
+                        <div class="listfield" data-list="files">
+                            <span class="field__label">Files to open</span>
+                            <div class="listfield__rows" data-rows></div>
+                            <button type="button" class="btn-add" data-add>
+                                <span class="mi mi-sm">add</span>Add file
+                            </button>
+                        </div>
+
+                        <div class="listfield" data-list="urls">
+                            <span class="field__label">URLs to open</span>
+                            <div class="listfield__rows" data-rows></div>
+                            <button type="button" class="btn-add" data-add>
+                                <span class="mi mi-sm">add</span>Add URL
+                            </button>
+                        </div>
+
+                        <div class="ws__actions">
+                            <span class="ws__status" id="ws-status"></span>
+                        </div>
+                    </form>
+                </section>
+            </div>
+        </main>
+
+        <!-- Drag-and-drop overlay -->
+        <div class="dropzone" id="dropzone" hidden>
+            <div class="dropzone__inner">
+                <span class="mi">add_photo_alternate</span>
+                Drop images to add them to this project
+            </div>
+        </div>
+
+        <!-- Media lightbox -->
+        <div class="lightbox" id="lightbox" hidden>
+            <div class="lightbox__bar">
+                <span class="lightbox__name" id="lightbox-name"></span>
+                <div class="lightbox__actions">
+                    <span class="edit-status" id="edit-status"></span>
+                    <button class="btn-ghost" id="lb-export">
+                        <span class="mi mi-sm">file_copy</span>Duplicate
+                    </button>
+                    <button class="btn-ghost" id="lb-webexport">
+                        <span class="mi mi-sm">photo_size_select_large</span
+                        >Export
+                    </button>
+                    <button class="btn-ghost" id="lb-replace">
+                        <span class="mi mi-sm">published_with_changes</span
+                        >Replace original
+                    </button>
+                    <button class="btn-ghost" id="lb-copy">
+                        <span class="mi mi-sm">file_export</span>Copy path
+                    </button>
+                    <button class="btn-ghost" id="lb-reveal">
+                        <span class="mi mi-sm">folder_open</span>Show in Finder
+                    </button>
+                    <button class="btn-ghost" id="lb-close">
+                        <span class="mi mi-sm">close</span>Close
+                    </button>
+                </div>
             </div>
 
-            <div class="editgroup">
-              <span class="editgroup__label">Light &amp; color</span>
-              <div id="tonal-sliders"></div>
+            <div class="lightbox__stage" id="lb-stage">
+                <div class="editor" id="editor">
+                    <div class="editor__canvas-wrap" id="editor-canvas-wrap">
+                        <div class="canvasstack" id="canvasstack">
+                            <canvas id="editor-canvas"></canvas>
+                            <div class="crop" id="crop">
+                                <span class="crop__h" data-h="nw"></span>
+                                <span class="crop__h" data-h="ne"></span>
+                                <span class="crop__h" data-h="sw"></span>
+                                <span class="crop__h" data-h="se"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <aside class="editor__panel">
+                        <div class="editgroup">
+                            <span class="editgroup__label"
+                                >Rotate &amp; flip</span
+                            >
+                            <div class="editbtns">
+                                <button
+                                    class="iconbtn"
+                                    id="ed-rotl"
+                                    title="Rotate left"
+                                >
+                                    <span class="mi">rotate_left</span>
+                                </button>
+                                <button
+                                    class="iconbtn"
+                                    id="ed-rotr"
+                                    title="Rotate right"
+                                >
+                                    <span class="mi">rotate_right</span>
+                                </button>
+                                <button
+                                    class="iconbtn"
+                                    id="ed-fliph"
+                                    title="Flip horizontal"
+                                >
+                                    <span class="mi">flip</span>
+                                </button>
+                                <button
+                                    class="iconbtn"
+                                    id="ed-flipv"
+                                    title="Flip vertical"
+                                >
+                                    <span
+                                        class="mi"
+                                        style="transform: rotate(90deg)"
+                                        >flip</span
+                                    >
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="editgroup">
+                            <span class="editgroup__label">Crop</span>
+                            <div class="editbtns editbtns--wrap">
+                                <button class="chip" data-aspect="free">
+                                    Free
+                                </button>
+                                <button class="chip" data-aspect="1">
+                                    1:1
+                                </button>
+                                <button class="chip" data-aspect="1.7778">
+                                    16:9
+                                </button>
+                                <button class="chip" data-aspect="0.8">
+                                    4:5
+                                </button>
+                            </div>
+                            <button class="chip chip--reset" id="ed-cropreset">
+                                <span class="mi mi-sm">crop_free</span>Reset
+                                crop
+                            </button>
+                        </div>
+
+                        <div class="editgroup">
+                            <span class="editgroup__label">
+                                Straighten <em id="ed-straighten-val">0°</em>
+                            </span>
+                            <input
+                                class="slider"
+                                type="range"
+                                id="ed-straighten"
+                                min="-15"
+                                max="15"
+                                step="0.5"
+                                value="0"
+                            />
+                        </div>
+
+                        <div class="editgroup">
+                            <span class="editgroup__label"
+                                >Light &amp; color</span
+                            >
+                            <div id="tonal-sliders"></div>
+                        </div>
+
+                        <div class="editgroup">
+                            <span class="editgroup__label">Adjustments</span>
+                            <div class="editbtns">
+                                <button class="chip" id="ed-copy">
+                                    <span class="mi mi-sm">content_copy</span
+                                    >Copy
+                                </button>
+                                <button class="chip" id="ed-paste" disabled>
+                                    <span class="mi mi-sm">content_paste</span
+                                    >Paste
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="editgroup">
+                            <span class="editgroup__label">Background</span>
+                            <button class="chip chip--reset" id="ed-removebg">
+                                <span class="mi mi-sm">auto_fix_high</span
+                                >Remove background
+                            </button>
+                        </div>
+
+                        <button class="btn-ghost editreset" id="ed-reset">
+                            <span class="mi mi-sm">restart_alt</span>Reset all
+                        </button>
+                    </aside>
+                </div>
             </div>
+        </div>
 
-            <div class="editgroup">
-              <span class="editgroup__label">Adjustments</span>
-              <div class="editbtns">
-                <button class="chip" id="ed-copy">
-                  <span class="mi mi-sm">content_copy</span>Copy
-                </button>
-                <button class="chip" id="ed-paste" disabled>
-                  <span class="mi mi-sm">content_paste</span>Paste
-                </button>
-              </div>
+        <!-- Background-removal cutout preview -->
+        <div class="modal cutout" id="cutout" hidden>
+            <div class="modal__card cutout__card">
+                <h2 class="modal__title">Background removed</h2>
+                <div class="cutout__stage">
+                    <img class="cutout__img" id="cutout-img" alt="cutout" />
+                </div>
+                <div class="modal__actions">
+                    <button class="btn-ghost" id="cutout-cancel">Cancel</button>
+                    <button class="btn-save" id="cutout-save">
+                        <span class="mi mi-sm">save</span>Save cutout
+                    </button>
+                </div>
             </div>
+        </div>
 
-            <div class="editgroup">
-              <span class="editgroup__label">Background</span>
-              <button class="chip chip--reset" id="ed-removebg">
-                <span class="mi mi-sm">auto_fix_high</span>Remove background
-              </button>
+        <!-- Export -->
+        <div class="modal webexport" id="webexport" hidden>
+            <div class="modal__card">
+                <h2 class="modal__title">Export</h2>
+                <p class="modal__hint" id="web-context"></p>
+
+                <div class="field">
+                    <span class="field__label">Format</span>
+                    <div class="editbtns">
+                        <button class="chip" data-fmt="webp">WebP</button>
+                        <button class="chip" data-fmt="jpeg">JPG</button>
+                        <button class="chip" data-fmt="png">PNG</button>
+                    </div>
+                </div>
+
+                <label class="field">
+                    <span class="field__label">Max size (longest side)</span>
+                    <select class="field__input" id="web-maxdim">
+                        <option value="0">Original</option>
+                        <option value="2560">2560 px</option>
+                        <option value="1920">1920 px</option>
+                        <option value="1280">1280 px</option>
+                        <option value="1024">1024 px</option>
+                        <option value="640">640 px</option>
+                    </select>
+                </label>
+
+                <div class="field" id="web-quality-field">
+                    <span class="field__label"
+                        >Quality <em id="web-quality-val">82</em></span
+                    >
+                    <input
+                        class="slider"
+                        type="range"
+                        id="web-quality"
+                        min="1"
+                        max="100"
+                        value="82"
+                    />
+                </div>
+
+                <div class="modal__actions">
+                    <button class="btn-ghost" id="web-cancel">Cancel</button>
+                    <button class="btn-save" id="web-export">
+                        <span class="mi mi-sm">save</span>Export
+                    </button>
+                </div>
             </div>
-
-            <button class="btn-ghost editreset" id="ed-reset">
-              <span class="mi mi-sm">restart_alt</span>Reset all
-            </button>
-          </aside>
-        </div>
-      </div>
-    </div>
-
-    <!-- Background-removal cutout preview -->
-    <div class="modal cutout" id="cutout" hidden>
-      <div class="modal__card cutout__card">
-        <h2 class="modal__title">Background removed</h2>
-        <div class="cutout__stage">
-          <img class="cutout__img" id="cutout-img" alt="cutout" />
-        </div>
-        <div class="modal__actions">
-          <button class="btn-ghost" id="cutout-cancel">Cancel</button>
-          <button class="btn-save" id="cutout-save">
-            <span class="mi mi-sm">save</span>Save cutout
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Export for web -->
-    <div class="modal webexport" id="webexport" hidden>
-      <div class="modal__card">
-        <h2 class="modal__title">Export for web</h2>
-        <p class="modal__hint" id="web-context"></p>
-
-        <div class="field">
-          <span class="field__label">Format</span>
-          <div class="editbtns">
-            <button class="chip" data-fmt="webp">WebP</button>
-            <button class="chip" data-fmt="jpeg">JPG</button>
-            <button class="chip" data-fmt="png">PNG</button>
-          </div>
         </div>
 
-        <label class="field">
-          <span class="field__label">Max size (longest side)</span>
-          <select class="field__input" id="web-maxdim">
-            <option value="0">Original</option>
-            <option value="2560">2560 px</option>
-            <option value="1920">1920 px</option>
-            <option value="1280">1280 px</option>
-            <option value="1024">1024 px</option>
-            <option value="640">640 px</option>
-          </select>
-        </label>
-
-        <div class="field" id="web-quality-field">
-          <span class="field__label">Quality <em id="web-quality-val">82</em></span>
-          <input class="slider" type="range" id="web-quality" min="1" max="100" value="82" />
+        <!-- New project modal -->
+        <div class="modal" id="new-modal" hidden>
+            <div class="modal__card">
+                <h2 class="modal__title">New project</h2>
+                <p class="modal__hint">Creates a folder in ~/Projects.</p>
+                <input
+                    class="field__input"
+                    id="new-name"
+                    placeholder="project-name"
+                    autocomplete="off"
+                />
+                <p class="modal__error" id="new-error" hidden></p>
+                <div class="modal__actions">
+                    <button class="btn-ghost" id="new-cancel">Cancel</button>
+                    <button class="btn-save" id="new-create">
+                        <span class="mi mi-sm">add</span>Create
+                    </button>
+                </div>
+            </div>
         </div>
-
-        <div class="modal__actions">
-          <button class="btn-ghost" id="web-cancel">Cancel</button>
-          <button class="btn-save" id="web-export">
-            <span class="mi mi-sm">save</span>Export
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- New project modal -->
-    <div class="modal" id="new-modal" hidden>
-      <div class="modal__card">
-        <h2 class="modal__title">New project</h2>
-        <p class="modal__hint">Creates a folder in ~/Projects.</p>
-        <input class="field__input" id="new-name" placeholder="project-name" autocomplete="off" />
-        <p class="modal__error" id="new-error" hidden></p>
-        <div class="modal__actions">
-          <button class="btn-ghost" id="new-cancel">Cancel</button>
-          <button class="btn-save" id="new-create">
-            <span class="mi mi-sm">add</span>Create
-          </button>
-        </div>
-      </div>
-    </div>
-  </body>
+    </body>
 </html>
