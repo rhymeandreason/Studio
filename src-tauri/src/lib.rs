@@ -734,6 +734,15 @@ fn remove_background(png_base64: String) -> Result<String, String> {
     Ok(STANDARD.encode(&png))
 }
 
+/// Read plain text from the clipboard via pbpaste (macOS).
+#[tauri::command]
+fn read_clipboard_text() -> Result<String, String> {
+    let out = Command::new("pbpaste")
+        .output()
+        .map_err(|e| e.to_string())?;
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 /// Paste an image from the clipboard into a project's media/ folder (PNG).
 /// Returns the new file path; errors if the clipboard has no image.
 #[tauri::command]
@@ -884,6 +893,7 @@ pub fn run() {
             heic_preview,
             import_media,
             paste_image,
+            read_clipboard_text,
             reveal_in_finder,
             remove_background,
             encode_webp,

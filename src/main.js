@@ -1681,7 +1681,8 @@ function initMedia() {
       return;
     }
     // Grid context: Cmd+V pastes onto selected tiles, or a clipboard image
-    // into the project. Leave text fields alone so normal paste still works.
+    // into the project. Leave text fields and the notes panel alone so their
+    // own paste handlers can fire.
     if (mod && (e.key === "v" || e.key === "V")) {
       const ae = document.activeElement;
       if (
@@ -1695,7 +1696,7 @@ function initMedia() {
       }
       e.preventDefault();
       if (mediaSelection.size) batchPaste();
-      else if (activeProject) pasteImageFromClipboard();
+      else pasteFromClipboard();
     }
   });
   document.getElementById("lb-close").addEventListener("click", closeLightbox);
@@ -1806,6 +1807,33 @@ function scheduleNotesSave() {
       setNotesStatus(`Error: ${err}`);
     }
   }, 400);
+}
+
+async function pasteFromClipboard() {
+  let text = "";
+  try {
+    text = await invoke("read_clipboard_text");
+  } catch (_) {}
+
+  if (text.includes("\t")) {
+    // TSV → table note; first row becomes column headers.
+    const rows = text.trimEnd().split(/\r?\n/).map((r) => r.split("\t"));
+    const columns = rows[0].map((h) => h.trim() || "Column");
+    const dataRows = rows.slice(1).map((r) => columns.map((_, ci) => (r[ci] ?? "").trim()));
+    notesData.notes.unshift({ id: genId(), kind: "table", title: "", columns, rows: dataRows, totals: [] });
+    renderNotes();
+    scheduleNotesSave();
+    selectTab("notes");
+  } else if (text.trim()) {
+    // Plain text → text note.
+    notesData.notes.unshift({ id: genId(), kind: "text", title: "", body: text.trim() });
+    renderNotes();
+    scheduleNotesSave();
+    selectTab("notes");
+  } else {
+    // No text — try pasting as image (switches to media tab on success).
+    pasteImageFromClipboard();
+  }
 }
 
 function newNote(kind) {
@@ -2159,6 +2187,11 @@ function initNotes() {
   document.querySelectorAll("[data-new-note]").forEach((btn) => {
     btn.addEventListener("click", () => newNote(btn.dataset.newNote));
   });
+
+  // Paste on the notes panel is handled via the keydown Cmd+V path calling pasteIntoNotes()
+  // so that navigator.clipboard.readText() can be used (e.clipboardData is empty in Tauri
+  // on non-editable elements). The paste event still handles pastes inside inputs/textareas.
+
 }
 
 // --- Boot ------------------------------------------------------------------
