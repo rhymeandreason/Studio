@@ -1725,6 +1725,7 @@ function initMedia() {
 let notesData = { version: 1, notes: [] };
 let selectedCol = null; // { note, ci, thEls, tdEls }
 let selectedRow = null; // { note, ri, trEl }
+let selectedNoteId = null;
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Delete" && e.key !== "Backspace") return;
@@ -2197,6 +2198,16 @@ function renderNotes() {
     card.append(noteFooter(note));
     card.dataset.noteId = note.id;
     card.style.gridColumn = `span ${note.span || 1}`;
+    if (note.id === selectedNoteId) card.classList.add("is-selected");
+    card.addEventListener("click", (e) => {
+      const rect = card.getBoundingClientRect();
+      if (e.clientY - rect.top <= 8) {
+        selectedNoteId = selectedNoteId === note.id ? null : note.id;
+        listEl.querySelectorAll(".notecard").forEach((c) => {
+          c.classList.toggle("is-selected", c.dataset.noteId === selectedNoteId);
+        });
+      }
+    });
     listEl.append(card);
   }
 }

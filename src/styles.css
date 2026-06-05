@@ -652,6 +652,22 @@ select.field__input {
     gap: 10px;
     box-shadow: var(--shadow-sm);
     min-height: 190px;
+    position: relative;
+    cursor: default;
+}
+
+.notecard::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 8px;
+    border-radius: var(--radius) var(--radius) 0 0;
+    cursor: pointer;
+}
+
+.notecard.is-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent), var(--shadow-sm);
 }
 
 .notecard__head {
