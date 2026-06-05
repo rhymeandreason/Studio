@@ -85,7 +85,9 @@ async function showOverview() {
       path.className = "card__path";
       path.textContent = p.path;
       card.append(name, path);
-      card.addEventListener("click", () => invoke("open_project", { path: p.path }));
+      card.addEventListener("click", () =>
+        invoke("open_project", { path: p.path }),
+      );
       grid.append(card);
     }
   }
@@ -145,11 +147,27 @@ function listContainer() {
 }
 
 const LIST_META = {
-  repo:  { icon: "folder_open", label: "Repo",  placeholder: "~/code/my-repo", singleton: true, browse: "dir" },
-  figma: { icon: "pentagon",    label: "Figma", placeholder: "https://figma.com/file/…", singleton: true },
-  apps:  { icon: "apps",        label: "App",   placeholder: "Finder", browse: "app" },
-  files: { icon: "description", label: "File",  placeholder: "~/code/file.ts", browse: "file" },
-  urls:  { icon: "link",        label: "URL",   placeholder: "https://…" },
+  repo: {
+    icon: "folder_open",
+    label: "Repo",
+    placeholder: "~/code/my-repo",
+    singleton: true,
+    browse: "dir",
+  },
+  figma: {
+    icon: "pentagon",
+    label: "Figma",
+    placeholder: "https://figma.com/file/…",
+    singleton: true,
+  },
+  apps: { icon: "apps", label: "App", placeholder: "Finder", browse: "app" },
+  files: {
+    icon: "description",
+    label: "File",
+    placeholder: "~/code/file.ts",
+    browse: "file",
+  },
+  urls: { icon: "link", label: "URL", placeholder: "https://…" },
 };
 
 function addRow(list, value = "") {
@@ -203,8 +221,11 @@ function addRow(list, value = "") {
         meta.browse === "dir"
           ? await pickPath({ directory: true })
           : meta.browse === "app"
-          ? await pickPath({ defaultPath: "/Applications", filters: [{ name: "Applications", extensions: ["app"] }] })
-          : await pickPath({});
+            ? await pickPath({
+                defaultPath: "/Applications",
+                filters: [{ name: "Applications", extensions: ["app"] }],
+              })
+            : await pickPath({});
       if (picked) {
         input.value = meta.browse === "app" ? appNameFromPath(picked) : picked;
         scheduleWorkspaceSave();
@@ -223,13 +244,17 @@ function setSingletonBtn(list, added) {
 }
 
 function readList(list) {
-  return [...listContainer().querySelectorAll(`.ws-item[data-list="${list}"] input`)]
+  return [
+    ...listContainer().querySelectorAll(`.ws-item[data-list="${list}"] input`),
+  ]
     .map((i) => i.value.trim())
     .filter(Boolean);
 }
 
 function setList(list, values) {
-  listContainer().querySelectorAll(`.ws-item[data-list="${list}"]`).forEach((c) => c.remove());
+  listContainer()
+    .querySelectorAll(`.ws-item[data-list="${list}"]`)
+    .forEach((c) => c.remove());
   (values || []).forEach((v) => addRow(list, v));
 }
 
@@ -290,7 +315,7 @@ function initWorkspaceForm() {
   document
     .querySelectorAll("[data-add-list]")
     .forEach((btn) =>
-      btn.addEventListener("click", () => addRow(btn.dataset.addList))
+      btn.addEventListener("click", () => addRow(btn.dataset.addList)),
     );
   // Autosave: any typing or selection change in the form persists (debounced).
   const form = document.getElementById("ws-form");
@@ -336,8 +361,12 @@ async function createProject() {
 }
 
 function initNewModal() {
-  document.getElementById("new-create").addEventListener("click", createProject);
-  document.getElementById("new-cancel").addEventListener("click", closeNewModal);
+  document
+    .getElementById("new-create")
+    .addEventListener("click", createProject);
+  document
+    .getElementById("new-cancel")
+    .addEventListener("click", closeNewModal);
   document.getElementById("new-name").addEventListener("keydown", (e) => {
     if (e.key === "Enter") createProject();
     if (e.key === "Escape") closeNewModal();
@@ -370,9 +399,9 @@ function toggleSelect(path, tile) {
 
 function clearSelection() {
   mediaSelection.clear();
-  document.querySelectorAll(".mediatile.is-selected").forEach((t) =>
-    t.classList.remove("is-selected")
-  );
+  document
+    .querySelectorAll(".mediatile.is-selected")
+    .forEach((t) => t.classList.remove("is-selected"));
   updateSelbar();
 }
 
@@ -385,12 +414,16 @@ async function batchPaste() {
   const paths = [...mediaSelection];
   for (const path of paths) {
     const existing = await invoke("read_edits", { path });
-    await invoke("save_edits", { path, edits: { version: 1, ...existing, ...fields } });
+    await invoke("save_edits", {
+      path,
+      edits: { version: 1, ...existing, ...fields },
+    });
     invalidateThumb(path);
   }
 
   const n = paths.length;
-  document.getElementById("sel-count").textContent = `Pasted to ${n} image${n > 1 ? "s" : ""} ✓`;
+  document.getElementById("sel-count").textContent =
+    `Pasted to ${n} image${n > 1 ? "s" : ""} ✓`;
   document.getElementById("sel-paste").disabled = true;
   setTimeout(() => {
     clearSelection();
@@ -488,12 +521,20 @@ async function qlSrc(item) {
   }
 }
 
-const KIND_ICONS = { video: "play_circle", audio: "music_note", doc: "description" };
+const KIND_ICONS = {
+  video: "play_circle",
+  audio: "music_note",
+  doc: "description",
+};
 
 // Any .webp is a web format; also the export naming ("<name>x<longest>.jpg/png"
 // or the legacy "@web").
 function isWebExport(name) {
-  return /\.webp$/i.test(name) || /x\d+\.(?:jpe?g|png)$/i.test(name) || name.includes("@web");
+  return (
+    /\.webp$/i.test(name) ||
+    /x\d+\.(?:jpe?g|png)$/i.test(name) ||
+    name.includes("@web")
+  );
 }
 
 // Build a media tile (queues its thumbnail load). `edited` collects edited
@@ -507,9 +548,18 @@ function buildMediaTile(item, edited) {
   if (item.is_heic) {
     tile.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
   } else if (isImage && isWebExport(item.name)) {
-    tile.append(el("span", "mediatile__badge mediatile__badge--web", { textContent: "WEB" }));
+    tile.append(
+      el("span", "mediatile__badge mediatile__badge--web", {
+        textContent: "WEB",
+      }),
+    );
   }
-  if (!isImage) tile.append(el("span", "mediatile__kind", { innerHTML: mi(KIND_ICONS[item.kind] || "insert_drive_file") }));
+  if (!isImage)
+    tile.append(
+      el("span", "mediatile__kind", {
+        innerHTML: mi(KIND_ICONS[item.kind] || "insert_drive_file"),
+      }),
+    );
   tile.append(img);
 
   if (isImage) {
@@ -585,7 +635,8 @@ async function loadMedia(path) {
 
   // Prune selection to files that still exist.
   const present = new Set(items.map((i) => i.path));
-  for (const p of [...mediaSelection]) if (!present.has(p)) mediaSelection.delete(p);
+  for (const p of [...mediaSelection])
+    if (!present.has(p)) mediaSelection.delete(p);
   updateSelbar();
 
   if (!items.length) {
@@ -594,7 +645,9 @@ async function loadMedia(path) {
   }
 
   const existing = new Map();
-  grid.querySelectorAll(".mediatile").forEach((t) => existing.set(t.dataset.path, t));
+  grid
+    .querySelectorAll(".mediatile")
+    .forEach((t) => existing.set(t.dataset.path, t));
 
   const edited = [];
   const desired = [];
@@ -618,7 +671,8 @@ async function loadMedia(path) {
   if (placeholder) placeholder.remove();
   for (const [, stale] of existing) stale.remove(); // removed files
   desired.forEach((tile, i) => {
-    if (grid.children[i] !== tile) grid.insertBefore(tile, grid.children[i] || null);
+    if (grid.children[i] !== tile)
+      grid.insertBefore(tile, grid.children[i] || null);
   });
 
   for (const { item, img } of edited) {
@@ -640,7 +694,11 @@ async function openLightbox(item) {
   document.getElementById("lightbox-name").textContent = item.name;
 
   const ext = (item.ext || "").toLowerCase();
-  document.getElementById("lb-replace").hidden = !["png", "jpg", "jpeg"].includes(ext);
+  document.getElementById("lb-replace").hidden = ![
+    "png",
+    "jpg",
+    "jpeg",
+  ].includes(ext);
 
   document.getElementById("lightbox").hidden = false;
   setEditStatus("Loading…");
@@ -868,7 +926,11 @@ function getGL(canvas) {
 
   const buf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+    gl.STATIC_DRAW,
+  );
   const aPos = gl.getAttribLocation(prog, "a_pos");
   gl.enableVertexAttribArray(aPos);
   gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
@@ -927,7 +989,7 @@ function renderEditorPreview() {
   const scale = Math.min(
     wrap.clientWidth / oriented.width,
     wrap.clientHeight / oriented.height,
-    1
+    1,
   );
   canvas.width = Math.max(1, Math.round(oriented.width * scale));
   canvas.height = Math.max(1, Math.round(oriented.height * scale));
@@ -1082,15 +1144,28 @@ function resetCrop() {
 // --- Copy / paste adjustments ----------------------------------------------
 
 const ADJ_FIELDS = [
-  "rotate", "flipH", "flipV", "straighten", "crop", "cropAspect",
-  "exposure", "contrast", "saturation", "temperature", "tint", "highlights", "shadows",
+  "rotate",
+  "flipH",
+  "flipV",
+  "straighten",
+  "crop",
+  "cropAspect",
+  "exposure",
+  "contrast",
+  "saturation",
+  "temperature",
+  "tint",
+  "highlights",
+  "shadows",
 ];
 
 let copiedEdits = null;
 
 function loadCopiedEdits() {
   try {
-    copiedEdits = JSON.parse(localStorage.getItem("studio_copied_edits") || "null");
+    copiedEdits = JSON.parse(
+      localStorage.getItem("studio_copied_edits") || "null",
+    );
   } catch {
     copiedEdits = null;
   }
@@ -1166,7 +1241,8 @@ function buildTonalSliders() {
 
 function syncEditorControls() {
   document.getElementById("ed-straighten").value = editState.straighten || 0;
-  document.getElementById("ed-straighten-val").textContent = `${editState.straighten || 0}°`;
+  document.getElementById("ed-straighten-val").textContent =
+    `${editState.straighten || 0}°`;
   highlightAspect(editState.cropAspect ?? null);
   document.querySelectorAll("#tonal-sliders input[data-key]").forEach((inp) => {
     const v = editState[inp.dataset.key] || 0;
@@ -1207,7 +1283,9 @@ async function exportEdited(replace) {
     const cropped = document.createElement("canvas");
     cropped.width = sw;
     cropped.height = sh;
-    cropped.getContext("2d").drawImage(exportGLCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+    cropped
+      .getContext("2d")
+      .drawImage(exportGLCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
     out = cropped;
   }
 
@@ -1228,7 +1306,9 @@ async function exportEdited(replace) {
       await invoke("save_edits", { path: editItem.path, edits: editState });
       syncEditorControls();
       try {
-        editImg = await loadImage(await invoke("read_image_data", { path: editItem.path }));
+        editImg = await loadImage(
+          await invoke("read_image_data", { path: editItem.path }),
+        );
       } catch (err) {
         console.error("Reload after replace failed:", err);
       }
@@ -1299,7 +1379,7 @@ function bakeCanvas(img, edits, settings) {
 
 function canvasToBase64(canvas, mime, q) {
   return new Promise((resolve) =>
-    canvas.toBlob(async (b) => resolve(await blobToBase64(b)), mime, q)
+    canvas.toBlob(async (b) => resolve(await blobToBase64(b)), mime, q),
   );
 }
 
@@ -1313,18 +1393,25 @@ function base64Size(b64) {
 async function encodeFinal(canvas, settings) {
   if (settings.format === "webp") {
     const pngB64 = await canvasToBase64(canvas, "image/png");
-    const webpB64 = await invoke("encode_webp", { pngBase64: pngB64, quality: settings.quality });
+    const webpB64 = await invoke("encode_webp", {
+      pngBase64: pngB64,
+      quality: settings.quality,
+    });
     return { b64: webpB64, size: base64Size(webpB64) };
   }
   const mime = settings.format === "png" ? "image/png" : "image/jpeg";
-  const blob = await new Promise((res) => canvas.toBlob(res, mime, settings.quality / 100));
+  const blob = await new Promise((res) =>
+    canvas.toBlob(res, mime, settings.quality / 100),
+  );
   return { b64: await blobToBase64(blob), size: blob.size };
 }
 
 function highlightFmt() {
-  document.querySelectorAll("#webexport [data-fmt]").forEach((b) =>
-    b.classList.toggle("is-active", b.dataset.fmt === webSettings.format)
-  );
+  document
+    .querySelectorAll("#webexport [data-fmt]")
+    .forEach((b) =>
+      b.classList.toggle("is-active", b.dataset.fmt === webSettings.format),
+    );
   document.getElementById("web-quality-field").style.display =
     webSettings.format === "png" ? "none" : "";
 }
@@ -1359,17 +1446,32 @@ async function runWebExport(ctx, settings) {
     if (ctx.mode === "single") {
       const it = ctx.items[0];
       const canvas = bakeCanvas(it.img, it.edits, settings);
-      const long = settings.maxDim ? Math.max(canvas.width, canvas.height) : null;
+      const long = settings.maxDim
+        ? Math.max(canvas.width, canvas.height)
+        : null;
       const { b64 } = await encodeFinal(canvas, settings);
-      await invoke("write_image", { path: webName(it.path, settings.format, long), dataBase64: b64 });
+      await invoke("write_image", {
+        path: webName(it.path, settings.format, long),
+        dataBase64: b64,
+      });
     } else {
       for (const it of ctx.items) {
-        const img = await loadImage(await invoke("read_image_data", { path: it.path }));
-        const edits = { ...defaultEdits(), ...(await invoke("read_edits", { path: it.path })) };
+        const img = await loadImage(
+          await invoke("read_image_data", { path: it.path }),
+        );
+        const edits = {
+          ...defaultEdits(),
+          ...(await invoke("read_edits", { path: it.path })),
+        };
         const canvas = bakeCanvas(img, edits, settings);
-        const long = settings.maxDim ? Math.max(canvas.width, canvas.height) : null;
+        const long = settings.maxDim
+          ? Math.max(canvas.width, canvas.height)
+          : null;
         const { b64 } = await encodeFinal(canvas, settings);
-        await invoke("write_image", { path: webName(it.path, settings.format, long), dataBase64: b64 });
+        await invoke("write_image", {
+          path: webName(it.path, settings.format, long),
+          dataBase64: b64,
+        });
       }
     }
     if (mediaProjectPath) loadMedia(mediaProjectPath);
@@ -1383,21 +1485,31 @@ function initWebExport() {
     if (!editItem) return;
     openWebExport({
       mode: "single",
-      items: [{ path: editItem.path, name: editItem.name, edits: editState, img: editImg }],
+      items: [
+        {
+          path: editItem.path,
+          name: editItem.name,
+          edits: editState,
+          img: editImg,
+        },
+      ],
     });
   });
   document.getElementById("sel-webexport").addEventListener("click", () => {
     if (!mediaSelection.size) return;
     openWebExport({
       mode: "batch",
-      items: [...mediaSelection].map((p) => ({ path: p, name: p.split("/").pop() })),
+      items: [...mediaSelection].map((p) => ({
+        path: p,
+        name: p.split("/").pop(),
+      })),
     });
   });
   document.querySelectorAll("#webexport [data-fmt]").forEach((b) =>
     b.addEventListener("click", () => {
       webSettings.format = b.dataset.fmt;
       highlightFmt();
-    })
+    }),
   );
   document.getElementById("web-maxdim").addEventListener("change", (e) => {
     webSettings.maxDim = Number(e.target.value);
@@ -1406,7 +1518,9 @@ function initWebExport() {
     webSettings.quality = Number(e.target.value);
     document.getElementById("web-quality-val").textContent = e.target.value;
   });
-  document.getElementById("web-cancel").addEventListener("click", closeWebExport);
+  document
+    .getElementById("web-cancel")
+    .addEventListener("click", closeWebExport);
   document.getElementById("web-export").addEventListener("click", doWebExport);
 }
 
@@ -1422,11 +1536,16 @@ async function removeBg() {
   setEditStatus("Removing background…");
   try {
     // Bake at full resolution, hand the PNG to the native ISNet command.
-    const canvas = bakeCanvas(editImg, editState, { maxDim: 0, format: "png", quality: 100 });
+    const canvas = bakeCanvas(editImg, editState, {
+      maxDim: 0,
+      format: "png",
+      quality: 100,
+    });
     const pngB64 = await canvasToBase64(canvas, "image/png");
     cutoutB64 = await invoke("remove_background", { pngBase64: pngB64 });
     cutoutSourcePath = editItem.path;
-    document.getElementById("cutout-img").src = `data:image/png;base64,${cutoutB64}`;
+    document.getElementById("cutout-img").src =
+      `data:image/png;base64,${cutoutB64}`;
     document.getElementById("cutout").hidden = false;
     setEditStatus("");
   } catch (err) {
@@ -1461,8 +1580,12 @@ function initRemoveBg() {
 
 function initEditor() {
   buildTonalSliders();
-  document.getElementById("lb-export").addEventListener("click", () => exportEdited(false));
-  document.getElementById("lb-replace").addEventListener("click", () => exportEdited(true));
+  document
+    .getElementById("lb-export")
+    .addEventListener("click", () => exportEdited(false));
+  document
+    .getElementById("lb-replace")
+    .addEventListener("click", () => exportEdited(true));
 
   const apply = () => {
     renderEditorPreview();
@@ -1486,7 +1609,8 @@ function initEditor() {
   });
   document.getElementById("ed-straighten").addEventListener("input", (e) => {
     editState.straighten = Number(e.target.value);
-    document.getElementById("ed-straighten-val").textContent = `${editState.straighten}°`;
+    document.getElementById("ed-straighten-val").textContent =
+      `${editState.straighten}°`;
     apply();
   });
   document.getElementById("ed-reset").addEventListener("click", () => {
@@ -1496,19 +1620,27 @@ function initEditor() {
   });
 
   // Crop interactions.
-  document.getElementById("crop").addEventListener("pointerdown", onCropPointerDown);
-  document.querySelectorAll("[data-aspect]").forEach((b) =>
-    b.addEventListener("click", () =>
-      applyAspect(b.dataset.aspect === "free" ? null : Number(b.dataset.aspect))
-    )
-  );
+  document
+    .getElementById("crop")
+    .addEventListener("pointerdown", onCropPointerDown);
+  document
+    .querySelectorAll("[data-aspect]")
+    .forEach((b) =>
+      b.addEventListener("click", () =>
+        applyAspect(
+          b.dataset.aspect === "free" ? null : Number(b.dataset.aspect),
+        ),
+      ),
+    );
   document.getElementById("ed-cropreset").addEventListener("click", resetCrop);
 
   // Copy / paste adjustments.
   loadCopiedEdits();
   document.getElementById("ed-paste").disabled = !copiedEdits;
   document.getElementById("ed-copy").addEventListener("click", copyAdjustments);
-  document.getElementById("ed-paste").addEventListener("click", pasteAdjustments);
+  document
+    .getElementById("ed-paste")
+    .addEventListener("click", pasteAdjustments);
   window.addEventListener("resize", () => {
     if (editImg) renderEditorPreview();
   });
@@ -1519,7 +1651,9 @@ function initMedia() {
   initWebExport();
   initRemoveBg();
   document.getElementById("sel-paste").addEventListener("click", batchPaste);
-  document.getElementById("sel-clear").addEventListener("click", clearSelection);
+  document
+    .getElementById("sel-clear")
+    .addEventListener("click", clearSelection);
 
   document.addEventListener("keydown", (e) => {
     const mod = e.metaKey || e.ctrlKey;
@@ -1540,7 +1674,13 @@ function initMedia() {
     // into the project. Leave text fields alone so normal paste still works.
     if (mod && (e.key === "v" || e.key === "V")) {
       const ae = document.activeElement;
-      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT" || ae.isContentEditable)) {
+      if (
+        ae &&
+        (ae.tagName === "INPUT" ||
+          ae.tagName === "TEXTAREA" ||
+          ae.tagName === "SELECT" ||
+          ae.isContentEditable)
+      ) {
         return;
       }
       e.preventDefault();
@@ -1554,7 +1694,10 @@ function initMedia() {
       suppressLightboxClick = false;
       return;
     }
-    if (e.target.id === "lightbox" || e.target.classList.contains("lightbox__stage")) {
+    if (
+      e.target.id === "lightbox" ||
+      e.target.classList.contains("lightbox__stage")
+    ) {
       closeLightbox();
     }
   });
@@ -1574,11 +1717,16 @@ let selectedRow = null; // { note, ri, trEl }
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Delete" && e.key !== "Backspace") return;
-  if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+  if (document.activeElement && document.activeElement.tagName === "INPUT")
+    return;
   if (selectedCol) {
     const { note, ci } = selectedCol;
     note.columns.splice(ci, 1);
     note.rows.forEach((r) => r.splice(ci, 1));
+    if (note.totals)
+      note.totals = note.totals
+        .filter((i) => i !== ci)
+        .map((i) => (i > ci ? i - 1 : i));
     selectedCol = null;
     renderNotes();
     scheduleNotesSave();
@@ -1600,6 +1748,7 @@ function clearColSelection() {
   if (!selectedCol) return;
   selectedCol.thEls.forEach((el) => el.classList.remove("is-col-selected"));
   selectedCol.tdEls.forEach((el) => el.classList.remove("is-col-selected"));
+  if (selectedCol.totalBtn) selectedCol.totalBtn.hidden = true;
   selectedCol = null;
 }
 
@@ -1629,7 +1778,8 @@ function setNotesStatus(text) {
 async function loadNotes(path) {
   notesProjectPath = path;
   const data = await invoke("read_notes", { path });
-  notesData = data && Array.isArray(data.notes) ? data : { version: 1, notes: [] };
+  notesData =
+    data && Array.isArray(data.notes) ? data : { version: 1, notes: [] };
   setNotesStatus("");
   renderNotes();
 }
@@ -1654,7 +1804,11 @@ function newNote(kind) {
   if (kind === "checklist") note.items = [];
   if (kind === "table") {
     note.columns = ["Column", "Column"];
-    note.rows = [["", ""], ["", ""]];
+    note.rows = [
+      ["", ""],
+      ["", ""],
+    ];
+    note.totals = [];
   }
   notesData.notes.unshift(note);
   renderNotes();
@@ -1672,7 +1826,10 @@ function noteHeader(note) {
     scheduleNotesSave();
   });
 
-  const del = el("button", "btn-remove", { type: "button", innerHTML: mi("close") });
+  const del = el("button", "btn-remove", {
+    type: "button",
+    innerHTML: mi("close"),
+  });
   del.addEventListener("click", () => {
     notesData.notes = notesData.notes.filter((n) => n.id !== note.id);
     renderNotes();
@@ -1686,7 +1843,10 @@ function noteHeader(note) {
 // how many grid columns the card spans; clicking cycles 1 → 2 → 3 → 1.
 function noteFooter(note) {
   const footer = el("div", "notecard__footer");
-  const width = el("button", "notecard__width", { type: "button", title: "Width" });
+  const width = el("button", "notecard__width", {
+    type: "button",
+    title: "Width",
+  });
   const renderDots = () => {
     width.innerHTML = '<span class="dot"></span>'.repeat(note.span || 1);
   };
@@ -1706,7 +1866,9 @@ function buildTextNote(note) {
   const card = el("div", "notecard");
   card.append(noteHeader(note));
   const view = el("div", "notecard__md");
-  const textarea = el("textarea", "notecard__textarea", { value: note.body || "" });
+  const textarea = el("textarea", "notecard__textarea", {
+    value: note.body || "",
+  });
   textarea.hidden = true;
 
   const resizeTextarea = () => {
@@ -1718,7 +1880,8 @@ function buildTextNote(note) {
     if (note.body) {
       view.textContent = note.body;
     } else {
-      view.innerHTML = '<span class="notecard__empty">Empty — click to edit</span>';
+      view.innerHTML =
+        '<span class="notecard__empty">Empty — click to edit</span>';
     }
   };
   renderView();
@@ -1786,7 +1949,10 @@ function buildChecklist(note) {
         addChecklistItem(note);
       }
     });
-    const rm = el("button", "btn-remove", { type: "button", innerHTML: mi("close") });
+    const rm = el("button", "btn-remove", {
+      type: "button",
+      innerHTML: mi("close"),
+    });
     rm.addEventListener("click", () => {
       note.items.splice(idx, 1);
       renderNotes();
@@ -1807,6 +1973,8 @@ function buildTable(note) {
   const table = el("table", "ntable");
   const thead = el("thead");
   const htr = el("tr");
+  let actionsTotalBtn; // assigned after actions are built; closures below capture by reference
+
   const thEls = [];
   note.columns.forEach((col, ci) => {
     const th = el("th");
@@ -1818,33 +1986,51 @@ function buildTable(note) {
       clearColSelection();
       clearRowSelection();
       const tdEls = [...tbody.querySelectorAll(`td:nth-child(${ci + 1})`)];
-      selectedCol = { note, ci, thEls: [th], tdEls };
+      const hasTotal = (note.totals || []).includes(ci);
+      actionsTotalBtn.textContent = hasTotal ? "− Total" : "+ Total";
+      actionsTotalBtn.hidden = false;
+      actionsTotalBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        if (!note.totals) note.totals = [];
+        if (note.totals.includes(ci)) {
+          note.totals = note.totals.filter((i) => i !== ci);
+        } else {
+          note.totals.push(ci);
+        }
+        renderNotes();
+        scheduleNotesSave();
+      };
+      selectedCol = { note, ci, thEls: [th], tdEls, totalBtn: actionsTotalBtn };
       th.classList.add("is-col-selected");
       tdEls.forEach((td) => td.classList.add("is-col-selected"));
     });
 
-    const inp = el("input", "ntable__colinput", { value: col, placeholder: "Column" });
+    const inp = el("input", "ntable__colinput", {
+      value: col,
+      placeholder: "Column",
+    });
     inp.addEventListener("input", () => {
       note.columns[ci] = inp.value;
       scheduleNotesSave();
     });
+
     th.append(handle, inp);
     htr.append(th);
   });
   thead.append(htr);
   table.append(thead);
 
+  const colInputs = note.columns.map(() => []); // colInputs[ci] = all inputs in that column
+
   const tbody = el("tbody");
   note.rows.forEach((row, ri) => {
     const tr = el("tr");
-    let firstTd = null;
 
     note.columns.forEach((_, ci) => {
       const td = el("td");
       const inp = el("input", "ntable__cell", { value: row[ci] || "" });
 
       if (ci === 0) {
-        firstTd = td;
         td.style.position = "relative";
         const handle = el("div", "ntable__row-handle");
         handle.addEventListener("click", (e) => {
@@ -1860,6 +2046,7 @@ function buildTable(note) {
         row[ci] = inp.value;
         scheduleNotesSave();
       });
+      colInputs[ci].push(inp);
       td.append(inp);
       tr.append(td);
     });
@@ -1867,21 +2054,57 @@ function buildTable(note) {
   });
   table.append(tbody);
 
+  const activeTotals = note.totals || [];
+  if (activeTotals.length > 0) {
+    const tfoot = el("tfoot");
+    const ftr = el("tr");
+    note.columns.forEach((colName, ci) => {
+      const td = el("td", "ntable__total-cell");
+      if (activeTotals.includes(ci)) {
+        const computeTotal = () => {
+          const sum = colInputs[ci].reduce((acc, inp) => {
+            const val = parseFloat(inp.value);
+            return acc + (isNaN(val) ? 0 : val);
+          }, 0);
+          td.textContent = `Total: ${sum % 1 === 0 ? sum : sum.toFixed(2)}`;
+        };
+        computeTotal();
+        colInputs[ci].forEach((inp) =>
+          inp.addEventListener("input", computeTotal),
+        );
+      }
+      ftr.append(td);
+    });
+    tfoot.append(ftr);
+    table.append(tfoot);
+  }
+
   const actions = el("div", "ntable__actions");
-  const addRow = el("button", "btn-add", { type: "button", innerHTML: `${mi("add")}Row` });
+  const addRow = el("button", "btn-add", {
+    type: "button",
+    innerHTML: `${mi("add")}Row`,
+  });
   addRow.addEventListener("click", () => {
     note.rows.push(note.columns.map(() => ""));
     renderNotes();
     scheduleNotesSave();
   });
-  const addCol = el("button", "btn-add", { type: "button", innerHTML: `${mi("add")}Column` });
+  const addCol = el("button", "btn-add", {
+    type: "button",
+    innerHTML: `${mi("add")}Column`,
+  });
   addCol.addEventListener("click", () => {
     note.columns.push("Column");
     note.rows.forEach((r) => r.push(""));
     renderNotes();
     scheduleNotesSave();
   });
-  actions.append(addRow, addCol);
+  actionsTotalBtn = el("button", "btn-add ntable__total-btn-action", {
+    type: "button",
+    textContent: "+ Total",
+    hidden: true,
+  });
+  actions.append(addRow, addCol, actionsTotalBtn);
 
   card.append(table, actions);
   return card;
@@ -1894,8 +2117,9 @@ function renderNotes() {
   if (!notesData.notes.length) {
     listEl.append(
       el("p", "placeholder", {
-        textContent: "No notes yet. Add a text note, checklist, or table above.",
-      })
+        textContent:
+          "No notes yet. Add a text note, checklist, or table above.",
+      }),
     );
     return;
   }

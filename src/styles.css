@@ -829,7 +829,6 @@ select.field__input {
     padding: 0;
 }
 
-
 .ntable th {
     background: var(--surface);
     position: relative;
@@ -891,10 +890,21 @@ select.field__input {
     background: var(--accent-soft);
 }
 
-
 .ntable__actions {
     display: flex;
     gap: 8px;
+}
+
+.ntable__total-btn-action {
+    margin-left: auto;
+}
+
+td.ntable__total-cell {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 5px 8px;
+    border-top: 2px solid var(--hairline-strong);
 }
 
 /* Media grid — thumbnails at native aspect ratio */
