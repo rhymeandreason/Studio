@@ -323,6 +323,15 @@ function initWorkspaceForm() {
   form.addEventListener("input", scheduleWorkspaceSave);
   form.addEventListener("change", scheduleWorkspaceSave);
   form.addEventListener("submit", (e) => e.preventDefault());
+
+  // Re-run textarea auto-resize whenever the cards container changes width.
+  const cards = document.getElementById("ws-cards");
+  new ResizeObserver(() => {
+    cards.querySelectorAll(".ws-item__input").forEach((ta) => {
+      ta.style.height = "auto";
+      ta.style.height = ta.scrollHeight + "px";
+    });
+  }).observe(cards);
 }
 
 // --- New project modal -----------------------------------------------------
