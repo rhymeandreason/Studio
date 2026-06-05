@@ -1828,22 +1828,9 @@ function buildTable(note) {
       note.columns[ci] = inp.value;
       scheduleNotesSave();
     });
-    const rm = el("button", "ntable__x", {
-      type: "button",
-      innerHTML: mi("close"),
-      title: "Remove column",
-    });
-    rm.addEventListener("click", () => {
-      note.columns.splice(ci, 1);
-      note.rows.forEach((r) => r.splice(ci, 1));
-      selectedCol = null;
-      renderNotes();
-      scheduleNotesSave();
-    });
-    th.append(handle, inp, rm);
+    th.append(handle, inp);
     htr.append(th);
   });
-  htr.append(el("th", "ntable__spacer"));
   thead.append(htr);
   table.append(thead);
 
@@ -1876,19 +1863,6 @@ function buildTable(note) {
       td.append(inp);
       tr.append(td);
     });
-    const tdx = el("td");
-    const rm = el("button", "ntable__x", {
-      type: "button",
-      innerHTML: mi("close"),
-      title: "Remove row",
-    });
-    rm.addEventListener("click", () => {
-      note.rows.splice(ri, 1);
-      renderNotes();
-      scheduleNotesSave();
-    });
-    tdx.append(rm);
-    tr.append(tdx);
     tbody.append(tr);
   });
   table.append(tbody);
