@@ -374,7 +374,8 @@ fn walk_media(dir: &Path, out: &mut Vec<MediaItem>) {
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
         let path_str = path.to_string_lossy().to_string();
-        let edits_mtime = std::fs::metadata(format!("{path_str}.studio.json"))
+        migrate_sidecar(&path_str);
+        let edits_mtime = std::fs::metadata(sidecar_path(&path_str))
             .and_then(|m| m.modified())
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
@@ -628,10 +629,27 @@ fn read_image_data(app: AppHandle, path: String) -> Result<String, String> {
     Ok(format!("data:{mime};base64,{}", STANDARD.encode(bytes)))
 }
 
-/// Read an image's edit sidecar (`<image>.studio.json`); empty object if none.
+/// Returns the hidden sidecar path for an image: `.<filename>.studio.json` in the same dir.
+fn sidecar_path(image_path: &str) -> String {
+    let p = std::path::Path::new(image_path);
+    let filename = p.file_name().unwrap_or_default().to_string_lossy();
+    let parent = p.parent().map(|d| format!("{}/", d.to_string_lossy())).unwrap_or_default();
+    format!("{}.{}.studio.json", parent, filename)
+}
+
+/// Migrate old-style sidecar (`<image>.studio.json`) to hidden (`.<image>.studio.json`).
+fn migrate_sidecar(image_path: &str) {
+    let old = format!("{}.studio.json", image_path);
+    let new = sidecar_path(image_path);
+    if std::path::Path::new(&old).exists() && !std::path::Path::new(&new).exists() {
+        let _ = std::fs::rename(&old, &new);
+    }
+}
+
+/// Read an image's edit sidecar (`.<image>.studio.json`); empty object if none.
 #[tauri::command]
 fn read_edits(path: String) -> Result<serde_json::Value, String> {
-    let sidecar = format!("{path}.studio.json");
+    let sidecar = sidecar_path(&path);
     match std::fs::read_to_string(&sidecar) {
         Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
         Err(_) => Ok(serde_json::json!({})),
@@ -641,7 +659,7 @@ fn read_edits(path: String) -> Result<serde_json::Value, String> {
 /// Write an image's edit sidecar.
 #[tauri::command]
 fn save_edits(path: String, edits: serde_json::Value) -> Result<(), String> {
-    let sidecar = format!("{path}.studio.json");
+    let sidecar = sidecar_path(&path);
     let text = serde_json::to_string_pretty(&edits).map_err(|e| e.to_string())?;
     std::fs::write(&sidecar, text).map_err(|e| e.to_string())
 }
