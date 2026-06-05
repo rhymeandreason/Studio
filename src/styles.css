@@ -351,7 +351,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-width: 540px;
 }
 
 .field {
@@ -443,17 +442,92 @@ select.field__input {
 }
 
 .listfield__rows {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+/* Workspace item card */
+.ws-item {
+  aspect-ratio: 2 / 1;
+  background: var(--elevated);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  padding: 12px 14px;
 }
 
-.listfield__row {
+.ws-item__head {
   display: flex;
-  gap: 6px;
   align-items: center;
+  gap: 6px;
 }
 
+.ws-item__type {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  flex: 1 1 auto;
+}
+
+.ws-item__remove {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.ws-item:hover .ws-item__remove,
+.ws-item:focus-within .ws-item__remove {
+  opacity: 1;
+}
+
+.ws-item__input {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  outline: none;
+  overflow: hidden;
+  padding: 0;
+  resize: none;
+  width: 100%;
+  word-break: break-all;
+}
+
+.ws-item__input::placeholder {
+  color: var(--text-soft);
+}
+
+.ws-item__browse {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  padding: 0;
+  margin-top: 2px;
+  opacity: 0;
+  transition: color 0.15s, opacity 0.15s;
+}
+
+.ws-item:hover .ws-item__browse,
+.ws-item:focus-within .ws-item__browse {
+  opacity: 1;
+}
+
+.ws-item__browse:hover {
+  color: var(--accent);
+}
+
+/* Item remove button (used in ws-item and list rows) */
 .btn-remove {
   flex: 0 0 auto;
   background: transparent;
@@ -496,11 +570,21 @@ select.field__input {
   background: rgba(110, 97, 84, 0.04);
 }
 
-.ws__actions {
+.ws-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-top: 4px;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ws-toolbar .ws__status {
+  margin-left: auto;
+}
+
+.ws-toolbar .btn-add:disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
 }
 
 .ws__status,

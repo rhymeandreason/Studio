@@ -115,71 +115,26 @@
 
                 <section class="panel" data-panel="workspace">
                     <form class="ws" id="ws-form">
-                        <label class="field">
-                            <span class="field__label">Repo path</span>
-                            <div class="field__withbtn">
-                                <input
-                                    class="field__input"
-                                    id="ws-repo"
-                                    placeholder="repo/  or  ~/code/my-repo"
-                                />
-                                <button
-                                    type="button"
-                                    class="btn-browse"
-                                    id="ws-repo-browse"
-                                >
-                                    <span class="mi mi-sm">folder_open</span
-                                    >Browse…
-                                </button>
-                            </div>
-                        </label>
-
-                        <label class="field">
-                            <span class="field__label">Figma URL</span>
-                            <input
-                                class="field__input"
-                                id="ws-figma"
-                                placeholder="https://figma.com/file/…"
-                            />
-                        </label>
-
-                        <label class="field">
-                            <span class="field__label">Claude</span>
-                            <select class="field__input" id="ws-claude">
-                                <option value="terminal">
-                                    Run in terminal (cd into repo)
-                                </option>
-                                <option value="off">Don't launch</option>
-                            </select>
-                        </label>
-
-                        <div class="listfield" data-list="apps">
-                            <span class="field__label">Apps to launch</span>
-                            <div class="listfield__rows" data-rows></div>
-                            <button type="button" class="btn-add" data-add>
-                                <span class="mi mi-sm">add</span>Add app
+                        <div class="ws-toolbar">
+                            <button type="button" class="btn-add" data-add-list="repo" data-singleton>
+                                <span class="mi mi-sm">folder_open</span>Repo
                             </button>
-                        </div>
-
-                        <div class="listfield" data-list="files">
-                            <span class="field__label">Files to open</span>
-                            <div class="listfield__rows" data-rows></div>
-                            <button type="button" class="btn-add" data-add>
-                                <span class="mi mi-sm">add</span>Add file
+                            <button type="button" class="btn-add" data-add-list="figma" data-singleton>
+                                <span class="mi mi-sm">pentagon</span>Figma
                             </button>
-                        </div>
-
-                        <div class="listfield" data-list="urls">
-                            <span class="field__label">URLs to open</span>
-                            <div class="listfield__rows" data-rows></div>
-                            <button type="button" class="btn-add" data-add>
-                                <span class="mi mi-sm">add</span>Add URL
+                            <button type="button" class="btn-add" data-add-list="apps">
+                                <span class="mi mi-sm">apps</span>App
                             </button>
-                        </div>
-
-                        <div class="ws__actions">
+                            <button type="button" class="btn-add" data-add-list="files">
+                                <span class="mi mi-sm">description</span>File
+                            </button>
+                            <button type="button" class="btn-add" data-add-list="urls">
+                                <span class="mi mi-sm">link</span>URL
+                            </button>
                             <span class="ws__status" id="ws-status"></span>
                         </div>
+
+                        <div class="listfield__rows" id="ws-cards"></div>
                     </form>
                 </section>
             </div>

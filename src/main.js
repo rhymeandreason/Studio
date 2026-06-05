@@ -140,71 +140,107 @@ function initLaunch() {
 
 // --- Workspace form --------------------------------------------------------
 
-function listContainer(list) {
-  return document.querySelector(`.listfield[data-list="${list}"] [data-rows]`);
+function listContainer() {
+  return document.getElementById("ws-cards");
 }
 
-function addRow(list, value = "") {
-  const rows = listContainer(list);
-  const row = document.createElement("div");
-  row.className = "listfield__row";
-  const input = document.createElement("input");
-  input.className = "field__input";
-  input.value = value;
-  row.append(input);
+const LIST_META = {
+  repo:  { icon: "folder_open", label: "Repo",  placeholder: "~/code/my-repo", singleton: true, browse: "dir" },
+  figma: { icon: "pentagon",    label: "Figma", placeholder: "https://figma.com/file/…", singleton: true },
+  apps:  { icon: "apps",        label: "App",   placeholder: "Finder", browse: "app" },
+  files: { icon: "description", label: "File",  placeholder: "~/code/file.ts", browse: "file" },
+  urls:  { icon: "link",        label: "URL",   placeholder: "https://…" },
+};
 
-  // Files and apps get a native picker; URLs are typed.
-  if (list === "files" || list === "apps") {
-    const browse = document.createElement("button");
-    browse.type = "button";
-    browse.className = "btn-browse";
-    browse.innerHTML = `${mi(list === "apps" ? "apps" : "description")}Browse…`;
-    browse.addEventListener("click", async () => {
-      const picked =
-        list === "apps"
-          ? await pickPath({
-              defaultPath: "/Applications",
-              filters: [{ name: "Applications", extensions: ["app"] }],
-            })
-          : await pickPath({});
-      if (picked) {
-        input.value = list === "apps" ? appNameFromPath(picked) : picked;
-        scheduleWorkspaceSave();
-      }
-    });
-    row.append(browse);
-  }
+function addRow(list, value = "") {
+  const rows = listContainer();
+  const meta = LIST_META[list];
+
+  const card = document.createElement("div");
+  card.className = "ws-item";
+  card.dataset.list = list;
+
+  // Header: icon + type label + remove button
+  const head = document.createElement("div");
+  head.className = "ws-item__head";
+  head.innerHTML = `${mi(meta.icon)}<span class="ws-item__type">${meta.label}</span>`;
 
   const remove = document.createElement("button");
   remove.type = "button";
-  remove.className = "btn-remove";
+  remove.className = "btn-remove ws-item__remove";
   remove.innerHTML = mi("close");
   remove.addEventListener("click", () => {
-    row.remove();
+    card.remove();
     scheduleWorkspaceSave();
+    if (meta.singleton) setSingletonBtn(list, false);
   });
-  row.append(remove);
-  rows.append(row);
+  head.append(remove);
+  card.append(head);
+
+  // Value input
+  const input = document.createElement("textarea");
+  input.className = "ws-item__input";
+  input.placeholder = meta.placeholder;
+  input.value = value;
+  input.rows = 1;
+  const resizeInput = () => {
+    input.style.height = "auto";
+    input.style.height = input.scrollHeight + "px";
+  };
+  input.addEventListener("input", resizeInput);
+  // Resize after the card is in the DOM so scrollHeight is correct
+  requestAnimationFrame(resizeInput);
+  card.append(input);
+
+  // Browse button for repo, apps, and files
+  if (meta.browse) {
+    const browse = document.createElement("button");
+    browse.type = "button";
+    browse.className = "ws-item__browse";
+    browse.innerHTML = `${mi("folder_open")}Browse…`;
+    browse.addEventListener("click", async () => {
+      const picked =
+        meta.browse === "dir"
+          ? await pickPath({ directory: true })
+          : meta.browse === "app"
+          ? await pickPath({ defaultPath: "/Applications", filters: [{ name: "Applications", extensions: ["app"] }] })
+          : await pickPath({});
+      if (picked) {
+        input.value = meta.browse === "app" ? appNameFromPath(picked) : picked;
+        scheduleWorkspaceSave();
+      }
+    });
+    card.append(browse);
+  }
+
+  rows.append(card);
+  if (meta.singleton) setSingletonBtn(list, true);
+}
+
+function setSingletonBtn(list, added) {
+  const btn = document.querySelector(`[data-add-list="${list}"]`);
+  if (btn) btn.disabled = added;
 }
 
 function readList(list) {
-  return [...listContainer(list).querySelectorAll("input")]
+  return [...listContainer().querySelectorAll(`.ws-item[data-list="${list}"] input`)]
     .map((i) => i.value.trim())
     .filter(Boolean);
 }
 
 function setList(list, values) {
-  listContainer(list).innerHTML = "";
+  listContainer().querySelectorAll(`.ws-item[data-list="${list}"]`).forEach((c) => c.remove());
   (values || []).forEach((v) => addRow(list, v));
 }
 
+let wsClaude = "terminal";
+
 async function loadWorkspace(path) {
   const ws = await invoke("read_workspace", { path });
-  document.getElementById("ws-repo").value = ws.repo || "";
   wsEditor = ws.editor || "";
-  document.getElementById("ws-figma").value = ws.figma || "";
-  document.getElementById("ws-claude").value =
-    ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
+  wsClaude = ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
+  setList("repo", ws.repo ? [ws.repo] : []);
+  setList("figma", ws.figma ? [ws.figma] : []);
   setList("apps", ws.apps);
   setList("files", ws.files);
   setList("urls", ws.urls);
@@ -220,10 +256,10 @@ let wsEditor = "";
 
 function readWorkspaceForm() {
   return {
-    repo: document.getElementById("ws-repo").value.trim(),
+    repo: readList("repo")[0] || "",
     editor: wsEditor,
-    figma: document.getElementById("ws-figma").value.trim(),
-    claude: { mode: document.getElementById("ws-claude").value },
+    figma: readList("figma")[0] || "",
+    claude: { mode: wsClaude },
     apps: readList("apps"),
     files: readList("files"),
     urls: readList("urls"),
@@ -252,19 +288,10 @@ function scheduleWorkspaceSave() {
 
 function initWorkspaceForm() {
   document
-    .querySelectorAll(".listfield [data-add]")
+    .querySelectorAll("[data-add-list]")
     .forEach((btn) =>
-      btn.addEventListener("click", () =>
-        addRow(btn.closest(".listfield").dataset.list)
-      )
+      btn.addEventListener("click", () => addRow(btn.dataset.addList))
     );
-  document.getElementById("ws-repo-browse").addEventListener("click", async () => {
-    const picked = await pickPath({ directory: true });
-    if (picked) {
-      document.getElementById("ws-repo").value = picked;
-      scheduleWorkspaceSave();
-    }
-  });
   // Autosave: any typing or selection change in the form persists (debounced).
   const form = document.getElementById("ws-form");
   form.addEventListener("input", scheduleWorkspaceSave);
