@@ -201,7 +201,7 @@ function setList(list, values) {
 async function loadWorkspace(path) {
   const ws = await invoke("read_workspace", { path });
   document.getElementById("ws-repo").value = ws.repo || "";
-  document.getElementById("ws-editor").value = ws.editor || "";
+  wsEditor = ws.editor || "";
   document.getElementById("ws-figma").value = ws.figma || "";
   document.getElementById("ws-claude").value =
     ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
@@ -216,11 +216,12 @@ function setStatus(text) {
 }
 
 let wsSaveTimer = null;
+let wsEditor = "";
 
 function readWorkspaceForm() {
   return {
     repo: document.getElementById("ws-repo").value.trim(),
-    editor: document.getElementById("ws-editor").value.trim(),
+    editor: wsEditor,
     figma: document.getElementById("ws-figma").value.trim(),
     claude: { mode: document.getElementById("ws-claude").value },
     apps: readList("apps"),
@@ -264,17 +265,6 @@ function initWorkspaceForm() {
       scheduleWorkspaceSave();
     }
   });
-  document.getElementById("ws-editor-browse").addEventListener("click", async () => {
-    const picked = await pickPath({
-      defaultPath: "/Applications",
-      filters: [{ name: "Applications", extensions: ["app"] }],
-    });
-    if (picked) {
-      document.getElementById("ws-editor").value = appNameFromPath(picked);
-      scheduleWorkspaceSave();
-    }
-  });
-
   // Autosave: any typing or selection change in the form persists (debounced).
   const form = document.getElementById("ws-form");
   form.addEventListener("input", scheduleWorkspaceSave);
