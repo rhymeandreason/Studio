@@ -717,20 +717,6 @@ select.field__input {
     background: var(--accent);
 }
 
-.notecard__md {
-    font-size: 13px;
-    line-height: 1.6;
-    color: var(--text);
-    cursor: text;
-    min-height: 22px;
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-.notecard__empty {
-    color: var(--text-soft);
-    font-style: italic;
-}
 
 .notecard__textarea {
     background: transparent;

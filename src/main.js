@@ -1903,47 +1903,22 @@ function noteFooter(note) {
 function buildTextNote(note) {
   const card = el("div", "notecard");
   card.append(noteHeader(note));
-  const view = el("div", "notecard__md");
-  const textarea = el("textarea", "notecard__textarea", {
-    value: note.body || "",
-  });
-  textarea.hidden = true;
+
+  const textarea = el("textarea", "notecard__textarea", { placeholder: "Write something…" });
+  textarea.value = note.body || "";
 
   const resizeTextarea = () => {
     textarea.style.height = "auto";
     textarea.style.height = textarea.scrollHeight + "px";
   };
-
-  const renderView = () => {
-    if (note.body) {
-      view.textContent = note.body;
-    } else {
-      view.innerHTML =
-        '<span class="notecard__empty">Empty — click to edit</span>';
-    }
-  };
-  renderView();
-
-  view.addEventListener("click", () => {
-    view.hidden = true;
-    textarea.hidden = false;
-    requestAnimationFrame(resizeTextarea);
-    textarea.focus();
-  });
   textarea.addEventListener("input", () => {
     note.body = textarea.value;
     resizeTextarea();
     scheduleNotesSave();
   });
-  textarea.addEventListener("blur", () => {
-    note.body = textarea.value;
-    renderView();
-    textarea.hidden = true;
-    view.hidden = false;
-    scheduleNotesSave();
-  });
+  requestAnimationFrame(resizeTextarea);
 
-  card.append(view, textarea);
+  card.append(textarea);
   return card;
 }
 
