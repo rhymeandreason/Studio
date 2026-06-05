@@ -32,6 +32,14 @@ no model download. The portable `ort`/ISNet version is preserved at tag
   Optimize by baking adjustments on a downscaled base in Rust and/or persisting
   the baked thumbnails on disk (`$APPCACHE`) keyed by path + sidecar mtime.
 
+## Future integration: NFC hardware (Runes)
+Not in v0.1 scope, but mentioned so the architecture leaves room:
+- A separate background process (Runes) watches an NFC reader and emits `tag_scanned: {uid}` events.
+- Studio will subscribe to these events (HTTP or WebSocket) and map UID → "activate project X."
+- Tag management UI will become a panel in Studio. Each project's `workspace.json` could gain a `tags: [uid1, uid2]` field.
+- For v0.1, design the workspace activation function so it can be triggered programmatically (not only from the UI menu). That's the only forward-compatibility work needed.
+
+
 ## Packaging (before shipping a real `.app`)
 - **Bundle the Swift helpers.** Three helpers — `bgremove`, `qlthumb`, `pbimage`
   — are compiled by `build.rs` into `target/.../build/.../out/` and located via
