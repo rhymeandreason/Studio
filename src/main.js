@@ -1670,20 +1670,29 @@ function buildTextNote(note) {
   const textarea = el("textarea", "notecard__textarea", { value: note.body || "" });
   textarea.hidden = true;
 
+  const resizeTextarea = () => {
+    textarea.style.height = "auto";
+    textarea.style.height = textarea.scrollHeight + "px";
+  };
+
   const renderView = () => {
-    view.innerHTML = note.body
-      ? marked.parse(note.body)
-      : '<span class="notecard__empty">Empty — click to edit</span>';
+    if (note.body) {
+      view.textContent = note.body;
+    } else {
+      view.innerHTML = '<span class="notecard__empty">Empty — click to edit</span>';
+    }
   };
   renderView();
 
   view.addEventListener("click", () => {
     view.hidden = true;
     textarea.hidden = false;
+    requestAnimationFrame(resizeTextarea);
     textarea.focus();
   });
   textarea.addEventListener("input", () => {
     note.body = textarea.value;
+    resizeTextarea();
     scheduleNotesSave();
   });
   textarea.addEventListener("blur", () => {
