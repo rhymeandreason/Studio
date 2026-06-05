@@ -185,7 +185,7 @@ function addRow(list, value = "") {
 
   const remove = document.createElement("button");
   remove.type = "button";
-  remove.className = "btn-remove ws-item__remove";
+  remove.className = "btn-remove";
   remove.innerHTML = mi("close");
   remove.addEventListener("click", () => {
     card.remove();
@@ -255,6 +255,7 @@ function setList(list, values) {
   listContainer()
     .querySelectorAll(`.ws-item[data-list="${list}"]`)
     .forEach((c) => c.remove());
+  if (LIST_META[list]?.singleton) setSingletonBtn(list, false);
   (values || []).forEach((v) => addRow(list, v));
 }
 

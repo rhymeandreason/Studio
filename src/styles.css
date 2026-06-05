@@ -492,13 +492,13 @@ select.field__input {
     flex: 1 1 auto;
 }
 
-.ws-item__remove {
+.ws-item .btn-remove {
     opacity: 0;
     transition: opacity 0.15s;
 }
 
-.ws-item:hover .ws-item__remove,
-.ws-item:focus-within .ws-item__remove {
+.ws-item:hover .btn-remove,
+.ws-item:focus-within .btn-remove {
     opacity: 1;
 }
 
@@ -554,27 +554,24 @@ select.field__input {
     color: var(--text);
 }
 
-/* Item remove button (used in ws-item and list rows) */
 .btn-remove {
-    flex: 0 0 auto;
-    background: transparent;
-    border: 1px solid var(--hairline-strong);
-    border-radius: var(--radius-sm);
+    // flex: 0 0 auto;
+    background: var(--surface);
+    border: none;
+    border-radius: 50%;
     color: var(--text-muted);
     cursor: pointer;
-    width: 32px;
-    height: 32px;
-    font-size: 12px;
+    width: 26px;
+    height: 26px;
+    padding:5px;
     transition:
         color 0.15s,
-        border-color 0.15s,
         background 0.15s;
 }
 
 .btn-remove:hover {
     color: var(--rose);
-    border-color: var(--rose);
-    background: rgba(168, 90, 74, 0.08);
+    background: rgba(168, 90, 74, 0.1);
 }
 
 .btn-add {
@@ -755,20 +752,6 @@ select.field__input {
     color: var(--text-muted);
 }
 
-/* Round, borderless delete on note cards */
-.notecard__head .btn-remove {
-    width: 26px;
-    height: 26px;
-    border: none;
-    border-radius: 50%;
-    background: var(--surface);
-}
-
-.notecard__head .btn-remove:hover {
-    color: var(--rose);
-    background: rgba(168, 90, 74, 0.1);
-    border: none;
-}
 
 .checklist {
     display: flex;
