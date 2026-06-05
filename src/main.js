@@ -589,7 +589,10 @@ async function loadMedia(path) {
       reuse.classList.toggle("is-selected", mediaSelection.has(item.path));
       desired.push(reuse);
     } else {
-      if (reuse) existing.delete(item.path);
+      if (reuse) {
+        existing.delete(item.path);
+        reuse.remove(); // signature changed — drop the stale tile (don't leave a duplicate)
+      }
       desired.push(buildMediaTile(item, edited));
     }
   }
