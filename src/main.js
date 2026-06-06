@@ -488,16 +488,10 @@ function loadImage(src) {
   });
 }
 
-// Render an edited image's thumbnail (geometry + crop + tonal baked) as a data URL.
-async function renderThumb(item) {
-  const [dataUrl, saved] = await Promise.all([
-    invoke("read_image_data", { path: item.path }),
-    invoke("read_edits", { path: item.path }),
-  ]);
-  const img = await loadImage(dataUrl);
-  const edits = { ...defaultEdits(), ...saved };
-
-  const oriented = renderOriented(img, edits);
+// Bake a thumbnail (geometry + crop + tonal) from an in-memory source image or
+// canvas → data URL. Source must be clean (data-URL/canvas) so toDataURL works.
+function bakeThumbDataURL(src, edits) {
+  const oriented = renderOriented(src, edits);
   let base = oriented;
   const c = edits.crop;
   if (c && (c.x > 0 || c.y > 0 || c.w < 1 || c.h < 1)) {
@@ -518,6 +512,16 @@ async function renderThumb(item) {
   thumbGLCanvas.height = Math.max(1, Math.round(base.height * scale));
   glAdjust(thumbGLCanvas, base, edits);
   return thumbGLCanvas.toDataURL("image/png");
+}
+
+// Render an edited image's thumbnail (geometry + crop + tonal baked) as a data URL.
+async function renderThumb(item) {
+  const [dataUrl, saved] = await Promise.all([
+    invoke("read_image_data", { path: item.path }),
+    invoke("read_edits", { path: item.path }),
+  ]);
+  const img = await loadImage(dataUrl);
+  return bakeThumbDataURL(img, { ...defaultEdits(), ...saved });
 }
 
 // QuickLook thumbnail (any file type) → asset URL, via the OS thumbnail service.
@@ -681,6 +685,27 @@ async function loadMedia(path) {
         "is-active",
         !!activeItem && activeItem.path === item.path,
       );
+      desired.push(reuse);
+    } else if (reuse && item.kind === "image") {
+      // Same image, edits changed — refresh its thumbnail in place. The old (or
+      // optimistic-preview) image stays visible until the new bake is ready, so
+      // the tile never blanks.
+      existing.delete(item.path);
+      reuse.dataset.sig = sig;
+      reuse.classList.toggle("is-selected", mediaSelection.has(item.path));
+      reuse.classList.toggle(
+        "is-active",
+        !!activeItem && activeItem.path === item.path,
+      );
+      const img = reuse.querySelector(".mediatile__img");
+      if (item.has_edits) {
+        if (thumbCache.has(item.path)) img.src = thumbCache.get(item.path);
+        else edited.push({ item, img }); // keeps current src until baked
+      } else {
+        qlSrc(item).then((src) => {
+          if (src) img.src = src;
+        });
+      }
       desired.push(reuse);
     } else {
       if (reuse) {
@@ -1354,7 +1379,7 @@ function copyAdjustments() {
   setEditStatus("Copied ✓");
 }
 
-function pasteAdjustments() {
+async function pasteAdjustments() {
   if (!copiedEdits || !editState) return;
   for (const f of ADJ_FIELDS) {
     if (f in copiedEdits) editState[f] = copiedEdits[f];
@@ -1363,7 +1388,23 @@ function pasteAdjustments() {
   orientedSig = "";
   syncEditorControls();
   renderEditorPreview();
-  scheduleEditsSave();
+
+  // Optimistic: bake a thumbnail from the already-loaded preview source and show
+  // it on the tile right away, so the grid reflects the paste with no blank gap.
+  const src = previewSrc();
+  const tile = document.querySelector(
+    `.mediatile[data-path="${CSS.escape(editItem.path)}"]`,
+  );
+  if (src && tile) {
+    const url = bakeThumbDataURL(src, editState);
+    thumbCache.set(editItem.path, url);
+    tile.querySelector(".mediatile__img").src = url;
+  }
+
+  // Persist; the background re-bake (full-res) swaps in seamlessly via loadMedia.
+  editDirty = true;
+  await flushEditSave();
+  if (mediaProjectPath) loadMedia(mediaProjectPath);
   setEditStatus("Pasted ✓");
 }
 
