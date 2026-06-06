@@ -656,6 +656,22 @@ fn read_edits(path: String) -> Result<serde_json::Value, String> {
     }
 }
 
+/// Move media files (and their edit sidecars) to the system Trash.
+#[tauri::command]
+fn trash_media(paths: Vec<String>) -> Result<(), String> {
+    for path in &paths {
+        if std::path::Path::new(path).exists() {
+            trash::delete(path).map_err(|e| e.to_string())?;
+        }
+        // The hidden edit sidecar goes with it, if present.
+        let sidecar = sidecar_path(path);
+        if std::path::Path::new(&sidecar).exists() {
+            let _ = trash::delete(&sidecar);
+        }
+    }
+    Ok(())
+}
+
 /// Write an image's edit sidecar.
 #[tauri::command]
 fn save_edits(path: String, edits: serde_json::Value) -> Result<(), String> {
@@ -900,6 +916,7 @@ pub fn run() {
             read_image_data,
             read_edits,
             save_edits,
+            trash_media,
             write_image
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.

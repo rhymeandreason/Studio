@@ -415,6 +415,34 @@ function clearSelection() {
   updateSelbar();
 }
 
+// Move the given media (and their edit sidecars) to the Trash, then refresh.
+async function trashMedia(paths) {
+  if (!paths.length) return;
+
+  // Detach the editor from anything we're deleting so we don't re-save a
+  // sidecar that trash_media is about to remove.
+  if (editItem && paths.includes(editItem.path)) {
+    editDirty = false;
+    activeItem = null;
+    editItem = null;
+    editThumb = editImg = editPreview = editState = null;
+    document.getElementById("lightbox").hidden = true;
+    moveEditor(document.getElementById("media-side-editor"));
+    document.getElementById("media-side").hidden = true;
+  }
+
+  try {
+    await invoke("trash_media", { paths });
+  } catch (err) {
+    console.error("Trash failed:", err);
+    return;
+  }
+
+  for (const p of paths) mediaSelection.delete(p);
+  updateSelbar();
+  if (mediaProjectPath) loadMedia(mediaProjectPath);
+}
+
 // Write the copied adjustments onto every selected image's sidecar.
 async function batchPaste() {
   if (!copiedEdits || !mediaSelection.size) return;
@@ -1912,26 +1940,39 @@ function initMedia() {
       } else if (mod && (e.key === "v" || e.key === "V")) {
         e.preventDefault();
         pasteAdjustments();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        // Delete the focused image (or the checkbox selection, if any).
+        e.preventDefault();
+        trashMedia(mediaSelection.size ? [...mediaSelection] : [editItem.path]);
       }
       return;
     }
-    // Grid context: Cmd+V pastes onto selected tiles, or a clipboard image
-    // into the project. Leave text fields and the notes panel alone so their
-    // own paste handlers can fire.
+    // Grid context: leave text fields and other panels' handlers alone.
+    const ae = document.activeElement;
+    const inField =
+      ae &&
+      (ae.tagName === "INPUT" ||
+        ae.tagName === "TEXTAREA" ||
+        ae.tagName === "SELECT" ||
+        ae.isContentEditable);
+    const onMedia = !document.querySelector('[data-panel="media"]').hidden;
+
+    // Cmd+V pastes onto selected tiles, or a clipboard image into the project.
     if (mod && (e.key === "v" || e.key === "V")) {
-      const ae = document.activeElement;
-      if (
-        ae &&
-        (ae.tagName === "INPUT" ||
-          ae.tagName === "TEXTAREA" ||
-          ae.tagName === "SELECT" ||
-          ae.isContentEditable)
-      ) {
-        return;
-      }
+      if (inField) return;
       e.preventDefault();
       if (mediaSelection.size) batchPaste();
       else pasteFromClipboard();
+    }
+    // Delete/Backspace trashes the checkbox-selected media.
+    else if (
+      onMedia &&
+      !inField &&
+      mediaSelection.size &&
+      (e.key === "Delete" || e.key === "Backspace")
+    ) {
+      e.preventDefault();
+      trashMedia([...mediaSelection]);
     }
   });
   document.getElementById("lb-close").addEventListener("click", closeLightbox);
