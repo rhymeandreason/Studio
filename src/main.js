@@ -731,8 +731,9 @@ function setActiveTile(tile) {
 }
 
 // Flush any pending edit save so the grid thumbnail reflects the latest edits.
+// No-op when nothing changed, so the thumbnail isn't needlessly re-baked.
 async function flushEditSave() {
-  if (!editItem || !editState) return;
+  if (!editItem || !editState || !editDirty) return;
   clearTimeout(editSaveTimer);
   try {
     await invoke("save_edits", { path: editItem.path, edits: editState });
@@ -740,6 +741,7 @@ async function flushEditSave() {
     console.error("Edit save failed:", err);
   }
   invalidateThumb(editItem.path);
+  editDirty = false;
 }
 
 // The best loaded edit source for the current context: full preview in the
@@ -787,6 +789,7 @@ async function loadEditor(item) {
   const saved = await invoke("read_edits", { path: item.path });
   if (editItem !== item) return; // superseded by a newer selection
   editState = { ...defaultEdits(), ...saved };
+  editDirty = false;
   syncEditorControls();
 
   setEditStatus("Loading…");
@@ -910,6 +913,7 @@ let editPreview = null;
 let editImg = null;
 let editState = null; // current adjustments
 let editSaveTimer = null;
+let editDirty = false; // true once an edit control has changed editState
 
 // Longest side (px) for the inline thumbnail and the lightbox preview.
 const THUMB_MAX = 768;
@@ -1369,6 +1373,7 @@ function setEditStatus(text) {
 
 function scheduleEditsSave() {
   if (!editItem) return;
+  editDirty = true;
   setEditStatus("Saving…");
   clearTimeout(editSaveTimer);
   editSaveTimer = setTimeout(async () => {
@@ -1472,6 +1477,7 @@ async function exportEdited(replace) {
       // Edits are now baked into the file — reset the sidecar so they aren't
       // re-applied on top of the baked pixels, and reload from the new file.
       editState = defaultEdits();
+      editDirty = false;
       orientedCache = null;
       orientedSig = "";
       await invoke("save_edits", { path: editItem.path, edits: editState });
