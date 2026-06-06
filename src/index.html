@@ -60,27 +60,42 @@
 
             <!-- Project content -->
             <div class="content" id="project-content" hidden>
-                <section class="panel" data-panel="media" hidden>
-                    <div class="selbar" id="selbar" hidden>
-                        <span class="selbar__count" id="sel-count"
-                            >0 selected</span
-                        >
-                        <div class="selbar__actions">
-                            <button class="btn-ghost" id="sel-paste">
-                                <span class="mi mi-sm">content_paste</span>Paste
-                                adjustments
-                            </button>
-                            <button class="btn-ghost" id="sel-webexport">
-                                <span class="mi mi-sm"
-                                    >photo_size_select_large</span
-                                >Export
-                            </button>
-                            <button class="btn-ghost" id="sel-clear">
-                                Clear
+                <section class="panel panel--media" data-panel="media" hidden>
+                    <div class="media-main" id="media-main">
+                        <div class="selbar" id="selbar" hidden>
+                            <span class="selbar__count" id="sel-count"
+                                >0 selected</span
+                            >
+                            <div class="selbar__actions">
+                                <button class="btn-ghost" id="sel-paste">
+                                    <span class="mi mi-sm">content_paste</span
+                                    >Paste adjustments
+                                </button>
+                                <button class="btn-ghost" id="sel-webexport">
+                                    <span class="mi mi-sm"
+                                        >photo_size_select_large</span
+                                    >Export
+                                </button>
+                                <button class="btn-ghost" id="sel-clear">
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                        <div class="media-grid" id="media-grid"></div>
+                    </div>
+                    <aside class="media-side" id="media-side" hidden>
+                        <div class="media-side__head">
+                            <span class="media-side__name" id="side-name"></span>
+                            <button class="btn-ghost" id="side-lightbox">
+                                <span class="mi mi-sm">open_in_full</span
+                                >Lightbox
                             </button>
                         </div>
-                    </div>
-                    <div class="media-grid" id="media-grid"></div>
+                        <div
+                            class="media-side__editor"
+                            id="media-side-editor"
+                        ></div>
+                    </aside>
                 </section>
 
                 <section class="panel" data-panel="notes" hidden>

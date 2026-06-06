@@ -581,11 +581,15 @@ function buildMediaTile(item, edited) {
     tile.append(check);
   }
   if (mediaSelection.has(item.path)) tile.classList.add("is-selected");
+  if (activeItem && activeItem.path === item.path)
+    tile.classList.add("is-active");
 
-  tile.addEventListener("click", () => {
-    if (isImage) openLightbox(item);
-    else invoke("open_path", { path: item.path });
-  });
+  if (isImage) {
+    tile.addEventListener("click", () => selectForEdit(item, tile));
+    tile.addEventListener("dblclick", () => openLightbox(item));
+  } else {
+    tile.addEventListener("click", () => invoke("open_path", { path: item.path }));
+  }
 
   if (isImage && item.has_edits) {
     if (thumbCache.has(item.path)) img.src = thumbCache.get(item.path);
@@ -649,6 +653,12 @@ async function loadMedia(path) {
     if (!present.has(p)) mediaSelection.delete(p);
   updateSelbar();
 
+  // Drop the inline edit focus if its file is gone.
+  if (activeItem && !present.has(activeItem.path)) {
+    activeItem = null;
+    document.getElementById("media-side").hidden = true;
+  }
+
   if (!items.length) {
     grid.innerHTML = `<p class="placeholder">No media in this project yet.</p>`;
     return;
@@ -667,6 +677,10 @@ async function loadMedia(path) {
     if (reuse && reuse.dataset.sig === sig) {
       existing.delete(item.path);
       reuse.classList.toggle("is-selected", mediaSelection.has(item.path));
+      reuse.classList.toggle(
+        "is-active",
+        !!activeItem && activeItem.path === item.path,
+      );
       desired.push(reuse);
     } else {
       if (reuse) {
@@ -697,10 +711,70 @@ async function loadMedia(path) {
   }
 }
 
-// Opening a media item drops straight into the editor (canvas + controls).
-async function openLightbox(item) {
+// The inline-selected image (its edit controls live in the right side column).
+// The editor DOM is a single shared node that we reparent between the side
+// column and the lightbox overlay, so there's only ever one editor instance.
+let activeItem = null;
+
+// Move the (single) editor node into a host container if it isn't there already.
+function moveEditor(host) {
+  const editor = document.getElementById("editor");
+  if (editor.parentElement !== host) host.append(editor);
+}
+
+// Highlight one tile as the edit focus (distinct from checkbox multi-select).
+function setActiveTile(tile) {
+  document
+    .querySelectorAll(".mediatile.is-active")
+    .forEach((t) => t.classList.remove("is-active"));
+  if (tile) tile.classList.add("is-active");
+}
+
+// Flush any pending edit save so the grid thumbnail reflects the latest edits.
+async function flushEditSave() {
+  if (!editItem || !editState) return;
+  clearTimeout(editSaveTimer);
+  try {
+    await invoke("save_edits", { path: editItem.path, edits: editState });
+  } catch (err) {
+    console.error("Edit save failed:", err);
+  }
+  invalidateThumb(editItem.path);
+}
+
+// The best loaded edit source for the current context: full preview in the
+// lightbox, thumbnail inline — falling back to whatever is loaded so far.
+function previewSrc() {
+  if (!document.getElementById("lightbox").hidden) return editPreview || editThumb;
+  return editThumb || editPreview || editImg;
+}
+function previewTag() {
+  const src = previewSrc();
+  return src === editImg ? "full" : src === editPreview ? "large" : "thumb";
+}
+
+// Lazily load the ~2048px lightbox preview (and the full-res image it's derived
+// from). The full-res image doubles as the export / remove-bg source.
+async function ensureFullRes() {
+  if (editImg) return;
+  const item = editItem;
+  const dataUrl = await invoke("read_image_data", { path: item.path });
+  const img = await loadImage(dataUrl);
+  if (editItem !== item) return; // selection changed while loading
+  editImg = img;
+  editPreview = makePreview(editImg); // ~2048px copy for the lightbox
+}
+
+// Load an image's edit controls + a fast thumbnail-resolution preview. Full
+// resolution is deferred (see ensureFullRes) so selecting feels instant.
+async function loadEditor(item) {
   currentMedia = item;
   editItem = item;
+  editThumb = null;
+  editPreview = null;
+  editImg = null;
+  orientedCache = null; // new image — invalidate geometry cache
+  orientedSig = "";
   document.getElementById("lightbox-name").textContent = item.name;
 
   const ext = (item.ext || "").toLowerCase();
@@ -710,42 +784,85 @@ async function openLightbox(item) {
     "jpeg",
   ].includes(ext);
 
-  document.getElementById("lightbox").hidden = false;
-  setEditStatus("Loading…");
-
-  const dataUrl = await invoke("read_image_data", { path: item.path });
-  editImg = new Image();
-  await new Promise((resolve, reject) => {
-    editImg.onload = resolve;
-    editImg.onerror = reject;
-    editImg.src = dataUrl;
-  });
-
   const saved = await invoke("read_edits", { path: item.path });
+  if (editItem !== item) return; // superseded by a newer selection
   editState = { ...defaultEdits(), ...saved };
-  orientedCache = null; // new image — invalidate geometry cache
-  orientedSig = "";
-  setEditStatus("");
   syncEditorControls();
+
+  setEditStatus("Loading…");
+  // QuickLook thumbnail of the original pixels — clean PNG, fast, OS-cached.
+  const thumbPath = await invoke("quicklook_thumb", {
+    path: item.path,
+    size: THUMB_MAX,
+  });
+  const thumb = await loadImage(await invoke("read_image_data", { path: thumbPath }));
+  if (editItem !== item) return;
+  editThumb = thumb;
+  setEditStatus("");
   renderEditorPreview();
 }
 
-async function closeLightbox() {
-  // Flush any pending edit save so the grid thumbnail reflects it.
-  if (editItem && editState) {
-    clearTimeout(editSaveTimer);
-    try {
-      await invoke("save_edits", { path: editItem.path, edits: editState });
-    } catch (err) {
-      console.error("Edit save on close failed:", err);
-    }
-    invalidateThumb(editItem.path); // this image's thumbnail may have changed
-  }
-  document.getElementById("lightbox").hidden = true;
-  currentMedia = null;
+// Single-click an image: select it and show its edit controls in the side column.
+async function selectForEdit(item, tile) {
+  if (activeItem && activeItem.path === item.path) return; // already selected
+  if (activeItem) await flushEditSave();
+  setActiveTile(tile);
+  activeItem = item;
+  document.getElementById("side-name").textContent = item.name;
+  document.getElementById("media-side").hidden = false;
+  moveEditor(document.getElementById("media-side-editor"));
+  await loadEditor(item);
+}
+
+// Click off any thumbnail (or Escape): drop the edit focus, hide the side column.
+async function deselectActive() {
+  if (!activeItem) return;
+  await flushEditSave();
+  setActiveTile(null);
+  activeItem = null;
+  document.getElementById("media-side").hidden = true;
   editItem = null;
+  editThumb = null;
   editImg = null;
+  editPreview = null;
   editState = null;
+  if (mediaProjectPath) loadMedia(mediaProjectPath);
+}
+
+// Double-click (or the side "Lightbox" button): open the full-screen editor.
+async function openLightbox(item) {
+  if (!activeItem || activeItem.path !== item.path) {
+    const tile = document.querySelector(
+      `.mediatile[data-path="${CSS.escape(item.path)}"]`,
+    );
+    await selectForEdit(item, tile);
+  }
+  moveEditor(document.getElementById("lb-stage"));
+  document.getElementById("lightbox").hidden = false;
+  renderEditorPreview(); // show the thumbnail immediately…
+  const current = editItem;
+  setEditStatus("Loading…");
+  await ensureFullRes(); // …then upgrade to the ~2048px preview
+  if (editItem === current) {
+    setEditStatus("");
+    renderEditorPreview();
+  }
+}
+
+async function closeLightbox() {
+  await flushEditSave();
+  document.getElementById("lightbox").hidden = true;
+  // Return the editor to the side column; keep editing inline if still selected.
+  moveEditor(document.getElementById("media-side-editor"));
+  if (activeItem) {
+    renderEditorPreview();
+  } else {
+    editItem = null;
+    editThumb = null;
+    editImg = null;
+    editPreview = null;
+    editState = null;
+  }
   if (mediaProjectPath) loadMedia(mediaProjectPath);
 }
 
@@ -782,9 +899,44 @@ async function initDragDrop() {
 // --- Image editor (non-destructive, sidecar-backed) ------------------------
 
 let editItem = null; // the MediaItem being edited
-let editImg = null; // full-res HTMLImageElement
+// Three tiers of the edit source, all of the *original* pixels (edits are
+// applied on top via the shader). The editor renders from the smallest one
+// that's loaded, upgrading as larger tiers arrive:
+//   editThumb   — QuickLook thumbnail; loaded instantly on select (inline editor)
+//   editPreview — ~2048px; loaded when the lightbox opens
+//   editImg     — full resolution; loaded only for export / remove-background
+let editThumb = null;
+let editPreview = null;
+let editImg = null;
 let editState = null; // current adjustments
 let editSaveTimer = null;
+
+// Longest side (px) for the inline thumbnail and the lightbox preview.
+const THUMB_MAX = 768;
+const PREVIEW_MAX = 2048;
+
+// Width/height of an image source (HTMLImageElement or canvas).
+function srcW(s) {
+  return s.naturalWidth || s.width;
+}
+function srcH(s) {
+  return s.naturalHeight || s.height;
+}
+
+// A downscaled copy of `img` (longest side ≤ max) for fast preview rendering.
+// Returns the image itself when it's already small enough. Derived from the
+// clean data-URL image, so it stays WebGL/export-safe.
+function makePreview(img, max = PREVIEW_MAX) {
+  const w = srcW(img);
+  const h = srcH(img);
+  const scale = Math.min(1, max / Math.max(w, h));
+  if (scale === 1) return img;
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w * scale));
+  c.height = Math.max(1, Math.round(h * scale));
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
 
 function defaultEdits() {
   return {
@@ -830,12 +982,15 @@ function coverScale(w, h, deg) {
   return Math.max((w * cos + h * sin) / w, (w * sin + h * cos) / h);
 }
 
-// Render the oriented (rotate + flip + straighten) image to a full-res canvas.
+// Render the oriented (rotate + flip + straighten) image (HTMLImageElement or
+// canvas) at its source resolution.
 function renderOriented(img, edits) {
+  const iw = srcW(img);
+  const ih = srcH(img);
   const rot = (((edits.rotate || 0) % 360) + 360) % 360;
   const swap = rot === 90 || rot === 270;
-  const ow = swap ? img.naturalHeight : img.naturalWidth;
-  const oh = swap ? img.naturalWidth : img.naturalHeight;
+  const ow = swap ? ih : iw;
+  const oh = swap ? iw : ih;
 
   const canvas = document.createElement("canvas");
   canvas.width = ow;
@@ -855,7 +1010,7 @@ function renderOriented(img, edits) {
   ctx.translate(ow / 2, oh / 2);
   ctx.rotate((rot * Math.PI) / 180);
   ctx.scale(edits.flipH ? -1 : 1, edits.flipV ? -1 : 1);
-  ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+  ctx.drawImage(img, -iw / 2, -ih / 2);
 
   return canvas;
 }
@@ -866,15 +1021,19 @@ let orientedSig = "";
 // Reused offscreen canvas for full-res export (avoids leaking WebGL contexts).
 const exportGLCanvas = document.createElement("canvas");
 
-function getOriented() {
+// Oriented (geometry-only) canvas for `src`. The preview uses the downscaled
+// copy; export passes the full-res image. Cache keyed by source + geometry, so
+// a preview render is never reused for a full-res export (or vice versa).
+function getOriented(src = editPreview, tag = "preview") {
   const sig = [
+    tag,
     editState.rotate,
     editState.flipH,
     editState.flipV,
     editState.straighten,
   ].join("|");
   if (!orientedCache || sig !== orientedSig) {
-    orientedCache = renderOriented(editImg, editState);
+    orientedCache = renderOriented(src, editState);
     orientedSig = sig;
   }
   return orientedCache;
@@ -992,8 +1151,9 @@ function glAdjust(canvas, source, ed) {
 }
 
 function renderEditorPreview() {
-  if (!editImg) return;
-  const oriented = getOriented();
+  const src = previewSrc();
+  if (!src) return;
+  const oriented = getOriented(src, previewTag());
   const canvas = document.getElementById("editor-canvas");
   const wrap = document.getElementById("editor-canvas-wrap");
   const scale = Math.min(
@@ -1270,8 +1430,9 @@ function blobToBase64(blob) {
 }
 
 async function exportEdited(replace) {
-  if (!editImg) return;
-  const oriented = getOriented(); // geometry, full resolution
+  if (!editItem) return;
+  await ensureFullRes();
+  const oriented = getOriented(editImg, "full"); // geometry, full resolution
   const ext = (editItem.ext || "png").toLowerCase();
   const jpeg = ext === "jpg" || ext === "jpeg";
   const mime = jpeg ? "image/jpeg" : "image/png";
@@ -1315,10 +1476,14 @@ async function exportEdited(replace) {
       orientedSig = "";
       await invoke("save_edits", { path: editItem.path, edits: editState });
       syncEditorControls();
+      editThumb = null;
+      editImg = null;
+      editPreview = null;
       try {
         editImg = await loadImage(
           await invoke("read_image_data", { path: editItem.path }),
         );
+        editPreview = makePreview(editImg);
       } catch (err) {
         console.error("Reload after replace failed:", err);
       }
@@ -1491,8 +1656,9 @@ async function runWebExport(ctx, settings) {
 }
 
 function initWebExport() {
-  document.getElementById("lb-webexport").addEventListener("click", () => {
+  document.getElementById("lb-webexport").addEventListener("click", async () => {
     if (!editItem) return;
+    await ensureFullRes(); // single-mode export bakes from the full-res image
     openWebExport({
       mode: "single",
       items: [
@@ -1540,7 +1706,8 @@ let cutoutB64 = null;
 let cutoutSourcePath = null;
 
 async function removeBg() {
-  if (!editImg) return;
+  if (!editItem) return;
+  await ensureFullRes();
   const btn = document.getElementById("ed-removebg");
   btn.disabled = true;
   setEditStatus("Removing background…");
@@ -1652,7 +1819,7 @@ function initEditor() {
     .getElementById("ed-paste")
     .addEventListener("click", pasteAdjustments);
   window.addEventListener("resize", () => {
-    if (editImg) renderEditorPreview();
+    if (previewSrc()) renderEditorPreview();
   });
 }
 
@@ -1665,12 +1832,30 @@ function initMedia() {
     .getElementById("sel-clear")
     .addEventListener("click", clearSelection);
 
+  // Side column: open the full lightbox for the selected image.
+  document.getElementById("side-lightbox").addEventListener("click", () => {
+    if (activeItem) openLightbox(activeItem);
+  });
+
+  // Click off any thumbnail (empty grid space) to deselect.
+  document.getElementById("media-main").addEventListener("click", (e) => {
+    if (e.target.closest(".mediatile") || e.target.closest(".selbar")) return;
+    deselectActive();
+  });
+
   document.addEventListener("keydown", (e) => {
     const mod = e.metaKey || e.ctrlKey;
-    if (!document.getElementById("lightbox").hidden) {
-      // Editor is open.
+    const lightboxOpen = !document.getElementById("lightbox").hidden;
+    const inlineActive =
+      activeItem &&
+      !document.querySelector('[data-panel="media"]').hidden &&
+      document.activeElement?.tagName !== "INPUT" &&
+      document.activeElement?.tagName !== "TEXTAREA";
+    if (lightboxOpen || inlineActive) {
+      // The editor is active (full lightbox or inline side column).
       if (e.key === "Escape") {
-        closeLightbox();
+        if (lightboxOpen) closeLightbox();
+        else deselectActive();
       } else if (mod && (e.key === "c" || e.key === "C")) {
         e.preventDefault();
         copyAdjustments();
