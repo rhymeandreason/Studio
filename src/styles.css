@@ -57,6 +57,15 @@
     box-sizing: border-box;
 }
 
+/* Hide scrollbars everywhere (scrolling still works). */
+* {
+    scrollbar-width: none; /* Firefox */
+}
+
+*::-webkit-scrollbar {
+    display: none; /* WebKit */
+}
+
 /* The `hidden` attribute must win over component display rules. */
 [hidden] {
     display: none !important;
@@ -966,7 +975,9 @@ td.ntable__total-cell {
 .media-side__editor {
     flex: 1 1 auto;
     min-height: 0;
-    overflow: hidden;
+    overflow-y: auto; /* scroll the editor column when it's taller than the window */
+    overscroll-behavior: contain; /* don't chain scroll to the grid behind it */
+    padding-bottom: 40px;
 }
 
 /* Inline editor: stack the preview above the controls (the lightbox keeps the
@@ -1119,11 +1130,12 @@ td.ntable__total-cell {
     box-shadow: 0 0 0 2px var(--accent);
 }
 
-/* Edit focus (single-click) — same selected treatment as a Notes card. */
+/* Edit focus (single-click) — just a tad thicker border than a Notes card. */
 .mediatile.is-active .mediatile__thumb {
     border-color: var(--accent);
+    border-width: 1.5px;
     box-shadow:
-        0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent),
+        0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent),
         var(--shadow-sm);
 }
 
