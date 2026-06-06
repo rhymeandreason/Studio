@@ -1728,9 +1728,52 @@ let selectedRow = null; // { note, ri, trEl }
 let selectedNoteId = null;
 
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "Delete" && e.key !== "Backspace") return;
-  if (document.activeElement && document.activeElement.tagName === "INPUT")
+  const tag = document.activeElement?.tagName;
+  const isEditable = tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable;
+
+  // Arrow keys move a selected note within the grid
+  if (selectedNoteId && !isEditable && (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown")) {
+    e.preventDefault();
+    const idx = notesData.notes.findIndex((n) => n.id === selectedNoteId);
+    if (idx === -1) return;
+    let delta;
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      delta = e.key === "ArrowLeft" ? -1 : 1;
+    } else {
+      // Simulate grid auto-placement to find each note's row, respecting spans.
+      const listEl = document.getElementById("notes-list");
+      const colCount = getComputedStyle(listEl).gridTemplateColumns.split(" ").length;
+      const noteRows = [];
+      let col = 0, row = 0;
+      for (const n of notesData.notes) {
+        const span = Math.min(n.span || 1, colCount);
+        if (col + span > colCount) { row++; col = 0; }
+        noteRows.push(row);
+        col += span;
+      }
+      const myRow = noteRows[idx];
+      if (e.key === "ArrowUp") {
+        if (myRow === 0) return;
+        const prevRowCount = noteRows.filter((r) => r === myRow - 1).length;
+        delta = -prevRowCount;
+      } else {
+        const maxRow = noteRows[noteRows.length - 1];
+        if (myRow === maxRow) return;
+        const nextRowCount = noteRows.filter((r) => r === myRow + 1).length;
+        delta = nextRowCount;
+      }
+    }
+    const newIdx = idx + delta;
+    if (newIdx < 0 || newIdx >= notesData.notes.length) return;
+    const [note] = notesData.notes.splice(idx, 1);
+    notesData.notes.splice(newIdx, 0, note);
+    renderNotes();
+    scheduleNotesSave();
     return;
+  }
+
+  if (e.key !== "Delete" && e.key !== "Backspace") return;
+  if (isEditable) return;
   if (selectedCol) {
     const { note, ci } = selectedCol;
     note.columns.splice(ci, 1);
@@ -2215,6 +2258,13 @@ function renderNotes() {
 function initNotes() {
   document.querySelectorAll("[data-new-note]").forEach((btn) => {
     btn.addEventListener("click", () => newNote(btn.dataset.newNote));
+  });
+
+  document.addEventListener("click", (e) => {
+    if (selectedNoteId && !e.target.closest(".notecard")) {
+      selectedNoteId = null;
+      document.querySelectorAll(".notecard.is-selected").forEach((c) => c.classList.remove("is-selected"));
+    }
   });
 
   // Paste on the notes panel is handled via the keydown Cmd+V path calling pasteIntoNotes()
