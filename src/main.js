@@ -584,6 +584,7 @@ function buildMediaTile(item, edited) {
     });
     tile.append(check);
   }
+  tile.append(el("span", "mediatile__name", { textContent: item.name }));
   if (mediaSelection.has(item.path)) tile.classList.add("is-selected");
   if (activeItem && activeItem.path === item.path)
     tile.classList.add("is-active");
