@@ -997,13 +997,22 @@ td.ntable__total-cell {
 }
 
 .mediatile {
-    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
     padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+/* The thumbnail itself is the card (border, shadow, selection ring). */
+.mediatile__thumb {
+    position: relative;
     border: 1px solid var(--hairline);
     border-radius: var(--radius);
     overflow: hidden;
     background: var(--surface);
-    cursor: pointer;
     box-shadow: var(--shadow-sm);
     transition:
         transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1),
@@ -1011,7 +1020,7 @@ td.ntable__total-cell {
         border-color 0.2s;
 }
 
-.mediatile:hover {
+.mediatile:hover .mediatile__thumb {
     transform: translateY(-1px);
     box-shadow: var(--shadow-md);
     border-color: var(--hairline-strong);
@@ -1025,14 +1034,12 @@ td.ntable__total-cell {
 
 .mediatile__name {
     display: block;
-    padding: 7px 9px;
     font-size: 11.5px;
     color: var(--text-muted);
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    border-top: 1px solid var(--hairline);
 }
 
 .mediatile__badge {
@@ -1107,17 +1114,21 @@ td.ntable__total-cell {
     transform: rotate(45deg);
 }
 
-.mediatile.is-selected {
+.mediatile.is-selected .mediatile__thumb {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px var(--accent);
 }
 
 /* Edit focus (single-click) — same selected treatment as a Notes card. */
-.mediatile.is-active {
+.mediatile.is-active .mediatile__thumb {
     border-color: var(--accent);
     box-shadow:
         0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent),
         var(--shadow-sm);
+}
+
+.mediatile.is-active .mediatile__name {
+    color: var(--text);
 }
 
 /* Selection bar */

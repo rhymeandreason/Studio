@@ -558,23 +558,24 @@ function buildMediaTile(item, edited) {
   const tile = el("button", "mediatile", { type: "button", title: item.name });
   tile.dataset.path = item.path;
   tile.dataset.sig = `${item.modified}|${item.edits_mtime}`;
+  const thumb = el("div", "mediatile__thumb"); // the card visual + selection ring
   const img = el("img", "mediatile__img", { loading: "lazy", alt: item.name });
   if (item.is_heic) {
-    tile.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
+    thumb.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
   } else if (isImage && isWebExport(item.name)) {
-    tile.append(
+    thumb.append(
       el("span", "mediatile__badge mediatile__badge--web", {
         textContent: "WEB",
       }),
     );
   }
   if (!isImage)
-    tile.append(
+    thumb.append(
       el("span", "mediatile__kind", {
         innerHTML: mi(KIND_ICONS[item.kind] || "insert_drive_file"),
       }),
     );
-  tile.append(img);
+  thumb.append(img);
 
   if (isImage) {
     const check = el("span", "mediatile__check", { title: "Select" });
@@ -582,8 +583,9 @@ function buildMediaTile(item, edited) {
       e.stopPropagation();
       toggleSelect(item.path, tile);
     });
-    tile.append(check);
+    thumb.append(check);
   }
+  tile.append(thumb);
   tile.append(el("span", "mediatile__name", { textContent: item.name }));
   if (mediaSelection.has(item.path)) tile.classList.add("is-selected");
   if (activeItem && activeItem.path === item.path)
