@@ -1673,9 +1673,10 @@ td.ntable__total-cell {
     background: rgba(42, 42, 40, 0.45);
 }
 
-.extend__card {
+/* More specific than .modal__card so its fixed 340px width doesn't win. */
+.modal__card.extend__card {
     width: auto;
-    max-width: 92vw;
+    max-width: 94vw;
     gap: 14px;
 }
 
