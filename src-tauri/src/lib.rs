@@ -1,3 +1,5 @@
+mod patchmatch;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
@@ -707,6 +709,30 @@ fn encode_webp(png_base64: String, quality: f32) -> Result<String, String> {
     Ok(STANDARD.encode(&*out))
 }
 
+/// Extend (outpaint) an image's background. Input is a PNG (base64) of the
+/// enlarged canvas with the original composited in and the new margins left
+/// transparent (alpha 0). PatchMatch synthesizes those margins from the
+/// image's own content; returns an opaque PNG (base64).
+#[tauri::command]
+fn extend_background(png_base64: String) -> Result<String, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let png = STANDARD.decode(png_base64.as_bytes()).map_err(|e| e.to_string())?;
+    let img = image::load_from_memory(&png)
+        .map_err(|e| e.to_string())?
+        .to_rgba8();
+    let (w, h) = img.dimensions();
+    let filled = patchmatch::outpaint(img.as_raw(), w as usize, h as usize);
+
+    let mut out = Vec::new();
+    {
+        use image::ImageEncoder;
+        image::codecs::png::PngEncoder::new(&mut out)
+            .write_image(&filled, w, h, image::ExtendedColorType::Rgba8)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(STANDARD.encode(&out))
+}
+
 // --- Background removal (macOS Vision framework) ---------------------------
 
 /// Remove the background from a PNG (base64) using the bundled Swift helper
@@ -912,6 +938,7 @@ pub fn run() {
             read_clipboard_text,
             reveal_in_finder,
             remove_background,
+            extend_background,
             encode_webp,
             read_image_data,
             read_edits,
