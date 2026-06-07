@@ -26,6 +26,25 @@ func loadCGImage(_ path: String) -> CGImage? {
     return img
 }
 
+// Downscale so the longest side is <= max (ImageCreator dislikes huge inputs).
+func downscale(_ img: CGImage, max maxSide: Int) -> CGImage {
+    let w = img.width
+    let h = img.height
+    let scale = min(1.0, Double(maxSide) / Double(Swift.max(w, h)))
+    if scale >= 1.0 { return img }
+    let nw = Int(Double(w) * scale)
+    let nh = Int(Double(h) * scale)
+    guard
+        let ctx = CGContext(
+            data: nil, width: nw, height: nh, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return img }
+    ctx.interpolationQuality = .high
+    ctx.draw(img, in: CGRect(x: 0, y: 0, width: nw, height: nh))
+    return ctx.makeImage() ?? img
+}
+
 func writePNG(_ image: CGImage, to path: String) -> Bool {
     let url = URL(fileURLWithPath: path)
     guard
@@ -40,13 +59,23 @@ func writePNG(_ image: CGImage, to path: String) -> Bool {
 func run() async {
     let args = CommandLine.arguments
     guard args.count >= 4 else {
-        die("usage: imgplay <input-image> <animation|illustration|sketch> <output.png>", 2)
+        die(
+            "usage: imgplay <input-image | -> <animation|illustration|sketch> <output.png> [prompt]",
+            2)
     }
     let inPath = args[1]
     let styleName = args[2].lowercased()
     let outPath = args[3]
+    let prompt = args.count >= 5 ? args[4] : ""
 
-    guard let cg = loadCGImage(inPath) else { die("could not read input image: \(inPath)") }
+    // Build the concepts: optional source image (`-` = none) + optional text.
+    var concepts: [ImagePlaygroundConcept] = []
+    if inPath != "-" {
+        guard let cg = loadCGImage(inPath) else { die("could not read input image: \(inPath)") }
+        concepts.append(.image(downscale(cg, max: 1024)))
+    }
+    if !prompt.isEmpty { concepts.append(.text(prompt)) }
+    guard !concepts.isEmpty else { die("need a source image and/or a prompt", 2) }
 
     do {
         // Throws if Image Playground isn't available (Apple Intelligence off,
@@ -59,7 +88,7 @@ func run() async {
         default: style = .animation
         }
 
-        let stream = creator.images(for: [.image(cg)], style: style, limit: 1)
+        let stream = creator.images(for: concepts, style: style, limit: 1)
         for try await created in stream {
             if writePNG(created.cgImage, to: outPath) {
                 print(outPath)
