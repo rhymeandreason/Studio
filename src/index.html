@@ -483,30 +483,32 @@
                     <span class="edit-status" id="extend-status"></span>
                     <button class="btn-ghost" id="extend-cancel">Cancel</button>
                     <button
-                        class="btn-ghost"
-                        id="extend-fill"
-                        title="Content-aware fill (fast; best for simple backgrounds)"
+                        class="btn-ghost extend__fillbtn"
+                        id="extend-fill-simple"
+                        title="Simple edge-stretch + blur (fast)"
                     >
-                        <span class="mi mi-sm">auto_fix_normal</span>Simple Fill
+                        <span class="mi mi-sm">blur_on</span>Simple Fill
                     </button>
                     <button
-                        class="btn-ghost"
+                        class="btn-ghost extend__fillbtn"
+                        id="extend-fill"
+                        title="Content-aware fill (best for plain backgrounds)"
+                    >
+                        <span class="mi mi-sm">auto_fix_normal</span>Fill
+                    </button>
+                    <button
+                        class="btn-ghost extend__fillbtn"
                         id="extend-fill-sd"
                         title="Generative fill (Stable Diffusion)"
+                        hidden
                     >
                         <span class="mi mi-sm">auto_awesome</span>Generative Fill
                     </button>
-                    <button
-                        class="btn-ghost"
-                        id="extend-photos"
-                        title="Save, then open in Photos to brush Clean Up"
-                        disabled
-                    >
-                        <span class="mi mi-sm">auto_fix_high</span>Save &amp;
-                        Clean Up
-                    </button>
                     <button class="btn-save" id="extend-save" disabled>
                         <span class="mi mi-sm">save</span>Save
+                    </button>
+                    <button class="btn-ghost" id="extend-edit-photos" hidden>
+                        <span class="mi mi-sm">photo_library</span>Edit in Photos
                     </button>
                 </div>
             </div>

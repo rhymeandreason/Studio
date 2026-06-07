@@ -2081,11 +2081,9 @@ async function runExtendFill(engine, cap) {
   const tw = exTargetW();
   const th = exTargetH();
   const status = document.getElementById("extend-status");
-  const fillBtn = document.getElementById("extend-fill");
-  const sdBtn = document.getElementById("extend-fill-sd");
+  const fillBtns = document.querySelectorAll(".extend__fillbtn");
   status.textContent = "Filling…";
-  fillBtn.disabled = true;
-  sdBtn.disabled = true;
+  fillBtns.forEach((b) => (b.disabled = true));
   try {
     // Compose the enlarged canvas at a capped working resolution, leaving the
     // new margins transparent (alpha 0) for the engine to synthesize.
@@ -2135,12 +2133,11 @@ async function runExtendFill(engine, cap) {
     console.error("extend fill failed:", err);
     status.textContent = `Fill failed: ${err}`;
   } finally {
-    fillBtn.disabled = false;
-    sdBtn.disabled = false;
+    fillBtns.forEach((b) => (b.disabled = false));
   }
 }
 
-// Simple (content-aware PatchMatch) fill — fast, best for plain backgrounds.
+// "Fill" — content-aware PatchMatch; best for plain backgrounds.
 function extendFill() {
   return runExtendFill(
     (work) =>
@@ -2149,6 +2146,58 @@ function extendFill() {
       }),
     1536,
   );
+}
+
+// "Simple Fill" — extend each edge by stretching its border pixels outward,
+// then blur the result so the margin reads as a soft continuation. All on the
+// canvas (no backend). The crisp original is feathered back on top in runExtendFill.
+function extendFillSimple() {
+  return runExtendFill(async (work) => {
+    const wW = work.width;
+    const wH = work.height;
+    // Opaque bounding box of the original within the work canvas.
+    const d = work.getContext("2d").getImageData(0, 0, wW, wH).data;
+    let x0 = wW,
+      y0 = wH,
+      x1 = -1,
+      y1 = -1;
+    for (let y = 0; y < wH; y++) {
+      for (let x = 0; x < wW; x++) {
+        if (d[(y * wW + x) * 4 + 3] > 0) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (x1 < x0) return work.toDataURL("image/png").split(",")[1];
+    const bw = x1 - x0 + 1;
+    const bh = y1 - y0 + 1;
+
+    const out = document.createElement("canvas");
+    out.width = wW;
+    out.height = wH;
+    const o = out.getContext("2d");
+    o.drawImage(work, 0, 0);
+    // Stretch left/right edge columns across the side margins.
+    if (x0 > 0) o.drawImage(work, x0, y0, 1, bh, 0, y0, x0, bh);
+    if (x1 < wW - 1)
+      o.drawImage(work, x1, y0, 1, bh, x1 + 1, y0, wW - 1 - x1, bh);
+    // Stretch top/bottom rows across full width (covers corners too).
+    if (y0 > 0) o.drawImage(out, 0, y0, wW, 1, 0, 0, wW, y0);
+    if (y1 < wH - 1)
+      o.drawImage(out, 0, y1, wW, 1, 0, y1 + 1, wW, wH - 1 - y1);
+
+    // Soften the streaky stretch with a blur.
+    const blurred = document.createElement("canvas");
+    blurred.width = wW;
+    blurred.height = wH;
+    const b = blurred.getContext("2d");
+    b.filter = `blur(${Math.max(3, Math.round(Math.min(wW, wH) * 0.03))}px)`;
+    b.drawImage(out, 0, 0);
+    return blurred.toDataURL("image/png").split(",")[1];
+  }, 1024);
 }
 
 // Generative (Stable Diffusion outpaint) fill via the A1111 HTTP API.
@@ -2199,10 +2248,13 @@ async function sdEngine(work) {
   });
 }
 
-// Enable/disable the two post-fill actions together.
+let exLastSaved = null; // path of the most recently saved extended image
+
+// Enable Save once a fill is ready; hide the post-save "Edit in Photos" until
+// the next save.
 function setExtendReady(ready) {
   document.getElementById("extend-save").disabled = !ready;
-  document.getElementById("extend-photos").disabled = !ready;
+  if (!ready) document.getElementById("extend-edit-photos").hidden = true;
 }
 
 // Write the extended image to <name>-extended.png; returns the path (or null).
@@ -2220,16 +2272,31 @@ async function writeExtended() {
   }
 }
 
+// Save, then reveal an "Edit in Photos" button (modal stays open).
 async function extendSave() {
   const dest = await writeExtended();
   if (!dest) return;
-  document.getElementById("extend").hidden = true;
+  exLastSaved = dest;
   if (mediaProjectPath) loadMedia(mediaProjectPath);
+  document.getElementById("extend-status").textContent = "Saved ✓";
+  document.getElementById("extend-edit-photos").hidden = false;
 }
 
-// Save, then open the result in Apple Photos to brush Clean Up (smooths the
-// PatchMatch-extended margin with Apple's on-device model).
-// Import the current image into Photos and open it in Edit (for Clean Up etc.).
+// Open the just-saved extended image in the Photos Edit panel.
+async function extendEditInPhotos() {
+  if (!exLastSaved) return;
+  document.getElementById("extend-status").textContent = "Opening in Photos…";
+  try {
+    await invoke("open_in_photos", { path: exLastSaved });
+    document.getElementById("extend").hidden = true;
+  } catch (err) {
+    console.error("Open in Photos failed:", err);
+    document.getElementById("extend-status").textContent = `Photos: ${err}`;
+  }
+}
+
+// Import the current image into Photos and open it in Edit (Background group /
+// More menu shortcut).
 async function editInPhotos() {
   if (!editItem) return;
   setEditStatus("Opening in Photos…");
@@ -2242,32 +2309,20 @@ async function editInPhotos() {
   }
 }
 
-async function extendSaveAndCleanUp() {
-  const dest = await writeExtended();
-  if (!dest) return;
-  document.getElementById("extend-status").textContent = "Opening in Photos…";
-  try {
-    await invoke("open_in_photos", { path: dest });
-  } catch (err) {
-    console.error("Open in Photos failed:", err);
-    document.getElementById("extend-status").textContent = `Photos: ${err}`;
-    return; // keep the modal open so the error is visible
-  }
-  document.getElementById("extend").hidden = true;
-  if (mediaProjectPath) loadMedia(mediaProjectPath);
-}
-
 function initExtend() {
   document.getElementById("ed-extendbg").addEventListener("click", openExtend);
   document.getElementById("ed-photos").addEventListener("click", editInPhotos);
   document.getElementById("extend-fill").addEventListener("click", extendFill);
   document
+    .getElementById("extend-fill-simple")
+    .addEventListener("click", extendFillSimple);
+  document
     .getElementById("extend-fill-sd")
     .addEventListener("click", extendFillSD);
   document.getElementById("extend-save").addEventListener("click", extendSave);
   document
-    .getElementById("extend-photos")
-    .addEventListener("click", extendSaveAndCleanUp);
+    .getElementById("extend-edit-photos")
+    .addEventListener("click", extendEditInPhotos);
   document
     .getElementById("extend-cancel")
     .addEventListener("click", () => (document.getElementById("extend").hidden = true));
