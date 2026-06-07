@@ -523,6 +523,7 @@ fn open_in_photos(path: String) -> Result<(), String> {
         r#"
         set imagePath to POSIX file "{path}"
         tell application "Photos"
+            reopen
             activate
             delay 0.2
             if not (exists container "{album}") then
