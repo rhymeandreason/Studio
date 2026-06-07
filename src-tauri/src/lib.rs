@@ -749,20 +749,17 @@ fn sd_outpaint(
 ) -> Result<String, String> {
     let host = std::env::var("STUDIO_SD_HOST")
         .unwrap_or_else(|_| "http://127.0.0.1:7860".to_string());
+    let _ = (width, height); // Draw Things derives output size from the init image
     let body = serde_json::json!({
         "init_images": [init_base64],
         "mask": mask_base64,
         "prompt": prompt,
         "negative_prompt": negative_prompt,
+        "seed": -1,
         "steps": steps,
         "cfg_scale": 7.0,
+        "batch_count": 1,
         "denoising_strength": 1.0,
-        "inpainting_fill": 0,       // fill (we pre-fill the margins in the init)
-        "inpaint_full_res": false,  // see the whole image for context
-        "mask_blur": 8,
-        "width": width,
-        "height": height,
-        "seed": -1,
     });
 
     let agent = ureq::AgentBuilder::new()
@@ -770,12 +767,23 @@ fn sd_outpaint(
         .timeout_read(std::time::Duration::from_secs(600))
         .build();
 
-    let resp = agent
+    let resp = match agent
         .post(&format!("{host}/sdapi/v1/img2img"))
         .send_json(body)
-        .map_err(|e| {
-            format!("Draw Things request failed — is its API Server on at {host}? ({e})")
-        })?;
+    {
+        Ok(r) => r,
+        // A non-2xx (e.g. 422) means the server is up but rejected the body —
+        // surface its message so we can see which field it dislikes.
+        Err(ureq::Error::Status(code, r)) => {
+            let detail = r.into_string().unwrap_or_default();
+            return Err(format!("Draw Things {code}: {}", detail.trim()));
+        }
+        Err(e) => {
+            return Err(format!(
+                "Draw Things request failed — is its API Server on at {host}? ({e})"
+            ));
+        }
+    };
     let v: serde_json::Value = resp.into_json().map_err(|e| e.to_string())?;
     v["images"][0]
         .as_str()
