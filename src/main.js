@@ -270,7 +270,7 @@ function setSingletonBtn(list, added) {
 
 function readList(list) {
   return [
-    ...listContainer().querySelectorAll(`.ws-item[data-list="${list}"] input`),
+    ...listContainer().querySelectorAll(`.ws-item[data-list="${list}"] textarea`),
   ]
     .map((i) => i.value.trim())
     .filter(Boolean);
