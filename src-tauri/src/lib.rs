@@ -197,7 +197,10 @@ fn start_watching(app: &AppHandle) {
     );
 
     if let Ok(mut d) = debouncer {
-        if d.watcher().watch(root.as_path(), RecursiveMode::Recursive).is_ok() {
+        if d.watcher()
+            .watch(root.as_path(), RecursiveMode::Recursive)
+            .is_ok()
+        {
             let _ = WATCHER.set(Mutex::new(Some(d)));
         }
     }
@@ -482,7 +485,9 @@ fn save_edited_thumb(
 ) -> Result<String, String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
     let file = edited_thumb_file(&app, &path, edits_mtime)?;
-    let bytes = STANDARD.decode(data_base64.as_bytes()).map_err(|e| e.to_string())?;
+    let bytes = STANDARD
+        .decode(data_base64.as_bytes())
+        .map_err(|e| e.to_string())?;
     std::fs::write(&file, bytes).map_err(|e| e.to_string())?;
     Ok(file.to_string_lossy().to_string())
 }
@@ -519,14 +524,22 @@ fn open_in_photos(path: String) -> Result<(), String> {
         set imagePath to POSIX file "{path}"
         tell application "Photos"
             activate
+            delay 0.2
             if not (exists container "{album}") then
                 make new album named "{album}"
             end if
             set targetAlbum to container "{album}"
-            import {{imagePath}} into targetAlbum
+            set importedItems to (import {{imagePath}} into targetAlbum)
             spotlight targetAlbum
-            set foundItems to (search for "{name}")
-            if (count of foundItems) > 0 then spotlight item 1 of foundItems
+            -- Prefer the just-imported item (avoids Spotlight-index lag and
+            -- duplicate-name ambiguity); fall back to a name search if Photos
+            -- deduped the import and returned nothing.
+            if (count of importedItems) > 0 then
+                spotlight item 1 of importedItems
+            else
+                set foundItems to (search for "{name}")
+                if (count of foundItems) > 0 then spotlight item 1 of foundItems
+            end if
         end tell
         delay 0.6
         tell application "System Events" to keystroke return
@@ -684,7 +697,10 @@ fn read_image_data(app: AppHandle, path: String) -> Result<String, String> {
 fn sidecar_path(image_path: &str) -> String {
     let p = std::path::Path::new(image_path);
     let filename = p.file_name().unwrap_or_default().to_string_lossy();
-    let parent = p.parent().map(|d| format!("{}/", d.to_string_lossy())).unwrap_or_default();
+    let parent = p
+        .parent()
+        .map(|d| format!("{}/", d.to_string_lossy()))
+        .unwrap_or_default();
     format!("{}.{}.studio.json", parent, filename)
 }
 
@@ -748,7 +764,9 @@ fn write_image(path: String, data_base64: String) -> Result<(), String> {
 #[tauri::command]
 fn encode_webp(png_base64: String, quality: f32) -> Result<String, String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
-    let png = STANDARD.decode(png_base64.as_bytes()).map_err(|e| e.to_string())?;
+    let png = STANDARD
+        .decode(png_base64.as_bytes())
+        .map_err(|e| e.to_string())?;
     let img = image::load_from_memory(&png)
         .map_err(|e| e.to_string())?
         .to_rgba8();
@@ -765,7 +783,9 @@ fn encode_webp(png_base64: String, quality: f32) -> Result<String, String> {
 #[tauri::command]
 fn extend_background(png_base64: String) -> Result<String, String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
-    let png = STANDARD.decode(png_base64.as_bytes()).map_err(|e| e.to_string())?;
+    let png = STANDARD
+        .decode(png_base64.as_bytes())
+        .map_err(|e| e.to_string())?;
     let img = image::load_from_memory(&png)
         .map_err(|e| e.to_string())?
         .to_rgba8();
@@ -796,8 +816,8 @@ fn sd_outpaint(
     height: u32,
     steps: u32,
 ) -> Result<String, String> {
-    let host = std::env::var("STUDIO_SD_HOST")
-        .unwrap_or_else(|_| "http://127.0.0.1:7860".to_string());
+    let host =
+        std::env::var("STUDIO_SD_HOST").unwrap_or_else(|_| "http://127.0.0.1:7860".to_string());
     let body = serde_json::json!({
         "init_images": [init_base64],
         "mask": mask_base64,
@@ -853,7 +873,9 @@ fn sd_outpaint(
 fn remove_background(png_base64: String) -> Result<String, String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
 
-    let bytes = STANDARD.decode(png_base64.as_bytes()).map_err(|e| e.to_string())?;
+    let bytes = STANDARD
+        .decode(png_base64.as_bytes())
+        .map_err(|e| e.to_string())?;
 
     // The Vision helper reads/writes files; use unique temp paths.
     let dir = std::env::temp_dir();
@@ -1003,7 +1025,10 @@ fn launch_workspace(app: AppHandle, path: String) -> Result<(), String> {
         } else {
             ws.editor.trim()
         };
-        let _ = Command::new("open").args(["-a", editor]).arg(repo_path).spawn();
+        let _ = Command::new("open")
+            .args(["-a", editor])
+            .arg(repo_path)
+            .spawn();
     }
 
     // Claude: open Terminal cd'd into the repo and run `claude`.
