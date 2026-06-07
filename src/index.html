@@ -139,7 +139,8 @@
                                         >Show in Finder
                                     </button>
                                     <button class="menu__item" id="m-photos">
-                                        <span class="mi mi-sm">photo_library</span
+                                        <span class="mi mi-sm"
+                                            >photo_library</span
                                         >Edit in Photos
                                     </button>
                                 </div>
@@ -392,10 +393,7 @@
                                     <span class="mi mi-sm">aspect_ratio</span
                                     >Extend background
                                 </button>
-                                <button
-                                    class="chip chip--reset"
-                                    id="ed-photos"
-                                >
+                                <button class="chip chip--reset" id="ed-photos">
                                     <span class="mi mi-sm">photo_library</span
                                     >Edit in Photos
                                 </button>
@@ -460,12 +458,14 @@
                     <button class="chip" data-ratio="1.3333">4:3</button>
                     <button class="chip" data-ratio="1.25">5:4</button>
                 </div>
+                <!-- --
                 <input
                     class="field__input extend__prompt"
                     id="extend-prompt"
                     placeholder="Prompt for Generative Fill (optional) — describe the background"
                     autocomplete="off"
                 />
+                -->
                 <div class="extend__stage" id="extend-stage">
                     <div class="extend__frame" id="extend-frame">
                         <canvas id="extend-canvas"></canvas>
@@ -542,13 +542,15 @@
                         title="Generative fill (Stable Diffusion)"
                         hidden
                     >
-                        <span class="mi mi-sm">auto_awesome</span>Generative Fill
+                        <span class="mi mi-sm">auto_awesome</span>Generative
+                        Fill
                     </button>
                     <button class="btn-save" id="extend-save" disabled>
                         <span class="mi mi-sm">save</span>Save
                     </button>
                     <button class="btn-ghost" id="extend-edit-photos" hidden>
-                        <span class="mi mi-sm">photo_library</span>Edit in Photos
+                        <span class="mi mi-sm">photo_library</span>Edit in
+                        Photos
                     </button>
                 </div>
             </div>
