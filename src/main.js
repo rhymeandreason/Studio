@@ -120,6 +120,16 @@ function selectTab(name) {
   document.querySelectorAll(".panel").forEach((p) => {
     p.hidden = p.dataset.panel !== name;
   });
+
+  // Close the editor column when leaving the media tab.
+  if (name !== "media") {
+    const appRight = document.getElementById("app-right");
+    if (appRight && !appRight.hidden) {
+      appRight.hidden = true;
+      document.getElementById("media-side").hidden = true;
+      invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+    }
+  }
 }
 
 function initTabs() {
@@ -483,6 +493,9 @@ async function selectOnly(item) {
   if (editItem && editItem.path !== item.path) await flushEditSave();
   document.getElementById("side-name").textContent = item.name;
   document.getElementById("media-side").hidden = false;
+  document.getElementById("app-right").hidden = false;
+  invoke("set_window_width", { width: Math.max(window.innerWidth, 1220) });
+
   moveEditor(document.getElementById("media-side-editor"));
   await loadEditor(item);
 }
@@ -515,6 +528,9 @@ async function trashMedia(paths) {
     document.getElementById("lightbox").hidden = true;
     moveEditor(document.getElementById("media-side-editor"));
     document.getElementById("media-side").hidden = true;
+    document.getElementById("app-right").hidden = true;
+    invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+
   }
 
   try {
@@ -838,6 +854,9 @@ async function loadMedia(path) {
   if (activeItem && !present.has(activeItem.path)) {
     activeItem = null;
     document.getElementById("media-side").hidden = true;
+    document.getElementById("app-right").hidden = true;
+    invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+
   }
 
   if (!items.length) {
@@ -1004,6 +1023,9 @@ async function closeInlineEditor() {
   document.getElementById("lightbox").hidden = true;
   moveEditor(document.getElementById("media-side-editor"));
   document.getElementById("media-side").hidden = true;
+    document.getElementById("app-right").hidden = true;
+    invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+
   editItem = null;
   editThumb = null;
   editImg = null;

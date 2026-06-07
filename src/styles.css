@@ -83,12 +83,31 @@ body {
     font-size: 14px;
     letter-spacing: -0.005em;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-user-select: none;
     user-select: none;
+}
+
+.app-left {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.app-right {
+    flex: 0 0 320px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border-left: 1px solid var(--hairline);
+    background: var(--bg);
+    overflow: hidden;
 }
 
 /* Titlebar / wordmark */
@@ -299,6 +318,7 @@ body {
     flex: 1 1 auto;
     display: flex;
     overflow-y: auto;
+    min-height: 0;
 }
 
 /* Empty state */
@@ -1053,24 +1073,20 @@ td.ntable__total-cell {
 
 /* Media panel — grid on the left, edit controls in a right side column */
 .panel--media {
-    display: flex;
-    align-items: flex-start;
-    gap: 20px;
+    display: block;
 }
 
 .media-main {
-    flex: 1 1 auto;
-    min-width: 0;
+    width: 100%;
 }
 
 .media-side {
-    flex: 0 0 320px;
-    position: sticky;
-    top: 0;
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     gap: 14px;
-    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    padding: 18px 16px;
 }
 
 .media-side__head {

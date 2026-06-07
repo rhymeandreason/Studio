@@ -217,6 +217,17 @@ fn show_studio(app: &AppHandle) {
     }
 }
 
+/// Resize the window to a new logical width, keeping the current height.
+#[tauri::command]
+fn set_window_width(app: AppHandle, width: u32) -> Result<(), String> {
+    let win = app.get_webview_window("main").ok_or("no window")?;
+    let size = win.inner_size().map_err(|e| e.to_string())?;
+    let scale = win.scale_factor().unwrap_or(1.0);
+    let logical_height = (size.height as f64 / scale).round() as u32;
+    win.set_size(tauri::LogicalSize::new(width, logical_height))
+        .map_err(|e| e.to_string())
+}
+
 /// Activate a project: store it, refresh the tray, open the window, notify the UI.
 fn activate_project(app: &AppHandle, path: &str) {
     let projects = scan_projects(app);
@@ -1200,7 +1211,8 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
             trash_media,
             write_image,
             rename_media,
-            trash_project
+            trash_project,
+            set_window_width
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.
