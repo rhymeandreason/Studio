@@ -2252,6 +2252,18 @@ function initExtend() {
     .getElementById("extend-photos")
     .addEventListener("click", extendSaveAndCleanUp);
   document
+    .getElementById("extend-test-photos")
+    .addEventListener("click", async () => {
+      const status = document.getElementById("extend-status");
+      status.textContent = "Testing Photos…";
+      try {
+        await invoke("photos_edit_test");
+        status.textContent = "Photos test ran";
+      } catch (err) {
+        status.textContent = `Photos test: ${err}`;
+      }
+    });
+  document
     .getElementById("extend-cancel")
     .addEventListener("click", () => (document.getElementById("extend").hidden = true));
   document.querySelectorAll("#extend-ratios .chip").forEach((c) =>

@@ -497,23 +497,14 @@ fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Open a file in Apple Photos (for Clean Up of an extended image). After the
-/// import, best-effort enters the Edit panel by sending the Return shortcut via
-/// System Events — this needs Accessibility permission and is timing-dependent,
-/// so it may not always land. The user can still press Return manually.
-#[tauri::command]
-fn open_in_photos(path: String) -> Result<(), String> {
-    Command::new("open")
-        .args(["-a", "Photos"])
-        .arg(&path)
-        .status()
-        .map_err(|e| e.to_string())?;
-
-    // Best-effort: open the "Recently Saved" album, select the last (newest)
-    // photo, and enter the Edit panel. Each UI step is wrapped so a layout
-    // mismatch doesn't abort the rest. Key codes: 36=Return, 48=Tab, 119=End.
-    let script = r#"
-        delay 2.5
+/// AppleScript that drives Photos: open "Recently Saved", select the last
+/// (newest) photo, and enter the Edit panel. `initial_delay` lets callers wait
+/// for an import to finish first. Each UI step is wrapped so a layout mismatch
+/// doesn't abort the rest. Key codes: 36=Return, 48=Tab, 119=End.
+fn photos_edit_script(initial_delay: f32) -> String {
+    format!(
+        r#"
+        delay {initial_delay}
         tell application "Photos" to activate
         delay 0.8
         tell application "System Events" to tell process "Photos"
@@ -535,9 +526,39 @@ fn open_in_photos(path: String) -> Result<(), String> {
                 key code 36
             end try
         end tell
-    "#;
-    let _ = Command::new("osascript").args(["-e", script]).spawn();
+    "#
+    )
+}
+
+/// Open a file in Apple Photos (for Clean Up of an extended image), then
+/// best-effort navigate to it and enter Edit (see photos_edit_script). Needs
+/// Accessibility permission and is timing-dependent, so it may not always land.
+#[tauri::command]
+fn open_in_photos(path: String) -> Result<(), String> {
+    Command::new("open")
+        .args(["-a", "Photos"])
+        .arg(&path)
+        .status()
+        .map_err(|e| e.to_string())?;
+    let _ = Command::new("osascript")
+        .args(["-e", &photos_edit_script(2.5)])
+        .spawn();
     Ok(())
+}
+
+/// Run only the "navigate to Recently Saved → last photo → Edit" automation
+/// against whatever Photos currently shows. For tuning the UI scripting.
+#[tauri::command]
+fn photos_edit_test() -> Result<String, String> {
+    let out = Command::new("osascript")
+        .args(["-e", &photos_edit_script(0.3)])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok("ran".into())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
 }
 
 /// Convert a HEIC to a cached JPEG (in the app cache dir) so the webview can
@@ -1038,6 +1059,7 @@ pub fn run() {
             save_edited_thumb,
             open_path,
             open_in_photos,
+            photos_edit_test,
             heic_preview,
             import_media,
             paste_image,
