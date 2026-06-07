@@ -2070,7 +2070,9 @@ function featheredOriginal(base, m, feather) {
   return c;
 }
 
-async function extendFill() {
+// Shared fill flow. `engine(workPngB64, tw, th)` returns the filled PNG (base64)
+// for the enlarged canvas; the original is feathered back on top to hide seams.
+async function runExtendFill(engine, cap) {
   if (!exBase) return;
   if (exMargins.l + exMargins.r + exMargins.t + exMargins.b === 0) {
     document.getElementById("extend-status").textContent = "Nothing to extend";
@@ -2080,12 +2082,13 @@ async function extendFill() {
   const th = exTargetH();
   const status = document.getElementById("extend-status");
   const fillBtn = document.getElementById("extend-fill");
+  const sdBtn = document.getElementById("extend-fill-sd");
   status.textContent = "Filling…";
   fillBtn.disabled = true;
+  sdBtn.disabled = true;
   try {
     // Compose the enlarged canvas at a capped working resolution, leaving the
-    // new margins transparent (alpha 0) for PatchMatch to synthesize.
-    const cap = 1536;
+    // new margins transparent (alpha 0) for the engine to synthesize.
     const ws = Math.min(1, cap / Math.max(tw, th));
     const wW = Math.max(1, Math.round(tw * ws));
     const wH = Math.max(1, Math.round(th * ws));
@@ -2103,7 +2106,7 @@ async function extendFill() {
       Math.round(exBase.height * ws),
     );
     const b64 = work.toDataURL("image/png").split(",")[1];
-    const filledB64 = await invoke("extend_background", { pngBase64: b64 });
+    const filledB64 = await engine(b64, wW, wH);
     const filledImg = await loadImage(`data:image/png;base64,${filledB64}`);
 
     // Final full-res: upscaled synthesized fill, with the crisp original
@@ -2129,11 +2132,34 @@ async function extendFill() {
     document.getElementById("extend-save").disabled = false;
     renderExtend();
   } catch (err) {
-    console.error("extend_background failed:", err);
-    status.textContent = "Fill failed";
+    console.error("extend fill failed:", err);
+    status.textContent = `Fill failed: ${err}`;
   } finally {
     fillBtn.disabled = false;
+    sdBtn.disabled = false;
   }
+}
+
+// Simple (content-aware PatchMatch) fill — fast, best for plain backgrounds.
+function extendFill() {
+  return runExtendFill(
+    (b64) => invoke("extend_background", { pngBase64: b64 }),
+    1536,
+  );
+}
+
+// Generative (Stable Diffusion outpaint) fill. Backend not wired yet.
+const SD_FILL_ENABLED = false;
+function extendFillSD() {
+  if (!SD_FILL_ENABLED) {
+    document.getElementById("extend-status").textContent =
+      "Generative Fill isn’t set up yet";
+    return;
+  }
+  return runExtendFill(
+    (b64) => invoke("extend_background_sd", { pngBase64: b64 }),
+    1024,
+  );
 }
 
 async function extendSave() {
@@ -2152,6 +2178,9 @@ async function extendSave() {
 function initExtend() {
   document.getElementById("ed-extendbg").addEventListener("click", openExtend);
   document.getElementById("extend-fill").addEventListener("click", extendFill);
+  document
+    .getElementById("extend-fill-sd")
+    .addEventListener("click", extendFillSD);
   document.getElementById("extend-save").addEventListener("click", extendSave);
   document
     .getElementById("extend-cancel")
