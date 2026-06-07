@@ -413,26 +413,30 @@ function updateSelectionUI() {
   updateSelbar();
 }
 
-// Open the inline editor on `item` (switching from another image if needed).
-async function openInlineEditor(item) {
-  if (activeItem && activeItem.path === item.path) return;
-  if (activeItem) await flushEditSave();
-  activeItem = item;
-  document.getElementById("side-name").textContent = item.name;
-  document.getElementById("media-side").hidden = false;
-  moveEditor(document.getElementById("media-side-editor"));
-  await loadEditor(item);
-  updateSelbar();
-}
-
 // Plain click: select only this item. A single deliberate selection drives the
 // editor — opening it on an image, or closing it on a non-image.
 async function selectOnly(item) {
   mediaSelection.clear();
   mediaSelection.add(item.path);
-  updateSelectionUI();
-  if (item.kind === "image") await openInlineEditor(item);
-  else await closeInlineEditor();
+
+  if (item.kind !== "image") {
+    updateSelectionUI();
+    await closeInlineEditor();
+    return;
+  }
+
+  // Claim editor ownership synchronously so the batch bar never flashes between
+  // the selection update and the (async) editor load.
+  const alreadyShown = activeItem && activeItem.path === item.path;
+  activeItem = item;
+  updateSelectionUI(); // selbar now sees the editor owns the lone selection
+  if (alreadyShown) return;
+
+  if (editItem && editItem.path !== item.path) await flushEditSave();
+  document.getElementById("side-name").textContent = item.name;
+  document.getElementById("media-side").hidden = false;
+  moveEditor(document.getElementById("media-side-editor"));
+  await loadEditor(item);
 }
 
 // ⌘/Ctrl click: add/remove from the selection. The editor is sticky here — a
