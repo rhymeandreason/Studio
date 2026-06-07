@@ -2980,16 +2980,21 @@ function setNotesStatus(text) {
 
 function applyNotesFont() {
   const font = notesData.font || "system-ui";
-  const picker = document.getElementById("notes-font-picker");
   const listEl = document.getElementById("notes-list");
+  const menu = document.getElementById("notes-font-menu");
 
-  const opt = picker ? [...picker.options].find((o) => o.value === font) : null;
-  const size = notesData.fontSize || (opt?.dataset.size ? Number(opt.dataset.size) : 14);
+  const btn = menu
+    ? [...menu.querySelectorAll(".menu__item")].find((b) => b.dataset.font === font)
+    : null;
+  const size = notesData.fontSize || (btn?.dataset.size ? Number(btn.dataset.size) : 14);
 
   listEl.style.setProperty("--notes-font", font);
   listEl.style.setProperty("--notes-font-size", size + "px");
 
-  if (picker) picker.value = opt ? font : "system-ui";
+  // Mark active item.
+  menu?.querySelectorAll(".menu__item").forEach((b) => {
+    b.classList.toggle("is-active", b.dataset.font === font);
+  });
 }
 
 async function loadNotes(path) {
@@ -3435,12 +3440,26 @@ function initNotes() {
     btn.addEventListener("click", () => newNote(btn.dataset.newNote));
   });
 
-  document.getElementById("notes-font-picker").addEventListener("change", (e) => {
-    const opt = e.target.options[e.target.selectedIndex];
-    notesData.font = e.target.value;
-    notesData.fontSize = opt.dataset.size ? Number(opt.dataset.size) : 14;
+  const fontBtn = document.getElementById("notes-font-btn");
+  const fontMenu = document.getElementById("notes-font-menu");
+
+  fontBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    fontMenu.hidden = !fontMenu.hidden;
+  });
+
+  fontMenu.addEventListener("click", (e) => {
+    const item = e.target.closest(".menu__item");
+    if (!item) return;
+    notesData.font = item.dataset.font;
+    notesData.fontSize = item.dataset.size ? Number(item.dataset.size) : 14;
+    fontMenu.hidden = true;
     applyNotesFont();
     scheduleNotesSave();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#notes-font-wrap")) fontMenu.hidden = true;
   });
 
   document.addEventListener("click", (e) => {

@@ -183,39 +183,20 @@
                             <span class="mi mi-sm">table_chart</span>Table
                         </button>
                         <span class="notes-status" id="notes-status"></span>
-                        <select
-                            class="notes-font-picker"
-                            id="notes-font-picker"
-                        >
-                            <option value="'Futura', sans-serif" data-size="14">
-                                Futura
-                            </option>
-                            <option value="system-ui" data-size="14">
-                                System
-                            </option>
-                            <option value="Verdana" data-size="14">
-                                Verdana
-                            </option>
-                            <option
-                                value="New York Medium, serif"
-                                data-size="15"
-                            >
-                                New York
-                            </option>
-                            <option value="Georgia, serif" data-size="15">
-                                Georgia
-                            </option>
-                            <option
-                                value="'Palatino Linotype', Palatino, serif"
-                                data-size="15"
-                            >
-                                Palatino
-                            </option>
-
-                            <option value="Menlo, monospace" data-size="13">
-                                Menlo
-                            </option>
-                        </select>
+                        <div class="notes-font-wrap" id="notes-font-wrap">
+                            <button class="iconbtn-round" id="notes-font-btn" type="button" title="Font">
+                                <span class="mi mi-sm">text_fields</span>
+                            </button>
+                            <div class="menu notes-font-menu" id="notes-font-menu" hidden>
+                                <button class="menu__item" data-font="'Futura', sans-serif"                      data-size="14">Futura</button>
+                                <button class="menu__item" data-font="system-ui"                                 data-size="14">System</button>
+                                <button class="menu__item" data-font="Verdana, sans-serif"                       data-size="13">Verdana</button>
+                                <button class="menu__item" data-font="'New York', 'New York Medium', serif"      data-size="15">New York</button>
+                                <button class="menu__item" data-font="Georgia, serif"                            data-size="15">Georgia</button>
+                                <button class="menu__item" data-font="'Palatino Linotype', Palatino, serif"      data-size="15">Palatino</button>
+                                <button class="menu__item" data-font="Menlo, monospace"                          data-size="13">Menlo</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="notes-list" id="notes-list"></div>
                 </section>
