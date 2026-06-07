@@ -556,8 +556,9 @@ function loadImage(src) {
 
 // Bake a thumbnail (geometry + crop + tonal) from an in-memory source image or
 // canvas → data URL. Source must be clean (data-URL/canvas) so toDataURL works.
-function bakeThumbDataURL(src, edits) {
-  const oriented = renderOriented(src, edits);
+// Bake a thumbnail from an already-oriented (rotate/flip/straighten) canvas,
+// applying crop + tonal. Lets callers reuse the editor's cached oriented canvas.
+function bakeThumbFromOriented(oriented, edits) {
   let base = oriented;
   const c = edits.crop;
   if (c && (c.x > 0 || c.y > 0 || c.w < 1 || c.h < 1)) {
@@ -578,6 +579,10 @@ function bakeThumbDataURL(src, edits) {
   thumbGLCanvas.height = Math.max(1, Math.round(base.height * scale));
   glAdjust(thumbGLCanvas, base, edits);
   return thumbGLCanvas.toDataURL("image/png");
+}
+
+function bakeThumbDataURL(src, edits) {
+  return bakeThumbFromOriented(renderOriented(src, edits), edits);
 }
 
 // Render an edited image's thumbnail (geometry + crop + tonal baked) as a data URL.
@@ -1234,6 +1239,29 @@ function renderEditorPreview() {
   canvas.height = Math.max(1, Math.round(oriented.height * scale));
   glAdjust(canvas, oriented, editState);
   positionCrop();
+
+  // Mirror the live edit onto the image's grid thumbnail (reusing the oriented
+  // canvas we just built). Coalesced to one bake per frame.
+  scheduleLiveThumb(oriented);
+}
+
+let liveThumbRaf = 0;
+let liveThumbOriented = null;
+function scheduleLiveThumb(oriented) {
+  if (!activeItem) return;
+  liveThumbOriented = oriented;
+  if (liveThumbRaf) return;
+  liveThumbRaf = requestAnimationFrame(() => {
+    liveThumbRaf = 0;
+    if (!activeItem || !editState || !liveThumbOriented) return;
+    const tile = document.querySelector(
+      `.mediatile[data-path="${CSS.escape(activeItem.path)}"]`,
+    );
+    if (!tile) return;
+    const url = bakeThumbFromOriented(liveThumbOriented, editState);
+    thumbCache.set(activeItem.path, url);
+    tile.querySelector(".mediatile__img").src = url;
+  });
 }
 
 // --- Crop overlay ----------------------------------------------------------
