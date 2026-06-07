@@ -9,7 +9,7 @@
 //! own content — exactly what works well for backgrounds (skies, walls,
 //! foliage, gradients).
 
-const R: i32 = 3; // patch radius → 7×7 patches
+const R: i32 = 2; // patch radius → 5×5 patches
 const MIN_SIDE: usize = 24; // stop the pyramid here
 const MAX_LEVELS: usize = 6;
 
@@ -69,13 +69,18 @@ pub fn outpaint(rgba: &[u8], w: usize, h: usize) -> Vec<u8> {
     }
     pyramid.reverse();
 
-    // Coarsest: seed holes by mirror-reflecting the known region. This keeps
-    // low-frequency gradients (vignettes) and straight structure continuous at
-    // the boundary, giving PatchMatch a coherent start instead of a flat block.
+    // Coarsest: seed holes with the mean known colour, then solve from scratch.
     let mut solved = {
         let l = &pyramid[0];
         let mut color = l.color.clone();
-        reflect_seed(l, &mut color);
+        let mean = mean_known(l);
+        for i in 0..l.w * l.h {
+            if !l.known[i] {
+                color[i * 3] = mean[0];
+                color[i * 3 + 1] = mean[1];
+                color[i * 3 + 2] = mean[2];
+            }
+        }
         em_solve(l, color, None, 6, 1)
     };
 
@@ -105,70 +110,6 @@ struct Solved {
     color: Vec<f32>,
     nx: Vec<i32>, // source-patch centre x for each target pixel
     ny: Vec<i32>,
-}
-
-/// Triangle-wave reflection of `v` into the inclusive range [lo, hi].
-fn reflect(v: i32, lo: i32, hi: i32) -> i32 {
-    if hi <= lo {
-        return lo;
-    }
-    let period = 2 * (hi - lo);
-    let mut t = (v - lo) % period;
-    if t < 0 {
-        t += period;
-    }
-    if t > hi - lo {
-        t = period - t;
-    }
-    lo + t
-}
-
-/// Seed hole pixels by mirror-reflecting the known region's bounding box.
-/// Falls back to the mean colour for any reflected sample that isn't known
-/// (only possible with a non-rectangular known region).
-fn reflect_seed(l: &Level, color: &mut [f32]) {
-    let (mut minx, mut miny, mut maxx, mut maxy) = (l.w, l.h, 0usize, 0usize);
-    let mut any = false;
-    for y in 0..l.h {
-        for x in 0..l.w {
-            if l.known[idx(x, y, l.w)] {
-                any = true;
-                minx = minx.min(x);
-                maxx = maxx.max(x);
-                miny = miny.min(y);
-                maxy = maxy.max(y);
-            }
-        }
-    }
-    let mean = mean_known(l);
-    if !any {
-        for i in 0..l.w * l.h {
-            color[i * 3] = mean[0];
-            color[i * 3 + 1] = mean[1];
-            color[i * 3 + 2] = mean[2];
-        }
-        return;
-    }
-    for y in 0..l.h {
-        for x in 0..l.w {
-            let i = idx(x, y, l.w);
-            if l.known[i] {
-                continue;
-            }
-            let sx = reflect(x as i32, minx as i32, maxx as i32) as usize;
-            let sy = reflect(y as i32, miny as i32, maxy as i32) as usize;
-            let s = idx(sx, sy, l.w);
-            if l.known[s] {
-                color[i * 3] = l.color[s * 3];
-                color[i * 3 + 1] = l.color[s * 3 + 1];
-                color[i * 3 + 2] = l.color[s * 3 + 2];
-            } else {
-                color[i * 3] = mean[0];
-                color[i * 3 + 1] = mean[1];
-                color[i * 3 + 2] = mean[2];
-            }
-        }
-    }
 }
 
 fn mean_known(l: &Level) -> [f32; 3] {
@@ -430,31 +371,8 @@ fn em_solve(
                 }
             }
 
-            // Random search: probe a window around the current best, halving
-            // the radius each step. This is what lets matches refine so straight
-            // structure (shelf edges, book tops) stays continuous.
-            let mut radius = (w.max(h)) as i32;
-            while radius >= 1 {
-                let cx = bx + rng.below((2 * radius + 1) as usize) as i32 - radius;
-                let cy = by + rng.below((2 * radius + 1) as usize) as i32 - radius;
-                if cx >= R
-                    && cx < w as i32 - R
-                    && cy >= R
-                    && cy < h as i32 - R
-                    && valid_src[idx(cx as usize, cy as usize, w)]
-                {
-                    let d = patch_dist(&color, w, x, y, cx, cy, bd);
-                    if d < bd {
-                        bd = d;
-                        bx = cx;
-                        by = cy;
-                    }
-                }
-                radius /= 2;
-            }
-
-            // A couple of fully-random restarts to escape local minima.
-            for _ in 0..2 {
+            // A few random restarts from the valid-source pool.
+            for _ in 0..4 {
                 let s = src_list[rng.below(src_list.len())];
                 let d = patch_dist(&color, w, x, y, s.0, s.1, bd);
                 if d < bd {
