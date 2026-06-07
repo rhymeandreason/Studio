@@ -921,6 +921,80 @@ select.field__input {
     color: var(--text-muted);
 }
 
+.notecard__links {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.notelink {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--base, transparent);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 4px 6px 4px 8px;
+    transition: border-color 0.15s;
+}
+
+.notelink:hover {
+    border-color: var(--accent);
+}
+
+.notelink__open {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    padding: 2px 0;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    transition: color 0.15s;
+}
+
+.notelink:hover .notelink__open {
+    color: var(--accent);
+}
+
+.notelink__open .mi {
+    flex: 0 0 auto;
+}
+
+.notelink__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notelink .btn-remove {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    color: var(--text-soft);
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.notelink:hover .btn-remove {
+    opacity: 1;
+}
+
+.notelink .btn-remove:hover {
+    color: var(--rose);
+    background: transparent;
+    border: none;
+}
+
 
 .checklist {
     display: flex;

@@ -3213,14 +3213,94 @@ function noteFooter(note) {
   return footer;
 }
 
+// Pull http/https URLs out of free text, in order, de-duplicated. Trailing
+// punctuation that's usually sentence-grammar rather than part of the link is
+// trimmed off.
+function extractUrls(text) {
+  if (!text) return [];
+  const matches = text.match(/\bhttps?:\/\/[^\s<>"']+/gi) || [];
+  const seen = new Set();
+  const urls = [];
+  for (let url of matches) {
+    url = url.replace(/[.,;:!?)\]}'"]+$/, "");
+    if (url && !seen.has(url)) {
+      seen.add(url);
+      urls.push(url);
+    }
+  }
+  return urls;
+}
+
+// A compact label for a link block: host (without leading www.) plus the path,
+// truncated so long URLs don't blow out the card width.
+function linkLabel(url) {
+  try {
+    const u = new URL(url);
+    let label = u.hostname.replace(/^www\./, "") + u.pathname.replace(/\/$/, "");
+    if (u.search) label += u.search;
+    return label.length > 48 ? label.slice(0, 47) + "…" : label;
+  } catch {
+    return url;
+  }
+}
+
+// Open an external URL in the system default browser. Validates the scheme so
+// we never hand arbitrary strings to the OS `open` command.
+function openExternalUrl(url) {
+  if (!/^https?:\/\//i.test(url)) return;
+  invoke("open_path", { path: url });
+}
+
 function buildTextNote(note) {
   const card = el("div", "notecard");
   card.append(noteHeader(note));
+
+  if (!Array.isArray(note.links)) note.links = [];
 
   const textarea = el("textarea", "notecard__textarea", {
     placeholder: "Write something…",
   });
   textarea.value = note.body || "";
+
+  const links = el("div", "notecard__links");
+  const renderLinks = () => {
+    links.innerHTML = "";
+    links.style.display = note.links.length ? "" : "none";
+    note.links.forEach((url, idx) => {
+      const block = el("div", "notelink", { title: url });
+      const open = el("button", "notelink__open", { type: "button" });
+      open.innerHTML = mi("link");
+      open.append(el("span", "notelink__label", { textContent: linkLabel(url) }));
+      open.addEventListener("click", () => openExternalUrl(url));
+      const rm = el("button", "btn-remove", {
+        type: "button",
+        innerHTML: mi("close"),
+        title: "Remove link",
+      });
+      rm.addEventListener("click", () => {
+        note.links.splice(idx, 1);
+        renderLinks();
+        scheduleNotesSave();
+      });
+      block.append(open, rm);
+      links.append(block);
+    });
+  };
+
+  // Pull any URLs out of the body into note.links (de-duped) and strip their
+  // text from the body. Returns true if anything changed.
+  const harvestLinks = () => {
+    const urls = extractUrls(note.body);
+    if (!urls.length) return false;
+    let body = note.body;
+    for (const url of urls) {
+      if (!note.links.includes(url)) note.links.push(url);
+      body = body.split(url).join("");
+    }
+    // Tidy whitespace left behind by removed URLs.
+    note.body = body.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    return true;
+  };
 
   const resizeTextarea = () => {
     textarea.style.height = "auto";
@@ -3231,9 +3311,25 @@ function buildTextNote(note) {
     resizeTextarea();
     scheduleNotesSave();
   });
+  textarea.addEventListener("blur", () => {
+    if (harvestLinks()) {
+      textarea.value = note.body;
+      resizeTextarea();
+      renderLinks();
+      scheduleNotesSave();
+    }
+  });
   requestAnimationFrame(resizeTextarea);
 
   card.append(textarea);
+  card.append(links);
+
+  // Migrate any links already sitting inline in saved notes.
+  if (harvestLinks()) {
+    textarea.value = note.body;
+    scheduleNotesSave();
+  }
+  renderLinks();
   return card;
 }
 
