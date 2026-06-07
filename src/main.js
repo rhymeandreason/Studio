@@ -2229,6 +2229,19 @@ async function extendSave() {
 
 // Save, then open the result in Apple Photos to brush Clean Up (smooths the
 // PatchMatch-extended margin with Apple's on-device model).
+// Import the current image into Photos and open it in Edit (for Clean Up etc.).
+async function editInPhotos() {
+  if (!editItem) return;
+  setEditStatus("Opening in Photos…");
+  try {
+    await invoke("open_in_photos", { path: editItem.path });
+    setEditStatus("");
+  } catch (err) {
+    console.error("Open in Photos failed:", err);
+    setEditStatus(`Photos: ${err}`);
+  }
+}
+
 async function extendSaveAndCleanUp() {
   const dest = await writeExtended();
   if (!dest) return;
@@ -2246,6 +2259,7 @@ async function extendSaveAndCleanUp() {
 
 function initExtend() {
   document.getElementById("ed-extendbg").addEventListener("click", openExtend);
+  document.getElementById("ed-photos").addEventListener("click", editInPhotos);
   document.getElementById("extend-fill").addEventListener("click", extendFill);
   document
     .getElementById("extend-fill-sd")
@@ -2391,6 +2405,7 @@ function initMedia() {
   menuAction("m-reveal", () => {
     if (editItem) invoke("reveal_in_finder", { path: editItem.path });
   });
+  menuAction("m-photos", editInPhotos); // Edit in Photos
 
   // Click anywhere off a thumbnail (empty grid space, panel padding) to clear
   // the selection. The batch bar and the editor side column keep their clicks.
