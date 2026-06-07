@@ -509,13 +509,31 @@ fn open_in_photos(path: String) -> Result<(), String> {
         .status()
         .map_err(|e| e.to_string())?;
 
-    // Give Photos time to import + show the photo, then press Return (Edit).
+    // Best-effort: open the "Recently Saved" album, select the last (newest)
+    // photo, and enter the Edit panel. Each UI step is wrapped so a layout
+    // mismatch doesn't abort the rest. Key codes: 36=Return, 48=Tab, 119=End.
     let script = r#"
         delay 2.5
         tell application "Photos" to activate
-        delay 0.6
+        delay 0.8
         tell application "System Events" to tell process "Photos"
-            key code 36
+            -- 1) Open the "Recently Saved" album in the sidebar.
+            try
+                set theRow to (first row of outline 1 of scroll area 1 of splitter group 1 of window 1 whose name contains "Recently Saved")
+                select theRow
+            end try
+            delay 1.0
+            -- 2) Move focus into the photo grid and jump to the last photo.
+            try
+                key code 48
+                delay 0.3
+                key code 119
+            end try
+            delay 0.3
+            -- 3) Enter Edit.
+            try
+                key code 36
+            end try
         end tell
     "#;
     let _ = Command::new("osascript").args(["-e", script]).spawn();
