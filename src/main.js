@@ -1890,6 +1890,14 @@ let exScale = 1; // stage px per image px
 let exDrag = null;
 let exMethod = null; // "patch" | "simple" | "color" — the last fill used
 let exColor = "#cccccc"; // Color Fill colour (defaults to corner average)
+let exHasAlpha = false; // whether the current image has transparent pixels
+
+// True if any pixel in the canvas is not fully opaque.
+function canvasHasAlpha(cv) {
+  const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+  for (let i = 3; i < d.length; i += 4) if (d[i] < 255) return true;
+  return false;
+}
 
 const exTargetW = () => exBase.width + exMargins.l + exMargins.r;
 const exTargetH = () => exBase.height + exMargins.t + exMargins.b;
@@ -1957,6 +1965,7 @@ async function openExtend() {
   exBase.width = baked.width;
   exBase.height = baked.height;
   exBase.getContext("2d").drawImage(baked, 0, 0);
+  exHasAlpha = canvasHasAlpha(exBase);
 
   exMargins = { l: 0, r: 0, t: 0, b: 0 };
   exRatio = null;
@@ -2187,15 +2196,22 @@ async function runExtendFill(engine, cap) {
     const fctx = final.getContext("2d");
     fctx.imageSmoothingQuality = "high";
     fctx.drawImage(filledImg, 0, 0, tw, th);
-    const feather = Math.min(
-      64,
-      Math.max(6, Math.round(Math.min(exBase.width, exBase.height) * 0.04)),
-    );
-    fctx.drawImage(
-      featheredOriginal(exBase, exMargins, feather),
-      exMargins.l,
-      exMargins.t,
-    );
+    // Composite the original on top. Feather its edges into the fill to hide the
+    // seam — except for Color Fill on a transparent image, where feathering
+    // would fade the cutout's own edges into the colour (a halo).
+    if (exMethod === "color" && exHasAlpha) {
+      fctx.drawImage(exBase, exMargins.l, exMargins.t);
+    } else {
+      const feather = Math.min(
+        64,
+        Math.max(6, Math.round(Math.min(exBase.width, exBase.height) * 0.04)),
+      );
+      fctx.drawImage(
+        featheredOriginal(exBase, exMargins, feather),
+        exMargins.l,
+        exMargins.t,
+      );
+    }
     exFinal = final;
 
     status.textContent = "Filled ✓";
