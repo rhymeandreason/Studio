@@ -1,4 +1,5 @@
 // imgplay — headless Image Playground generator (Apple Intelligence).
+//This doesn't work in the background at of Jun 7 2026, revisit later
 //
 // Usage:  imgplay <input-image> <style> <output.png>
 //   style: animation | illustration | sketch
