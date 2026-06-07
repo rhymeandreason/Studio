@@ -505,9 +505,29 @@ fn photos_edit_script(initial_delay: f32) -> String {
     format!(
         r#"
         delay {initial_delay}
-        tell application "Photos" to activate
+        -- Launch + restore Photos: `reopen` recreates the main window if it was
+        -- closed; activate brings it forward.
+        tell application "Photos"
+            reopen
+            activate
+        end tell
         delay 0.8
         tell application "System Events" to tell process "Photos"
+            set frontmost to true
+            -- Un-minimize any minimized window.
+            try
+                repeat with w in windows
+                    if value of attribute "AXMinimized" of w is true then
+                        set value of attribute "AXMinimized" of w to false
+                    end if
+                end repeat
+            end try
+            -- Wait up to ~3s for a window to be present.
+            repeat 30 times
+                if (count of windows) > 0 then exit repeat
+                delay 0.1
+            end repeat
+            delay 0.4
             -- 1) Open the "Recently Saved" album in the sidebar.
             try
                 set theRow to (first row of outline 1 of scroll area 1 of splitter group 1 of window 1 whose name contains "Recently Saved")
