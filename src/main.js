@@ -387,32 +387,66 @@ function initNewModal() {
 
 let mediaProjectPath = null;
 let currentMedia = null;
+// The single source of truth for selection. A selection of exactly one image
+// opens the editor; 0 or 2+ (or a single non-image) shows the batch bar instead.
 const mediaSelection = new Set();
+const mediaItemsByPath = new Map(); // path → MediaItem, refreshed by loadMedia
 
 function updateSelbar() {
   const n = mediaSelection.size;
-  document.getElementById("selbar").hidden = n === 0;
+  // Hide the batch bar only when the sole selected item is the one the editor
+  // is already showing; otherwise show it (incl. multi-select with editor open).
+  const editorOwnsSelection =
+    n === 1 && activeItem && mediaSelection.has(activeItem.path);
+  document.getElementById("selbar").hidden = n === 0 || editorOwnsSelection;
   document.getElementById("sel-count").textContent = `${n} selected`;
   document.getElementById("sel-paste").disabled = !copiedEdits || n === 0;
 }
 
-function toggleSelect(path, tile) {
-  if (mediaSelection.has(path)) {
-    mediaSelection.delete(path);
-    tile.classList.remove("is-selected");
-  } else {
-    mediaSelection.add(path);
-    tile.classList.add("is-selected");
-  }
+// Repaint tile selection rings + the batch bar from mediaSelection.
+function updateSelectionUI() {
+  document
+    .querySelectorAll(".mediatile")
+    .forEach((t) =>
+      t.classList.toggle("is-selected", mediaSelection.has(t.dataset.path)),
+    );
   updateSelbar();
+}
+
+// Open the inline editor on `item` (switching from another image if needed).
+async function openInlineEditor(item) {
+  if (activeItem && activeItem.path === item.path) return;
+  if (activeItem) await flushEditSave();
+  activeItem = item;
+  document.getElementById("side-name").textContent = item.name;
+  document.getElementById("media-side").hidden = false;
+  moveEditor(document.getElementById("media-side-editor"));
+  await loadEditor(item);
+  updateSelbar();
+}
+
+// Plain click: select only this item. A single deliberate selection drives the
+// editor — opening it on an image, or closing it on a non-image.
+async function selectOnly(item) {
+  mediaSelection.clear();
+  mediaSelection.add(item.path);
+  updateSelectionUI();
+  if (item.kind === "image") await openInlineEditor(item);
+  else await closeInlineEditor();
+}
+
+// ⌘/Ctrl click: add/remove from the selection. The editor is sticky here — a
+// second selection never opens, closes, or switches it.
+async function toggleSelect(item) {
+  if (mediaSelection.has(item.path)) mediaSelection.delete(item.path);
+  else mediaSelection.add(item.path);
+  updateSelectionUI();
 }
 
 function clearSelection() {
   mediaSelection.clear();
-  document
-    .querySelectorAll(".mediatile.is-selected")
-    .forEach((t) => t.classList.remove("is-selected"));
-  updateSelbar();
+  updateSelectionUI();
+  closeInlineEditor();
 }
 
 // Move the given media (and their edit sidecars) to the Trash, then refresh.
@@ -605,26 +639,20 @@ function buildMediaTile(item, edited) {
     );
   thumb.append(img);
 
-  if (isImage) {
-    const check = el("span", "mediatile__check", { title: "Select" });
-    check.addEventListener("click", (e) => {
-      e.stopPropagation();
-      toggleSelect(item.path, tile);
-    });
-    thumb.append(check);
-  }
   tile.append(thumb);
   tile.append(el("span", "mediatile__name", { textContent: item.name }));
   if (mediaSelection.has(item.path)) tile.classList.add("is-selected");
-  if (activeItem && activeItem.path === item.path)
-    tile.classList.add("is-active");
 
-  if (isImage) {
-    tile.addEventListener("click", () => selectForEdit(item, tile));
-    tile.addEventListener("dblclick", () => openLightbox(item));
-  } else {
-    tile.addEventListener("click", () => invoke("open_path", { path: item.path }));
-  }
+  tile.addEventListener("click", (e) => {
+    // ⌘/Ctrl-click toggles the item in the selection; plain click selects only
+    // it (and opens the editor when it's a single image).
+    if (e.metaKey || e.ctrlKey) toggleSelect(item);
+    else selectOnly(item);
+  });
+  tile.addEventListener("dblclick", () => {
+    if (isImage) openLightbox(item);
+    else invoke("open_path", { path: item.path });
+  });
 
   if (isImage && item.has_edits) {
     if (thumbCache.has(item.path)) img.src = thumbCache.get(item.path);
@@ -682,6 +710,9 @@ async function loadMedia(path) {
   const grid = document.getElementById("media-grid");
   const items = await invoke("list_media", { path });
 
+  mediaItemsByPath.clear();
+  for (const it of items) mediaItemsByPath.set(it.path, it);
+
   // Prune selection to files that still exist.
   const present = new Set(items.map((i) => i.path));
   for (const p of [...mediaSelection])
@@ -712,10 +743,6 @@ async function loadMedia(path) {
     if (reuse && reuse.dataset.sig === sig) {
       existing.delete(item.path);
       reuse.classList.toggle("is-selected", mediaSelection.has(item.path));
-      reuse.classList.toggle(
-        "is-active",
-        !!activeItem && activeItem.path === item.path,
-      );
       desired.push(reuse);
     } else if (reuse && item.kind === "image") {
       // Same image, edits changed — refresh its thumbnail in place. The old (or
@@ -724,10 +751,6 @@ async function loadMedia(path) {
       existing.delete(item.path);
       reuse.dataset.sig = sig;
       reuse.classList.toggle("is-selected", mediaSelection.has(item.path));
-      reuse.classList.toggle(
-        "is-active",
-        !!activeItem && activeItem.path === item.path,
-      );
       const img = reuse.querySelector(".mediatile__img");
       if (item.has_edits) {
         if (thumbCache.has(item.path)) img.src = thumbCache.get(item.path);
@@ -776,14 +799,6 @@ let activeItem = null;
 function moveEditor(host) {
   const editor = document.getElementById("editor");
   if (editor.parentElement !== host) host.append(editor);
-}
-
-// Highlight one tile as the edit focus (distinct from checkbox multi-select).
-function setActiveTile(tile) {
-  document
-    .querySelectorAll(".mediatile.is-active")
-    .forEach((t) => t.classList.remove("is-active"));
-  if (tile) tile.classList.add("is-active");
 }
 
 // Flush any pending edit save so the grid thumbnail reflects the latest edits.
@@ -861,41 +876,31 @@ async function loadEditor(item) {
   renderEditorPreview();
 }
 
-// Single-click an image: select it and show its edit controls in the side column.
-async function selectForEdit(item, tile) {
-  if (activeItem && activeItem.path === item.path) return; // already selected
-  if (activeItem) await flushEditSave();
-  setActiveTile(tile);
-  activeItem = item;
-  document.getElementById("side-name").textContent = item.name;
-  document.getElementById("media-side").hidden = false;
-  moveEditor(document.getElementById("media-side-editor"));
-  await loadEditor(item);
-}
-
-// Click off any thumbnail (or Escape): drop the edit focus, hide the side column.
-async function deselectActive() {
+// Tear down the inline editor (no selection change). Refreshes the grid
+// thumbnail if edits were made.
+async function closeInlineEditor() {
   if (!activeItem) return;
+  const dirty = editDirty;
   await flushEditSave();
-  setActiveTile(null);
   activeItem = null;
+  document.getElementById("lightbox").hidden = true;
+  moveEditor(document.getElementById("media-side-editor"));
   document.getElementById("media-side").hidden = true;
   editItem = null;
   editThumb = null;
   editImg = null;
   editPreview = null;
   editState = null;
-  if (mediaProjectPath) loadMedia(mediaProjectPath);
+  updateSelbar(); // editor closed — the batch bar may need to reappear
+  if (dirty && mediaProjectPath) loadMedia(mediaProjectPath);
 }
 
 // Double-click (or the side "Lightbox" button): open the full-screen editor.
 async function openLightbox(item) {
   if (!activeItem || activeItem.path !== item.path) {
-    const tile = document.querySelector(
-      `.mediatile[data-path="${CSS.escape(item.path)}"]`,
-    );
-    await selectForEdit(item, tile);
+    await selectOnly(item); // selects + loads the inline editor
   }
+  if (!activeItem) return; // not an image — nothing to show
   moveEditor(document.getElementById("lb-stage"));
   document.getElementById("lightbox").hidden = false;
   renderEditorPreview(); // show the thumbnail immediately…
@@ -1915,10 +1920,23 @@ function initMedia() {
     if (activeItem) openLightbox(activeItem);
   });
 
-  // Click off any thumbnail (empty grid space) to deselect.
-  document.getElementById("media-main").addEventListener("click", (e) => {
-    if (e.target.closest(".mediatile") || e.target.closest(".selbar")) return;
-    deselectActive();
+  // Click anywhere off a thumbnail (empty grid space, panel padding) to clear
+  // the selection. The batch bar and the editor side column keep their clicks.
+  document
+    .querySelector('[data-panel="media"]')
+    .addEventListener("click", (e) => {
+      if (
+        e.target.closest(".mediatile") ||
+        e.target.closest(".selbar") ||
+        e.target.closest(".media-side")
+      )
+        return;
+      clearSelection();
+    });
+
+  // Clicking the project header (name/path, empty space) also counts as off.
+  document.getElementById("project-header").addEventListener("click", () => {
+    if (!document.querySelector('[data-panel="media"]').hidden) clearSelection();
   });
 
   document.addEventListener("keydown", (e) => {
@@ -1933,7 +1951,7 @@ function initMedia() {
       // The editor is active (full lightbox or inline side column).
       if (e.key === "Escape") {
         if (lightboxOpen) closeLightbox();
-        else deselectActive();
+        else clearSelection();
       } else if (mod && (e.key === "c" || e.key === "C")) {
         e.preventDefault();
         copyAdjustments();
