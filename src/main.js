@@ -39,7 +39,9 @@ function render(project) {
   const header = document.getElementById("project-header");
   const overview = document.getElementById("overview");
 
-  overview.hidden = true; // activating a project leaves the overview
+  // Only close the overview when a project is actively being rendered
+  // (i.e. a card was clicked). Navigating back via the back button keeps it open.
+  if (project) overview.hidden = true;
 
   if (project) {
     document.getElementById("project-name").textContent = project.name;
@@ -82,7 +84,19 @@ async function showOverview() {
       const path = document.createElement("span");
       path.className = "card__path";
       path.textContent = p.path;
-      card.append(name, path);
+
+      const trash = document.createElement("button");
+      trash.className = "card__trash";
+      trash.type = "button";
+      trash.title = "Move to Trash";
+      trash.innerHTML = mi("delete");
+      trash.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await invoke("trash_project", { path: p.path });
+        card.remove();
+      });
+
+      card.append(name, path, trash);
       card.addEventListener("click", () =>
         invoke("open_project", { path: p.path }),
       );

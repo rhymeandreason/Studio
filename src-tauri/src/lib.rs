@@ -1137,6 +1137,12 @@ fn launch_workspace(app: AppHandle, path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+/// Move an entire project folder to the Trash.
+#[tauri::command]
+fn trash_project(path: String) -> Result<(), String> {
+    trash::delete(&path).map_err(|e| e.to_string())
+}
+
 /// Rename a media file in place, moving its edits sidecar too if present.
 #[tauri::command]
 fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
@@ -1191,7 +1197,8 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
             save_edits,
             trash_media,
             write_image,
-            rename_media
+            rename_media,
+            trash_project
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.
