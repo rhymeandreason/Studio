@@ -1094,7 +1094,7 @@ td.ntable__total-cell {
 }
 
 /* Generate dialog */
-.generate {
+.modal.generate {
     z-index: 50;
     background: rgba(42, 42, 40, 0.45);
 }

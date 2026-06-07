@@ -348,6 +348,18 @@ function closeNewModal() {
   document.getElementById("new-modal").hidden = true;
 }
 
+// Clicking the backdrop (the .modal element itself, not the card inside)
+// closes any modal — mirrors the Escape / cancel-button behaviour.
+document.addEventListener("click", (e) => {
+  if (!e.target.classList.contains("modal")) return;
+  const id = e.target.id;
+  if (id === "new-modal") { closeNewModal(); return; }
+  if (id === "generate") { document.getElementById("generate").hidden = true; return; }
+  if (id === "extend")   { document.getElementById("extend").hidden   = true; return; }
+  if (id === "webexport"){ document.getElementById("webexport").hidden = true; return; }
+  if (id === "cutout")   { document.getElementById("cutout").hidden   = true; return; }
+});
+
 function showNewError(msg) {
   const el = document.getElementById("new-error");
   el.textContent = msg;
