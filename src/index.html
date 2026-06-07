@@ -89,9 +89,46 @@
                                 class="media-side__name"
                                 id="side-name"
                             ></span>
-                            <button class="btn-ghost" id="side-lightbox">
+                            <button
+                                class="iconbtn-round"
+                                id="side-lightbox"
+                                title="Open Lightbox"
+                            >
                                 <span class="mi mi-sm">open_in_full</span>
                             </button>
+                            <div class="side-more">
+                                <button
+                                    class="iconbtn-round"
+                                    id="side-more"
+                                    title="More"
+                                >
+                                    <span class="mi mi-sm">more_vert</span>
+                                </button>
+                                <div class="menu" id="side-menu" hidden>
+                                    <button class="menu__item" id="m-export">
+                                        <span class="mi mi-sm">file_copy</span
+                                        >Duplicate
+                                    </button>
+                                    <button class="menu__item" id="m-webexport">
+                                        <span class="mi mi-sm"
+                                            >photo_size_select_large</span
+                                        >Export
+                                    </button>
+                                    <button class="menu__item" id="m-replace">
+                                        <span class="mi mi-sm"
+                                            >published_with_changes</span
+                                        >Replace original
+                                    </button>
+                                    <button class="menu__item" id="m-copy">
+                                        <span class="mi mi-sm">file_export</span
+                                        >Copy path
+                                    </button>
+                                    <button class="menu__item" id="m-reveal">
+                                        <span class="mi mi-sm">folder_open</span
+                                        >Show in Finder
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div
                             class="media-side__editor"

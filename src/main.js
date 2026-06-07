@@ -1738,22 +1738,27 @@ async function runWebExport(ctx, settings) {
   }
 }
 
-function initWebExport() {
-  document.getElementById("lb-webexport").addEventListener("click", async () => {
-    if (!editItem) return;
-    await ensureFullRes(); // single-mode export bakes from the full-res image
-    openWebExport({
-      mode: "single",
-      items: [
-        {
-          path: editItem.path,
-          name: editItem.name,
-          edits: editState,
-          img: editImg,
-        },
-      ],
-    });
+// Open the Export dialog for the image currently in the editor.
+async function exportCurrent() {
+  if (!editItem) return;
+  await ensureFullRes(); // single-mode export bakes from the full-res image
+  openWebExport({
+    mode: "single",
+    items: [
+      {
+        path: editItem.path,
+        name: editItem.name,
+        edits: editState,
+        img: editImg,
+      },
+    ],
   });
+}
+
+function initWebExport() {
+  document
+    .getElementById("lb-webexport")
+    .addEventListener("click", exportCurrent);
   document.getElementById("sel-webexport").addEventListener("click", () => {
     if (!mediaSelection.size) return;
     openWebExport({
@@ -1918,6 +1923,34 @@ function initMedia() {
   // Side column: open the full lightbox for the selected image.
   document.getElementById("side-lightbox").addEventListener("click", () => {
     if (activeItem) openLightbox(activeItem);
+  });
+
+  // "More" dropdown in the editor side column.
+  const sideMenu = document.getElementById("side-menu");
+  const closeSideMenu = () => (sideMenu.hidden = true);
+  document.getElementById("side-more").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (sideMenu.hidden) {
+      // Replace-original only applies to PNG/JPEG, like the lightbox bar.
+      document.getElementById("m-replace").hidden =
+        document.getElementById("lb-replace").hidden;
+    }
+    sideMenu.hidden = !sideMenu.hidden;
+  });
+  document.addEventListener("click", () => closeSideMenu());
+  const menuAction = (id, fn) =>
+    document.getElementById(id).addEventListener("click", () => {
+      closeSideMenu();
+      fn();
+    });
+  menuAction("m-export", () => exportEdited(false)); // Duplicate
+  menuAction("m-webexport", exportCurrent); // Export
+  menuAction("m-replace", () => exportEdited(true)); // Replace original
+  menuAction("m-copy", () => {
+    if (editItem) navigator.clipboard.writeText(editItem.path);
+  });
+  menuAction("m-reveal", () => {
+    if (editItem) invoke("reveal_in_finder", { path: editItem.path });
   });
 
   // Click anywhere off a thumbnail (empty grid space, panel padding) to clear
