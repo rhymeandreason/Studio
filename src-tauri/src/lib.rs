@@ -733,10 +733,10 @@ fn extend_background(png_base64: String) -> Result<String, String> {
     Ok(STANDARD.encode(&out))
 }
 
-/// Generative outpaint via Draw Things' Automatic1111-compatible HTTP API.
+/// Generative outpaint via the Automatic1111 (stable-diffusion-webui) HTTP API.
 /// `init_base64` is the enlarged canvas (margins pre-filled), `mask_base64`
 /// marks the new margins white. Returns the generated PNG (base64). Requires
-/// Draw Things running with "API Server" enabled (default 127.0.0.1:7860).
+/// A1111 running with `--api` (default 127.0.0.1:7860).
 #[tauri::command]
 fn sd_outpaint(
     init_base64: String,
@@ -749,17 +749,21 @@ fn sd_outpaint(
 ) -> Result<String, String> {
     let host = std::env::var("STUDIO_SD_HOST")
         .unwrap_or_else(|_| "http://127.0.0.1:7860".to_string());
-    let _ = (width, height); // Draw Things derives output size from the init image
     let body = serde_json::json!({
         "init_images": [init_base64],
         "mask": mask_base64,
         "prompt": prompt,
         "negative_prompt": negative_prompt,
-        "seed": -1,
+        "denoising_strength": 1.0,
+        "mask_blur": 8,
+        "inpainting_fill": 2,       // latent noise — generate new content
+        "inpaint_full_res": false,  // use the whole image as context
+        "resize_mode": 0,
         "steps": steps,
         "cfg_scale": 7.0,
-        "batch_count": 1,
-        "denoising_strength": 1.0,
+        "width": width,
+        "height": height,
+        "seed": -1,
     });
 
     let agent = ureq::AgentBuilder::new()
@@ -776,11 +780,11 @@ fn sd_outpaint(
         // surface its message so we can see which field it dislikes.
         Err(ureq::Error::Status(code, r)) => {
             let detail = r.into_string().unwrap_or_default();
-            return Err(format!("Draw Things {code}: {}", detail.trim()));
+            return Err(format!("SD {code}: {}", detail.trim()));
         }
         Err(e) => {
             return Err(format!(
-                "Draw Things request failed — is its API Server on at {host}? ({e})"
+                "SD request failed — is the A1111 API running at {host} (--api)? ({e})"
             ));
         }
     };
@@ -788,7 +792,7 @@ fn sd_outpaint(
     v["images"][0]
         .as_str()
         .map(|s| s.to_string())
-        .ok_or_else(|| "Draw Things returned no image".to_string())
+        .ok_or_else(|| "SD API returned no image".to_string())
 }
 
 // --- Background removal (macOS Vision framework) ---------------------------

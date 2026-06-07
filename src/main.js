@@ -2151,13 +2151,13 @@ function extendFill() {
   );
 }
 
-// Generative (Stable Diffusion outpaint) fill via Draw Things' HTTP API.
+// Generative (Stable Diffusion outpaint) fill via the A1111 HTTP API.
 function extendFillSD() {
   return runExtendFill(sdEngine, 1024);
 }
 
 // Build the init image (margins pre-filled) + mask (margins white) from the
-// transparent-margin work canvas, then ask Draw Things to outpaint.
+// transparent-margin work canvas, then ask the SD API to outpaint.
 async function sdEngine(work) {
   const wW = work.width;
   const wH = work.height;
