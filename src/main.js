@@ -1875,6 +1875,247 @@ function initRemoveBg() {
   });
 }
 
+// --- Extend background (PatchMatch outpaint) -------------------------------
+
+let exBase = null; // standalone canvas of the current edited image, full-res
+let exMargins = { l: 0, r: 0, t: 0, b: 0 }; // px added per side, base-image space
+let exRatio = null; // locked aspect (w/h) or null = free drag
+let exFinal = null; // composited result canvas after Fill (or null)
+let exScale = 1; // stage px per image px
+let exDrag = null;
+
+const exTargetW = () => exBase.width + exMargins.l + exMargins.r;
+const exTargetH = () => exBase.height + exMargins.t + exMargins.b;
+
+async function openExtend() {
+  if (!editItem) return;
+  await ensureFullRes();
+  // Bake the current edits to a standalone full-res canvas (bakeCanvas returns
+  // a shared canvas, so copy it).
+  const baked = bakeCanvas(editImg, editState, {
+    maxDim: 0,
+    format: "png",
+    quality: 100,
+  });
+  exBase = document.createElement("canvas");
+  exBase.width = baked.width;
+  exBase.height = baked.height;
+  exBase.getContext("2d").drawImage(baked, 0, 0);
+
+  exMargins = { l: 0, r: 0, t: 0, b: 0 };
+  exRatio = null;
+  exFinal = null;
+  document.getElementById("extend-save").disabled = true;
+  document.getElementById("extend-status").textContent = "";
+  document
+    .querySelectorAll("#extend-ratios .chip")
+    .forEach((c) => c.classList.toggle("is-active", c.dataset.ratio === "free"));
+  document.getElementById("extend").hidden = false;
+  renderExtend();
+}
+
+function applyExtendRatio(r) {
+  exRatio = r;
+  if (r) {
+    let tw = exBase.width;
+    let th = exBase.height;
+    if (tw / th < r) tw = Math.round(th * r);
+    else th = Math.round(tw / r);
+    const ml = Math.floor((tw - exBase.width) / 2);
+    const mt = Math.floor((th - exBase.height) / 2);
+    exMargins = {
+      l: ml,
+      r: tw - exBase.width - ml,
+      t: mt,
+      b: th - exBase.height - mt,
+    };
+  }
+  exFinal = null;
+  document.getElementById("extend-save").disabled = true;
+  renderExtend();
+}
+
+function renderExtend() {
+  const stage = document.getElementById("extend-stage");
+  const frame = document.getElementById("extend-frame");
+  const canvas = document.getElementById("extend-canvas");
+  const tw = exTargetW();
+  const th = exTargetH();
+  exScale = Math.min(stage.clientWidth / tw, stage.clientHeight / th, 1);
+  const dw = Math.max(1, Math.round(tw * exScale));
+  const dh = Math.max(1, Math.round(th * exScale));
+  frame.style.width = `${dw}px`;
+  frame.style.height = `${dh}px`;
+  canvas.width = dw;
+  canvas.height = dh;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.clearRect(0, 0, dw, dh);
+  if (exFinal) {
+    ctx.drawImage(exFinal, 0, 0, dw, dh);
+  } else {
+    ctx.drawImage(
+      exBase,
+      exMargins.l * exScale,
+      exMargins.t * exScale,
+      exBase.width * exScale,
+      exBase.height * exScale,
+    );
+  }
+}
+
+function exPointerDown(e) {
+  e.preventDefault();
+  exDrag = {
+    handle: e.target.dataset.h,
+    sx: e.clientX,
+    sy: e.clientY,
+    m0: { ...exMargins },
+    tw0: exTargetW(),
+  };
+  window.addEventListener("pointermove", exPointerMove);
+  window.addEventListener("pointerup", exPointerUp);
+}
+
+function exPointerMove(e) {
+  if (!exDrag) return;
+  const dx = (e.clientX - exDrag.sx) / exScale;
+  const dy = (e.clientY - exDrag.sy) / exScale;
+  const h = exDrag.handle;
+
+  if (exRatio) {
+    // Keep the locked ratio: extend symmetrically around the center, driven by
+    // whichever axis the handle moved most.
+    const cands = [];
+    if (h.includes("e")) cands.push(dx);
+    if (h.includes("w")) cands.push(-dx);
+    if (h.includes("s")) cands.push(dy);
+    if (h.includes("n")) cands.push(-dy);
+    const d = cands.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), 0);
+    let tw = Math.max(exBase.width, Math.round(exDrag.tw0 + 2 * d));
+    let th = Math.round(tw / exRatio);
+    if (th < exBase.height) {
+      th = exBase.height;
+      tw = Math.round(th * exRatio);
+    }
+    const ml = Math.floor((tw - exBase.width) / 2);
+    const mt = Math.floor((th - exBase.height) / 2);
+    exMargins = {
+      l: ml,
+      r: tw - exBase.width - ml,
+      t: mt,
+      b: th - exBase.height - mt,
+    };
+  } else {
+    const m = { ...exDrag.m0 };
+    if (h.includes("e")) m.r = Math.max(0, Math.round(exDrag.m0.r + dx));
+    if (h.includes("w")) m.l = Math.max(0, Math.round(exDrag.m0.l - dx));
+    if (h.includes("s")) m.b = Math.max(0, Math.round(exDrag.m0.b + dy));
+    if (h.includes("n")) m.t = Math.max(0, Math.round(exDrag.m0.t - dy));
+    exMargins = m;
+  }
+  exFinal = null;
+  document.getElementById("extend-save").disabled = true;
+  renderExtend();
+}
+
+function exPointerUp() {
+  exDrag = null;
+  window.removeEventListener("pointermove", exPointerMove);
+  window.removeEventListener("pointerup", exPointerUp);
+}
+
+async function extendFill() {
+  if (!exBase) return;
+  if (exMargins.l + exMargins.r + exMargins.t + exMargins.b === 0) {
+    document.getElementById("extend-status").textContent = "Nothing to extend";
+    return;
+  }
+  const tw = exTargetW();
+  const th = exTargetH();
+  const status = document.getElementById("extend-status");
+  const fillBtn = document.getElementById("extend-fill");
+  status.textContent = "Filling…";
+  fillBtn.disabled = true;
+  try {
+    // Compose the enlarged canvas at a capped working resolution, leaving the
+    // new margins transparent (alpha 0) for PatchMatch to synthesize.
+    const cap = 1024;
+    const ws = Math.min(1, cap / Math.max(tw, th));
+    const wW = Math.max(1, Math.round(tw * ws));
+    const wH = Math.max(1, Math.round(th * ws));
+    const work = document.createElement("canvas");
+    work.width = wW;
+    work.height = wH;
+    const wctx = work.getContext("2d");
+    wctx.imageSmoothingQuality = "high";
+    wctx.clearRect(0, 0, wW, wH);
+    wctx.drawImage(
+      exBase,
+      Math.round(exMargins.l * ws),
+      Math.round(exMargins.t * ws),
+      Math.round(exBase.width * ws),
+      Math.round(exBase.height * ws),
+    );
+    const b64 = work.toDataURL("image/png").split(",")[1];
+    const filledB64 = await invoke("extend_background", { pngBase64: b64 });
+    const filledImg = await loadImage(`data:image/png;base64,${filledB64}`);
+
+    // Final full-res: upscaled synthesized fill, with the crisp original on top.
+    const final = document.createElement("canvas");
+    final.width = tw;
+    final.height = th;
+    const fctx = final.getContext("2d");
+    fctx.imageSmoothingQuality = "high";
+    fctx.drawImage(filledImg, 0, 0, tw, th);
+    fctx.drawImage(exBase, exMargins.l, exMargins.t);
+    exFinal = final;
+
+    status.textContent = "Filled ✓";
+    document.getElementById("extend-save").disabled = false;
+    renderExtend();
+  } catch (err) {
+    console.error("extend_background failed:", err);
+    status.textContent = "Fill failed";
+  } finally {
+    fillBtn.disabled = false;
+  }
+}
+
+async function extendSave() {
+  if (!exFinal || !editItem) return;
+  const dest = editItem.path.replace(/\.[^/.]+$/, "") + "-extended.png";
+  try {
+    const b64 = exFinal.toDataURL("image/png").split(",")[1];
+    await invoke("write_image", { path: dest, dataBase64: b64 });
+    document.getElementById("extend").hidden = true;
+    if (mediaProjectPath) loadMedia(mediaProjectPath);
+  } catch (err) {
+    console.error("Saving extended image failed:", err);
+  }
+}
+
+function initExtend() {
+  document.getElementById("ed-extendbg").addEventListener("click", openExtend);
+  document.getElementById("extend-fill").addEventListener("click", extendFill);
+  document.getElementById("extend-save").addEventListener("click", extendSave);
+  document
+    .getElementById("extend-cancel")
+    .addEventListener("click", () => (document.getElementById("extend").hidden = true));
+  document.querySelectorAll("#extend-ratios .chip").forEach((c) =>
+    c.addEventListener("click", () => {
+      document
+        .querySelectorAll("#extend-ratios .chip")
+        .forEach((x) => x.classList.remove("is-active"));
+      c.classList.add("is-active");
+      applyExtendRatio(c.dataset.ratio === "free" ? null : Number(c.dataset.ratio));
+    }),
+  );
+  document
+    .querySelectorAll("#extend-frame .exh")
+    .forEach((hd) => hd.addEventListener("pointerdown", exPointerDown));
+}
+
 function initEditor() {
   buildTonalSliders();
   document
@@ -1942,6 +2183,7 @@ function initMedia() {
   initEditor();
   initWebExport();
   initRemoveBg();
+  initExtend();
   document.getElementById("sel-paste").addEventListener("click", batchPaste);
   document
     .getElementById("sel-clear")
@@ -2005,6 +2247,11 @@ function initMedia() {
 
   document.addEventListener("keydown", (e) => {
     const mod = e.metaKey || e.ctrlKey;
+    // The Extend-background modal takes Escape first.
+    if (!document.getElementById("extend").hidden) {
+      if (e.key === "Escape") document.getElementById("extend").hidden = true;
+      return;
+    }
     const lightboxOpen = !document.getElementById("lightbox").hidden;
     const inlineActive =
       activeItem &&

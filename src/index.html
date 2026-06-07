@@ -381,6 +381,13 @@
                                     <span class="mi mi-sm">auto_fix_high</span
                                     >Remove background
                                 </button>
+                                <button
+                                    class="chip chip--reset"
+                                    id="ed-extendbg"
+                                >
+                                    <span class="mi mi-sm">aspect_ratio</span
+                                    >Extend background
+                                </button>
                             </div>
                         </div>
 
@@ -403,6 +410,48 @@
                     <button class="btn-ghost" id="cutout-cancel">Cancel</button>
                     <button class="btn-save" id="cutout-save">
                         <span class="mi mi-sm">save</span>Save cutout
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Extend background (outpaint) -->
+        <div class="modal extend" id="extend" hidden>
+            <div class="modal__card extend__card">
+                <h2 class="modal__title">Extend background</h2>
+                <p class="modal__hint">
+                    Drag the handles to grow the canvas, or pick a ratio. Fill
+                    synthesizes the new area from the image.
+                </p>
+                <div class="extend__ratios" id="extend-ratios">
+                    <button class="chip is-active" data-ratio="free">Free</button>
+                    <button class="chip" data-ratio="1">1:1</button>
+                    <button class="chip" data-ratio="1.7778">16:9</button>
+                    <button class="chip" data-ratio="0.5625">9:16</button>
+                    <button class="chip" data-ratio="1.5">3:2</button>
+                    <button class="chip" data-ratio="0.8">4:5</button>
+                </div>
+                <div class="extend__stage" id="extend-stage">
+                    <div class="extend__frame" id="extend-frame">
+                        <canvas id="extend-canvas"></canvas>
+                        <span class="exh" data-h="n"></span>
+                        <span class="exh" data-h="s"></span>
+                        <span class="exh" data-h="e"></span>
+                        <span class="exh" data-h="w"></span>
+                        <span class="exh" data-h="nw"></span>
+                        <span class="exh" data-h="ne"></span>
+                        <span class="exh" data-h="sw"></span>
+                        <span class="exh" data-h="se"></span>
+                    </div>
+                </div>
+                <div class="modal__actions">
+                    <span class="edit-status" id="extend-status"></span>
+                    <button class="btn-ghost" id="extend-cancel">Cancel</button>
+                    <button class="btn-ghost" id="extend-fill">
+                        <span class="mi mi-sm">auto_awesome</span>Fill
+                    </button>
+                    <button class="btn-save" id="extend-save" disabled>
+                        <span class="mi mi-sm">save</span>Save
                     </button>
                 </div>
             </div>
