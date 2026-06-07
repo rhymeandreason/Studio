@@ -7,6 +7,7 @@
 // ImageCreator API and writes it to <output.png>. Used to evaluate whether
 // Image Playground's photo-seeding is useful for Studio. Stylized only.
 
+import AppKit
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -68,6 +69,10 @@ func run() async {
     let outPath = args[3]
     let prompt = args.count >= 5 ? args[4] : ""
 
+    // ImageCreator refuses to run from a background process
+    // (backgroundCreationForbidden), so let activation settle first.
+    try? await Task.sleep(nanoseconds: 400_000_000)
+
     // Build the concepts: optional source image (`-` = none) + optional text.
     var concepts: [ImagePlaygroundConcept] = []
     if inPath != "-" {
@@ -102,13 +107,21 @@ func run() async {
     }
 }
 
-if #available(macOS 15.4, *) {
-    let sema = DispatchSemaphore(value: 0)
-    Task {
-        await run()
-        sema.signal()
+// ImageCreator only generates for a foreground app, so run as a real (regular)
+// app: activate ourselves, then kick off generation once the event loop is up.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.activate(ignoringOtherApps: true)
+        if #available(macOS 15.4, *) {
+            Task { await run() }  // run() calls exit() on every path
+        } else {
+            die("requires macOS 15.4 or later")
+        }
     }
-    sema.wait()
-} else {
-    die("requires macOS 15.4 or later")
 }
+
+let app = NSApplication.shared
+app.setActivationPolicy(.regular)
+let delegate = AppDelegate()
+app.delegate = delegate
+app.run()
