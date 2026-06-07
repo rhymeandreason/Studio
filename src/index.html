@@ -64,7 +64,8 @@
                     <div class="media-main" id="media-main">
                         <div class="media-toolbar">
                             <button class="btn-ghost" id="generate-open">
-                                <span class="mi mi-sm">auto_awesome</span>Generate
+                                <span class="mi mi-sm">auto_awesome</span
+                                >Generate
                             </button>
                         </div>
                         <div class="selbar" id="selbar" hidden>
@@ -182,6 +183,39 @@
                             <span class="mi mi-sm">table_chart</span>Table
                         </button>
                         <span class="notes-status" id="notes-status"></span>
+                        <select
+                            class="notes-font-picker"
+                            id="notes-font-picker"
+                        >
+                            <option value="'Futura', sans-serif" data-size="14">
+                                Futura
+                            </option>
+                            <option value="system-ui" data-size="14">
+                                System
+                            </option>
+                            <option value="Verdana" data-size="14">
+                                Verdana
+                            </option>
+                            <option
+                                value="New York Medium, serif"
+                                data-size="15"
+                            >
+                                New York
+                            </option>
+                            <option value="Georgia, serif" data-size="15">
+                                Georgia
+                            </option>
+                            <option
+                                value="'Palatino Linotype', Palatino, serif"
+                                data-size="15"
+                            >
+                                Palatino
+                            </option>
+
+                            <option value="Menlo, monospace" data-size="13">
+                                Menlo
+                            </option>
+                        </select>
                     </div>
                     <div class="notes-list" id="notes-list"></div>
                 </section>
@@ -434,8 +468,8 @@
             <div class="modal__card">
                 <h2 class="modal__title">Generate image</h2>
                 <p class="modal__hint">
-                    Runs your Image Playground Shortcut and saves the result into
-                    this project.
+                    Runs your Image Playground Shortcut and saves the result
+                    into this project.
                 </p>
                 <textarea
                     class="field__input generate__prompt"
@@ -449,7 +483,9 @@
                 </label>
                 <div class="modal__actions">
                     <span class="edit-status" id="generate-status"></span>
-                    <button class="btn-ghost" id="generate-cancel">Cancel</button>
+                    <button class="btn-ghost" id="generate-cancel">
+                        Cancel
+                    </button>
                     <button class="btn-save" id="generate-run">
                         <span class="mi mi-sm">auto_awesome</span>Generate
                     </button>

@@ -644,11 +644,37 @@ select.field__input {
     margin-left: auto;
 }
 
+.notes-font-picker {
+    background: transparent;
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 4px 8px;
+    cursor: pointer;
+    outline: none;
+}
+
+.notes-font-picker:hover {
+    border-color: var(--text);
+    color: var(--text);
+}
+
 .notes-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     align-items: start;
     gap: 14px;
+    --notes-font: system-ui;
+}
+
+.notes-list .notecard,
+.notes-list .notecard input,
+.notes-list .notecard textarea,
+.notes-list .notecard td,
+.notes-list .notecard th {
+    font-family: var(--notes-font);
+    font-size: var(--notes-font-size, 14px);
 }
 
 .notecard {
@@ -1102,7 +1128,9 @@ td.ntable__total-cell {
 .generate__prompt {
     width: 100%;
     resize: vertical;
-    font-family: var(--sans);
+    font-family: system-ui;
+    padding:10px;
+    min-height:80px;
 }
 
 .generate__check {

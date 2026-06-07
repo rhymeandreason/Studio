@@ -2978,12 +2978,27 @@ function setNotesStatus(text) {
   document.getElementById("notes-status").textContent = text;
 }
 
+function applyNotesFont() {
+  const font = notesData.font || "system-ui";
+  const picker = document.getElementById("notes-font-picker");
+  const listEl = document.getElementById("notes-list");
+
+  const opt = picker ? [...picker.options].find((o) => o.value === font) : null;
+  const size = notesData.fontSize || (opt?.dataset.size ? Number(opt.dataset.size) : 14);
+
+  listEl.style.setProperty("--notes-font", font);
+  listEl.style.setProperty("--notes-font-size", size + "px");
+
+  if (picker) picker.value = opt ? font : "system-ui";
+}
+
 async function loadNotes(path) {
   notesProjectPath = path;
   const data = await invoke("read_notes", { path });
   notesData =
     data && Array.isArray(data.notes) ? data : { version: 1, notes: [] };
   setNotesStatus("");
+  applyNotesFont();
   renderNotes();
 }
 
@@ -3418,6 +3433,14 @@ function renderNotes() {
 function initNotes() {
   document.querySelectorAll("[data-new-note]").forEach((btn) => {
     btn.addEventListener("click", () => newNote(btn.dataset.newNote));
+  });
+
+  document.getElementById("notes-font-picker").addEventListener("change", (e) => {
+    const opt = e.target.options[e.target.selectedIndex];
+    notesData.font = e.target.value;
+    notesData.fontSize = opt.dataset.size ? Number(opt.dataset.size) : 14;
+    applyNotesFont();
+    scheduleNotesSave();
   });
 
   document.addEventListener("click", (e) => {
