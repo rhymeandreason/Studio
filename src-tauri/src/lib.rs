@@ -45,6 +45,8 @@ struct Workspace {
     urls: Vec<String>,
     #[serde(default)]
     claude: ClaudeCfg,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "pinnedTab")]
+    pinned_tab: Option<String>,
 }
 
 /// App-wide state: which project is currently active (if any).

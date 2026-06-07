@@ -125,7 +125,18 @@ function selectTab(name) {
 function initTabs() {
   document.getElementById("tabs").addEventListener("click", (e) => {
     const tab = e.target.closest(".tab");
-    if (tab) selectTab(tab.dataset.tab);
+    if (e.target.closest("#tab-pin")) {
+      const activeTab = document.querySelector(".tab.is-active")?.dataset.tab;
+      wsPinnedTab = wsPinnedTab === activeTab ? null : activeTab;
+      updatePinButton();
+      scheduleWorkspaceSave();
+      return;
+    }
+
+    if (tab) {
+      selectTab(tab.dataset.tab);
+      updatePinButton();
+    }
   });
 }
 
@@ -285,6 +296,9 @@ async function loadWorkspace(path) {
   setList("files", ws.files);
   setList("urls", ws.urls);
   setStatus("");
+  wsPinnedTab = ws.pinnedTab || null;
+  selectTab(wsPinnedTab || "workspace");
+  updatePinButton();
 }
 
 function setStatus(text) {
@@ -293,6 +307,7 @@ function setStatus(text) {
 
 let wsSaveTimer = null;
 let wsEditor = "";
+let wsPinnedTab = null;
 
 function readWorkspaceForm() {
   return {
@@ -303,7 +318,14 @@ function readWorkspaceForm() {
     apps: readList("apps"),
     files: readList("files"),
     urls: readList("urls"),
+    pinnedTab: wsPinnedTab,
   };
+}
+
+function updatePinButton() {
+  const pinBtn = document.getElementById("tab-pin");
+  const activeTab = document.querySelector(".tab.is-active")?.dataset.tab;
+  pinBtn.classList.toggle("is-active", !!wsPinnedTab && wsPinnedTab === activeTab);
 }
 
 async function saveWorkspaceNow() {
@@ -3502,7 +3524,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   initNewModal();
 
   render(await invoke("get_active_project"));
-  selectTab("workspace");
 
   await listen("project-activated", (event) => render(event.payload));
   await listen("new-project-request", openNewModal);
