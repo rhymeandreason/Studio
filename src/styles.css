@@ -1691,6 +1691,53 @@ td.ntable__total-cell {
     width: 100%;
 }
 
+/* Per-method options (Blur/Noise sliders, Color picker) */
+.extend__options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.extend__opt {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.extend__slider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.extend__slider .slider {
+    width: 160px;
+}
+
+.extend__slider input[type="color"] {
+    width: 40px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    background: none;
+    cursor: pointer;
+}
+
+/* Color swatch inside the Color Fill button */
+.extend__swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid var(--hairline-strong);
+    background: #cccccc;
+    margin-right: 5px;
+    vertical-align: -2px;
+}
+
 /* Landscape / portrait orientation toggle */
 .orient-toggle {
     display: inline-flex;

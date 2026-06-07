@@ -827,7 +827,8 @@ async function flushEditSave() {
 // The best loaded edit source for the current context: full preview in the
 // lightbox, thumbnail inline — falling back to whatever is loaded so far.
 function previewSrc() {
-  if (!document.getElementById("lightbox").hidden) return editPreview || editThumb;
+  if (!document.getElementById("lightbox").hidden)
+    return editPreview || editThumb;
   return editThumb || editPreview || editImg;
 }
 function previewTag() {
@@ -878,7 +879,9 @@ async function loadEditor(item) {
     path: item.path,
     size: THUMB_MAX,
   });
-  const thumb = await loadImage(await invoke("read_image_data", { path: thumbPath }));
+  const thumb = await loadImage(
+    await invoke("read_image_data", { path: thumbPath }),
+  );
   if (editItem !== item) return;
   editThumb = thumb;
   setEditStatus("");
@@ -1885,9 +1888,60 @@ let exOrient = "landscape"; // "landscape" | "portrait"
 let exFinal = null; // composited result canvas after Fill (or null)
 let exScale = 1; // stage px per image px
 let exDrag = null;
+let exMethod = null; // "patch" | "simple" | "color" — the last fill used
+let exColor = "#cccccc"; // Color Fill colour (defaults to corner average)
 
 const exTargetW = () => exBase.width + exMargins.l + exMargins.r;
 const exTargetH = () => exBase.height + exMargins.t + exMargins.b;
+
+// Average colour of the image's four corners (small sampled blocks) as #rrggbb.
+function cornerAverage(cv) {
+  const ctx = cv.getContext("2d");
+  const s = Math.max(1, Math.round(Math.min(cv.width, cv.height) * 0.03));
+  const corners = [
+    [0, 0],
+    [cv.width - s, 0],
+    [0, cv.height - s],
+    [cv.width - s, cv.height - s],
+  ];
+  let r = 0,
+    g = 0,
+    b = 0,
+    n = 0;
+  for (const [x, y] of corners) {
+    const d = ctx.getImageData(x, y, s, s).data;
+    for (let i = 0; i < d.length; i += 4) {
+      r += d[i];
+      g += d[i + 1];
+      b += d[i + 2];
+      n++;
+    }
+  }
+  const hex = (v) =>
+    Math.round(v / n)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
+}
+
+// Select a fill method: highlight its button, show its options, and run it.
+function selectFillMethod(method, btnId, run) {
+  exMethod = method;
+  document
+    .querySelectorAll(".extend__fillbtn")
+    .forEach((b) => b.classList.toggle("is-active", b.id === btnId));
+  document.getElementById("opt-simple").hidden = method !== "simple";
+  document.getElementById("opt-color").hidden = method !== "color";
+  document.getElementById("extend-options").hidden =
+    method !== "simple" && method !== "color";
+  run();
+}
+
+// Re-run the active method when its options (sliders / colour) change.
+function rerunActiveMethod() {
+  if (exMethod === "simple") extendFillSimple();
+  else if (exMethod === "color") extendFillColor();
+}
 
 async function openExtend() {
   if (!editItem) return;
@@ -1909,16 +1963,28 @@ async function openExtend() {
   exRatioBase = null;
   exOrient = "landscape";
   exFinal = null;
+  exMethod = null;
   setExtendReady(false);
   document.getElementById("extend-status").textContent = "";
   document
     .querySelectorAll("#extend-ratios .chip")
-    .forEach((c) => c.classList.toggle("is-active", c.dataset.ratio === "free"));
+    .forEach((c) =>
+      c.classList.toggle("is-active", c.dataset.ratio === "free"),
+    );
   document
     .querySelectorAll("#extend-orient .orient-btn")
     .forEach((b) =>
       b.classList.toggle("is-active", b.dataset.orient === "landscape"),
     );
+  // Reset fill-method selection + options.
+  document
+    .querySelectorAll(".extend__fillbtn")
+    .forEach((b) => b.classList.remove("is-active"));
+  document.getElementById("extend-options").hidden = true;
+  // Seed Color Fill with the image's corner-average colour.
+  exColor = cornerAverage(exBase);
+  document.getElementById("extend-color").value = exColor;
+  document.getElementById("extend-color-sw").style.background = exColor;
   document.getElementById("extend").hidden = false;
   renderExtend();
 }
@@ -2063,7 +2129,8 @@ function featheredOriginal(base, m, feather) {
       if (m.r > 0) a = Math.min(a, (c.width - 1 - x) / feather);
       if (m.t > 0) a = Math.min(a, y / feather);
       if (m.b > 0) a = Math.min(a, (c.height - 1 - y) / feather);
-      if (a < 1) d[(y * c.width + x) * 4 + 3] = Math.round(Math.max(0, a) * 255);
+      if (a < 1)
+        d[(y * c.width + x) * 4 + 3] = Math.round(Math.max(0, a) * 255);
     }
   }
   ctx.putImageData(img, 0, 0);
@@ -2186,21 +2253,22 @@ function extendFillSimple() {
       o.drawImage(work, x1, y0, 1, bh, x1 + 1, y0, wW - 1 - x1, bh);
     // Stretch top/bottom rows across full width (covers corners too).
     if (y0 > 0) o.drawImage(out, 0, y0, wW, 1, 0, 0, wW, y0);
-    if (y1 < wH - 1)
-      o.drawImage(out, 0, y1, wW, 1, 0, y1 + 1, wW, wH - 1 - y1);
+    if (y1 < wH - 1) o.drawImage(out, 0, y1, wW, 1, 0, y1 + 1, wW, wH - 1 - y1);
 
-    // Heavily blur the streaky stretch so the margin reads as a soft wash.
+    // Blur the streaky stretch into a soft wash. Amount = Blur slider (% of the
+    // working size).
+    const blurPct = Number(document.getElementById("extend-blur").value);
     const blurred = document.createElement("canvas");
     blurred.width = wW;
     blurred.height = wH;
     const b = blurred.getContext("2d");
-    b.filter = `blur(${Math.max(12, Math.round(Math.min(wW, wH) * 0.1))}px)`;
+    b.filter = `blur(${Math.round((Math.min(wW, wH) * blurPct) / 100)}px)`;
     b.drawImage(out, 0, 0);
 
-    // Add fine noise so the flat blur doesn't look plasticky / banded.
+    // Add fine noise (Noise slider) so the flat blur isn't plasticky / banded.
     const img = b.getImageData(0, 0, wW, wH);
     const px = img.data;
-    const amp = 10; // ± per channel
+    const amp = Number(document.getElementById("extend-noise").value);
     for (let i = 0; i < px.length; i += 4) {
       const n = (Math.random() - 0.5) * 2 * amp;
       px[i] = Math.max(0, Math.min(255, px[i] + n));
@@ -2210,6 +2278,19 @@ function extendFillSimple() {
     b.putImageData(img, 0, 0);
     return blurred.toDataURL("image/png").split(",")[1];
   }, 1024);
+}
+
+// "Color Fill" — fill the margins with a solid colour (exColor).
+function extendFillColor() {
+  return runExtendFill(async (work) => {
+    const c = document.createElement("canvas");
+    c.width = work.width;
+    c.height = work.height;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = exColor;
+    ctx.fillRect(0, 0, c.width, c.height);
+    return c.toDataURL("image/png").split(",")[1];
+  }, 512);
 }
 
 // Generative (Stable Diffusion outpaint) fill via the A1111 HTTP API.
@@ -2324,20 +2405,48 @@ async function editInPhotos() {
 function initExtend() {
   document.getElementById("ed-extendbg").addEventListener("click", openExtend);
   document.getElementById("ed-photos").addEventListener("click", editInPhotos);
-  document.getElementById("extend-fill").addEventListener("click", extendFill);
+  document
+    .getElementById("extend-fill")
+    .addEventListener("click", () =>
+      selectFillMethod("patch", "extend-fill", extendFill),
+    );
   document
     .getElementById("extend-fill-simple")
-    .addEventListener("click", extendFillSimple);
+    .addEventListener("click", () =>
+      selectFillMethod("simple", "extend-fill-simple", extendFillSimple),
+    );
+  document
+    .getElementById("extend-fill-color")
+    .addEventListener("click", () =>
+      selectFillMethod("color", "extend-fill-color", extendFillColor),
+    );
   document
     .getElementById("extend-fill-sd")
-    .addEventListener("click", extendFillSD);
+    .addEventListener("click", () =>
+      selectFillMethod("sd", "extend-fill-sd", extendFillSD),
+    );
+  // Live re-run when Simple/Color options change.
+  document
+    .getElementById("extend-blur")
+    .addEventListener("change", rerunActiveMethod);
+  document
+    .getElementById("extend-noise")
+    .addEventListener("change", rerunActiveMethod);
+  document.getElementById("extend-color").addEventListener("input", (e) => {
+    exColor = e.target.value;
+    document.getElementById("extend-color-sw").style.background = exColor;
+    rerunActiveMethod();
+  });
   document.getElementById("extend-save").addEventListener("click", extendSave);
   document
     .getElementById("extend-edit-photos")
     .addEventListener("click", extendEditInPhotos);
   document
     .getElementById("extend-cancel")
-    .addEventListener("click", () => (document.getElementById("extend").hidden = true));
+    .addEventListener(
+      "click",
+      () => (document.getElementById("extend").hidden = true),
+    );
   document.querySelectorAll("#extend-ratios .chip").forEach((c) =>
     c.addEventListener("click", () => {
       document
@@ -2490,7 +2599,8 @@ function initMedia() {
 
   // Clicking the project header (name/path, empty space) also counts as off.
   document.getElementById("project-header").addEventListener("click", () => {
-    if (!document.querySelector('[data-panel="media"]').hidden) clearSelection();
+    if (!document.querySelector('[data-panel="media"]').hidden)
+      clearSelection();
   });
 
   document.addEventListener("keydown", (e) => {
@@ -2582,10 +2692,20 @@ let selectedNoteId = null;
 
 document.addEventListener("keydown", (e) => {
   const tag = document.activeElement?.tagName;
-  const isEditable = tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable;
+  const isEditable =
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    document.activeElement?.isContentEditable;
 
   // Arrow keys move a selected note within the grid
-  if (selectedNoteId && !isEditable && (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown")) {
+  if (
+    selectedNoteId &&
+    !isEditable &&
+    (e.key === "ArrowLeft" ||
+      e.key === "ArrowRight" ||
+      e.key === "ArrowUp" ||
+      e.key === "ArrowDown")
+  ) {
     e.preventDefault();
     const idx = notesData.notes.findIndex((n) => n.id === selectedNoteId);
     if (idx === -1) return;
@@ -2595,12 +2715,17 @@ document.addEventListener("keydown", (e) => {
     } else {
       // Simulate grid auto-placement to find each note's row, respecting spans.
       const listEl = document.getElementById("notes-list");
-      const colCount = getComputedStyle(listEl).gridTemplateColumns.split(" ").length;
+      const colCount =
+        getComputedStyle(listEl).gridTemplateColumns.split(" ").length;
       const noteRows = [];
-      let col = 0, row = 0;
+      let col = 0,
+        row = 0;
       for (const n of notesData.notes) {
         const span = Math.min(n.span || 1, colCount);
-        if (col + span > colCount) { row++; col = 0; }
+        if (col + span > colCount) {
+          row++;
+          col = 0;
+        }
         noteRows.push(row);
         col += span;
       }
@@ -2753,7 +2878,12 @@ async function pasteFromClipboard() {
 }
 
 function newNote(kind) {
-  const note = { id: genId(), kind, title: "", createdAt: new Date().toISOString() };
+  const note = {
+    id: genId(),
+    kind,
+    title: "",
+    createdAt: new Date().toISOString(),
+  };
   if (kind === "text") note.body = "";
   if (kind === "checklist") note.items = [];
   if (kind === "table") {
@@ -2800,7 +2930,11 @@ function noteFooter(note) {
 
   if (note.createdAt) {
     const d = new Date(note.createdAt);
-    const dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    const dateStr = d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
     footer.append(el("span", "notecard__date", { textContent: dateStr }));
   }
 
@@ -3100,7 +3234,10 @@ function renderNotes() {
       if (e.clientY - rect.top <= 8) {
         selectedNoteId = selectedNoteId === note.id ? null : note.id;
         listEl.querySelectorAll(".notecard").forEach((c) => {
-          c.classList.toggle("is-selected", c.dataset.noteId === selectedNoteId);
+          c.classList.toggle(
+            "is-selected",
+            c.dataset.noteId === selectedNoteId,
+          );
         });
       }
     });
@@ -3116,7 +3253,9 @@ function initNotes() {
   document.addEventListener("click", (e) => {
     if (selectedNoteId && !e.target.closest(".notecard")) {
       selectedNoteId = null;
-      document.querySelectorAll(".notecard.is-selected").forEach((c) => c.classList.remove("is-selected"));
+      document
+        .querySelectorAll(".notecard.is-selected")
+        .forEach((c) => c.classList.remove("is-selected"));
     }
   });
 
