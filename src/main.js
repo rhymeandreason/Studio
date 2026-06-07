@@ -387,32 +387,98 @@ function initNewModal() {
 
 let mediaProjectPath = null;
 let currentMedia = null;
+// The single source of truth for selection. A selection of exactly one image
+// opens the editor; 0 or 2+ (or a single non-image) shows the batch bar instead.
 const mediaSelection = new Set();
+const mediaItemsByPath = new Map(); // path → MediaItem, refreshed by loadMedia
 
 function updateSelbar() {
   const n = mediaSelection.size;
-  document.getElementById("selbar").hidden = n === 0;
+  // Hide the batch bar only when the sole selected item is the one the editor
+  // is already showing; otherwise show it (incl. multi-select with editor open).
+  const editorOwnsSelection =
+    n === 1 && activeItem && mediaSelection.has(activeItem.path);
+  document.getElementById("selbar").hidden = n === 0 || editorOwnsSelection;
   document.getElementById("sel-count").textContent = `${n} selected`;
   document.getElementById("sel-paste").disabled = !copiedEdits || n === 0;
 }
 
-function toggleSelect(path, tile) {
-  if (mediaSelection.has(path)) {
-    mediaSelection.delete(path);
-    tile.classList.remove("is-selected");
-  } else {
-    mediaSelection.add(path);
-    tile.classList.add("is-selected");
-  }
+// Repaint tile selection rings + the batch bar from mediaSelection.
+function updateSelectionUI() {
+  document
+    .querySelectorAll(".mediatile")
+    .forEach((t) =>
+      t.classList.toggle("is-selected", mediaSelection.has(t.dataset.path)),
+    );
   updateSelbar();
+}
+
+// Plain click: select only this item. A single deliberate selection drives the
+// editor — opening it on an image, or closing it on a non-image.
+async function selectOnly(item) {
+  mediaSelection.clear();
+  mediaSelection.add(item.path);
+
+  if (item.kind !== "image") {
+    updateSelectionUI();
+    await closeInlineEditor();
+    return;
+  }
+
+  // Claim editor ownership synchronously so the batch bar never flashes between
+  // the selection update and the (async) editor load.
+  const alreadyShown = activeItem && activeItem.path === item.path;
+  activeItem = item;
+  updateSelectionUI(); // selbar now sees the editor owns the lone selection
+  if (alreadyShown) return;
+
+  if (editItem && editItem.path !== item.path) await flushEditSave();
+  document.getElementById("side-name").textContent = item.name;
+  document.getElementById("media-side").hidden = false;
+  moveEditor(document.getElementById("media-side-editor"));
+  await loadEditor(item);
+}
+
+// ⌘/Ctrl click: add/remove from the selection. The editor is sticky here — a
+// second selection never opens, closes, or switches it.
+async function toggleSelect(item) {
+  if (mediaSelection.has(item.path)) mediaSelection.delete(item.path);
+  else mediaSelection.add(item.path);
+  updateSelectionUI();
 }
 
 function clearSelection() {
   mediaSelection.clear();
-  document
-    .querySelectorAll(".mediatile.is-selected")
-    .forEach((t) => t.classList.remove("is-selected"));
+  updateSelectionUI();
+  closeInlineEditor();
+}
+
+// Move the given media (and their edit sidecars) to the Trash, then refresh.
+async function trashMedia(paths) {
+  if (!paths.length) return;
+
+  // Detach the editor from anything we're deleting so we don't re-save a
+  // sidecar that trash_media is about to remove.
+  if (editItem && paths.includes(editItem.path)) {
+    editDirty = false;
+    activeItem = null;
+    editItem = null;
+    editThumb = editImg = editPreview = editState = null;
+    document.getElementById("lightbox").hidden = true;
+    moveEditor(document.getElementById("media-side-editor"));
+    document.getElementById("media-side").hidden = true;
+  }
+
+  try {
+    await invoke("trash_media", { paths });
+  } catch (err) {
+    console.error("Trash failed:", err);
+    return;
+  }
+
+  for (const p of paths) mediaSelection.delete(p);
   updateSelbar();
+  if (mediaProjectPath) loadMedia(mediaProjectPath);
 }
 
 // Write the copied adjustments onto every selected image's sidecar.
@@ -488,16 +554,11 @@ function loadImage(src) {
   });
 }
 
-// Render an edited image's thumbnail (geometry + crop + tonal baked) as a data URL.
-async function renderThumb(item) {
-  const [dataUrl, saved] = await Promise.all([
-    invoke("read_image_data", { path: item.path }),
-    invoke("read_edits", { path: item.path }),
-  ]);
-  const img = await loadImage(dataUrl);
-  const edits = { ...defaultEdits(), ...saved };
-
-  const oriented = renderOriented(img, edits);
+// Bake a thumbnail (geometry + crop + tonal) from an in-memory source image or
+// canvas → data URL. Source must be clean (data-URL/canvas) so toDataURL works.
+// Bake a thumbnail from an already-oriented (rotate/flip/straighten) canvas,
+// applying crop + tonal. Lets callers reuse the editor's cached oriented canvas.
+function bakeThumbFromOriented(oriented, edits) {
   let base = oriented;
   const c = edits.crop;
   if (c && (c.x > 0 || c.y > 0 || c.w < 1 || c.h < 1)) {
@@ -518,6 +579,20 @@ async function renderThumb(item) {
   thumbGLCanvas.height = Math.max(1, Math.round(base.height * scale));
   glAdjust(thumbGLCanvas, base, edits);
   return thumbGLCanvas.toDataURL("image/png");
+}
+
+function bakeThumbDataURL(src, edits) {
+  return bakeThumbFromOriented(renderOriented(src, edits), edits);
+}
+
+// Render an edited image's thumbnail (geometry + crop + tonal baked) as a data URL.
+async function renderThumb(item) {
+  const [dataUrl, saved] = await Promise.all([
+    invoke("read_image_data", { path: item.path }),
+    invoke("read_edits", { path: item.path }),
+  ]);
+  const img = await loadImage(dataUrl);
+  return bakeThumbDataURL(img, { ...defaultEdits(), ...saved });
 }
 
 // QuickLook thumbnail (any file type) → asset URL, via the OS thumbnail service.
@@ -554,35 +629,36 @@ function buildMediaTile(item, edited) {
   const tile = el("button", "mediatile", { type: "button", title: item.name });
   tile.dataset.path = item.path;
   tile.dataset.sig = `${item.modified}|${item.edits_mtime}`;
+  const thumb = el("div", "mediatile__thumb"); // the card visual + selection ring
   const img = el("img", "mediatile__img", { loading: "lazy", alt: item.name });
   if (item.is_heic) {
-    tile.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
+    thumb.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
   } else if (isImage && isWebExport(item.name)) {
-    tile.append(
+    thumb.append(
       el("span", "mediatile__badge mediatile__badge--web", {
         textContent: "WEB",
       }),
     );
   }
   if (!isImage)
-    tile.append(
+    thumb.append(
       el("span", "mediatile__kind", {
         innerHTML: mi(KIND_ICONS[item.kind] || "insert_drive_file"),
       }),
     );
-  tile.append(img);
+  thumb.append(img);
 
-  if (isImage) {
-    const check = el("span", "mediatile__check", { title: "Select" });
-    check.addEventListener("click", (e) => {
-      e.stopPropagation();
-      toggleSelect(item.path, tile);
-    });
-    tile.append(check);
-  }
+  tile.append(thumb);
+  tile.append(el("span", "mediatile__name", { textContent: item.name }));
   if (mediaSelection.has(item.path)) tile.classList.add("is-selected");
 
-  tile.addEventListener("click", () => {
+  tile.addEventListener("click", (e) => {
+    // ⌘/Ctrl-click toggles the item in the selection; plain click selects only
+    // it (and opens the editor when it's a single image).
+    if (e.metaKey || e.ctrlKey) toggleSelect(item);
+    else selectOnly(item);
+  });
+  tile.addEventListener("dblclick", () => {
     if (isImage) openLightbox(item);
     else invoke("open_path", { path: item.path });
   });
@@ -643,11 +719,20 @@ async function loadMedia(path) {
   const grid = document.getElementById("media-grid");
   const items = await invoke("list_media", { path });
 
+  mediaItemsByPath.clear();
+  for (const it of items) mediaItemsByPath.set(it.path, it);
+
   // Prune selection to files that still exist.
   const present = new Set(items.map((i) => i.path));
   for (const p of [...mediaSelection])
     if (!present.has(p)) mediaSelection.delete(p);
   updateSelbar();
+
+  // Drop the inline edit focus if its file is gone.
+  if (activeItem && !present.has(activeItem.path)) {
+    activeItem = null;
+    document.getElementById("media-side").hidden = true;
+  }
 
   if (!items.length) {
     grid.innerHTML = `<p class="placeholder">No media in this project yet.</p>`;
@@ -667,6 +752,23 @@ async function loadMedia(path) {
     if (reuse && reuse.dataset.sig === sig) {
       existing.delete(item.path);
       reuse.classList.toggle("is-selected", mediaSelection.has(item.path));
+      desired.push(reuse);
+    } else if (reuse && item.kind === "image") {
+      // Same image, edits changed — refresh its thumbnail in place. The old (or
+      // optimistic-preview) image stays visible until the new bake is ready, so
+      // the tile never blanks.
+      existing.delete(item.path);
+      reuse.dataset.sig = sig;
+      reuse.classList.toggle("is-selected", mediaSelection.has(item.path));
+      const img = reuse.querySelector(".mediatile__img");
+      if (item.has_edits) {
+        if (thumbCache.has(item.path)) img.src = thumbCache.get(item.path);
+        else edited.push({ item, img }); // keeps current src until baked
+      } else {
+        qlSrc(item).then((src) => {
+          if (src) img.src = src;
+        });
+      }
       desired.push(reuse);
     } else {
       if (reuse) {
@@ -697,10 +799,64 @@ async function loadMedia(path) {
   }
 }
 
-// Opening a media item drops straight into the editor (canvas + controls).
-async function openLightbox(item) {
+// The inline-selected image (its edit controls live in the right side column).
+// The editor DOM is a single shared node that we reparent between the side
+// column and the lightbox overlay, so there's only ever one editor instance.
+let activeItem = null;
+
+// Move the (single) editor node into a host container if it isn't there already.
+function moveEditor(host) {
+  const editor = document.getElementById("editor");
+  if (editor.parentElement !== host) host.append(editor);
+}
+
+// Flush any pending edit save so the grid thumbnail reflects the latest edits.
+// No-op when nothing changed, so the thumbnail isn't needlessly re-baked.
+async function flushEditSave() {
+  if (!editItem || !editState || !editDirty) return;
+  clearTimeout(editSaveTimer);
+  try {
+    await invoke("save_edits", { path: editItem.path, edits: editState });
+  } catch (err) {
+    console.error("Edit save failed:", err);
+  }
+  invalidateThumb(editItem.path);
+  editDirty = false;
+}
+
+// The best loaded edit source for the current context: full preview in the
+// lightbox, thumbnail inline — falling back to whatever is loaded so far.
+function previewSrc() {
+  if (!document.getElementById("lightbox").hidden) return editPreview || editThumb;
+  return editThumb || editPreview || editImg;
+}
+function previewTag() {
+  const src = previewSrc();
+  return src === editImg ? "full" : src === editPreview ? "large" : "thumb";
+}
+
+// Lazily load the ~2048px lightbox preview (and the full-res image it's derived
+// from). The full-res image doubles as the export / remove-bg source.
+async function ensureFullRes() {
+  if (editImg) return;
+  const item = editItem;
+  const dataUrl = await invoke("read_image_data", { path: item.path });
+  const img = await loadImage(dataUrl);
+  if (editItem !== item) return; // selection changed while loading
+  editImg = img;
+  editPreview = makePreview(editImg); // ~2048px copy for the lightbox
+}
+
+// Load an image's edit controls + a fast thumbnail-resolution preview. Full
+// resolution is deferred (see ensureFullRes) so selecting feels instant.
+async function loadEditor(item) {
   currentMedia = item;
   editItem = item;
+  editThumb = null;
+  editPreview = null;
+  editImg = null;
+  orientedCache = null; // new image — invalidate geometry cache
+  orientedSig = "";
   document.getElementById("lightbox-name").textContent = item.name;
 
   const ext = (item.ext || "").toLowerCase();
@@ -710,42 +866,76 @@ async function openLightbox(item) {
     "jpeg",
   ].includes(ext);
 
-  document.getElementById("lightbox").hidden = false;
-  setEditStatus("Loading…");
-
-  const dataUrl = await invoke("read_image_data", { path: item.path });
-  editImg = new Image();
-  await new Promise((resolve, reject) => {
-    editImg.onload = resolve;
-    editImg.onerror = reject;
-    editImg.src = dataUrl;
-  });
-
   const saved = await invoke("read_edits", { path: item.path });
+  if (editItem !== item) return; // superseded by a newer selection
   editState = { ...defaultEdits(), ...saved };
-  orientedCache = null; // new image — invalidate geometry cache
-  orientedSig = "";
-  setEditStatus("");
+  editDirty = false;
   syncEditorControls();
+
+  setEditStatus("Loading…");
+  // QuickLook thumbnail of the original pixels — clean PNG, fast, OS-cached.
+  const thumbPath = await invoke("quicklook_thumb", {
+    path: item.path,
+    size: THUMB_MAX,
+  });
+  const thumb = await loadImage(await invoke("read_image_data", { path: thumbPath }));
+  if (editItem !== item) return;
+  editThumb = thumb;
+  setEditStatus("");
   renderEditorPreview();
 }
 
-async function closeLightbox() {
-  // Flush any pending edit save so the grid thumbnail reflects it.
-  if (editItem && editState) {
-    clearTimeout(editSaveTimer);
-    try {
-      await invoke("save_edits", { path: editItem.path, edits: editState });
-    } catch (err) {
-      console.error("Edit save on close failed:", err);
-    }
-    invalidateThumb(editItem.path); // this image's thumbnail may have changed
-  }
+// Tear down the inline editor (no selection change). Refreshes the grid
+// thumbnail if edits were made.
+async function closeInlineEditor() {
+  if (!activeItem) return;
+  const dirty = editDirty;
+  await flushEditSave();
+  activeItem = null;
   document.getElementById("lightbox").hidden = true;
-  currentMedia = null;
+  moveEditor(document.getElementById("media-side-editor"));
+  document.getElementById("media-side").hidden = true;
   editItem = null;
+  editThumb = null;
   editImg = null;
+  editPreview = null;
   editState = null;
+  updateSelbar(); // editor closed — the batch bar may need to reappear
+  if (dirty && mediaProjectPath) loadMedia(mediaProjectPath);
+}
+
+// Double-click (or the side "Lightbox" button): open the full-screen editor.
+async function openLightbox(item) {
+  if (!activeItem || activeItem.path !== item.path) {
+    await selectOnly(item); // selects + loads the inline editor
+  }
+  if (!activeItem) return; // not an image — nothing to show
+  moveEditor(document.getElementById("lb-stage"));
+  document.getElementById("lightbox").hidden = false;
+  renderEditorPreview(); // show the thumbnail immediately…
+  const current = editItem;
+  setEditStatus("Loading…");
+  await ensureFullRes(); // …then upgrade to the ~2048px preview
+  if (editItem === current) {
+    setEditStatus("");
+    renderEditorPreview();
+  }
+}
+
+async function closeLightbox() {
+  await flushEditSave();
+  document.getElementById("lightbox").hidden = true;
+  // Return the editor to the side column; keep editing inline if still selected.
+  moveEditor(document.getElementById("media-side-editor"));
+  if (activeItem) {
+    renderEditorPreview();
+  } else {
+    editItem = null;
+    editThumb = null;
+    editImg = null;
+    editPreview = null;
+    editState = null;
+  }
   if (mediaProjectPath) loadMedia(mediaProjectPath);
 }
 
@@ -782,9 +972,45 @@ async function initDragDrop() {
 // --- Image editor (non-destructive, sidecar-backed) ------------------------
 
 let editItem = null; // the MediaItem being edited
-let editImg = null; // full-res HTMLImageElement
+// Three tiers of the edit source, all of the *original* pixels (edits are
+// applied on top via the shader). The editor renders from the smallest one
+// that's loaded, upgrading as larger tiers arrive:
+//   editThumb   — QuickLook thumbnail; loaded instantly on select (inline editor)
+//   editPreview — ~2048px; loaded when the lightbox opens
+//   editImg     — full resolution; loaded only for export / remove-background
+let editThumb = null;
+let editPreview = null;
+let editImg = null;
 let editState = null; // current adjustments
 let editSaveTimer = null;
+let editDirty = false; // true once an edit control has changed editState
+
+// Longest side (px) for the inline thumbnail and the lightbox preview.
+const THUMB_MAX = 768;
+const PREVIEW_MAX = 2048;
+
+// Width/height of an image source (HTMLImageElement or canvas).
+function srcW(s) {
+  return s.naturalWidth || s.width;
+}
+function srcH(s) {
+  return s.naturalHeight || s.height;
+}
+
+// A downscaled copy of `img` (longest side ≤ max) for fast preview rendering.
+// Returns the image itself when it's already small enough. Derived from the
+// clean data-URL image, so it stays WebGL/export-safe.
+function makePreview(img, max = PREVIEW_MAX) {
+  const w = srcW(img);
+  const h = srcH(img);
+  const scale = Math.min(1, max / Math.max(w, h));
+  if (scale === 1) return img;
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w * scale));
+  c.height = Math.max(1, Math.round(h * scale));
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
 
 function defaultEdits() {
   return {
@@ -830,12 +1056,15 @@ function coverScale(w, h, deg) {
   return Math.max((w * cos + h * sin) / w, (w * sin + h * cos) / h);
 }
 
-// Render the oriented (rotate + flip + straighten) image to a full-res canvas.
+// Render the oriented (rotate + flip + straighten) image (HTMLImageElement or
+// canvas) at its source resolution.
 function renderOriented(img, edits) {
+  const iw = srcW(img);
+  const ih = srcH(img);
   const rot = (((edits.rotate || 0) % 360) + 360) % 360;
   const swap = rot === 90 || rot === 270;
-  const ow = swap ? img.naturalHeight : img.naturalWidth;
-  const oh = swap ? img.naturalWidth : img.naturalHeight;
+  const ow = swap ? ih : iw;
+  const oh = swap ? iw : ih;
 
   const canvas = document.createElement("canvas");
   canvas.width = ow;
@@ -855,7 +1084,7 @@ function renderOriented(img, edits) {
   ctx.translate(ow / 2, oh / 2);
   ctx.rotate((rot * Math.PI) / 180);
   ctx.scale(edits.flipH ? -1 : 1, edits.flipV ? -1 : 1);
-  ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+  ctx.drawImage(img, -iw / 2, -ih / 2);
 
   return canvas;
 }
@@ -866,15 +1095,19 @@ let orientedSig = "";
 // Reused offscreen canvas for full-res export (avoids leaking WebGL contexts).
 const exportGLCanvas = document.createElement("canvas");
 
-function getOriented() {
+// Oriented (geometry-only) canvas for `src`. The preview uses the downscaled
+// copy; export passes the full-res image. Cache keyed by source + geometry, so
+// a preview render is never reused for a full-res export (or vice versa).
+function getOriented(src = editPreview, tag = "preview") {
   const sig = [
+    tag,
     editState.rotate,
     editState.flipH,
     editState.flipV,
     editState.straighten,
   ].join("|");
   if (!orientedCache || sig !== orientedSig) {
-    orientedCache = renderOriented(editImg, editState);
+    orientedCache = renderOriented(src, editState);
     orientedSig = sig;
   }
   return orientedCache;
@@ -992,8 +1225,9 @@ function glAdjust(canvas, source, ed) {
 }
 
 function renderEditorPreview() {
-  if (!editImg) return;
-  const oriented = getOriented();
+  const src = previewSrc();
+  if (!src) return;
+  const oriented = getOriented(src, previewTag());
   const canvas = document.getElementById("editor-canvas");
   const wrap = document.getElementById("editor-canvas-wrap");
   const scale = Math.min(
@@ -1005,6 +1239,29 @@ function renderEditorPreview() {
   canvas.height = Math.max(1, Math.round(oriented.height * scale));
   glAdjust(canvas, oriented, editState);
   positionCrop();
+
+  // Mirror the live edit onto the image's grid thumbnail (reusing the oriented
+  // canvas we just built). Coalesced to one bake per frame.
+  scheduleLiveThumb(oriented);
+}
+
+let liveThumbRaf = 0;
+let liveThumbOriented = null;
+function scheduleLiveThumb(oriented) {
+  if (!activeItem) return;
+  liveThumbOriented = oriented;
+  if (liveThumbRaf) return;
+  liveThumbRaf = requestAnimationFrame(() => {
+    liveThumbRaf = 0;
+    if (!activeItem || !editState || !liveThumbOriented) return;
+    const tile = document.querySelector(
+      `.mediatile[data-path="${CSS.escape(activeItem.path)}"]`,
+    );
+    if (!tile) return;
+    const url = bakeThumbFromOriented(liveThumbOriented, editState);
+    thumbCache.set(activeItem.path, url);
+    tile.querySelector(".mediatile__img").src = url;
+  });
 }
 
 // --- Crop overlay ----------------------------------------------------------
@@ -1186,11 +1443,11 @@ function copyAdjustments() {
   for (const k of ADJ_FIELDS) snap[k] = editState[k];
   copiedEdits = JSON.parse(JSON.stringify(snap));
   localStorage.setItem("studio_copied_edits", JSON.stringify(copiedEdits));
-  document.getElementById("ed-paste").disabled = false;
+  document.getElementById("m-pasteadj").disabled = false;
   setEditStatus("Copied ✓");
 }
 
-function pasteAdjustments() {
+async function pasteAdjustments() {
   if (!copiedEdits || !editState) return;
   for (const f of ADJ_FIELDS) {
     if (f in copiedEdits) editState[f] = copiedEdits[f];
@@ -1199,7 +1456,23 @@ function pasteAdjustments() {
   orientedSig = "";
   syncEditorControls();
   renderEditorPreview();
-  scheduleEditsSave();
+
+  // Optimistic: bake a thumbnail from the already-loaded preview source and show
+  // it on the tile right away, so the grid reflects the paste with no blank gap.
+  const src = previewSrc();
+  const tile = document.querySelector(
+    `.mediatile[data-path="${CSS.escape(editItem.path)}"]`,
+  );
+  if (src && tile) {
+    const url = bakeThumbDataURL(src, editState);
+    thumbCache.set(editItem.path, url);
+    tile.querySelector(".mediatile__img").src = url;
+  }
+
+  // Persist; the background re-bake (full-res) swaps in seamlessly via loadMedia.
+  editDirty = true;
+  await flushEditSave();
+  if (mediaProjectPath) loadMedia(mediaProjectPath);
   setEditStatus("Pasted ✓");
 }
 
@@ -1209,6 +1482,7 @@ function setEditStatus(text) {
 
 function scheduleEditsSave() {
   if (!editItem) return;
+  editDirty = true;
   setEditStatus("Saving…");
   clearTimeout(editSaveTimer);
   editSaveTimer = setTimeout(async () => {
@@ -1270,8 +1544,9 @@ function blobToBase64(blob) {
 }
 
 async function exportEdited(replace) {
-  if (!editImg) return;
-  const oriented = getOriented(); // geometry, full resolution
+  if (!editItem) return;
+  await ensureFullRes();
+  const oriented = getOriented(editImg, "full"); // geometry, full resolution
   const ext = (editItem.ext || "png").toLowerCase();
   const jpeg = ext === "jpg" || ext === "jpeg";
   const mime = jpeg ? "image/jpeg" : "image/png";
@@ -1311,14 +1586,19 @@ async function exportEdited(replace) {
       // Edits are now baked into the file — reset the sidecar so they aren't
       // re-applied on top of the baked pixels, and reload from the new file.
       editState = defaultEdits();
+      editDirty = false;
       orientedCache = null;
       orientedSig = "";
       await invoke("save_edits", { path: editItem.path, edits: editState });
       syncEditorControls();
+      editThumb = null;
+      editImg = null;
+      editPreview = null;
       try {
         editImg = await loadImage(
           await invoke("read_image_data", { path: editItem.path }),
         );
+        editPreview = makePreview(editImg);
       } catch (err) {
         console.error("Reload after replace failed:", err);
       }
@@ -1490,21 +1770,27 @@ async function runWebExport(ctx, settings) {
   }
 }
 
-function initWebExport() {
-  document.getElementById("lb-webexport").addEventListener("click", () => {
-    if (!editItem) return;
-    openWebExport({
-      mode: "single",
-      items: [
-        {
-          path: editItem.path,
-          name: editItem.name,
-          edits: editState,
-          img: editImg,
-        },
-      ],
-    });
+// Open the Export dialog for the image currently in the editor.
+async function exportCurrent() {
+  if (!editItem) return;
+  await ensureFullRes(); // single-mode export bakes from the full-res image
+  openWebExport({
+    mode: "single",
+    items: [
+      {
+        path: editItem.path,
+        name: editItem.name,
+        edits: editState,
+        img: editImg,
+      },
+    ],
   });
+}
+
+function initWebExport() {
+  document
+    .getElementById("lb-webexport")
+    .addEventListener("click", exportCurrent);
   document.getElementById("sel-webexport").addEventListener("click", () => {
     if (!mediaSelection.size) return;
     openWebExport({
@@ -1540,7 +1826,8 @@ let cutoutB64 = null;
 let cutoutSourcePath = null;
 
 async function removeBg() {
-  if (!editImg) return;
+  if (!editItem) return;
+  await ensureFullRes();
   const btn = document.getElementById("ed-removebg");
   btn.disabled = true;
   setEditStatus("Removing background…");
@@ -1644,15 +1931,10 @@ function initEditor() {
     );
   document.getElementById("ed-cropreset").addEventListener("click", resetCrop);
 
-  // Copy / paste adjustments.
+  // Copy / paste adjustments live in the side "More" menu (wired in initMedia).
   loadCopiedEdits();
-  document.getElementById("ed-paste").disabled = !copiedEdits;
-  document.getElementById("ed-copy").addEventListener("click", copyAdjustments);
-  document
-    .getElementById("ed-paste")
-    .addEventListener("click", pasteAdjustments);
   window.addEventListener("resize", () => {
-    if (editImg) renderEditorPreview();
+    if (previewSrc()) renderEditorPreview();
   });
 }
 
@@ -1665,38 +1947,114 @@ function initMedia() {
     .getElementById("sel-clear")
     .addEventListener("click", clearSelection);
 
+  // Side column: open the full lightbox for the selected image.
+  document.getElementById("side-lightbox").addEventListener("click", () => {
+    if (activeItem) openLightbox(activeItem);
+  });
+
+  // "More" dropdown in the editor side column.
+  const sideMenu = document.getElementById("side-menu");
+  const closeSideMenu = () => (sideMenu.hidden = true);
+  document.getElementById("side-more").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (sideMenu.hidden) {
+      // Replace-original only applies to PNG/JPEG, like the lightbox bar.
+      document.getElementById("m-replace").hidden =
+        document.getElementById("lb-replace").hidden;
+      // Paste adjustments is available only once something has been copied.
+      document.getElementById("m-pasteadj").disabled = !copiedEdits;
+    }
+    sideMenu.hidden = !sideMenu.hidden;
+  });
+  document.addEventListener("click", () => closeSideMenu());
+  const menuAction = (id, fn) =>
+    document.getElementById(id).addEventListener("click", () => {
+      closeSideMenu();
+      fn();
+    });
+  menuAction("m-copyadj", copyAdjustments); // Copy adjustments
+  menuAction("m-pasteadj", pasteAdjustments); // Paste adjustments
+  menuAction("m-export", () => exportEdited(false)); // Duplicate
+  menuAction("m-webexport", exportCurrent); // Export
+  menuAction("m-replace", () => exportEdited(true)); // Replace original
+  menuAction("m-copy", () => {
+    if (editItem) navigator.clipboard.writeText(editItem.path);
+  });
+  menuAction("m-reveal", () => {
+    if (editItem) invoke("reveal_in_finder", { path: editItem.path });
+  });
+
+  // Click anywhere off a thumbnail (empty grid space, panel padding) to clear
+  // the selection. The batch bar and the editor side column keep their clicks.
+  document
+    .querySelector('[data-panel="media"]')
+    .addEventListener("click", (e) => {
+      if (
+        e.target.closest(".mediatile") ||
+        e.target.closest(".selbar") ||
+        e.target.closest(".media-side")
+      )
+        return;
+      clearSelection();
+    });
+
+  // Clicking the project header (name/path, empty space) also counts as off.
+  document.getElementById("project-header").addEventListener("click", () => {
+    if (!document.querySelector('[data-panel="media"]').hidden) clearSelection();
+  });
+
   document.addEventListener("keydown", (e) => {
     const mod = e.metaKey || e.ctrlKey;
-    if (!document.getElementById("lightbox").hidden) {
-      // Editor is open.
+    const lightboxOpen = !document.getElementById("lightbox").hidden;
+    const inlineActive =
+      activeItem &&
+      !document.querySelector('[data-panel="media"]').hidden &&
+      document.activeElement?.tagName !== "INPUT" &&
+      document.activeElement?.tagName !== "TEXTAREA";
+    if (lightboxOpen || inlineActive) {
+      // The editor is active (full lightbox or inline side column).
       if (e.key === "Escape") {
-        closeLightbox();
+        if (lightboxOpen) closeLightbox();
+        else clearSelection();
       } else if (mod && (e.key === "c" || e.key === "C")) {
         e.preventDefault();
         copyAdjustments();
       } else if (mod && (e.key === "v" || e.key === "V")) {
         e.preventDefault();
         pasteAdjustments();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        // Delete the focused image (or the checkbox selection, if any).
+        e.preventDefault();
+        trashMedia(mediaSelection.size ? [...mediaSelection] : [editItem.path]);
       }
       return;
     }
-    // Grid context: Cmd+V pastes onto selected tiles, or a clipboard image
-    // into the project. Leave text fields and the notes panel alone so their
-    // own paste handlers can fire.
+    // Grid context: leave text fields and other panels' handlers alone.
+    const ae = document.activeElement;
+    const inField =
+      ae &&
+      (ae.tagName === "INPUT" ||
+        ae.tagName === "TEXTAREA" ||
+        ae.tagName === "SELECT" ||
+        ae.isContentEditable);
+    const onMedia = !document.querySelector('[data-panel="media"]').hidden;
+
+    // Cmd+V pastes onto selected tiles, or a clipboard image into the project.
     if (mod && (e.key === "v" || e.key === "V")) {
-      const ae = document.activeElement;
-      if (
-        ae &&
-        (ae.tagName === "INPUT" ||
-          ae.tagName === "TEXTAREA" ||
-          ae.tagName === "SELECT" ||
-          ae.isContentEditable)
-      ) {
-        return;
-      }
+      if (inField) return;
       e.preventDefault();
       if (mediaSelection.size) batchPaste();
       else pasteFromClipboard();
+    }
+    // Delete/Backspace trashes the checkbox-selected media.
+    else if (
+      onMedia &&
+      !inField &&
+      mediaSelection.size &&
+      (e.key === "Delete" || e.key === "Backspace")
+    ) {
+      e.preventDefault();
+      trashMedia([...mediaSelection]);
     }
   });
   document.getElementById("lb-close").addEventListener("click", closeLightbox);

@@ -60,27 +60,92 @@
 
             <!-- Project content -->
             <div class="content" id="project-content" hidden>
-                <section class="panel" data-panel="media" hidden>
-                    <div class="selbar" id="selbar" hidden>
-                        <span class="selbar__count" id="sel-count"
-                            >0 selected</span
-                        >
-                        <div class="selbar__actions">
-                            <button class="btn-ghost" id="sel-paste">
-                                <span class="mi mi-sm">content_paste</span>Paste
-                                adjustments
-                            </button>
-                            <button class="btn-ghost" id="sel-webexport">
-                                <span class="mi mi-sm"
-                                    >photo_size_select_large</span
-                                >Export
-                            </button>
-                            <button class="btn-ghost" id="sel-clear">
-                                Clear
-                            </button>
+                <section class="panel panel--media" data-panel="media" hidden>
+                    <div class="media-main" id="media-main">
+                        <div class="selbar" id="selbar" hidden>
+                            <span class="selbar__count" id="sel-count"
+                                >0 selected</span
+                            >
+                            <div class="selbar__actions">
+                                <button class="btn-ghost" id="sel-paste">
+                                    <span class="mi mi-sm">content_paste</span
+                                    >Paste adjustments
+                                </button>
+                                <button class="btn-ghost" id="sel-webexport">
+                                    <span class="mi mi-sm"
+                                        >photo_size_select_large</span
+                                    >Export
+                                </button>
+                                <button class="btn-ghost" id="sel-clear">
+                                    Clear
+                                </button>
+                            </div>
                         </div>
+                        <div class="media-grid" id="media-grid"></div>
                     </div>
-                    <div class="media-grid" id="media-grid"></div>
+                    <aside class="media-side" id="media-side" hidden>
+                        <div class="media-side__head">
+                            <span
+                                class="media-side__name"
+                                id="side-name"
+                            ></span>
+                            <button
+                                class="iconbtn-round"
+                                id="side-lightbox"
+                                title="Open Lightbox"
+                            >
+                                <span class="mi mi-sm">open_in_full</span>
+                            </button>
+                            <div class="side-more">
+                                <button
+                                    class="iconbtn-round"
+                                    id="side-more"
+                                    title="More"
+                                >
+                                    <span class="mi mi-sm">more_vert</span>
+                                </button>
+                                <div class="menu" id="side-menu" hidden>
+                                    <button class="menu__item" id="m-copyadj">
+                                        <span class="mi mi-sm"
+                                            >content_copy</span
+                                        >Copy adjustments
+                                    </button>
+                                    <button class="menu__item" id="m-pasteadj">
+                                        <span class="mi mi-sm"
+                                            >content_paste</span
+                                        >Paste adjustments
+                                    </button>
+                                    <div class="menu__sep"></div>
+                                    <button class="menu__item" id="m-export">
+                                        <span class="mi mi-sm">file_copy</span
+                                        >Duplicate
+                                    </button>
+                                    <button class="menu__item" id="m-webexport">
+                                        <span class="mi mi-sm"
+                                            >photo_size_select_large</span
+                                        >Export
+                                    </button>
+                                    <button class="menu__item" id="m-replace">
+                                        <span class="mi mi-sm"
+                                            >published_with_changes</span
+                                        >Replace original
+                                    </button>
+                                    <button class="menu__item" id="m-copy">
+                                        <span class="mi mi-sm">file_export</span
+                                        >Copy path
+                                    </button>
+                                    <button class="menu__item" id="m-reveal">
+                                        <span class="mi mi-sm">folder_open</span
+                                        >Show in Finder
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div
+                            class="media-side__editor"
+                            id="media-side-editor"
+                        ></div>
+                    </aside>
                 </section>
 
                 <section class="panel" data-panel="notes" hidden>
@@ -211,110 +276,112 @@
                         </div>
                     </div>
                     <aside class="editor__panel">
-                        <div class="editgroup">
-                            <span class="editgroup__label"
-                                >Rotate &amp; flip</span
-                            >
-                            <div class="editbtns">
-                                <button
-                                    class="iconbtn"
-                                    id="ed-rotl"
-                                    title="Rotate left"
+                        <div class="editsection">
+                            <div class="editgroup">
+                                <span class="editgroup__label"
+                                    >Rotate &amp; flip</span
                                 >
-                                    <span class="mi">rotate_left</span>
-                                </button>
-                                <button
-                                    class="iconbtn"
-                                    id="ed-rotr"
-                                    title="Rotate right"
-                                >
-                                    <span class="mi">rotate_right</span>
-                                </button>
-                                <button
-                                    class="iconbtn"
-                                    id="ed-fliph"
-                                    title="Flip horizontal"
-                                >
-                                    <span class="mi">flip</span>
-                                </button>
-                                <button
-                                    class="iconbtn"
-                                    id="ed-flipv"
-                                    title="Flip vertical"
-                                >
-                                    <span
-                                        class="mi"
-                                        style="transform: rotate(90deg)"
-                                        >flip</span
+
+                                <div class="editbtns">
+                                    <button
+                                        class="iconbtn"
+                                        id="ed-rotl"
+                                        title="Rotate left"
                                     >
+                                        <span class="mi">rotate_left</span>
+                                    </button>
+                                    <button
+                                        class="iconbtn"
+                                        id="ed-rotr"
+                                        title="Rotate right"
+                                    >
+                                        <span class="mi">rotate_right</span>
+                                    </button>
+                                    <button
+                                        class="iconbtn"
+                                        id="ed-fliph"
+                                        title="Flip horizontal"
+                                    >
+                                        <span class="mi">flip</span>
+                                    </button>
+                                    <button
+                                        class="iconbtn"
+                                        id="ed-flipv"
+                                        title="Flip vertical"
+                                    >
+                                        <span
+                                            class="mi"
+                                            style="transform: rotate(90deg)"
+                                            >flip</span
+                                        >
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="editgroup">
+                                <span class="editgroup__label">Crop</span>
+                                <div class="editbtns editbtns--wrap">
+                                    <button class="chip" data-aspect="free">
+                                        Free
+                                    </button>
+                                    <button class="chip" data-aspect="1">
+                                        1:1
+                                    </button>
+                                    <button class="chip" data-aspect="1.7778">
+                                        16:9
+                                    </button>
+                                    <button class="chip" data-aspect="0.8">
+                                        4:5
+                                    </button>
+                                </div>
+                                <button
+                                    class="chip chip--reset"
+                                    id="ed-cropreset"
+                                >
+                                    <span class="mi mi-sm">crop_free</span>Reset
+                                    crop
                                 </button>
+                            </div>
+
+                            <div class="editgroup">
+                                <span class="editgroup__label">
+                                    Straighten
+                                    <em id="ed-straighten-val">0°</em>
+                                </span>
+                                <input
+                                    class="slider"
+                                    type="range"
+                                    id="ed-straighten"
+                                    min="-15"
+                                    max="15"
+                                    step="0.5"
+                                    value="0"
+                                />
                             </div>
                         </div>
 
-                        <div class="editgroup">
-                            <span class="editgroup__label">Crop</span>
-                            <div class="editbtns editbtns--wrap">
-                                <button class="chip" data-aspect="free">
-                                    Free
-                                </button>
-                                <button class="chip" data-aspect="1">
-                                    1:1
-                                </button>
-                                <button class="chip" data-aspect="1.7778">
-                                    16:9
-                                </button>
-                                <button class="chip" data-aspect="0.8">
-                                    4:5
-                                </button>
-                            </div>
-                            <button class="chip chip--reset" id="ed-cropreset">
-                                <span class="mi mi-sm">crop_free</span>Reset
-                                crop
-                            </button>
-                        </div>
-
-                        <div class="editgroup">
-                            <span class="editgroup__label">
-                                Straighten <em id="ed-straighten-val">0°</em>
-                            </span>
-                            <input
-                                class="slider"
-                                type="range"
-                                id="ed-straighten"
-                                min="-15"
-                                max="15"
-                                step="0.5"
-                                value="0"
-                            />
-                        </div>
-
-                        <div class="editgroup">
+                        <div class="editsection">
+                            <div class="editgroup">
+                                <!-- --
                             <span class="editgroup__label"
                                 >Light &amp; color</span
                             >
-                            <div id="tonal-sliders"></div>
-                        </div>
-
-                        <div class="editgroup">
-                            <span class="editgroup__label">Adjustments</span>
-                            <div class="editbtns">
-                                <button class="chip" id="ed-copy">
-                                    <span class="mi mi-sm">content_copy</span
-                                    >Copy
-                                </button>
-                                <button class="chip" id="ed-paste" disabled>
-                                    <span class="mi mi-sm">content_paste</span
-                                    >Paste
-                                </button>
+                            -->
+                                <div id="tonal-sliders"></div>
                             </div>
                         </div>
 
-                        <div class="editgroup">
-                            <span class="editgroup__label">Background</span>
-                            <button class="chip chip--reset" id="ed-removebg">
-                                <span class="mi mi-sm">auto_fix_high</span
-                                >Remove background
-                            </button>
+                        <div class="editsection">
+                            <div class="editgroup">
+                                <span class="editgroup__label">Background</span>
+                                <button
+                                    class="chip chip--reset"
+                                    id="ed-removebg"
+                                >
+                                    <span class="mi mi-sm">auto_fix_high</span
+                                    >Remove background
+                                </button>
+                            </div>
                         </div>
 
                         <button class="btn-ghost editreset" id="ed-reset">
