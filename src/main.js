@@ -2189,13 +2189,25 @@ function extendFillSimple() {
     if (y1 < wH - 1)
       o.drawImage(out, 0, y1, wW, 1, 0, y1 + 1, wW, wH - 1 - y1);
 
-    // Soften the streaky stretch with a blur.
+    // Heavily blur the streaky stretch so the margin reads as a soft wash.
     const blurred = document.createElement("canvas");
     blurred.width = wW;
     blurred.height = wH;
     const b = blurred.getContext("2d");
-    b.filter = `blur(${Math.max(3, Math.round(Math.min(wW, wH) * 0.03))}px)`;
+    b.filter = `blur(${Math.max(12, Math.round(Math.min(wW, wH) * 0.1))}px)`;
     b.drawImage(out, 0, 0);
+
+    // Add fine noise so the flat blur doesn't look plasticky / banded.
+    const img = b.getImageData(0, 0, wW, wH);
+    const px = img.data;
+    const amp = 10; // ± per channel
+    for (let i = 0; i < px.length; i += 4) {
+      const n = (Math.random() - 0.5) * 2 * amp;
+      px[i] = Math.max(0, Math.min(255, px[i] + n));
+      px[i + 1] = Math.max(0, Math.min(255, px[i + 1] + n));
+      px[i + 2] = Math.max(0, Math.min(255, px[i + 2] + n));
+    }
+    b.putImageData(img, 0, 0);
     return blurred.toDataURL("image/png").split(",")[1];
   }, 1024);
 }
