@@ -2025,6 +2025,32 @@ function exPointerUp() {
   window.removeEventListener("pointerup", exPointerUp);
 }
 
+// A copy of `base` whose alpha ramps to 0 over `feather` px on each *extended*
+// side, so it cross-fades into the synthesized fill rather than meeting it at a
+// hard edge. Sides with no margin (the image's real edges) stay fully opaque.
+function featheredOriginal(base, m, feather) {
+  const c = document.createElement("canvas");
+  c.width = base.width;
+  c.height = base.height;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(base, 0, 0);
+  if (feather <= 0) return c;
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  for (let y = 0; y < c.height; y++) {
+    for (let x = 0; x < c.width; x++) {
+      let a = 1;
+      if (m.l > 0) a = Math.min(a, x / feather);
+      if (m.r > 0) a = Math.min(a, (c.width - 1 - x) / feather);
+      if (m.t > 0) a = Math.min(a, y / feather);
+      if (m.b > 0) a = Math.min(a, (c.height - 1 - y) / feather);
+      if (a < 1) d[(y * c.width + x) * 4 + 3] = Math.round(Math.max(0, a) * 255);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
 async function extendFill() {
   if (!exBase) return;
   if (exMargins.l + exMargins.r + exMargins.t + exMargins.b === 0) {
@@ -2040,7 +2066,7 @@ async function extendFill() {
   try {
     // Compose the enlarged canvas at a capped working resolution, leaving the
     // new margins transparent (alpha 0) for PatchMatch to synthesize.
-    const cap = 1024;
+    const cap = 1536;
     const ws = Math.min(1, cap / Math.max(tw, th));
     const wW = Math.max(1, Math.round(tw * ws));
     const wH = Math.max(1, Math.round(th * ws));
@@ -2061,14 +2087,23 @@ async function extendFill() {
     const filledB64 = await invoke("extend_background", { pngBase64: b64 });
     const filledImg = await loadImage(`data:image/png;base64,${filledB64}`);
 
-    // Final full-res: upscaled synthesized fill, with the crisp original on top.
+    // Final full-res: upscaled synthesized fill, with the crisp original
+    // feathered on top so it cross-fades into the fill (hides the seam).
     const final = document.createElement("canvas");
     final.width = tw;
     final.height = th;
     const fctx = final.getContext("2d");
     fctx.imageSmoothingQuality = "high";
     fctx.drawImage(filledImg, 0, 0, tw, th);
-    fctx.drawImage(exBase, exMargins.l, exMargins.t);
+    const feather = Math.min(
+      64,
+      Math.max(6, Math.round(Math.min(exBase.width, exBase.height) * 0.04)),
+    );
+    fctx.drawImage(
+      featheredOriginal(exBase, exMargins, feather),
+      exMargins.l,
+      exMargins.t,
+    );
     exFinal = final;
 
     status.textContent = "Filled ✓";
