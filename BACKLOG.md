@@ -2,6 +2,15 @@
 
 Deferred ideas and follow-ups, captured during the build. Not scheduled.
 
+## Test Generative Expand
+The code is still there, just hidden.
+
+To test:
+
+Launch Automatic1111 with the API on: ./webui.sh --api (add --listen if needed). Confirm http://127.0.0.1:7860/docs loads.
+npm run tauri dev → image → Extend background → drag/pick ratio → optional prompt → Generative Fill.
+If it still errors, the status line now shows the real response (SD <code>: <body>) — paste it and I'll adjust. Otherwise, once a fill comes back, tell me how the result looks and we can tune denoising_strength / inpainting_fill / mask_blur.
+
 ## UI / polish
 - **Vendor Material Symbols locally.** Icons currently load from Google Fonts
   (Material Symbols Rounded), so they need network — offline they degrade to
