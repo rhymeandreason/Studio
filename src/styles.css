@@ -132,9 +132,28 @@ body {
 
 .projhead__row {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
+    align-items: center;
     gap: 12px;
+}
+
+.projhead__all-projects {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.projhead__all-projects:hover {
+    background: var(--surface);
+    color: var(--text);
 }
 
 .projhead__name {

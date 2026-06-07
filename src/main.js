@@ -75,9 +75,7 @@ async function showOverview() {
     for (const p of projects) {
       const card = document.createElement("button");
       card.className = "card";
-      if (activeProject && activeProject.path === p.path) {
-        card.classList.add("is-active");
-      }
+
       const name = document.createElement("span");
       name.className = "card__name";
       name.textContent = p.name;
@@ -122,6 +120,8 @@ function initTabs() {
 const LAUNCH_LABEL = `${mi("rocket_launch")}Launch workspace`;
 
 function initLaunch() {
+  document.getElementById("all-projects-btn").addEventListener("click", showOverview);
+
   const btn = document.getElementById("launch-btn");
   btn.addEventListener("click", async () => {
     if (!activeProject) return;
