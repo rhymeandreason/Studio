@@ -1415,7 +1415,7 @@ function copyAdjustments() {
   for (const k of ADJ_FIELDS) snap[k] = editState[k];
   copiedEdits = JSON.parse(JSON.stringify(snap));
   localStorage.setItem("studio_copied_edits", JSON.stringify(copiedEdits));
-  document.getElementById("ed-paste").disabled = false;
+  document.getElementById("m-pasteadj").disabled = false;
   setEditStatus("Copied ✓");
 }
 
@@ -1903,13 +1903,8 @@ function initEditor() {
     );
   document.getElementById("ed-cropreset").addEventListener("click", resetCrop);
 
-  // Copy / paste adjustments.
+  // Copy / paste adjustments live in the side "More" menu (wired in initMedia).
   loadCopiedEdits();
-  document.getElementById("ed-paste").disabled = !copiedEdits;
-  document.getElementById("ed-copy").addEventListener("click", copyAdjustments);
-  document
-    .getElementById("ed-paste")
-    .addEventListener("click", pasteAdjustments);
   window.addEventListener("resize", () => {
     if (previewSrc()) renderEditorPreview();
   });
@@ -1938,6 +1933,8 @@ function initMedia() {
       // Replace-original only applies to PNG/JPEG, like the lightbox bar.
       document.getElementById("m-replace").hidden =
         document.getElementById("lb-replace").hidden;
+      // Paste adjustments is available only once something has been copied.
+      document.getElementById("m-pasteadj").disabled = !copiedEdits;
     }
     sideMenu.hidden = !sideMenu.hidden;
   });
@@ -1947,6 +1944,8 @@ function initMedia() {
       closeSideMenu();
       fn();
     });
+  menuAction("m-copyadj", copyAdjustments); // Copy adjustments
+  menuAction("m-pasteadj", pasteAdjustments); // Paste adjustments
   menuAction("m-export", () => exportEdited(false)); // Duplicate
   menuAction("m-webexport", exportCurrent); // Export
   menuAction("m-replace", () => exportEdited(true)); // Replace original

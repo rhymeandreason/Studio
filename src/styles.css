@@ -1032,8 +1032,23 @@ td.ntable__total-cell {
     background: var(--surface);
 }
 
+.menu__item:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.menu__item:disabled:hover {
+    background: transparent;
+}
+
 .menu__item .mi {
     color: var(--text-muted);
+}
+
+.menu__sep {
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--hairline);
 }
 
 .media-side__editor {
@@ -1474,11 +1489,19 @@ td.ntable__total-cell {
     flex: 0 0 240px;
     display: flex;
     flex-direction: column;
-    gap: 22px;
-    padding: 18px;
+    gap: 12px;
+    overflow-y: auto;
+}
+
+/* A soft-background card grouping related edit controls. */
+.editsection {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 16px;
+    padding-bottom: 24px;
     background: var(--surface);
     border-radius: var(--radius);
-    overflow-y: auto;
 }
 
 .editgroup {
@@ -1554,7 +1577,7 @@ td.ntable__total-cell {
 #tonal-sliders {
     display: flex;
     flex-direction: column;
-    gap: 13px;
+    gap: 16px;
 }
 
 .sliderrow {
