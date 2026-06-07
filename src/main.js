@@ -3525,6 +3525,8 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   render(await invoke("get_active_project"));
 
+  document.getElementById("overview-new-btn").addEventListener("click", openNewModal);
+
   await listen("project-activated", (event) => render(event.payload));
   await listen("new-project-request", openNewModal);
   await listen("show-overview", showOverview);

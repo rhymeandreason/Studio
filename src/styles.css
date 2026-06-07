@@ -355,8 +355,15 @@ body {
     padding: 24px;
 }
 
-.overview__title {
+.overview__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 18px;
+}
+
+.overview__title {
+    margin-bottom: 0;
 }
 
 .overview__grid {
