@@ -1909,7 +1909,7 @@ async function openExtend() {
   exRatioBase = null;
   exOrient = "landscape";
   exFinal = null;
-  document.getElementById("extend-save").disabled = true;
+  setExtendReady(false);
   document.getElementById("extend-status").textContent = "";
   document
     .querySelectorAll("#extend-ratios .chip")
@@ -1950,7 +1950,7 @@ function applyExtendRatio(r) {
     };
   }
   exFinal = null;
-  document.getElementById("extend-save").disabled = true;
+  setExtendReady(false);
   renderExtend();
 }
 
@@ -2034,7 +2034,7 @@ function exPointerMove(e) {
     exMargins = m;
   }
   exFinal = null;
-  document.getElementById("extend-save").disabled = true;
+  setExtendReady(false);
   renderExtend();
 }
 
@@ -2129,7 +2129,7 @@ async function runExtendFill(engine, cap) {
     exFinal = final;
 
     status.textContent = "Filled ✓";
-    document.getElementById("extend-save").disabled = false;
+    setExtendReady(true);
     renderExtend();
   } catch (err) {
     console.error("extend fill failed:", err);
@@ -2199,17 +2199,46 @@ async function sdEngine(work) {
   });
 }
 
-async function extendSave() {
-  if (!exFinal || !editItem) return;
+// Enable/disable the two post-fill actions together.
+function setExtendReady(ready) {
+  document.getElementById("extend-save").disabled = !ready;
+  document.getElementById("extend-photos").disabled = !ready;
+}
+
+// Write the extended image to <name>-extended.png; returns the path (or null).
+async function writeExtended() {
+  if (!exFinal || !editItem) return null;
   const dest = editItem.path.replace(/\.[^/.]+$/, "") + "-extended.png";
   try {
     const b64 = exFinal.toDataURL("image/png").split(",")[1];
     await invoke("write_image", { path: dest, dataBase64: b64 });
-    document.getElementById("extend").hidden = true;
-    if (mediaProjectPath) loadMedia(mediaProjectPath);
+    return dest;
   } catch (err) {
     console.error("Saving extended image failed:", err);
+    document.getElementById("extend-status").textContent = "Save failed";
+    return null;
   }
+}
+
+async function extendSave() {
+  const dest = await writeExtended();
+  if (!dest) return;
+  document.getElementById("extend").hidden = true;
+  if (mediaProjectPath) loadMedia(mediaProjectPath);
+}
+
+// Save, then open the result in Apple Photos to brush Clean Up (smooths the
+// PatchMatch-extended margin with Apple's on-device model).
+async function extendSaveAndCleanUp() {
+  const dest = await writeExtended();
+  if (!dest) return;
+  try {
+    await invoke("open_in_photos", { path: dest });
+  } catch (err) {
+    console.error("Open in Photos failed:", err);
+  }
+  document.getElementById("extend").hidden = true;
+  if (mediaProjectPath) loadMedia(mediaProjectPath);
 }
 
 function initExtend() {
@@ -2219,6 +2248,9 @@ function initExtend() {
     .getElementById("extend-fill-sd")
     .addEventListener("click", extendFillSD);
   document.getElementById("extend-save").addEventListener("click", extendSave);
+  document
+    .getElementById("extend-photos")
+    .addEventListener("click", extendSaveAndCleanUp);
   document
     .getElementById("extend-cancel")
     .addEventListener("click", () => (document.getElementById("extend").hidden = true));

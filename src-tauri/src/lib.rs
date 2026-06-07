@@ -497,6 +497,17 @@ fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Open a file in Apple Photos (for manual Clean Up of an extended image).
+#[tauri::command]
+fn open_in_photos(path: String) -> Result<(), String> {
+    Command::new("open")
+        .args(["-a", "Photos"])
+        .arg(&path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Convert a HEIC to a cached JPEG (in the app cache dir) so the webview can
 /// display it. Returns the cached file path; the frontend asset-resolves it.
 #[tauri::command]
@@ -994,6 +1005,7 @@ pub fn run() {
             edited_thumb,
             save_edited_thumb,
             open_path,
+            open_in_photos,
             heic_preview,
             import_media,
             paste_image,
