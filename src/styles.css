@@ -1683,7 +1683,43 @@ td.ntable__total-cell {
 .extend__ratios {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 6px;
+}
+
+/* Landscape / portrait orientation toggle */
+.orient-toggle {
+    display: inline-flex;
+    gap: 4px;
+    margin-right: 4px;
+}
+
+.orient-btn {
+    width: 34px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        color 0.15s,
+        border-color 0.15s;
+}
+
+.orient-btn:hover {
+    color: var(--text);
+    border-color: var(--text);
+}
+
+.orient-btn.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
 }
 
 .extend__stage {

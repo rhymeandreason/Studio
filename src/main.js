@@ -1880,6 +1880,8 @@ function initRemoveBg() {
 let exBase = null; // standalone canvas of the current edited image, full-res
 let exMargins = { l: 0, r: 0, t: 0, b: 0 }; // px added per side, base-image space
 let exRatio = null; // locked aspect (w/h) or null = free drag
+let exRatioBase = null; // selected base ratio (>=1, landscape) or null = Free
+let exOrient = "landscape"; // "landscape" | "portrait"
 let exFinal = null; // composited result canvas after Fill (or null)
 let exScale = 1; // stage px per image px
 let exDrag = null;
@@ -1904,14 +1906,31 @@ async function openExtend() {
 
   exMargins = { l: 0, r: 0, t: 0, b: 0 };
   exRatio = null;
+  exRatioBase = null;
+  exOrient = "landscape";
   exFinal = null;
   document.getElementById("extend-save").disabled = true;
   document.getElementById("extend-status").textContent = "";
   document
     .querySelectorAll("#extend-ratios .chip")
     .forEach((c) => c.classList.toggle("is-active", c.dataset.ratio === "free"));
+  document
+    .querySelectorAll("#extend-orient .orient-btn")
+    .forEach((b) =>
+      b.classList.toggle("is-active", b.dataset.orient === "landscape"),
+    );
   document.getElementById("extend").hidden = false;
   renderExtend();
+}
+
+// Apply the selected base ratio under the current orientation (portrait inverts
+// it). Free selection (null base) leaves the canvas free-form.
+function applyOrientedRatio() {
+  if (exRatioBase == null) {
+    applyExtendRatio(null);
+    return;
+  }
+  applyExtendRatio(exOrient === "portrait" ? 1 / exRatioBase : exRatioBase);
 }
 
 function applyExtendRatio(r) {
@@ -2143,7 +2162,18 @@ function initExtend() {
         .querySelectorAll("#extend-ratios .chip")
         .forEach((x) => x.classList.remove("is-active"));
       c.classList.add("is-active");
-      applyExtendRatio(c.dataset.ratio === "free" ? null : Number(c.dataset.ratio));
+      exRatioBase = c.dataset.ratio === "free" ? null : Number(c.dataset.ratio);
+      applyOrientedRatio();
+    }),
+  );
+  document.querySelectorAll("#extend-orient .orient-btn").forEach((b) =>
+    b.addEventListener("click", () => {
+      document
+        .querySelectorAll("#extend-orient .orient-btn")
+        .forEach((x) => x.classList.remove("is-active"));
+      b.classList.add("is-active");
+      exOrient = b.dataset.orient;
+      applyOrientedRatio(); // re-orient the current ratio (no-op for Free/1:1)
     }),
   );
   document
