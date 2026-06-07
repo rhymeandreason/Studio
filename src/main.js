@@ -3014,7 +3014,7 @@ function scheduleNotesSave() {
   notesSaveTimer = setTimeout(async () => {
     try {
       await invoke("save_notes", { path: notesProjectPath, notes: notesData });
-      setNotesStatus("Saved ✓");
+      setNotesStatus("");
     } catch (err) {
       setNotesStatus(`Error: ${err}`);
     }
