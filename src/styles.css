@@ -1687,6 +1687,10 @@ td.ntable__total-cell {
     gap: 6px;
 }
 
+.extend__prompt {
+    width: 100%;
+}
+
 /* Landscape / portrait orientation toggle */
 .orient-toggle {
     display: inline-flex;

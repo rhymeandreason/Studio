@@ -2105,9 +2105,9 @@ async function runExtendFill(engine, cap) {
       Math.round(exBase.width * ws),
       Math.round(exBase.height * ws),
     );
-    const b64 = work.toDataURL("image/png").split(",")[1];
-    const filledB64 = await engine(b64, wW, wH);
-    const filledImg = await loadImage(`data:image/png;base64,${filledB64}`);
+    const filledB64 = await engine(work);
+    const clean = filledB64.includes(",") ? filledB64.split(",")[1] : filledB64;
+    const filledImg = await loadImage(`data:image/png;base64,${clean}`);
 
     // Final full-res: upscaled synthesized fill, with the crisp original
     // feathered on top so it cross-fades into the fill (hides the seam).
@@ -2143,23 +2143,60 @@ async function runExtendFill(engine, cap) {
 // Simple (content-aware PatchMatch) fill — fast, best for plain backgrounds.
 function extendFill() {
   return runExtendFill(
-    (b64) => invoke("extend_background", { pngBase64: b64 }),
+    (work) =>
+      invoke("extend_background", {
+        pngBase64: work.toDataURL("image/png").split(",")[1],
+      }),
     1536,
   );
 }
 
-// Generative (Stable Diffusion outpaint) fill. Backend not wired yet.
-const SD_FILL_ENABLED = false;
+// Generative (Stable Diffusion outpaint) fill via Draw Things' HTTP API.
 function extendFillSD() {
-  if (!SD_FILL_ENABLED) {
-    document.getElementById("extend-status").textContent =
-      "Generative Fill isn’t set up yet";
-    return;
+  return runExtendFill(sdEngine, 1024);
+}
+
+// Build the init image (margins pre-filled) + mask (margins white) from the
+// transparent-margin work canvas, then ask Draw Things to outpaint.
+async function sdEngine(work) {
+  const wW = work.width;
+  const wH = work.height;
+
+  // Init: a stretched copy of the original as a plausible base, with the
+  // correctly-placed original composited crisply on top.
+  const init = document.createElement("canvas");
+  init.width = wW;
+  init.height = wH;
+  const ictx = init.getContext("2d");
+  ictx.imageSmoothingQuality = "high";
+  ictx.drawImage(exBase, 0, 0, wW, wH); // blurry edge-to-edge backdrop
+  ictx.drawImage(work, 0, 0); // original region on top (margins are transparent)
+
+  // Mask: white where the work canvas is transparent (the new margins).
+  const wd = work.getContext("2d").getImageData(0, 0, wW, wH).data;
+  const mask = document.createElement("canvas");
+  mask.width = wW;
+  mask.height = wH;
+  const mctx = mask.getContext("2d");
+  const md = mctx.createImageData(wW, wH);
+  for (let i = 0; i < wW * wH; i++) {
+    const v = wd[i * 4 + 3] < 128 ? 255 : 0;
+    md.data[i * 4] = v;
+    md.data[i * 4 + 1] = v;
+    md.data[i * 4 + 2] = v;
+    md.data[i * 4 + 3] = 255;
   }
-  return runExtendFill(
-    (b64) => invoke("extend_background_sd", { pngBase64: b64 }),
-    1024,
-  );
+  mctx.putImageData(md, 0, 0);
+
+  return invoke("sd_outpaint", {
+    initBase64: init.toDataURL("image/png").split(",")[1],
+    maskBase64: mask.toDataURL("image/png").split(",")[1],
+    prompt: document.getElementById("extend-prompt").value.trim(),
+    negativePrompt: "",
+    width: wW,
+    height: wH,
+    steps: 20,
+  });
 }
 
 async function extendSave() {

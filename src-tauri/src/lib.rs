@@ -733,6 +733,56 @@ fn extend_background(png_base64: String) -> Result<String, String> {
     Ok(STANDARD.encode(&out))
 }
 
+/// Generative outpaint via Draw Things' Automatic1111-compatible HTTP API.
+/// `init_base64` is the enlarged canvas (margins pre-filled), `mask_base64`
+/// marks the new margins white. Returns the generated PNG (base64). Requires
+/// Draw Things running with "API Server" enabled (default 127.0.0.1:7860).
+#[tauri::command]
+fn sd_outpaint(
+    init_base64: String,
+    mask_base64: String,
+    prompt: String,
+    negative_prompt: String,
+    width: u32,
+    height: u32,
+    steps: u32,
+) -> Result<String, String> {
+    let host = std::env::var("STUDIO_SD_HOST")
+        .unwrap_or_else(|_| "http://127.0.0.1:7860".to_string());
+    let body = serde_json::json!({
+        "init_images": [init_base64],
+        "mask": mask_base64,
+        "prompt": prompt,
+        "negative_prompt": negative_prompt,
+        "steps": steps,
+        "cfg_scale": 7.0,
+        "denoising_strength": 1.0,
+        "inpainting_fill": 0,       // fill (we pre-fill the margins in the init)
+        "inpaint_full_res": false,  // see the whole image for context
+        "mask_blur": 8,
+        "width": width,
+        "height": height,
+        "seed": -1,
+    });
+
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(5))
+        .timeout_read(std::time::Duration::from_secs(600))
+        .build();
+
+    let resp = agent
+        .post(&format!("{host}/sdapi/v1/img2img"))
+        .send_json(body)
+        .map_err(|e| {
+            format!("Draw Things request failed — is its API Server on at {host}? ({e})")
+        })?;
+    let v: serde_json::Value = resp.into_json().map_err(|e| e.to_string())?;
+    v["images"][0]
+        .as_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Draw Things returned no image".to_string())
+}
+
 // --- Background removal (macOS Vision framework) ---------------------------
 
 /// Remove the background from a PNG (base64) using the bundled Swift helper
@@ -939,6 +989,7 @@ pub fn run() {
             reveal_in_finder,
             remove_background,
             extend_background,
+            sd_outpaint,
             encode_webp,
             read_image_data,
             read_edits,
