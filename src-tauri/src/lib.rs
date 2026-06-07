@@ -497,14 +497,28 @@ fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Open a file in Apple Photos (for manual Clean Up of an extended image).
+/// Open a file in Apple Photos (for Clean Up of an extended image). After the
+/// import, best-effort enters the Edit panel by sending the Return shortcut via
+/// System Events — this needs Accessibility permission and is timing-dependent,
+/// so it may not always land. The user can still press Return manually.
 #[tauri::command]
 fn open_in_photos(path: String) -> Result<(), String> {
     Command::new("open")
         .args(["-a", "Photos"])
         .arg(&path)
-        .spawn()
+        .status()
         .map_err(|e| e.to_string())?;
+
+    // Give Photos time to import + show the photo, then press Return (Edit).
+    let script = r#"
+        delay 2.5
+        tell application "Photos" to activate
+        delay 0.6
+        tell application "System Events" to tell process "Photos"
+            key code 36
+        end tell
+    "#;
+    let _ = Command::new("osascript").args(["-e", script]).spawn();
     Ok(())
 }
 
