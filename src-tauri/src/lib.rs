@@ -346,6 +346,9 @@ struct MediaItem {
     modified: u64,
     has_edits: bool,
     edits_mtime: u64,
+    file_size: u64,
+    width: u32,
+    height: u32,
 }
 
 /// Recursively collect images under `dir`, skipping noise/hidden directories.
@@ -386,6 +389,12 @@ fn walk_media(dir: &Path, out: &mut Vec<MediaItem>) {
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
+        let file_size = entry.metadata().ok().map(|m| m.len()).unwrap_or(0);
+        let (width, height) = if kind == "image" {
+            image::image_dimensions(&path).unwrap_or((0, 0))
+        } else {
+            (0, 0)
+        };
         out.push(MediaItem {
             name: name.to_string(),
             path: path_str,
@@ -395,6 +404,9 @@ fn walk_media(dir: &Path, out: &mut Vec<MediaItem>) {
             modified,
             has_edits: edits_mtime > 0,
             edits_mtime,
+            file_size,
+            width,
+            height,
         });
     }
 }
@@ -1125,6 +1137,25 @@ fn launch_workspace(app: AppHandle, path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+/// Rename a media file in place, moving its edits sidecar too if present.
+#[tauri::command]
+fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
+    let old = PathBuf::from(&old_path);
+    let dir = old.parent().ok_or("no parent dir")?;
+    let new = dir.join(&new_name);
+    if new.exists() {
+        return Err(format!("A file named \"{}\" already exists", new_name));
+    }
+    std::fs::rename(&old, &new).map_err(|e| e.to_string())?;
+    // Move sidecar if present.
+    let old_sidecar = PathBuf::from(sidecar_path(&old_path));
+    if old_sidecar.exists() {
+        let new_sidecar = PathBuf::from(sidecar_path(&new.to_string_lossy()));
+        let _ = std::fs::rename(&old_sidecar, &new_sidecar);
+    }
+    Ok(new.to_string_lossy().to_string())
+}
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -1159,7 +1190,8 @@ pub fn run() {
             read_edits,
             save_edits,
             trash_media,
-            write_image
+            write_image,
+            rename_media
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.

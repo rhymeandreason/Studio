@@ -634,6 +634,49 @@ function isWebExport(name) {
   );
 }
 
+function startRename(tile, nameEl, item) {
+  if (tile.querySelector(".mediatile__rename")) return; // already renaming
+  const input = el("textarea", "mediatile__rename", { rows: 1 });
+  input.value = item.name;
+  nameEl.replaceWith(input);
+  // Auto-height.
+  const resizeInput = () => { input.style.height = "auto"; input.style.height = input.scrollHeight + "px"; };
+  input.addEventListener("input", resizeInput);
+  requestAnimationFrame(() => { resizeInput(); input.focus(); });
+  // Select name without extension for convenience.
+  const dotIdx = item.name.lastIndexOf(".");
+  input.setSelectionRange(0, dotIdx > 0 ? dotIdx : item.name.length);
+
+  const commit = async () => {
+    const newName = input.value.trim();
+    if (!newName || newName === item.name) {
+      cancel();
+      return;
+    }
+    try {
+      const newPath = await invoke("rename_media", { oldPath: item.path, newName });
+      item.name = newName;
+      item.path = newPath;
+      tile.dataset.path = newPath;
+      nameEl.textContent = newName;
+    } catch (err) {
+      console.error("Rename failed:", err);
+    }
+    input.replaceWith(nameEl);
+  };
+
+  const cancel = () => input.replaceWith(nameEl);
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commit(); }
+    if (e.key === "Escape") { e.preventDefault(); cancel(); }
+    e.stopPropagation();
+  });
+  input.addEventListener("blur", commit);
+  // Prevent tile click/select while renaming.
+  input.addEventListener("click", (e) => e.stopPropagation());
+}
+
 // Build a media tile (queues its thumbnail load). `edited` collects edited
 // images to bake after the grid is laid out.
 function buildMediaTile(item, edited) {
@@ -661,7 +704,22 @@ function buildMediaTile(item, edited) {
   thumb.append(img);
 
   tile.append(thumb);
-  tile.append(el("span", "mediatile__name", { textContent: item.name }));
+  const nameEl = el("span", "mediatile__name", { textContent: item.name });
+  nameEl.addEventListener("click", (e) => {
+    e.stopPropagation();
+    startRename(tile, nameEl, item);
+  });
+  tile.append(nameEl);
+
+  const metaParts = [];
+  if (item.width && item.height) metaParts.push(`${item.width}×${item.height}`);
+  if (item.file_size) {
+    const kb = item.file_size / 1024;
+    metaParts.push(kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.round(kb)} KB`);
+  }
+  if (metaParts.length)
+    tile.append(el("span", "mediatile__meta", { textContent: metaParts.join("  ·  ") }));
+
   if (mediaSelection.has(item.path)) tile.classList.add("is-selected");
 
   tile.addEventListener("click", (e) => {
