@@ -2423,6 +2423,80 @@ async function editInPhotos() {
   }
 }
 
+// --- Generate image (Image Playground via Shortcut) ------------------------
+
+// Shortcut names (build these in the Shortcuts app):
+//   text  → receives Shortcut Input (the prompt), runs Image Playground, returns image
+//   photo → receives Shortcut Input (the image) + reads the prompt from the
+//           clipboard, runs Image Playground, returns image
+const GEN_SHORTCUT_TEXT = "Studio Generate";
+const GEN_SHORTCUT_PHOTO = "Studio Generate From Photo";
+
+function openGenerate() {
+  if (!activeProject) return;
+  document.getElementById("generate-prompt").value = "";
+  document.getElementById("generate-status").textContent = "";
+  // Offer "use selected image" only when a single image is selected.
+  const seedable = !!(activeItem && activeItem.kind === "image");
+  document.getElementById("generate-seed-row").hidden = !seedable;
+  document.getElementById("generate-seed").checked = false;
+  document.getElementById("generate").hidden = false;
+  document.getElementById("generate-prompt").focus();
+}
+
+async function runGenerate() {
+  if (!activeProject) return;
+  const prompt = document.getElementById("generate-prompt").value.trim();
+  const seed =
+    document.getElementById("generate-seed").checked &&
+    activeItem &&
+    activeItem.kind === "image";
+  if (!prompt && !seed) {
+    document.getElementById("generate-status").textContent = "Enter a prompt";
+    return;
+  }
+
+  const out = `${activeProject.path}/media/generated-${Date.now()}.png`;
+  const status = document.getElementById("generate-status");
+  const btn = document.getElementById("generate-run");
+  status.textContent = "Generating…";
+  btn.disabled = true;
+  try {
+    if (seed) {
+      await invoke("run_shortcut", {
+        name: GEN_SHORTCUT_PHOTO,
+        inputPath: activeItem.path,
+        clipboardText: prompt,
+        outputPath: out,
+      });
+    } else {
+      await invoke("run_shortcut", {
+        name: GEN_SHORTCUT_TEXT,
+        inputText: prompt,
+        outputPath: out,
+      });
+    }
+    document.getElementById("generate").hidden = true;
+    if (mediaProjectPath) loadMedia(mediaProjectPath);
+  } catch (err) {
+    console.error("Generate failed:", err);
+    status.textContent = `Failed: ${err}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function initGenerate() {
+  document.getElementById("generate-open").addEventListener("click", openGenerate);
+  document.getElementById("generate-run").addEventListener("click", runGenerate);
+  document
+    .getElementById("generate-cancel")
+    .addEventListener(
+      "click",
+      () => (document.getElementById("generate").hidden = true),
+    );
+}
+
 function initExtend() {
   document.getElementById("ed-extendbg").addEventListener("click", openExtend);
   document.getElementById("ed-photos").addEventListener("click", editInPhotos);
@@ -2561,6 +2635,7 @@ function initMedia() {
   initWebExport();
   initRemoveBg();
   initExtend();
+  initGenerate();
   document.getElementById("sel-paste").addEventListener("click", batchPaste);
   document
     .getElementById("sel-clear")
@@ -2626,7 +2701,11 @@ function initMedia() {
 
   document.addEventListener("keydown", (e) => {
     const mod = e.metaKey || e.ctrlKey;
-    // The Extend-background modal takes Escape first.
+    // Modal dialogs take Escape first (and swallow other keys while open).
+    if (!document.getElementById("generate").hidden) {
+      if (e.key === "Escape") document.getElementById("generate").hidden = true;
+      return;
+    }
     if (!document.getElementById("extend").hidden) {
       if (e.key === "Escape") document.getElementById("extend").hidden = true;
       return;

@@ -62,6 +62,11 @@
             <div class="content" id="project-content" hidden>
                 <section class="panel panel--media" data-panel="media" hidden>
                     <div class="media-main" id="media-main">
+                        <div class="media-toolbar">
+                            <button class="btn-ghost" id="generate-open">
+                                <span class="mi mi-sm">auto_awesome</span>Generate
+                            </button>
+                        </div>
                         <div class="selbar" id="selbar" hidden>
                             <span class="selbar__count" id="sel-count"
                                 >0 selected</span
@@ -419,6 +424,34 @@
                     <button class="btn-ghost" id="cutout-cancel">Cancel</button>
                     <button class="btn-save" id="cutout-save">
                         <span class="mi mi-sm">save</span>Save cutout
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generate image (Image Playground via Shortcut) -->
+        <div class="modal generate" id="generate" hidden>
+            <div class="modal__card">
+                <h2 class="modal__title">Generate image</h2>
+                <p class="modal__hint">
+                    Runs your Image Playground Shortcut and saves the result into
+                    this project.
+                </p>
+                <textarea
+                    class="field__input generate__prompt"
+                    id="generate-prompt"
+                    rows="3"
+                    placeholder="Describe the image…"
+                ></textarea>
+                <label class="generate__check" id="generate-seed-row" hidden>
+                    <input type="checkbox" id="generate-seed" />
+                    <span>Use selected image as reference</span>
+                </label>
+                <div class="modal__actions">
+                    <span class="edit-status" id="generate-status"></span>
+                    <button class="btn-ghost" id="generate-cancel">Cancel</button>
+                    <button class="btn-save" id="generate-run">
+                        <span class="mi mi-sm">auto_awesome</span>Generate
                     </button>
                 </div>
             </div>

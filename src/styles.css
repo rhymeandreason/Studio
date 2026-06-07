@@ -1078,6 +1078,41 @@ td.ntable__total-cell {
     max-height: none;
 }
 
+/* Media toolbar (above the grid) */
+.media-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 14px;
+}
+
+.media-toolbar .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 14px;
+    font-size: 12px;
+}
+
+/* Generate dialog */
+.generate {
+    z-index: 50;
+    background: rgba(42, 42, 40, 0.45);
+}
+
+.generate__prompt {
+    width: 100%;
+    resize: vertical;
+    font-family: var(--sans);
+}
+
+.generate__check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text);
+}
+
 /* Media grid — thumbnails at native aspect ratio */
 .media-grid {
     display: grid;

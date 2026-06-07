@@ -507,6 +507,81 @@ fn applescript_quote(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// Run a macOS Shortcut via the `shortcuts` CLI. Used for Image Playground
+/// generation (which the direct ImageCreator API forbids from a background
+/// process). One of `input_path` / `input_text` becomes the shortcut's input
+/// (`--input-path`); `clipboard_text` is copied to the pasteboard first so a
+/// shortcut can read a prompt alongside an image input. Output is written to
+/// `output_path`.
+#[tauri::command]
+fn run_shortcut(
+    name: String,
+    input_path: Option<String>,
+    input_text: Option<String>,
+    clipboard_text: Option<String>,
+    output_path: String,
+) -> Result<(), String> {
+    use std::io::Write;
+
+    if let Some(text) = clipboard_text {
+        if let Ok(mut child) = Command::new("pbcopy")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+        {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(text.as_bytes());
+            }
+            let _ = child.wait();
+        }
+    }
+
+    // Resolve the shortcut input: an explicit path, or text written to a temp file.
+    let mut temp_input: Option<PathBuf> = None;
+    let resolved_input = if let Some(p) = input_path {
+        Some(p)
+    } else if let Some(t) = input_text {
+        let f = std::env::temp_dir().join(format!(
+            "studio-shortcut-{}.txt",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::write(&f, t).map_err(|e| e.to_string())?;
+        temp_input = Some(f.clone());
+        Some(f.to_string_lossy().to_string())
+    } else {
+        None
+    };
+
+    if let Some(parent) = Path::new(&output_path).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    let mut cmd = Command::new("shortcuts");
+    cmd.arg("run").arg(&name);
+    if let Some(ref ip) = resolved_input {
+        cmd.args(["--input-path", ip]);
+    }
+    cmd.args(["--output-path", &output_path]);
+    let out = cmd.output().map_err(|e| e.to_string())?;
+
+    if let Some(f) = temp_input {
+        let _ = std::fs::remove_file(f);
+    }
+
+    if out.status.success() {
+        Ok(())
+    } else {
+        let err = String::from_utf8_lossy(&out.stderr);
+        Err(if err.trim().is_empty() {
+            format!("shortcut \"{name}\" failed")
+        } else {
+            err.trim().to_string()
+        })
+    }
+}
+
 /// The album Studio imports extended images into for Clean Up.
 const PHOTOS_ALBUM: &str = "Studio";
 
@@ -1070,6 +1145,7 @@ pub fn run() {
             save_edited_thumb,
             open_path,
             open_in_photos,
+            run_shortcut,
             heic_preview,
             import_media,
             paste_image,
