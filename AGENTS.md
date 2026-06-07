@@ -3,7 +3,7 @@
 A macOS menu-bar app for designer-developers: each **project** is a folder under
 `~/Projects/`. Studio activates a project (launches its apps + `claude` in the
 repo), shows a **media** grid with a non-destructive **image editor**, and keeps
-lightweight **notes**. Full spec: `STUDIO_PLAN.md`. Deferred work: `BACKLOG.md`.
+lightweight **notes**. 
 
 ## Stack
 - **Tauri v2** (Rust backend) + **vanilla JS/HTML/CSS** frontend (no bundler).
@@ -28,6 +28,15 @@ app — no Dock icon; click the tray icon. Test projects live in `~/Projects/`.
 - FSEvents (`notify`) emits `fs-changed`; the grid reconciles (don't rebuild —
   it duplicated tiles before). Tray/window events drive activation.
 
+**Layout:** `body` is a flex row with `.app-left` (flex: 1 1 auto, full app) and `.app-right` (flex: 0 0 320px, editor column). Window width is controlled via `invoke("set_window_width", { width })` — CSS layout alone doesn't resize the native window.
+
+**Notes:** Stored in `notes.json` per project. `notesData` is the in-memory store. Font/size preference stored as `notesData.font` / `notesData.fontSize`, applied via CSS custom properties `--notes-font` / `--notes-font-size` on `#notes-list`.
+
+**Workspace:** Stored in `workspace.json` per project via `Workspace` Rust struct. The `pinnedTab` field (renamed from `pinned_tab` via serde) controls which tab opens on project load. `readList()` queries `textarea` elements (not `input`).
+
+**Key globals:** `activeProject`, `notesData`, `selectedNoteId`, `wsPinnedTab`, `wsEditor`, `wsClaude`.
+
+**Patterns:** All Tauri commands use `invoke()`. Saves are debounced via `scheduleNotesSave()` / `scheduleWorkspaceSave()`. The `el()` helper creates DOM elements. `renderNotes()` fully re-renders the notes grid from `notesData`.
 
 ## Conventions
 The human tests each step in the running app before committing. `cargo check` in `src-tauri/` after Rust edits. 
