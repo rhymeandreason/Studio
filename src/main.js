@@ -2141,7 +2141,12 @@ function featheredOriginal(base, m, feather) {
 // for the enlarged canvas; the original is feathered back on top to hide seams.
 async function runExtendFill(engine, cap) {
   if (!exBase) return;
-  if (exMargins.l + exMargins.r + exMargins.t + exMargins.b === 0) {
+  // Color Fill is allowed with no extension (it backs a transparent image);
+  // the others need actual margins to synthesize.
+  if (
+    exMargins.l + exMargins.r + exMargins.t + exMargins.b === 0 &&
+    exMethod !== "color"
+  ) {
     document.getElementById("extend-status").textContent = "Nothing to extend";
     return;
   }
