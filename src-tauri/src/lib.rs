@@ -497,85 +497,50 @@ fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// AppleScript that drives Photos: open "Recently Saved", select the last
-/// (newest) photo, and enter the Edit panel. `initial_delay` lets callers wait
-/// for an import to finish first. Each UI step is wrapped so a layout mismatch
-/// doesn't abort the rest. Key codes: 36=Return, 48=Tab, 119=End.
-fn photos_edit_script(initial_delay: f32) -> String {
-    format!(
-        r#"
-        delay {initial_delay}
-        -- Launch + restore Photos: `reopen` recreates the main window if it was
-        -- closed; activate brings it forward.
-        tell application "Photos"
-            reopen
-            activate
-        end tell
-        delay 0.8
-        tell application "System Events" to tell process "Photos"
-            set frontmost to true
-            -- Un-minimize any minimized window.
-            try
-                repeat with w in windows
-                    if value of attribute "AXMinimized" of w is true then
-                        set value of attribute "AXMinimized" of w to false
-                    end if
-                end repeat
-            end try
-            -- Wait up to ~3s for a window to be present.
-            repeat 30 times
-                if (count of windows) > 0 then exit repeat
-                delay 0.1
-            end repeat
-            delay 0.4
-            -- 1) Open the "Recently Saved" album in the sidebar.
-            try
-                set theRow to (first row of outline 1 of scroll area 1 of splitter group 1 of window 1 whose name contains "Recently Saved")
-                select theRow
-            end try
-            delay 1.0
-            -- 2) Move focus into the photo grid and jump to the last photo.
-            try
-                key code 48
-                delay 0.3
-                key code 119
-            end try
-            delay 0.3
-            -- 3) Enter Edit.
-            try
-                key code 36
-            end try
-        end tell
-    "#
-    )
+/// Escape a string for embedding in an AppleScript double-quoted literal.
+fn applescript_quote(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
-/// Open a file in Apple Photos (for Clean Up of an extended image), then
-/// best-effort navigate to it and enter Edit (see photos_edit_script). Needs
-/// Accessibility permission and is timing-dependent, so it may not always land.
+/// The album Studio imports extended images into for Clean Up.
+const PHOTOS_ALBUM: &str = "Studio";
+
+/// Import `path` into the Studio album in Photos, reveal it, and enter the Edit
+/// panel (ready for Clean Up). Uses Photos' native scripting to import + select,
+/// then a single Return via System Events to start editing (needs Accessibility).
 #[tauri::command]
 fn open_in_photos(path: String) -> Result<(), String> {
-    Command::new("open")
-        .args(["-a", "Photos"])
-        .arg(&path)
-        .status()
-        .map_err(|e| e.to_string())?;
-    let _ = Command::new("osascript")
-        .args(["-e", &photos_edit_script(2.5)])
-        .spawn();
-    Ok(())
-}
-
-/// Run only the "navigate to Recently Saved → last photo → Edit" automation
-/// against whatever Photos currently shows. For tuning the UI scripting.
-#[tauri::command]
-fn photos_edit_test() -> Result<String, String> {
+    let name = Path::new(&path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let script = format!(
+        r#"
+        set imagePath to POSIX file "{path}"
+        tell application "Photos"
+            activate
+            if not (exists container "{album}") then
+                make new album named "{album}"
+            end if
+            set targetAlbum to container "{album}"
+            import {{imagePath}} into targetAlbum
+            spotlight targetAlbum
+            set foundItems to (search for "{name}")
+            if (count of foundItems) > 0 then spotlight item 1 of foundItems
+        end tell
+        delay 0.6
+        tell application "System Events" to keystroke return
+    "#,
+        path = applescript_quote(&path),
+        name = applescript_quote(&name),
+        album = PHOTOS_ALBUM,
+    );
     let out = Command::new("osascript")
-        .args(["-e", &photos_edit_script(0.3)])
+        .args(["-e", &script])
         .output()
         .map_err(|e| e.to_string())?;
     if out.status.success() {
-        Ok("ran".into())
+        Ok(())
     } else {
         Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
     }
@@ -1079,7 +1044,6 @@ pub fn run() {
             save_edited_thumb,
             open_path,
             open_in_photos,
-            photos_edit_test,
             heic_preview,
             import_media,
             paste_image,

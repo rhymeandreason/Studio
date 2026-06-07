@@ -2232,10 +2232,13 @@ async function extendSave() {
 async function extendSaveAndCleanUp() {
   const dest = await writeExtended();
   if (!dest) return;
+  document.getElementById("extend-status").textContent = "Opening in Photos…";
   try {
     await invoke("open_in_photos", { path: dest });
   } catch (err) {
     console.error("Open in Photos failed:", err);
+    document.getElementById("extend-status").textContent = `Photos: ${err}`;
+    return; // keep the modal open so the error is visible
   }
   document.getElementById("extend").hidden = true;
   if (mediaProjectPath) loadMedia(mediaProjectPath);
@@ -2251,18 +2254,6 @@ function initExtend() {
   document
     .getElementById("extend-photos")
     .addEventListener("click", extendSaveAndCleanUp);
-  document
-    .getElementById("extend-test-photos")
-    .addEventListener("click", async () => {
-      const status = document.getElementById("extend-status");
-      status.textContent = "Testing Photos…";
-      try {
-        await invoke("photos_edit_test");
-        status.textContent = "Photos test ran";
-      } catch (err) {
-        status.textContent = `Photos test: ${err}`;
-      }
-    });
   document
     .getElementById("extend-cancel")
     .addEventListener("click", () => (document.getElementById("extend").hidden = true));
