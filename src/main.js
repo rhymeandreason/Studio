@@ -147,6 +147,15 @@ function selectTab(name) {
       document.getElementById("media-side").hidden = true;
       invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
     }
+  } else if (activeItem && mediaSelection.has(activeItem.path)) {
+    // Returning to media: re-open the editor column for the selection that
+    // still owns it (it was only hidden, not torn down).
+    const appRight = document.getElementById("app-right");
+    if (appRight && appRight.hidden) {
+      document.getElementById("media-side").hidden = false;
+      appRight.hidden = false;
+      invoke("set_window_width", { width: Math.max(window.innerWidth, 1220) });
+    }
   }
 }
 
@@ -465,11 +474,16 @@ let mediaProjectPath = null;
 let currentMedia = null;
 // The single source of truth for selection. A selection of exactly one image
 // opens the editor; 0 or 2+ (or a single non-image) shows the batch bar instead.
-const mediaSelection = new Set();
+// Media tile selection (interaction-spec §3). Multi-select; onChange repaints
+// tile rings + the batch bar.
+const mediaSelection = createSelection({
+  mode: "multi",
+  onChange: () => updateSelectionUI(),
+});
 const mediaItemsByPath = new Map(); // path → MediaItem, refreshed by loadMedia
 
 function updateSelbar() {
-  const n = mediaSelection.size;
+  const n = mediaSelection.size();
   // Hide the batch bar only when the sole selected item is the one the editor
   // is already showing; otherwise show it (incl. multi-select with editor open).
   const editorOwnsSelection =
@@ -492,20 +506,17 @@ function updateSelectionUI() {
 // Plain click: select only this item. A single deliberate selection drives the
 // editor — opening it on an image, or closing it on a non-image.
 async function selectOnly(item) {
-  mediaSelection.clear();
-  mediaSelection.add(item.path);
-
   if (item.kind !== "image") {
-    updateSelectionUI();
+    mediaSelection.set(item.path); // onChange → updateSelectionUI
     await closeInlineEditor();
     return;
   }
 
-  // Claim editor ownership synchronously so the batch bar never flashes between
-  // the selection update and the (async) editor load.
+  // Claim editor ownership *before* the selection repaint so the batch bar
+  // never flashes between the selection update and the (async) editor load.
   const alreadyShown = activeItem && activeItem.path === item.path;
   activeItem = item;
-  updateSelectionUI(); // selbar now sees the editor owns the lone selection
+  mediaSelection.set(item.path); // onChange → updateSelectionUI (sees ownership)
   if (alreadyShown) return;
 
   if (editItem && editItem.path !== item.path) await flushEditSave();
@@ -521,14 +532,11 @@ async function selectOnly(item) {
 // ⌘/Ctrl click: add/remove from the selection. The editor is sticky here — a
 // second selection never opens, closes, or switches it.
 async function toggleSelect(item) {
-  if (mediaSelection.has(item.path)) mediaSelection.delete(item.path);
-  else mediaSelection.add(item.path);
-  updateSelectionUI();
+  mediaSelection.toggle(item.path, true); // onChange → updateSelectionUI
 }
 
 function clearSelection() {
-  mediaSelection.clear();
-  updateSelectionUI();
+  mediaSelection.clear(); // onChange → updateSelectionUI
   closeInlineEditor();
 }
 
@@ -565,11 +573,11 @@ async function trashMedia(paths) {
 
 // Write the copied adjustments onto every selected image's sidecar.
 async function batchPaste() {
-  if (!copiedEdits || !mediaSelection.size) return;
+  if (!copiedEdits || !mediaSelection.size()) return;
   const fields = {};
   for (const f of ADJ_FIELDS) if (f in copiedEdits) fields[f] = copiedEdits[f];
 
-  const paths = [...mediaSelection];
+  const paths = mediaSelection.get();
   for (const path of paths) {
     const existing = await invoke("read_edits", { path });
     await invoke("save_edits", {
@@ -793,10 +801,18 @@ function buildMediaTile(item, edited) {
   if (mediaSelection.has(item.path)) tile.classList.add("is-selected");
 
   tile.addEventListener("click", (e) => {
-    // ⌘/Ctrl-click toggles the item in the selection; plain click selects only
-    // it (and opens the editor when it's a single image).
-    if (e.metaKey || e.ctrlKey) toggleSelect(item);
-    else selectOnly(item);
+    // Shift-click selects a range; ⌘/Ctrl-click toggles; plain click selects
+    // only it (and opens the editor when it's a single image).
+    if (e.shiftKey) {
+      const order = [...document.querySelectorAll(".mediatile")].map(
+        (t) => t.dataset.path,
+      );
+      mediaSelection.range(order, item.path);
+    } else if (e.metaKey || e.ctrlKey) {
+      toggleSelect(item);
+    } else {
+      selectOnly(item);
+    }
   });
   tile.addEventListener("dblclick", () => {
     if (isImage) openLightbox(item);
@@ -864,7 +880,7 @@ async function loadMedia(path) {
 
   // Prune selection to files that still exist.
   const present = new Set(items.map((i) => i.path));
-  for (const p of [...mediaSelection])
+  for (const p of mediaSelection.get())
     if (!present.has(p)) mediaSelection.delete(p);
   updateSelbar();
 
@@ -1943,10 +1959,10 @@ function initWebExport() {
     .getElementById("lb-webexport")
     .addEventListener("click", exportCurrent);
   document.getElementById("sel-webexport").addEventListener("click", () => {
-    if (!mediaSelection.size) return;
+    if (!mediaSelection.size()) return;
     openWebExport({
       mode: "batch",
-      items: [...mediaSelection].map((p) => ({
+      items: mediaSelection.get().map((p) => ({
         path: p,
         name: p.split("/").pop(),
       })),
@@ -2846,8 +2862,10 @@ function initMedia() {
       clearSelection();
     });
 
-  // Clicking the project header (name/path, empty space) also counts as off.
-  document.getElementById("project-header").addEventListener("click", () => {
+  // Clicking the project header (name/path, empty space) also counts as off —
+  // but NOT the tabs, or returning to the media tab would clear the selection.
+  document.getElementById("project-header").addEventListener("click", (e) => {
+    if (e.target.closest("#tabs")) return;
     if (!document.querySelector('[data-panel="media"]').hidden)
       clearSelection();
   });
@@ -2883,7 +2901,7 @@ function initMedia() {
       } else if (e.key === "Delete" || e.key === "Backspace") {
         // Delete the focused image (or the checkbox selection, if any).
         e.preventDefault();
-        trashMedia(mediaSelection.size ? [...mediaSelection] : [editItem.path]);
+        trashMedia(mediaSelection.size() ? mediaSelection.get() : [editItem.path]);
       }
       return;
     }
@@ -2901,18 +2919,18 @@ function initMedia() {
     if (mod && (e.key === "v" || e.key === "V")) {
       if (inField) return;
       e.preventDefault();
-      if (mediaSelection.size) batchPaste();
+      if (mediaSelection.size()) batchPaste();
       else pasteFromClipboard();
     }
     // Delete/Backspace trashes the checkbox-selected media.
     else if (
       onMedia &&
       !inField &&
-      mediaSelection.size &&
+      mediaSelection.size() &&
       (e.key === "Delete" || e.key === "Backspace")
     ) {
       e.preventDefault();
-      trashMedia([...mediaSelection]);
+      trashMedia(mediaSelection.get());
     }
   });
   document.getElementById("lb-close").addEventListener("click", closeLightbox);
