@@ -301,8 +301,8 @@ flavor (Studio) carries the theme, the plain flavor (system clipboard) does not.
 
 - **Outside Studio**, degrade to plain content:
   - text note → its body text
-  - checklist → bulleted list, one item per line **[DECIDE: include checkbox
-    state, e.g. `- [x]` / `- [ ]`, or plain `• item`?]**
+  - checklist → bulleted list, one item per line **[DECIDED: include checkbox
+    state]**
   - table → **TSV** (header row + rows, tab-separated)
   - multiple notes → concatenated, blank line between.
 
@@ -311,33 +311,43 @@ Paste **into** Notes:
   note(s) with type preserved.
 - Else parse the system text (existing `pasteIntoNotes` logic):
   - contains tabs → table note
-  - multiple lines → **[DECIDE: checklist, or text note?]** (today: text)
+  - multiple lines → **[DECIDED: checklist]** (today: text)
   - single line / plain → text note
-  - clipboard image → **[DECIDE: import to media (today), or make an image
-    note?]**
+  - clipboard image → **[DECIDED: image notes]**
 
-### 8.3 How to carry the Studio-native payload — **[DECIDE between A and B]**
+### 8.3 How to carry the Studio-native payload — **[DECIDED: Option B — HTML flavor]**
 
-**Option A — Sidecar "Studio clipboard" file.**
-On copy: write rich note JSON to a known app-cache file via a Rust command
-*and* write the degraded text to the system clipboard. On paste: read the
-sidecar file; if its stored degraded-text still equals the current system
-clipboard text, use the rich payload (type preserved); else fall back to
-parsing system text.
-- ✓ Works cross-window & cross-project (shared file). ✓ No new plugin.
-  External apps get the degraded text.
-- ✗ Relies on the "system text still matches" heuristic to detect staleness.
+Write **two clipboard flavors** on copy via the async Clipboard API (no Rust
+plugin needed if the webview cooperates):
 
-**Option B — Real clipboard with an HTML flavor.**
-Add a clipboard plugin/crate that writes `text/html` + `text/plain`. Embed the
-note JSON in the HTML (data attribute or a typed `<script>` blob); plain text is
-the degraded form. Studio reads the HTML flavor; external apps get HTML rich
-text or plain text.
-- ✓ Standard, no staleness heuristic. ✗ New dependency + capability; must
-  confirm the WKWebView/Tauri path actually round-trips an HTML flavor.
+```js
+navigator.clipboard.write([ new ClipboardItem({
+  "text/html":  new Blob([richHtml], { type: "text/html" }),  // embeds note JSON
+  "text/plain": new Blob([degraded], { type: "text/plain" }), // 8.2 degraded form
+})]);
+```
 
-> Recommendation: **A** for now (no new deps, satisfies all the decided
-> requirements), revisit **B** if/when we want true rich-text interop.
+- The note JSON (type + content + theme/fonts/span) is embedded in the
+  `text/html` flavor — e.g. inside a `<script type="application/studio-notes">`
+  blob or a `data-studio` attribute, alongside human-readable HTML.
+- **Studio paste** reads `text/html`, finds the embedded JSON → reconstructs
+  notes with full fidelity. External apps get rich text (HTML) or plain text.
+- **Plain-text-only sources** (and the textarea case below) → no embedded JSON →
+  fall through to the §8.2 text-parsing path.
+
+**Implementation notes / risk:**
+- Verify `navigator.clipboard.read()` returns the `text/html` flavor in the
+  Tauri WKWebView (history of `readText()` being finicky there — see the
+  existing `read_clipboard_text`/`pbpaste` workaround). If read fails, add a
+  Rust clipboard-crate command for the **read** path only; write stays in JS.
+- Image notes (§10.5): the embedded JSON references an asset; paste must
+  materialize the file into the destination project's `notes/`.
+
+**Textarea selection still copies plain text.** When focus is inside a textarea
+(editing), the keyboard dispatcher gates out (`isEditableTarget`, §4.1), so
+`Mod+c` is the browser's native copy of the selected text — plain text only,
+Studio does not intercept. Studio's rich card-copy only runs when a card is
+selected and you're *not* editing.
 
 ---
 
@@ -357,15 +367,15 @@ Tauri's native file-drop (`dragDropEnabled: true`, default) **swallows HTML5
 
 | Drop onto | Behavior |
 |---|---|
-| Media panel | import image files into project `media/` (today: works, switches to Media tab) |
+| Media panel | import image files into project `media/` (today: works, switches to Media tab, moves the image file into the folder) |
 | Notes panel | **[DECIDE: create image note? import to media + reference? ignore?]** |
 | Workspace | **[DECIDE: set the relevant path field from a dropped file/folder? ignore?]** |
-| Projects overview | **[DECIDE: dropped folder → open/add as project? ignore?]** |
-| Non-image files anywhere | **[DECIDE: ignore, or import as generic media via QuickLook thumbs?]** |
+| Projects overview | **[DECIDED: dropped folder → add as project with relative path, don't move the folder into /Projects]** |
+| Non-image files anywhere | **[DECIDED: move file into the Project folder]** |
 
-Overlay: today a single global dropzone overlay. **[DECIDE: make it
-context-aware — highlight only the panel that will receive the drop, with a
-per-target label like "Add to Media" / "New note"?]**
+Overlay: today a single global dropzone overlay. **[DECIDED: make it
+context-aware — add a
+per-target label like "Move Image File" / "Add Project"]**
 
 ### 9.2 Internal drag (within the app, pointer-based)
 
@@ -392,11 +402,90 @@ Confirm this is the rule (it's the platform-standard behavior).
 2. Notes copy — **DECIDED: Studio-native payload includes theme/fonts/span;
    the system-clipboard (external) form is plain content with no styling.**
 3. Checklist external form — `- [ ]` checkboxes or plain bullets?
-4. Paste multi-line text into Notes — checklist or text note?
-5. Paste image into Notes — import to media, or image note?
-6. Studio-native payload mechanism — Option A (sidecar file) or B (HTML flavor)?
+4. Paste multi-line text into Notes — **DECIDED: checklist.**
+5. Paste image into Notes — **DECIDED: image note** (see §10).
+6. Studio-native payload mechanism — **DECIDED: Option B (HTML flavor via
+   `ClipboardItem`).** Verify WKWebView `read()` of `text/html`; Rust read
+   fallback if needed.
 7. File drop targets — Notes / Workspace / Projects behaviors (9.1)?
 8. Non-image file drops — ignore or import as generic media?
 9. Context-aware drop overlay — yes/no?
 10. Media/Projects internal reorder — allow or not?
 11. Drag+selection rule (9.3) — confirm.
+
+---
+
+## 10. Image notes (data model)
+
+**Decision: store the image as a file (not inline base64), in a dedicated
+`notes/` folder in the project. Separate from `media/` (Option B), so note
+images don't appear in the Media tab.**
+
+### 10.1 Project layout
+
+```
+<project>/
+  media/                 # Media-tab images (unchanged)
+  notes/                 # NEW: image-note asset files live here
+    <noteId>.<ext>
+  notes.json             # stays at project root; references notes/ files
+  .<file>.studio.json    # edit sidecars (media only)
+```
+
+`notes.json` holds only a **reference**, never image bytes:
+
+```jsonc
+{
+  "kind": "image",
+  "id": "n…",
+  "src": "notes/n….png",   // project-relative path
+  "w": 1200, "h": 800,      // natural pixel size (for layout / bento sizing)
+  "caption": "",            // optional
+  "theme": "…", "span": 1   // same styling fields as other notes
+}
+```
+
+### 10.2 Display
+
+- Render via `convertFileSrc(<project>/notes/<file>)` directly — image notes are
+  shown, not edited, so they do **not** need the Media WebGL/thumbnail pipeline.
+  (If we later want editing or perf thumbnails, revisit.)
+- `w`/`h` feed bento row-span sizing so the card reserves correct height before
+  the image loads.
+
+### 10.3 Rust commands (new, parallel to media but simpler)
+
+- `import_note_image(project_path, file) -> src` — copy a file into `notes/`,
+  return the project-relative path. Used by file-drop onto Notes and by paste.
+- `paste_note_image(project_path) -> src` — write a clipboard image into
+  `notes/` (mirrors `paste_image`, different target dir).
+- Deletion: removing an image note deletes its `notes/<file>` (these assets are
+  **not** shared with the Media tab, so no reference-counting needed — simpler
+  than Option A would have been).
+
+### 10.4 Creation paths
+
+- **Paste** a clipboard image while in Notes → `paste_note_image` → new image
+  note (per §8.2 decision).
+- **Drag-drop** image file(s) onto the Notes panel → `import_note_image` each →
+  image note(s) (resolves part of §9.1).
+- **[DECIDE: also a toolbar "Image" button** alongside Text / Checklist /
+  Table?]
+
+### 10.5 Copy/paste of image notes (ties to §8)
+
+- **Within Studio:** the Studio-native payload references the asset. Pasting in
+  the **same** project reuses the file; pasting into a **different** project
+  must **copy `notes/<file>` into the destination's `notes/`** and rewrite
+  `src`. So "copy carries a file" is required for image notes.
+- **Outside Studio:** degrade to the **image on the system clipboard** (no
+  theme/caption). **[DECIDE: confirm external paste = raw image, not a file
+  reference.]**
+
+### 10.6 Open decisions (image notes)
+
+1. Toolbar "Image" add-button, or paste/drop only? (10.4)
+2. External copy of an image note → raw image on clipboard? (10.5)
+3. Caption — show/edit UI now, or schema-only for later?
+4. Filename in `notes/` — `<noteId>.<ext>` (proposed) vs original name? Using the
+   note id avoids collisions and makes orphan cleanup trivial.
