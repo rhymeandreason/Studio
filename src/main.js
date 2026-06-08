@@ -2930,50 +2930,16 @@ document.addEventListener("keydown", (e) => {
     tag === "TEXTAREA" ||
     document.activeElement?.isContentEditable;
 
-  // Arrow keys move a selected note within the grid
+  // Left/Right move a selected note one position within the grid.
   if (
     selectedNoteId &&
     !isEditable &&
-    (e.key === "ArrowLeft" ||
-      e.key === "ArrowRight" ||
-      e.key === "ArrowUp" ||
-      e.key === "ArrowDown")
+    (e.key === "ArrowLeft" || e.key === "ArrowRight")
   ) {
     e.preventDefault();
     const idx = notesData.notes.findIndex((n) => n.id === selectedNoteId);
     if (idx === -1) return;
-    let delta;
-    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      delta = e.key === "ArrowLeft" ? -1 : 1;
-    } else {
-      // Simulate grid auto-placement to find each note's row, respecting spans.
-      const listEl = document.getElementById("notes-list");
-      const colCount =
-        getComputedStyle(listEl).gridTemplateColumns.split(" ").length;
-      const noteRows = [];
-      let col = 0,
-        row = 0;
-      for (const n of notesData.notes) {
-        const span = Math.min(n.span || 1, colCount);
-        if (col + span > colCount) {
-          row++;
-          col = 0;
-        }
-        noteRows.push(row);
-        col += span;
-      }
-      const myRow = noteRows[idx];
-      if (e.key === "ArrowUp") {
-        if (myRow === 0) return;
-        const prevRowCount = noteRows.filter((r) => r === myRow - 1).length;
-        delta = -prevRowCount;
-      } else {
-        const maxRow = noteRows[noteRows.length - 1];
-        if (myRow === maxRow) return;
-        const nextRowCount = noteRows.filter((r) => r === myRow + 1).length;
-        delta = nextRowCount;
-      }
-    }
+    const delta = e.key === "ArrowLeft" ? -1 : 1;
     const newIdx = idx + delta;
     if (newIdx < 0 || newIdx >= notesData.notes.length) return;
     const [note] = notesData.notes.splice(idx, 1);
