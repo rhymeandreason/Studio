@@ -167,6 +167,7 @@ More combos for project/window browsing to be added later.
 | `Enter` | open selected project (single) |
 | `Delete` / `Backspace` | trash selected project(s) **[DECIDED: add confirm dialog]** |
 | `ArrowLeft/Right/Up/Down` | move selection across grid |
+| `Mod+v` | paste clipboard image → set icon of selected project (§11) |
 | `Mod+a` | select all **[DECIDED: no]** |
 | `Escape` | clear selection |
 
@@ -365,28 +366,43 @@ Tauri's native file-drop (`dragDropEnabled: true`, default) **swallows HTML5
 
 ### 9.1 External file drop (OS files → app)
 
-| Drop onto | Behavior |
-|---|---|
-| Media panel | import image files into project `media/` (today: works, switches to Media tab, moves the image file into the folder) |
-| Notes panel | **[DECIDE: create image note? import to media + reference? ignore?]** |
-| Workspace | **[DECIDE: set the relevant path field from a dropped file/folder? ignore?]** |
-| Projects overview | **[DECIDED: dropped folder → add as project with relative path, don't move the folder into /Projects]** |
-| Non-image files anywhere | **[DECIDED: move file into the Project folder]** |
+Behavior is driven by **what is dropped**, not which panel it lands on (drop
+anywhere in the window). The only context split is overview vs an open project.
 
-Overlay: today a single global dropzone overlay. **[DECIDED: make it
-context-aware — add a
-per-target label like "Move Image File" / "Add Project"]**
+**In an open project window** (drop anywhere in the window):
+| Dropped item | Behavior |
+|---|---|
+| Image file | **Move into project `media/`** (keep current behavior). Always → media, regardless of panel. Image *notes* are made via paste only (§10.4), never by drop. |
+| Non-image file | Move the file into the project folder. |
+| **Folder** | **Add a folder entry to the Workspace**, with an **"Open in Finder"** action. Does **not** move/copy the folder; stores its path. (Needs a new Workspace list type — see below.) |
+
+**On the Projects overview** (no project open):
+| Dropped item | Behavior |
+|---|---|
+| Folder | Add as a project, referencing the folder in place (don't move it into `/Projects`). |
+| File | **[DECIDED: ignore]** |
+
+**New Workspace list type for dropped folders:** add a `folders` entry to
+`LIST_META` (icon `folder_open`, label "Folder"), holding folder paths. Its row
+action opens the folder in Finder (`reveal_in_finder` / `open_path`). This is
+also the differentiation the user asked for: **files move in, folders get
+referenced + an open-in-Finder action.**
+
+Overlay: keep the single global dropzone overlay, but **label it by what's being
+dropped / where** — e.g. "Move image to Media", "Add folder to Workspace", "Add
+project" on the overview. The drop handler classifies each path
+(image-file / other-file / folder) and routes accordingly.
 
 ### 9.2 Internal drag (within the app, pointer-based)
 
 | Panel | Internal drag |
 |---|---|
 | Notes | reorder cards (done; horizontal drop indicator between column items) |
-| Media | **[DECIDE: manual reorder, or stay sorted (date/name) with no manual order?]** |
-| Projects | **[DECIDE: reorder tiles, or fixed order?]** |
-| Cross-panel | **[DECIDE/Future: drag a media tile into a note to embed an image?]** |
+| Media | **[DECIDED: manual reorder, add sort toggle buttons]** |
+| Projects | **[DECIDED: reorder tiles]** |
+| Cross-panel | **[DECIDED: drag a media tile into Notes Tab to create an image note]** |
 
-### 9.3 Drag + selection interplay — **[DECIDE]**
+### 9.3 Drag + selection interplay — **[DECIDED: yes]**
 
 When a drag starts on an item:
 - If the item **is** in the current selection → drag the **whole selection**.
@@ -407,11 +423,14 @@ Confirm this is the rule (it's the platform-standard behavior).
 6. Studio-native payload mechanism — **DECIDED: Option B (HTML flavor via
    `ClipboardItem`).** Verify WKWebView `read()` of `text/html`; Rust read
    fallback if needed.
-7. File drop targets — Notes / Workspace / Projects behaviors (9.1)?
-8. Non-image file drops — ignore or import as generic media?
-9. Context-aware drop overlay — yes/no?
-10. Media/Projects internal reorder — allow or not?
-11. Drag+selection rule (9.3) — confirm.
+7. File drop targets — **DECIDED (§9.1):** image file → `media/` (any panel);
+   folder → Workspace folder entry + Open-in-Finder; non-image file → moved into
+   project folder; folder on overview → add as project.
+8. Non-image file drops — **DECIDED: move into the project folder.**
+9. Context-aware drop overlay — **DECIDED: keep single overlay, labeled by what's
+   dropped / where.**
+10. Media/Projects internal reorder — **DECIDED: allow**
+11. Drag+selection rule (9.3) —  **DECIDED: yes**
 
 ---
 
@@ -432,18 +451,26 @@ images don't appear in the Media tab.**
   .<file>.studio.json    # edit sidecars (media only)
 ```
 
-`notes.json` holds only a **reference**, never image bytes:
+`notes.json` holds only a **reference**, never image bytes. The `src` may point
+into **either** `notes/` (note-owned asset) **or** an existing `media/` file:
 
 ```jsonc
 {
   "kind": "image",
   "id": "n…",
-  "src": "notes/n….png",   // project-relative path
+  "src": "notes/n….png",   // project-relative; may also be "media/foo.png"
   "w": 1200, "h": 800,      // natural pixel size (for layout / bento sizing)
   "caption": "",            // optional
   "theme": "…", "span": 1   // same styling fields as other notes
 }
 ```
+
+**Don't duplicate files already in the project.** If the image being turned into
+a note already lives in the project (e.g. it's a `media/` file), the note just
+**references that path in place** — no copy into `notes/`. Only images coming
+from *outside* the project (clipboard paste, external file) get written into
+`notes/`. So `src` is `notes/…` for note-owned imports and `media/…` for images
+already present.
 
 ### 10.2 Display
 
@@ -455,29 +482,34 @@ images don't appear in the Media tab.**
 
 ### 10.3 Rust commands (new, parallel to media but simpler)
 
-- `import_note_image(project_path, file) -> src` — copy a file into `notes/`,
-  return the project-relative path. Used by file-drop onto Notes and by paste.
+- `import_note_image(project_path, file) -> src` — copy an **external** file
+  into `notes/`, return the project-relative path. (Skip the copy and just
+  reference the path if the file is already inside the project.)
 - `paste_note_image(project_path) -> src` — write a clipboard image into
   `notes/` (mirrors `paste_image`, different target dir).
-- Deletion: removing an image note deletes its `notes/<file>` (these assets are
-  **not** shared with the Media tab, so no reference-counting needed — simpler
-  than Option A would have been).
+- **Deletion is path-scoped:** removing an image note deletes its asset **only
+  if `src` is under `notes/`** (note-owned). If `src` points into `media/`, the
+  file is shared with the Media tab — leave it; just remove the note. No
+  reference-counting needed: ownership is decided by which folder the file is in.
 
 ### 10.4 Creation paths
 
 - **Paste** a clipboard image while in Notes → `paste_note_image` → new image
-  note (per §8.2 decision).
-- **Drag-drop** image file(s) onto the Notes panel → `import_note_image` each →
-  image note(s) (resolves part of §9.1).
-- **[DECIDE: also a toolbar "Image" button** alongside Text / Checklist /
-  Table?]
+  note (per §8.2 decision). **This is the only drag/drop/paste route to an image
+  note.**
+- **Drag-dropping an image file does NOT create an image note** — image-file
+  drops always go to `media/` (§9.1). So image notes come from paste (or the
+  optional toolbar button below) only.
+- **[DECIDED: no toolbar "Image" button]
 
 ### 10.5 Copy/paste of image notes (ties to §8)
 
 - **Within Studio:** the Studio-native payload references the asset. Pasting in
-  the **same** project reuses the file; pasting into a **different** project
-  must **copy `notes/<file>` into the destination's `notes/`** and rewrite
-  `src`. So "copy carries a file" is required for image notes.
+  the **same** project reuses the file in place (whether `src` is `notes/…` or
+  `media/…`). Pasting into a **different** project must **copy the file into the
+  destination's `notes/`** and rewrite `src` to that new path — regardless of
+  whether the source was `notes/` or `media/` (the dest may not have that media
+  file). So "copy carries a file" is required for image notes.
 - **Outside Studio:** degrade to the **image on the system clipboard** (no
   theme/caption). **[DECIDE: confirm external paste = raw image, not a file
   reference.]**
@@ -489,3 +521,42 @@ images don't appear in the Media tab.**
 3. Caption — show/edit UI now, or schema-only for later?
 4. Filename in `notes/` — `<noteId>.<ext>` (proposed) vs original name? Using the
    note id avoids collisions and makes orphan cleanup trivial.
+
+---
+
+## 11. Project icons
+
+**Lightweight, convention-file based — no metadata store, no `list_projects`
+change.**
+
+### 11.1 Storage
+
+- The icon is a fixed hidden file in the project folder: **`.studio-icon.png`**.
+- Dot-prefixed → already skipped by `scan_projects` (ignores dotfiles), and it
+  **travels with the folder** (copy/move the project, the icon comes along).
+
+### 11.2 Display
+
+- The overview card renders
+  `<img src=convertFileSrc(<project>/.studio-icon.png)>` with an `onerror`
+  handler that falls back to the current **letter/initial avatar**.
+- The `img` failing to load *is* the existence check → **no Rust change needed
+  to display** icons.
+- Perf (later, optional): if grids get large, bake a ~256px square via
+  `quicklook_thumb` so cards don't decode full-res photos.
+
+### 11.3 Setting an icon — **paste onto the selected project**
+
+- In the Projects overview, **select a project** (single), then **`Mod+v`** with
+  a clipboard image → writes it to that project's `.studio-icon.png` and
+  repaints the card.
+- New Rust command `set_project_icon(project_path)` — write the clipboard image
+  to `<project>/.studio-icon.png` (mirrors `paste_image`, fixed filename).
+- This adds `Mod+v` to the **Projects keymap** (§4.3): "paste clipboard image →
+  set icon of selected project". No-op if the clipboard has no image or no
+  single project is selected.
+
+### 11.4 Open decisions (project icons)
+
+1. Remove/reset icon — a key or menu action to delete `.studio-icon.png`?
+2. Non-square images — center-crop to square on set, or letterbox in the card?
