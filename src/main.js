@@ -1075,6 +1075,8 @@ async function initDragDrop() {
   const { listen } = window.__TAURI__.event;
   const zone = document.getElementById("dropzone");
   const show = () => {
+    // Ignore drags that originate from reordering a note card.
+    if (draggingNoteId) return;
     if (activeProject) zone.hidden = false;
   };
   await listen("tauri://drag-enter", show);
@@ -1082,7 +1084,7 @@ async function initDragDrop() {
   await listen("tauri://drag-leave", () => (zone.hidden = true));
   await listen("tauri://drag-drop", async (e) => {
     zone.hidden = true;
-    if (!activeProject) return;
+    if (!activeProject || draggingNoteId) return;
     const paths = (e.payload && e.payload.paths) || [];
     if (!paths.length) return;
     try {
@@ -3548,7 +3550,16 @@ function renderNotes() {
     card.dataset.noteId = note.id;
     card.style.gridColumn = `span ${note.span || 1}`;
     if (note.id === selectedNoteId) card.classList.add("is-selected");
+
+    // Drag-to-reorder via pointer events (Tauri's native file-drop swallows
+    // HTML5 dragover/drop in the webview). Only starts from a non-interactive
+    // part of the card so text editing still works.
+    card.addEventListener("pointerdown", (e) =>
+      onNotePointerDown(e, note, card),
+    );
+
     card.addEventListener("click", (e) => {
+      if (Date.now() - lastNoteDragEnd < 300) return; // ignore click after drag
       const rect = card.getBoundingClientRect();
       if (e.clientY - rect.top <= 8) {
         selectedNoteId = selectedNoteId === note.id ? null : note.id;
@@ -3567,6 +3578,126 @@ function renderNotes() {
   // measure on the next frames and translate each card's height into a
   // grid-row span. `grid-auto-flow: dense` then tiles them into the gaps.
   requestAnimationFrame(() => requestAnimationFrame(layoutBento));
+}
+
+let draggingNoteId = null;
+let dropTargetIndex = null;
+let noteDrag = null; // { note, card, startX, startY, active }
+let lastNoteDragEnd = 0;
+
+function onNotePointerDown(e, note, card) {
+  if (e.button !== 0) return;
+  if (e.target.closest("textarea, input, button, a, [contenteditable]")) return;
+  noteDrag = { note, card, startX: e.clientX, startY: e.clientY, active: false };
+  window.addEventListener("pointermove", onNotePointerMove);
+  window.addEventListener("pointerup", onNotePointerUp);
+}
+
+function onNotePointerMove(e) {
+  if (!noteDrag) return;
+  if (!noteDrag.active) {
+    // Wait for a small movement threshold so plain clicks still select.
+    if (Math.hypot(e.clientX - noteDrag.startX, e.clientY - noteDrag.startY) < 5)
+      return;
+    noteDrag.active = true;
+    draggingNoteId = noteDrag.note.id;
+    noteDrag.card.classList.add("is-dragging");
+    document.body.classList.add("note-dragging");
+    document.body.style.cursor = "grabbing";
+    window.getSelection()?.removeAllRanges();
+  }
+  e.preventDefault();
+  const listEl = document.getElementById("notes-list");
+  const target = computeDropTarget(listEl, e.clientX, e.clientY);
+  dropTargetIndex = target ? target.index : null;
+  showDropIndicator(listEl, target);
+}
+
+function onNotePointerUp() {
+  window.removeEventListener("pointermove", onNotePointerMove);
+  window.removeEventListener("pointerup", onNotePointerUp);
+  const drag = noteDrag;
+  noteDrag = null;
+  document.body.style.cursor = "";
+  document.body.classList.remove("note-dragging");
+  if (!drag || !drag.active) return; // was a click, not a drag
+  lastNoteDragEnd = Date.now();
+  drag.card.classList.remove("is-dragging");
+  draggingNoteId = null;
+  hideDropIndicator();
+  const to0 = dropTargetIndex;
+  dropTargetIndex = null;
+  if (to0 == null) return;
+  const fromIdx = notesData.notes.findIndex((n) => n.id === drag.note.id);
+  if (fromIdx === -1) return;
+  let to = to0;
+  const [note] = notesData.notes.splice(fromIdx, 1);
+  if (fromIdx < to) to -= 1; // account for the removed element
+  to = Math.max(0, Math.min(to, notesData.notes.length));
+  notesData.notes.splice(to, 0, note);
+  renderNotes();
+  scheduleNotesSave();
+}
+
+// Where would a drop at the current pointer land? Returns the insertion index
+// in notesData.notes, plus the card/edge to draw the indicator against.
+function computeDropTarget(listEl, x, y) {
+  const cards = [...listEl.querySelectorAll(".notecard")];
+  if (!cards.length) return { index: 0, card: null, after: false };
+  for (let i = 0; i < cards.length; i++) {
+    const r = cards[i].getBoundingClientRect();
+    if (x < r.left || x > r.right) continue; // not in this card's column band
+    if (y < r.top + r.height / 2) return { index: i, card: cards[i], after: false };
+    // Bottom half: tentatively after this card; a card lower in the same
+    // column may still claim the pointer on a later iteration.
+    var colHit = { index: i + 1, card: cards[i], after: true };
+  }
+  if (typeof colHit !== "undefined") return colHit;
+  // Pointer in a gap / outside everything: snap to the nearest card by center.
+  let best = null;
+  let bestDist = Infinity;
+  cards.forEach((c, i) => {
+    const r = c.getBoundingClientRect();
+    const dx = x - (r.left + r.width / 2);
+    const dy = y - (r.top + r.height / 2);
+    const d = dx * dx + dy * dy;
+    if (d < bestDist) {
+      bestDist = d;
+      const after = y >= r.top + r.height / 2;
+      best = { index: after ? i + 1 : i, card: c, after };
+    }
+  });
+  return best;
+}
+
+function showDropIndicator(listEl, target) {
+  const bar = ensureDropIndicator(listEl);
+  if (!target || !target.card) {
+    bar.style.display = "none";
+    return;
+  }
+  const listRect = listEl.getBoundingClientRect();
+  const r = target.card.getBoundingClientRect();
+  const gap = parseFloat(getComputedStyle(listEl).rowGap) || 14;
+  const edgeY = target.after ? r.bottom + gap / 2 : r.top - gap / 2;
+  bar.style.display = "block";
+  bar.style.left = r.left - listRect.left + "px";
+  bar.style.width = r.width + "px";
+  bar.style.top = edgeY - listRect.top - 1.5 + "px";
+}
+
+function ensureDropIndicator(listEl) {
+  let bar = listEl.querySelector(".note-drop-indicator");
+  if (!bar) {
+    bar = el("div", "note-drop-indicator");
+    listEl.append(bar);
+  }
+  return bar;
+}
+
+function hideDropIndicator() {
+  const bar = document.querySelector(".note-drop-indicator");
+  if (bar) bar.style.display = "none";
 }
 
 // Translate each card's natural height into a grid-row span so dense auto-flow
