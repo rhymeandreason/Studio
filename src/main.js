@@ -16,6 +16,22 @@ let activePanel = "workspace";
 const panelKeymaps = {};
 const globalKeymap = {};
 
+// Shared "click-off to deselect" for the in-project panels. Clears the panel's
+// selection when the user clicks empty space in that panel or the project
+// header — but never the tabs (so selection survives tab switches), nor an
+// element matching one of `keep`. Only acts while its panel is active.
+function installOffClickDeselect({ panel, keep, hasSelection, clear }) {
+  document.addEventListener("click", (e) => {
+    if (activePanel !== panel || !hasSelection()) return;
+    const inZone =
+      e.target.closest(`[data-panel="${panel}"]`) ||
+      e.target.closest("#project-header");
+    if (!inZone || e.target.closest("#tabs")) return;
+    if (keep.some((s) => e.target.closest(s))) return;
+    clear();
+  });
+}
+
 // --- Native file/folder pickers --------------------------------------------
 
 async function pickPath(opts = {}) {
@@ -580,16 +596,11 @@ function initWorkspaceForm() {
   form.addEventListener("change", scheduleWorkspaceSave);
   form.addEventListener("submit", (e) => e.preventDefault());
 
-  // Click empty space in the workspace panel or the project header clears
-  // selection — but NOT the tabs (so it survives tab switches) nor an item.
-  document.addEventListener("click", (e) => {
-    if (!workspaceSelection.size()) return;
-    const inZone =
-      e.target.closest('[data-panel="workspace"]') ||
-      e.target.closest("#project-header");
-    if (inZone && !e.target.closest("#tabs") && !e.target.closest(".ws-item")) {
-      workspaceSelection.clear();
-    }
+  installOffClickDeselect({
+    panel: "workspace",
+    keep: [".ws-item"],
+    hasSelection: () => workspaceSelection.size(),
+    clear: () => workspaceSelection.clear(),
   });
 
   // Re-run textarea auto-resize whenever the cards container changes width.
@@ -3043,26 +3054,13 @@ function initMedia() {
   });
   menuAction("m-photos", editInPhotos); // Edit in Photos
 
-  // Click anywhere off a thumbnail (empty grid space, panel padding) to clear
+  // Click off a thumbnail (empty grid space, panel padding, header) to clear
   // the selection. The batch bar and the editor side column keep their clicks.
-  document
-    .querySelector('[data-panel="media"]')
-    .addEventListener("click", (e) => {
-      if (
-        e.target.closest(".mediatile") ||
-        e.target.closest(".selbar") ||
-        e.target.closest(".media-side")
-      )
-        return;
-      clearSelection();
-    });
-
-  // Clicking the project header (name/path, empty space) also counts as off —
-  // but NOT the tabs, or returning to the media tab would clear the selection.
-  document.getElementById("project-header").addEventListener("click", (e) => {
-    if (e.target.closest("#tabs")) return;
-    if (!document.querySelector('[data-panel="media"]').hidden)
-      clearSelection();
+  installOffClickDeselect({
+    panel: "media",
+    keep: [".mediatile", ".selbar", ".media-side"],
+    hasSelection: () => mediaSelection.size(),
+    clear: clearSelection,
   });
 
   document.addEventListener("keydown", (e) => {
@@ -4075,22 +4073,11 @@ function initNotes() {
     setSelectedNoteStyle("bodyFont", bodyFontSel.value),
   );
 
-  // Clicking empty space in the notes panel or the project header clears
-  // selection — but NOT the tabs (so selection persists across tab switches),
-  // nor a card / the style chrome.
-  document.addEventListener("click", (e) => {
-    const inDeselectZone =
-      e.target.closest('[data-panel="notes"]') ||
-      e.target.closest("#project-header");
-    if (
-      notesSelection.size() &&
-      inDeselectZone &&
-      !e.target.closest("#tabs") &&
-      !e.target.closest(".notecard") &&
-      !e.target.closest("#notes-card-style")
-    ) {
-      notesSelection.clear();
-    }
+  installOffClickDeselect({
+    panel: "notes",
+    keep: [".notecard", "#notes-card-style"],
+    hasSelection: () => notesSelection.size(),
+    clear: () => notesSelection.clear(),
   });
 
   // Register the Notes keymap and install the shared keyboard dispatcher.
