@@ -50,6 +50,7 @@ function modalKeymap(e) {
   if (!m) return;
   e.preventDefault();
   if (m.id === "new-modal") closeNewModal();
+  else if (m.id === "note-modal") closeNoteModal();
   else m.hidden = true;
 }
 
@@ -389,13 +390,17 @@ function repaintWorkspaceSelection() {
   );
 }
 
-// Enter: open the single selected item. macOS `open` handles paths, apps, URLs.
+// Open a workspace item's value. macOS `open` handles paths, apps, URLs.
+function openWorkspaceValue(card) {
+  const value = card?.querySelector("textarea")?.value.trim();
+  if (value) invoke("open_path", { path: value });
+}
+
+// Enter: open the single selected item.
 function openWorkspaceItem() {
   if (workspaceSelection.size() !== 1) return;
   const id = workspaceSelection.get()[0];
-  const card = workspaceCards().find((c) => c.dataset.wsid === id);
-  const value = card?.querySelector("textarea")?.value.trim();
-  if (value) invoke("open_path", { path: value });
+  openWorkspaceValue(workspaceCards().find((c) => c.dataset.wsid === id));
 }
 
 function deleteWorkspaceSelection() {
@@ -458,6 +463,10 @@ function addRow(list, value = "") {
     const ids = workspaceCards().map((c) => c.dataset.wsid);
     if (e.shiftKey) workspaceSelection.range(ids, card.dataset.wsid);
     else workspaceSelection.toggle(card.dataset.wsid, e.metaKey || e.ctrlKey);
+  });
+  card.addEventListener("dblclick", (e) => {
+    if (e.target.closest("textarea, button, input, select, a")) return;
+    openWorkspaceValue(card);
   });
 
   // Header: icon + type label + remove button
@@ -654,6 +663,7 @@ document.addEventListener("click", (e) => {
   if (!e.target.classList.contains("modal")) return;
   const id = e.target.id;
   if (id === "new-modal") { closeNewModal(); return; }
+  if (id === "note-modal") { closeNoteModal(); return; }
   if (id === "generate") { document.getElementById("generate").hidden = true; return; }
   if (id === "extend")   { document.getElementById("extend").hidden   = true; return; }
   if (id === "webexport"){ document.getElementById("webexport").hidden = true; return; }
@@ -3104,7 +3114,16 @@ function initMedia() {
   // editor are Media sub-modes (not modals), so the handlers branch on mode.
   const lbOpen = () => !document.getElementById("lightbox").hidden;
   const editorActive = () => lbOpen() || !!activeItem;
+  const activateSelectedMedia = () => {
+    const ids = mediaSelection.get();
+    if (ids.length !== 1) return;
+    const item = mediaItemsByPath.get(ids[0]);
+    if (!item) return;
+    if (item.kind === "image") openLightbox(item);
+    else invoke("open_path", { path: item.path });
+  };
   panelKeymaps.media = {
+    Enter: activateSelectedMedia,
     Escape: () => (lbOpen() ? closeLightbox() : clearSelection()),
     "Mod+c": () => {
       if (editorActive()) copyAdjustments();
@@ -3212,6 +3231,48 @@ function clearNotesSelection() {
   clearColSelection();
   clearRowSelection();
   notesSelection.clear();
+}
+
+// --- Note modal (double-click / Enter "open") ------------------------------
+
+function buildNoteCard(note) {
+  if (note.kind === "checklist") return buildChecklist(note);
+  if (note.kind === "table") return buildTable(note);
+  return buildTextNote(note);
+}
+
+// Open a single note enlarged in a modal. Uses the `.modal` class so the shared
+// dispatcher closes it on Escape / backdrop click; edits bind to the same note
+// object and sync to the grid on close.
+function openNoteModal(note) {
+  let modal = document.getElementById("note-modal");
+  if (!modal) {
+    modal = el("div", "modal note-modal", { id: "note-modal" });
+    modal.append(el("div", "modal__card note-modal__card"));
+    document.body.append(modal);
+  }
+  const card = modal.querySelector(".modal__card");
+  card.innerHTML = "";
+  card.append(buildNoteCard(note));
+  modal.hidden = false;
+  requestAnimationFrame(() =>
+    card.querySelectorAll("textarea").forEach((ta) => {
+      ta.style.height = "auto";
+      ta.style.height = ta.scrollHeight + "px";
+    }),
+  );
+}
+
+function closeNoteModal() {
+  const modal = document.getElementById("note-modal");
+  if (modal) modal.hidden = true;
+  renderNotes(); // reflect edits made in the modal
+  scheduleNotesSave();
+}
+
+function openSelectedNoteModal() {
+  const n = selectedNote();
+  if (n) openNoteModal(n);
 }
 
 document.addEventListener("click", (e) => {
@@ -3831,6 +3892,11 @@ function renderNotes() {
         }
       }
     });
+    // Double-click a non-editable part of the card opens it in a modal.
+    card.addEventListener("dblclick", (e) => {
+      if (e.target.closest("select, button, input, textarea, a")) return;
+      openNoteModal(note);
+    });
     listEl.append(card);
   }
 
@@ -4074,6 +4140,7 @@ function initNotes() {
 
   // Register the Notes keymap and install the shared keyboard dispatcher.
   panelKeymaps.notes = {
+    Enter: openSelectedNoteModal,
     Delete: deleteNotesSelection,
     Backspace: deleteNotesSelection,
     ArrowLeft: () => moveSelectedNote(-1),

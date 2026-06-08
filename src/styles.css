@@ -2226,6 +2226,21 @@ td.ntable__total-cell {
     box-shadow: var(--shadow-md);
 }
 
+/* Note modal: a wider card that hosts an enlarged note. */
+.note-modal__card {
+    width: min(680px, 92vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 18px;
+}
+
+.note-modal__card .notecard {
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    min-height: 0;
+}
+
 .modal__title {
     font-family: var(--serif);
     font-size: 18px;
