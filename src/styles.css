@@ -845,13 +845,12 @@ select.field__input {
     opacity: 1;
 }
 
-.notecard__title {
+input.notecard__title {
     flex: 1 1 auto;
     background: transparent;
     border: none;
     color: var(--text);
-    font-family: var(--serif);
-    font-size: 16px;
+    font-size: calc(var(--notes-font-size, 14px) * 1.3) !important;
     font-weight: 600;
     padding: 2px 0;
     outline: none;
