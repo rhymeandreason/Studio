@@ -2758,6 +2758,11 @@ function initEditor() {
   });
 }
 
+// Re-pack the notes bento grid when the window (and thus column count) changes.
+window.addEventListener("resize", () => {
+  if (document.getElementById("notes-list")) scheduleBentoLayout();
+});
+
 function initMedia() {
   initEditor();
   initWebExport();
@@ -3205,6 +3210,7 @@ function noteFooter(note) {
           ta.style.height = "auto";
           ta.style.height = ta.scrollHeight + "px";
         });
+        layoutBento();
       });
     }
     scheduleNotesSave();
@@ -3309,6 +3315,7 @@ function buildTextNote(note) {
   textarea.addEventListener("input", () => {
     note.body = textarea.value;
     resizeTextarea();
+    scheduleBentoLayout();
     scheduleNotesSave();
   });
   textarea.addEventListener("blur", () => {
@@ -3316,6 +3323,7 @@ function buildTextNote(note) {
       textarea.value = note.body;
       resizeTextarea();
       renderLinks();
+      scheduleBentoLayout();
       scheduleNotesSave();
     }
   });
@@ -3371,6 +3379,7 @@ function buildChecklist(note) {
     txt.addEventListener("input", () => {
       item.text = txt.value;
       resizeTxt();
+      scheduleBentoLayout();
       scheduleNotesSave();
     });
     txt.addEventListener("keydown", (e) => {
@@ -3587,6 +3596,34 @@ function renderNotes() {
     });
     listEl.append(card);
   }
+
+  // Bento packing: card heights aren't known until textareas auto-size, so
+  // measure on the next frames and translate each card's height into a
+  // grid-row span. `grid-auto-flow: dense` then tiles them into the gaps.
+  requestAnimationFrame(() => requestAnimationFrame(layoutBento));
+}
+
+// Translate each card's natural height into a grid-row span so dense auto-flow
+// can pack the cards into a bento mosaic.
+function layoutBento() {
+  const listEl = document.getElementById("notes-list");
+  if (!listEl) return;
+  const style = getComputedStyle(listEl);
+  const row = parseFloat(style.gridAutoRows) || 8;
+  const gap = parseFloat(style.rowGap) || 0;
+  listEl.querySelectorAll(".notecard").forEach((card) => {
+    // Reset so we measure the card's natural (content) height.
+    card.style.gridRowEnd = "";
+    const h = card.getBoundingClientRect().height;
+    const span = Math.max(1, Math.round((h + gap) / (row + gap)));
+    card.style.gridRowEnd = `span ${span}`;
+  });
+}
+
+let bentoLayoutTimer = null;
+function scheduleBentoLayout() {
+  clearTimeout(bentoLayoutTimer);
+  bentoLayoutTimer = setTimeout(layoutBento, 60);
 }
 
 function initNotes() {

@@ -783,6 +783,8 @@ select.field__input {
 .notes-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-auto-rows: var(--bento-row, 8px);
+    grid-auto-flow: row dense;
     align-items: start;
     gap: 14px;
     --notes-font: system-ui;
@@ -806,7 +808,7 @@ select.field__input {
     flex-direction: column;
     gap: 10px;
     box-shadow: var(--shadow-sm);
-    min-height: 190px;
+    min-height: 120px;
     position: relative;
     cursor: default;
 }
