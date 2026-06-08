@@ -32,6 +32,27 @@ function installOffClickDeselect({ panel, keep, hasSelection, clear }) {
   });
 }
 
+// Any visible `.modal` backdrop (generate / extend / webexport / cutout /
+// new-modal). Detected by class so new modals are covered automatically.
+function openModal() {
+  return [...document.querySelectorAll(".modal")].find((m) => !m.hidden) || null;
+}
+
+// A modal swallows all keys (the dispatcher routes to modalKeymap and stops),
+// so Escape closes the modal before any panel/editor handler sees it.
+function anyModalOpen() {
+  return !!openModal();
+}
+
+function modalKeymap(e) {
+  if (e.key !== "Escape") return; // Enter/etc. handled by the modal's own inputs
+  const m = openModal();
+  if (!m) return;
+  e.preventDefault();
+  if (m.id === "new-modal") closeNewModal();
+  else m.hidden = true;
+}
+
 // --- Native file/folder pickers --------------------------------------------
 
 async function pickPath(opts = {}) {
@@ -744,6 +765,22 @@ async function toggleSelect(item) {
 function clearSelection() {
   mediaSelection.clear(); // onChange → updateSelectionUI
   closeInlineEditor();
+}
+
+// Delete from the keyboard: in the editor/lightbox, trash the selection or the
+// focused image; in the grid, trash the selection.
+function mediaDeleteFromKeyboard() {
+  const editorActive = !document.getElementById("lightbox").hidden || !!activeItem;
+  if (editorActive) {
+    const targets = mediaSelection.size()
+      ? mediaSelection.get()
+      : editItem
+        ? [editItem.path]
+        : [];
+    trashMedia(targets);
+  } else if (mediaSelection.size()) {
+    trashMedia(mediaSelection.get());
+  }
 }
 
 // Move the given media (and their edit sidecars) to the Trash, then refresh.
@@ -3063,69 +3100,24 @@ function initMedia() {
     clear: clearSelection,
   });
 
-  document.addEventListener("keydown", (e) => {
-    const mod = e.metaKey || e.ctrlKey;
-    // Modal dialogs take Escape first (and swallow other keys while open).
-    if (!document.getElementById("generate").hidden) {
-      if (e.key === "Escape") document.getElementById("generate").hidden = true;
-      return;
-    }
-    if (!document.getElementById("extend").hidden) {
-      if (e.key === "Escape") document.getElementById("extend").hidden = true;
-      return;
-    }
-    const lightboxOpen = !document.getElementById("lightbox").hidden;
-    const inlineActive =
-      activeItem &&
-      !document.querySelector('[data-panel="media"]').hidden &&
-      document.activeElement?.tagName !== "INPUT" &&
-      document.activeElement?.tagName !== "TEXTAREA";
-    if (lightboxOpen || inlineActive) {
-      // The editor is active (full lightbox or inline side column).
-      if (e.key === "Escape") {
-        if (lightboxOpen) closeLightbox();
-        else clearSelection();
-      } else if (mod && (e.key === "c" || e.key === "C")) {
-        e.preventDefault();
-        copyAdjustments();
-      } else if (mod && (e.key === "v" || e.key === "V")) {
-        e.preventDefault();
-        pasteAdjustments();
-      } else if (e.key === "Delete" || e.key === "Backspace") {
-        // Delete the focused image (or the checkbox selection, if any).
-        e.preventDefault();
-        trashMedia(mediaSelection.size() ? mediaSelection.get() : [editItem.path]);
-      }
-      return;
-    }
-    // Grid context: leave text fields and other panels' handlers alone.
-    const ae = document.activeElement;
-    const inField =
-      ae &&
-      (ae.tagName === "INPUT" ||
-        ae.tagName === "TEXTAREA" ||
-        ae.tagName === "SELECT" ||
-        ae.isContentEditable);
-    const onMedia = !document.querySelector('[data-panel="media"]').hidden;
-
-    // Cmd+V pastes onto selected tiles, or a clipboard image into the project.
-    if (mod && (e.key === "v" || e.key === "V")) {
-      if (inField) return;
-      e.preventDefault();
-      if (mediaSelection.size()) batchPaste();
+  // Media keyboard, routed through the shared dispatcher. The lightbox / inline
+  // editor are Media sub-modes (not modals), so the handlers branch on mode.
+  const lbOpen = () => !document.getElementById("lightbox").hidden;
+  const editorActive = () => lbOpen() || !!activeItem;
+  panelKeymaps.media = {
+    Escape: () => (lbOpen() ? closeLightbox() : clearSelection()),
+    "Mod+c": () => {
+      if (editorActive()) copyAdjustments();
+    },
+    "Mod+v": () => {
+      if (editorActive()) pasteAdjustments();
+      else if (mediaSelection.size()) batchPaste();
       else pasteFromClipboard();
-    }
-    // Delete/Backspace trashes the checkbox-selected media.
-    else if (
-      onMedia &&
-      !inField &&
-      mediaSelection.size() &&
-      (e.key === "Delete" || e.key === "Backspace")
-    ) {
-      e.preventDefault();
-      trashMedia(mediaSelection.get());
-    }
-  });
+    },
+    Delete: mediaDeleteFromKeyboard,
+    Backspace: mediaDeleteFromKeyboard,
+  };
+
   document.getElementById("lb-close").addEventListener("click", closeLightbox);
   document.getElementById("lightbox").addEventListener("click", (e) => {
     if (suppressLightboxClick) {
@@ -4092,12 +4084,12 @@ function initNotes() {
     getActivePanel: () => activePanel,
     panelKeymaps,
     globalKeymap,
-    anyModalOpen: () => false, // modals still handled by existing code (pre-migration)
+    anyModalOpen,
+    modalKeymap,
   });
 
-  // Paste on the notes panel is handled via the keydown Cmd+V path calling pasteIntoNotes()
-  // so that navigator.clipboard.readText() can be used (e.clipboardData is empty in Tauri
-  // on non-editable elements). The paste event still handles pastes inside inputs/textareas.
+  // Notes Mod+v paste is a Phase 2 feature (interaction-spec §7.2) — not yet
+  // wired into panelKeymaps.notes.
 }
 
 // --- Boot ------------------------------------------------------------------
