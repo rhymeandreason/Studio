@@ -73,11 +73,92 @@ function render(project) {
 
 // --- All-projects overview -------------------------------------------------
 
+let overviewProjects = []; // last-rendered projects, in display order
+
+const projectsSelection = createSelection({
+  mode: "multi",
+  onChange: () => repaintProjectsSelection(),
+});
+
+function repaintProjectsSelection() {
+  document
+    .getElementById("overview-grid")
+    ?.querySelectorAll(".card")
+    .forEach((c) =>
+      c.classList.toggle("is-selected", projectsSelection.has(c.dataset.path)),
+    );
+}
+
+async function confirmDialog(message, title) {
+  const d = window.__TAURI__.dialog;
+  if (d?.confirm) return d.confirm(message, { title, kind: "warning" });
+  return window.confirm(message);
+}
+
+function projectNameFor(path) {
+  return (
+    overviewProjects.find((p) => p.path === path)?.name || path.split("/").pop()
+  );
+}
+
+async function trashProjects(paths) {
+  if (!paths.length) return;
+  const msg =
+    paths.length === 1
+      ? `Move “${projectNameFor(paths[0])}” to Trash?`
+      : `Move ${paths.length} projects to Trash?`;
+  if (!(await confirmDialog(msg, "Move to Trash"))) return;
+  for (const path of paths) await invoke("trash_project", { path });
+  projectsSelection.clear();
+  showOverview();
+}
+
+function openSelectedProject() {
+  const sel = projectsSelection.get();
+  if (sel.length === 1) invoke("open_project", { path: sel[0] });
+}
+
+// Grid arrow navigation: move the (single) selection by one cell.
+function moveProjectsSelection(dir) {
+  if (!overviewProjects.length) return;
+  const paths = overviewProjects.map((p) => p.path);
+  const grid = document.getElementById("overview-grid");
+  const cols = Math.max(
+    1,
+    getComputedStyle(grid).gridTemplateColumns.split(" ").length,
+  );
+  const sel = projectsSelection.get();
+  let idx = sel.length ? paths.indexOf(sel[sel.length - 1]) : -1;
+  if (idx === -1) idx = 0;
+  else if (dir === "left") idx -= 1;
+  else if (dir === "right") idx += 1;
+  else if (dir === "up") idx -= cols;
+  else if (dir === "down") idx += cols;
+  idx = Math.max(0, Math.min(idx, paths.length - 1));
+  projectsSelection.set(paths[idx]);
+  grid
+    .querySelector(`.card[data-path="${CSS.escape(paths[idx])}"]`)
+    ?.scrollIntoView({ block: "nearest" });
+}
+
+panelKeymaps.projects = {
+  Enter: openSelectedProject,
+  Delete: () => trashProjects(projectsSelection.get()),
+  Backspace: () => trashProjects(projectsSelection.get()),
+  ArrowLeft: () => moveProjectsSelection("left"),
+  ArrowRight: () => moveProjectsSelection("right"),
+  ArrowUp: () => moveProjectsSelection("up"),
+  ArrowDown: () => moveProjectsSelection("down"),
+  Escape: () => projectsSelection.clear(),
+};
+
 async function showOverview() {
   activePanel = "projects";
   const projects = await invoke("list_projects");
   const grid = document.getElementById("overview-grid");
   grid.innerHTML = "";
+
+  overviewProjects = projects;
 
   if (projects.length === 0) {
     const note = document.createElement("p");
@@ -86,8 +167,10 @@ async function showOverview() {
     grid.append(note);
   } else {
     for (const p of projects) {
-      const card = document.createElement("button");
+      const card = document.createElement("div");
       card.className = "card";
+      card.dataset.path = p.path;
+      if (projectsSelection.has(p.path)) card.classList.add("is-selected");
 
       const name = document.createElement("span");
       name.className = "card__name";
@@ -101,18 +184,37 @@ async function showOverview() {
       trash.type = "button";
       trash.title = "Move to Trash";
       trash.innerHTML = mi("delete");
-      trash.addEventListener("click", async (e) => {
+      trash.addEventListener("click", (e) => {
         e.stopPropagation();
-        await invoke("trash_project", { path: p.path });
-        card.remove();
+        trashProjects([p.path]);
       });
 
       card.append(name, path, trash);
-      card.addEventListener("click", () =>
+      // Single-click selects; double-click opens (interaction-spec §3.4).
+      card.addEventListener("click", (e) => {
+        if (e.shiftKey) {
+          projectsSelection.range(
+            overviewProjects.map((x) => x.path),
+            p.path,
+          );
+        } else {
+          projectsSelection.toggle(p.path, e.metaKey || e.ctrlKey);
+        }
+      });
+      card.addEventListener("dblclick", () =>
         invoke("open_project", { path: p.path }),
       );
       grid.append(card);
     }
+  }
+
+  // Clicking empty space in the overview clears selection (wired once).
+  const overviewEl = document.getElementById("overview");
+  if (!overviewEl.__deselectInit) {
+    overviewEl.__deselectInit = true;
+    overviewEl.addEventListener("click", (e) => {
+      if (!e.target.closest(".card")) projectsSelection.clear();
+    });
   }
 
   // Show only the overview.

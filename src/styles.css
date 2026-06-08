@@ -454,6 +454,11 @@ body {
     box-shadow: 0 6px 20px rgba(110, 97, 84, 0.25);
 }
 
+.card.is-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent), var(--shadow-sm);
+}
+
 .card__name {
     font-family: var(--serif);
     font-size: 16px;
