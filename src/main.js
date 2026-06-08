@@ -121,6 +121,12 @@ function selectTab(name) {
     p.hidden = p.dataset.panel !== name;
   });
 
+  // The notes bento layout measures card heights; if it ran while the panel
+  // was hidden every card collapsed to one row. Re-pack now that it's visible.
+  if (name === "notes") {
+    requestAnimationFrame(() => requestAnimationFrame(layoutBento));
+  }
+
   // Close the editor column when leaving the media tab.
   if (name !== "media") {
     const appRight = document.getElementById("app-right");
