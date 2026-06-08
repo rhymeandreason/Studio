@@ -334,6 +334,79 @@ const LIST_META = {
   urls: { icon: "link", label: "URL", placeholder: "https://…" },
 };
 
+// Workspace item selection (interaction-spec §3). Multi-select over the form's
+// item cards; ids are per-render (rows have no persistent id).
+let wsRowCounter = 0;
+const workspaceSelection = createSelection({
+  mode: "multi",
+  onChange: () => repaintWorkspaceSelection(),
+});
+
+function workspaceCards() {
+  return [...(listContainer()?.querySelectorAll(".ws-item") || [])];
+}
+
+function repaintWorkspaceSelection() {
+  workspaceCards().forEach((c) =>
+    c.classList.toggle("is-selected", workspaceSelection.has(c.dataset.wsid)),
+  );
+}
+
+// Enter: open the single selected item. macOS `open` handles paths, apps, URLs.
+function openWorkspaceItem() {
+  if (workspaceSelection.size() !== 1) return;
+  const id = workspaceSelection.get()[0];
+  const card = workspaceCards().find((c) => c.dataset.wsid === id);
+  const value = card?.querySelector("textarea")?.value.trim();
+  if (value) invoke("open_path", { path: value });
+}
+
+function deleteWorkspaceSelection() {
+  const ids = new Set(workspaceSelection.get());
+  if (!ids.size) return;
+  let changed = false;
+  workspaceCards().forEach((card) => {
+    if (!ids.has(card.dataset.wsid)) return;
+    const list = card.dataset.list;
+    card.remove();
+    if (LIST_META[list]?.singleton) setSingletonBtn(list, false);
+    changed = true;
+  });
+  workspaceSelection.clear();
+  if (changed) scheduleWorkspaceSave();
+}
+
+function moveWorkspaceSelection(dir) {
+  const cards = workspaceCards();
+  if (!cards.length) return;
+  const ids = cards.map((c) => c.dataset.wsid);
+  const cols = Math.max(
+    1,
+    getComputedStyle(listContainer()).gridTemplateColumns.split(" ").length,
+  );
+  const sel = workspaceSelection.get();
+  let idx = sel.length ? ids.indexOf(sel[sel.length - 1]) : -1;
+  if (idx === -1) idx = 0;
+  else if (dir === "left") idx -= 1;
+  else if (dir === "right") idx += 1;
+  else if (dir === "up") idx -= cols;
+  else if (dir === "down") idx += cols;
+  idx = Math.max(0, Math.min(idx, ids.length - 1));
+  workspaceSelection.set(ids[idx]);
+  cards[idx].scrollIntoView({ block: "nearest" });
+}
+
+panelKeymaps.workspace = {
+  Enter: openWorkspaceItem,
+  Delete: deleteWorkspaceSelection,
+  Backspace: deleteWorkspaceSelection,
+  ArrowLeft: () => moveWorkspaceSelection("left"),
+  ArrowRight: () => moveWorkspaceSelection("right"),
+  ArrowUp: () => moveWorkspaceSelection("up"),
+  ArrowDown: () => moveWorkspaceSelection("down"),
+  Escape: () => workspaceSelection.clear(),
+};
+
 function addRow(list, value = "") {
   const rows = listContainer();
   const meta = LIST_META[list];
@@ -341,6 +414,14 @@ function addRow(list, value = "") {
   const card = document.createElement("div");
   card.className = "ws-item";
   card.dataset.list = list;
+  card.dataset.wsid = "ws" + wsRowCounter++;
+  // Click a non-interactive part of the card to select it (interaction-spec §3).
+  card.addEventListener("click", (e) => {
+    if (e.target.closest("textarea, button, input, select, a")) return;
+    const ids = workspaceCards().map((c) => c.dataset.wsid);
+    if (e.shiftKey) workspaceSelection.range(ids, card.dataset.wsid);
+    else workspaceSelection.toggle(card.dataset.wsid, e.metaKey || e.ctrlKey);
+  });
 
   // Header: icon + type label + remove button
   const head = document.createElement("div");
@@ -498,6 +579,18 @@ function initWorkspaceForm() {
   form.addEventListener("input", scheduleWorkspaceSave);
   form.addEventListener("change", scheduleWorkspaceSave);
   form.addEventListener("submit", (e) => e.preventDefault());
+
+  // Click empty space in the workspace panel or the project header clears
+  // selection — but NOT the tabs (so it survives tab switches) nor an item.
+  document.addEventListener("click", (e) => {
+    if (!workspaceSelection.size()) return;
+    const inZone =
+      e.target.closest('[data-panel="workspace"]') ||
+      e.target.closest("#project-header");
+    if (inZone && !e.target.closest("#tabs") && !e.target.closest(".ws-item")) {
+      workspaceSelection.clear();
+    }
+  });
 
   // Re-run textarea auto-resize whenever the cards container changes width.
   const cards = document.getElementById("ws-cards");
