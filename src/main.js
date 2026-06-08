@@ -390,10 +390,13 @@ function repaintWorkspaceSelection() {
   );
 }
 
-// Open a workspace item's value. macOS `open` handles paths, apps, URLs.
+// Open a workspace item's value. Apps store a name → `open -a`; everything else
+// (paths, URLs) goes through `open`.
 function openWorkspaceValue(card) {
   const value = card?.querySelector("textarea")?.value.trim();
-  if (value) invoke("open_path", { path: value });
+  if (!value) return;
+  if (card.dataset.list === "apps") invoke("open_app", { name: value });
+  else invoke("open_path", { path: value });
 }
 
 // Enter: open the single selected item.

@@ -527,6 +527,16 @@ fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Launch an application by name: `open -a "AppName"`.
+#[tauri::command]
+fn open_app(name: String) -> Result<(), String> {
+    Command::new("open")
+        .args(["-a", name.trim()])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Escape a string for embedding in an AppleScript double-quoted literal.
 fn applescript_quote(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
@@ -1194,6 +1204,7 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
             edited_thumb,
             save_edited_thumb,
             open_path,
+            open_app,
             open_in_photos,
             run_shortcut,
             heic_preview,
