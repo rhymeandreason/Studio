@@ -185,6 +185,7 @@ More combos for project/window browsing to be added later.
 | `Delete` / `Backspace` | trash selected media |
 | `Mod+c` | copy adjustments (when editor active) |
 | `Mod+v` | paste adjustments to selection / paste clipboard image |
+| `Shift+Mod+c` | copy image — baked result (orig fallback); bitmap if single, file refs if multi (§8.1) |
 | `Enter` | open lightbox for selected **[DECIDED: same as double click]** |
 | `ArrowLeft/Right/Up/Down` | move selection across grid **[DECIDED: yes]** |
 | `Escape` | close lightbox → else clear selection |
@@ -285,6 +286,25 @@ no rich/HTML flavor, macOS-only. Anything richer needs a new mechanism (8.3).
 - `Mod+v` precedence: if `copiedEdits` exists → paste adjustments onto the
   selected tiles. Only when there are no copied adjustments does `Mod+v` fall
   back to importing a clipboard image into the project.
+
+**Media `Shift+Mod+c` — copy the actual image (decided):**
+- **Which pixels:** the **edited (baked) result**, falling back to the original
+  file when the image has no edits. (Reuses the existing bake path; HEIC bakes
+  to JPEG via `heic_preview`.)
+- **Clipboard form by selection size:**
+  - **single** image selected → put the **bitmap** on the clipboard (pastes into
+    image editors, and into Notes as an **image note** via `Mod+v` — see the
+    cross-feature flow below).
+  - **multiple** selected → put **file reference(s)** on the clipboard (pastes
+    into Finder/Mail; bitmap-of-many isn't meaningful).
+- **Cross-feature flow (intended):** `Shift+Mod+c` in Media (single) → switch to
+  Notes → `Mod+v` → image note. This is the "send media to Notes" path; no
+  dedicated action needed.
+- **[DECIDE: `Shift+Mod+v` = paste/import image?]** Since `Mod+v` is shadowed by
+  adjustments-paste whenever `copiedEdits` is held, a just-copied image can't be
+  re-imported via `Mod+v`. `Shift+Mod+v` would force "import clipboard image".
+- Needs a Rust command to place a baked image / file list on the macOS
+  pasteboard (no existing command does the *write* direction).
 
 ### 8.2 Notes copy/paste — the rich case
 
