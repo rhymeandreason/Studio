@@ -1,9 +1,9 @@
 # Interaction Spec — Selection & Keyboard
 
-Status: **DRAFT** — edit freely. Decision points are marked **[DECIDE]**.
 Goal: one selection model and one keyboard model shared across all four areas
 (Projects, Workspace, Media, Notes), so behavior is consistent and multi-window
-stays clean.
+stays clean. Most choices are settled; remaining open questions are collected in
+§11.
 
 ---
 
@@ -15,22 +15,22 @@ stays clean.
    (editable field? modal open?) and routes to the active panel's keymap.
 3. **Shared action names.** `Delete`, `Enter`, `Escape`, arrows mean the same
    verb everywhere; only the implementation differs per panel.
-4. **No behavior that depends on which window you're in.** A panel behaves
+4. **No behavior depends on which window you're in.** A panel behaves
    identically in any window.
 
 ---
 
-## 2. Current state (for reference — what we're replacing)
+## 2. Current state (what we're replacing)
 
 | Area | Selection today | Keyboard today |
 |---|---|---|
 | Projects | none — click opens, trash button deletes | none |
 | Workspace | none (form inputs) | local Enter/Esc per input |
 | Media | `mediaSelection: Set<path>`; click replaces, Cmd/Ctrl-click toggles; selbar shows count | global keydown: Esc, Mod+C/V (copy/paste edits), Delete |
-| Notes | `selectedNoteId` (card) **+** `selectedCol` **+** `selectedRow` (table) | global keydown: Arrows reorder card, Delete removes card/col/row |
+| Notes | `selectedNoteId` (card) + `selectedCol` + `selectedRow` (table) | global keydown: Arrows reorder card, Delete removes card/col/row |
 
-Two separate global `keydown` listeners exist (media ~line 2845, notes ~line
-2936), each re-deriving "is editable / is modal open / which tab".
+Two separate global `keydown` listeners exist (one for Media, one for Notes),
+each re-deriving "is editable / is modal open / which tab". We collapse these.
 
 ---
 
@@ -45,8 +45,6 @@ const sel = createSelection({
 });
 ```
 
-API:
-
 | Method | Behavior |
 |---|---|
 | `has(id)` | is id selected |
@@ -56,11 +54,11 @@ API:
 | `add(id)` / `delete(id)` | multi-mode primitives |
 | `toggle(id, additive)` | see rules below |
 | `clear()` | empty it |
-| `anchor` | last single-set id, for range-select **[DECIDED: yes shift-range]** |
+| `anchor` | last single-set id, used as the range-select pivot |
 
 `toggle(id, additive)` rules:
-- **single mode:** ignores `additive`; clicking the selected item again →
-  **[DECIDED: deselect]** (Notes currently deselects.)
+- **single mode:** ignores `additive`; clicking the selected item again
+  **deselects** it.
 - **multi mode, `additive=false`:** replace selection with `id`.
 - **multi mode, `additive=true`** (Cmd/Ctrl-click): flip `id` in/out of the set.
 
@@ -73,33 +71,32 @@ API:
 |---|---|---|
 | Projects | project path | multi |
 | Media | media path | multi |
-| Notes (cards) | note id | **[DECIDED: multi]** today single |
+| Notes (cards) | note id | multi |
 | Notes (table col/row) | see 3.3 | single, separate |
-| Workspace | row index / field id | **[DECIDED: same selection behavior as other panels]** |
+| Workspace | row index / field id | multi |
 
-### 3.3 Notes' nested selection (the tricky one)
+### 3.3 Notes' nested selection
 
-Notes has three selection scopes that are currently independent globals:
-`selectedNoteId`, `selectedCol`, `selectedRow`. Proposal:
+Notes has three selection scopes (today the independent globals
+`selectedNoteId`, `selectedCol`, `selectedRow`):
 
 - One **card** Selection at the panel level.
 - Table col/row selection is a **sub-selection local to the focused table
   note**, mutually exclusive with each other.
-- Selecting a card clears any table sub-selection and vice versa. **[DECIDED: Yes.]**
+- Selecting a card clears any table sub-selection, and vice versa.
 
-### 3.4 Click semantics (must be consistent)
+### 3.4 Click semantics (consistent across panels)
 
 | Gesture | Result |
 |---|---|
 | Click item | `sel.set(id)` (replace) |
 | Cmd/Ctrl-click | `sel.toggle(id, additive=true)` |
-| Shift-click | range select **[DECIDED: yes for all]** |
+| Shift-click | range select from `anchor` (all grids) |
 | Click empty space in panel | `sel.clear()` |
-| Double-click | panel "open/activate" action (Projects → open project; Media → open lightbox; Notes → **[DECIDED: open in Modal]**, Workspace → launch item;) **[DECIDED: new]**|
+| Double-click | panel open/activate action: Projects → open project; Media → open lightbox; Notes → open in modal; Workspace → launch item |
 
-> **Projects behavior change:** today single-click *opens* a project. To match
-> Media/Notes, single-click would *select* and double-click (or Enter) opens.
-> **[DECIDED: accept this change]**
+**Projects behavior change:** single-click now *selects* (was: opens);
+double-click or `Enter` opens.
 
 ---
 
@@ -112,31 +109,25 @@ document.addEventListener("keydown", (e) => {
   if (anyModalOpen()) { modalKeymap(e); return; }      // modals win
   if (isEditableTarget(e.target)) return;              // typing → let it through
   const key = keyName(e);
-  // Panel map first, then global fallback. This is how Mod+n means "new note"
-  // in Notes but "new project" everywhere else.
+  // Panel map first, then global fallback.
   const handler = panelKeymaps[activePanel]?.[key] ?? globalKeymap[key];
   if (handler) { e.preventDefault(); handler(e); }
 });
 ```
 
-- `activePanel`: one of `projects | workspace | media | notes`, set by
-  `selectTab()` and by entering/leaving the overview.
-- `isEditableTarget(el)`: INPUT / TEXTAREA / SELECT / contentEditable. The single
-  source of truth (replaces the duplicated checks).
-- `anyModalOpen()`: generate / extend / new-project modal. (Lightbox is **not**
-  a modal — it's Media's own mode; see 4.3.)
-- `keyName(e)`: normalizes to strings like `"Delete"`, `"Enter"`, `"Escape"`,
-  `"ArrowLeft"`, `"Mod+c"`, `"Mod+v"`, `"Shift+ArrowDown"`. `Mod` = Cmd on mac,
-  Ctrl elsewhere. **`Space` normalizes to `Enter`** (so every panel's Enter
-  handler also fires on Space). Space/Enter in a field is gated out by
-  `isEditableTarget`.
-- **Resolution order:** panel keymap → global keymap. There is no separate
-  "checked before" global tier; global is the *fallback*, so a panel can always
-  override a global key.
+- `activePanel`: `projects | workspace | media | notes`, set by `selectTab()`
+  and by entering/leaving the overview.
+- `isEditableTarget(el)`: INPUT / TEXTAREA / SELECT / contentEditable — the
+  single source of truth (replaces today's duplicated checks).
+- `anyModalOpen()`: generate / extend / new-project modal. The lightbox is **not**
+  a modal — it's Media's own mode (§4.3).
+- `keyName(e)`: normalizes to `"Delete"`, `"Enter"`, `"Escape"`, `"ArrowLeft"`,
+  `"Mod+c"`, `"Mod+v"`, `"Shift+Mod+c"`, etc. `Mod` = Cmd on mac, Ctrl elsewhere.
+  **`Space` normalizes to `Enter`** (Enter handlers also fire on Space).
+- **Resolution order:** panel keymap → global keymap. Global is the *fallback*,
+  so a panel can always override a global key (e.g. `Mod+n`).
 
 ### 4.2 Keymap registration
-
-Each panel registers a flat map of `keyName → handler`:
 
 ```js
 panelKeymaps.notes = {
@@ -148,435 +139,357 @@ panelKeymaps.notes = {
 };
 ```
 
-### 4.3 Proposed unified keymaps
+### 4.3 Keymaps
 
-Fill in / correct these — this is the heart of the spec.
-
-**Global (fallback — fires only if the active panel didn't claim the key):**
-More combos for project/window browsing to be added later.
+**Global (fallback — fires only if the active panel didn't claim the key).**
+More combos for project/window browsing to come later.
 | Key | Action |
 |---|---|
-| `Mod+n` | New project. (In Notes, the panel keymap overrides this to "new text note".) |
-| `Escape` | clear selection in the active panel (fallback) |
-
-> `Space` is normalized to `Enter` everywhere (see 4.1).
+| `Mod+n` | New project (Notes overrides → new text note) |
+| `Escape` | clear selection in the active panel |
 
 **Projects**
 | Key | Action |
 |---|---|
 | `Enter` | open selected project (single) |
-| `Delete` / `Backspace` | trash selected project(s) **[DECIDED: add confirm dialog]** |
-| `ArrowLeft/Right/Up/Down` | move selection across grid |
-| `Mod+v` | paste clipboard image → set icon of selected project (§11) |
-| `Mod+a` | select all **[DECIDED: no]** |
+| `Delete` / `Backspace` | trash selected project(s) — with confirm dialog |
+| `Arrow*` | move selection across grid |
+| `Mod+v` | paste clipboard image → set icon of selected project (§10) |
 | `Escape` | clear selection |
 
 **Workspace**
 | Key | Action |
 |---|---|
-| `Enter` | Launch app or open link (single) |
+| `Enter` | launch app / open link (single) |
 | `Delete` / `Backspace` | delete selected item(s) |
-| `ArrowLeft/Right/Up/Down` | move selection across grid | **[DECIDED: add grid keyboard behavior]** |
+| `Arrow*` | move selection across grid |
 | `Escape` | clear selection |
 
 **Media**
 | Key | Action |
 |---|---|
 | `Delete` / `Backspace` | trash selected media |
-| `Mod+c` | copy adjustments (when editor active) |
-| `Mod+v` | paste adjustments to selection / paste clipboard image |
-| `Shift+Mod+c` | copy image — baked result (orig fallback); bitmap if single, file refs if multi (§8.1) |
-| `Enter` | open lightbox for selected **[DECIDED: same as double click]** |
-| `ArrowLeft/Right/Up/Down` | move selection across grid **[DECIDED: yes]** |
-| `Escape` | close lightbox → else clear selection |
+| `Mod+c` | copy adjustments (§7.1) |
+| `Mod+v` | paste adjustments to selection; else import clipboard image (§7.1) |
+| `Shift+Mod+c` | copy image — baked (orig fallback); bitmap if single, file refs if multi (§7.1) |
+| `Enter` | open lightbox for selected (= double-click) |
+| `Arrow*` | move selection across grid |
+| `Escape` | close lightbox; else clear selection |
 
 **Notes**
 | Key | Action |
 |---|---|
 | `Delete` / `Backspace` | delete selected card(s), or selected table col/row |
-| `ArrowLeft/Right` | reorder selected card — **only when exactly one card is selected** (multi-select reorder is **[DECIDE: disable, or move the whole block keeping order?]**) |
-| `ArrowUp/Down` | none (kept removed) |
+| `ArrowLeft/Right` | reorder selected card — only when exactly one card is selected (multi-select reorder disabled) |
+| `ArrowUp/Down` | none |
+| `Mod+c` | copy selected note(s) (§7.2) |
+| `Mod+v` | paste into notes (§7.2) |
 | `Escape` | clear card / table selection |
-| `Mod+c` | copy note **[DECIDED: new, copy/paste notes should preserve type of note inside studio, allow copy/paste between projects. Outside of studio, it should paste as text, TSV, or bulleted list]** |
-| `Mod+v` | paste into notes (existing pasteIntoNotes) **[DECIDED: keep]** |
 
 ### 4.4 Modal keymap
 
-While a modal is open, only the modal's keys fire (everything else swallowed):
+While a modal is open, only its keys fire (everything else swallowed):
 | Key | Action |
 |---|---|
 | `Escape` | close modal |
-| `Enter` | confirm (new-project create, etc.) |
-| `ArrowLeft/Right` | browse to next item **[DECIDED: new]**| 
+| `Enter` | confirm (e.g. create project) |
+| `ArrowLeft/Right` | browse to next item |
 
 ---
 
 ## 5. Edge cases & rules
 
-- **Typing focus wins:** if focus is in an editable field, panel keymaps never
-  fire (the dispatcher returns early). Field-local handlers (Enter to commit a
-  rename, Esc to cancel) are registered on the field, not the dispatcher.
+- **Typing focus wins:** if focus is in an editable field, panel keymaps don't
+  fire (dispatcher returns early). Field-local handlers (Enter to commit a
+  rename, Esc to cancel) live on the field, not the dispatcher.
 - **Selection survives re-render:** panels rebuild DOM often (`renderNotes`,
-  `loadMedia`). Selection is keyed by stable id, repaint reads `sel.has(id)`.
-- **Deleting selected items:** after delete, selection should **[DECIDED: clear]**
-- **Switching tabs/windows:** `activePanel` changes; selection per panel is
-  **[DECIDED: preserved]**
+  `loadMedia`); selection is keyed by stable id, repaint reads `sel.has(id)`.
+- **After delete:** selection clears.
+- **On tab switch:** `activePanel` changes; each panel's selection is preserved.
 - **Click-after-drag:** Notes already suppresses the click that follows a drag
   (300ms guard) — keep this in the click→select path.
 
 ---
 
-## 6. Multi-window implications (for later, but shapes the above)
+## 6. Multi-window
 
-- Window model: **one window per project**, keyed by project path (Tauri window
-  label = path). Opening an already-open project focuses its window.
-- Each window has its own `activePanel` and its own per-panel Selections — no
-  cross-window selection sharing needed.
-- Because one project = at most one window, two windows never edit the same
-  `notes.json` / `workspace.json`, so no write-conflict handling is required.
-- Therefore the selection/keyboard layer needs **no** awareness of windows; it's
-  purely per-document state. Good.
-
----
-
-## 7. Open decisions summary (collected for quick editing) **[DECIDED]**
-
-1. Shift-range select — support it, grids only 
-2. Single-mode re-click — deselect 
-3. Notes cards — multi select
-4. Workspace — grid selection/keyboard added
-5. Projects — single-click-selects (double/Enter opens)
-6. Lightbox — Media sub-mode (because it also opens Modals)
-7. Truly global shortcuts - see above
-8. Notes ArrowUp/Down — keep removed
-9. Delete confirm dialog for projects - yes
-10. Post-delete selection — clear
-11. Selection on tab switch — preserve
+- **One window per project**, keyed by project path (Tauri window label = path).
+  Opening an already-open project focuses its window.
+- Each window has its own `activePanel` and per-panel Selections — no
+  cross-window selection sharing.
+- One project = at most one window, so two windows never edit the same
+  `notes.json` / `workspace.json` → no write-conflict handling needed.
+- The selection/keyboard layer therefore needs **no** window awareness; it's
+  purely per-document state.
 
 ---
 
-## 8. Copy / Paste
+## 7. Copy / Paste
 
-### 8.0 Constraint (current reality)
+### 7.0 Clipboard constraint (current reality)
 
-There is **no Tauri clipboard plugin** today. Clipboard is:
-- **Text:** `navigator.clipboard.readText/writeText` (webview) + macOS `pbpaste`
-  via the `read_clipboard_text` Rust command.
-- **Image:** `paste_image` Rust command (macOS shell) reads a clipboard image
-  into a project's `media/`.
+No Tauri clipboard plugin today. Clipboard is:
+- **Text:** `navigator.clipboard.readText/writeText` + macOS `pbpaste` via the
+  `read_clipboard_text` command.
+- **Image:** `paste_image` command (macOS) reads a clipboard image into `media/`.
 
-So the system clipboard, as wired today, carries **plain text or an image** —
-no rich/HTML flavor, macOS-only. Anything richer needs a new mechanism (8.3).
+So the system clipboard carries **plain text or an image**, macOS-only. Richer
+flavors need the mechanism in §7.3.
 
-### 8.1 Model
+### 7.1 Model + Media
 
-"Copy" / "Paste" act on the **active panel's selection**. Each panel defines
-`copy()` and `paste()`; the dispatcher routes `Mod+c` / `Mod+v` to them.
+Copy/Paste act on the **active panel's selection**; each panel defines `copy()`
+and `paste()`, routed from `Mod+c` / `Mod+v`.
 
-| Panel | `Mod+c` copies | `Mod+v` pastes |
+| Panel | `Mod+c` | `Mod+v` |
 |---|---|---|
-| Media | image **adjustments** (in-mem `copiedEdits`) — from the editor-active image or the selected tile | **adjustments → selected tiles** (priority); only if there are no copied adjustments does it fall back to importing a clipboard image |
-| Notes | selected note(s) — Studio-native (8.2) | clipboard → new note(s) (8.2) |
-| Projects | **[DECIDED:nothing]** | — |
-| Workspace | **[DECIDED: copy selected field value]** | — |
+| Media | copy adjustments | paste adjustments (priority), else import clipboard image |
+| Notes | copy selected note(s), Studio-native (§7.2) | paste → new note(s) (§7.2) |
+| Projects | — | set icon of selected project (§10) |
+| Workspace | copy selected field value | — |
 
-**Media is adjustments-first (decided — keep current behavior):**
-- `Mod+c` always copies the image **adjustments** into the in-memory
-  `copiedEdits` (never the image file or path).
-- `Mod+v` precedence: if `copiedEdits` exists → paste adjustments onto the
-  selected tiles. Only when there are no copied adjustments does `Mod+v` fall
-  back to importing a clipboard image into the project.
+**Media adjustments-first (keep current):**
+- `Mod+c` copies the image **adjustments** into in-memory `copiedEdits` (never
+  the file/path).
+- `Mod+v`: if `copiedEdits` exists → paste adjustments onto selected tiles; only
+  with no copied adjustments does it fall back to importing a clipboard image.
 
-**Media `Shift+Mod+c` — copy the actual image (decided):**
-- **Which pixels:** the **edited (baked) result**, falling back to the original
-  file when the image has no edits. (Reuses the existing bake path; HEIC bakes
-  to JPEG via `heic_preview`.)
-- **Clipboard form by selection size:**
-  - **single** image selected → put the **bitmap** on the clipboard (pastes into
-    image editors, and into Notes as an **image note** via `Mod+v` — see the
-    cross-feature flow below).
-  - **multiple** selected → put **file reference(s)** on the clipboard (pastes
-    into Finder/Mail; bitmap-of-many isn't meaningful).
-- **Cross-feature flow (intended):** `Shift+Mod+c` in Media (single) → switch to
-  Notes → `Mod+v` → image note. This is the "send media to Notes" path; no
-  dedicated action needed.
-- **[DECIDE: `Shift+Mod+v` = paste/import image?]** Since `Mod+v` is shadowed by
-  adjustments-paste whenever `copiedEdits` is held, a just-copied image can't be
-  re-imported via `Mod+v`. `Shift+Mod+v` would force "import clipboard image".
-- Needs a Rust command to place a baked image / file list on the macOS
-  pasteboard (no existing command does the *write* direction).
+**Media `Shift+Mod+c` — copy the actual image:**
+- **Pixels:** the **baked (edited) result**, falling back to the original when
+  unedited. Reuses the existing bake path (HEIC → JPEG via `heic_preview`).
+- **Form by selection size:**
+  - **single** → write the **bitmap** (pastes into image editors, and into Notes
+    as an image note via `Mod+v`).
+  - **multiple** → write **file references**, Finder-style.
+- **Cross-feature flow:** `Shift+Mod+c` (single) in Media → Notes → `Mod+v` →
+  image note. This is the "send media to Notes" path.
 
-### 8.2 Notes copy/paste — the rich case
+**What needs native code:**
+- **Single bitmap → pure JS.** Write the baked PNG from the editor canvas via
+  `navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])`. The
+  keydown is a valid user gesture. (Verify in the Tauri WKWebView — see §7.3.)
+- **Multi-select file references → native command, Finder-style.** Place **file
+  URLs on `NSPasteboard`** (`public.file-url` / `NSFilenamesPboardType`) so
+  Finder, Mail, etc. paste them as real files. The web Clipboard API can't carry
+  file references, so this needs `copy_files_to_clipboard(paths)` (clipboard
+  crate or Cocoa). Which files: **edited images bake to a temp dir** (app cache)
+  and those URLs are referenced; **unedited images reference the original** in
+  place. The command receives the mixed path list.
 
-Decided behavior — **copy writes two payloads; only the Studio one has styling:**
-- **Within Studio (incl. cross-project, cross-window):** the Studio-native
-  payload preserves note **type** (text / checklist / table), content, **and
-  styling — theme, title/body fonts, span.** Pasting in Studio recreates the
-  card exactly, theme included.
-- **Outside Studio:** the system clipboard carries only the degraded **plain
-  content — no theme, no fonts, no span.** So external apps never see styling;
-  Studio does.
+### 7.2 Notes copy/paste
 
-This is the whole reason for the two-representation mechanism in 8.3: the rich
-flavor (Studio) carries the theme, the plain flavor (system clipboard) does not.
-
-- **Outside Studio**, degrade to plain content:
+**Copy writes two payloads; only the Studio one carries styling.**
+- **In Studio (incl. cross-project, cross-window):** the Studio-native payload
+  preserves note **type** (text / checklist / table), content, and **styling —
+  theme, fonts, span.** Paste recreates the card exactly.
+- **Outside Studio:** the system clipboard carries only degraded **plain content
+  — no theme/fonts/span.** Degradation:
   - text note → its body text
-  - checklist → bulleted list, one item per line **[DECIDED: include checkbox
-    state]**
-  - table → **TSV** (header row + rows, tab-separated)
-  - multiple notes → concatenated, blank line between.
+  - checklist → one item per line, with checkbox state (`- [ ]` / `- [x]`)
+  - table → TSV (header + rows, tab-separated)
+  - multiple notes → concatenated, blank line between
 
-Paste **into** Notes:
-- If the clipboard holds a Studio-native payload (8.3) → reconstruct the
-  note(s) with type preserved.
-- Else parse the system text (existing `pasteIntoNotes` logic):
+**Paste into Notes:**
+- Studio-native payload present (§7.3) → reconstruct note(s) with full fidelity.
+- Else parse system text (extends today's `pasteIntoNotes`):
   - contains tabs → table note
-  - multiple lines → **[DECIDED: checklist]** (today: text)
-  - single line / plain → text note
-  - clipboard image → **[DECIDED: image notes]**
+  - multiple lines → checklist
+  - single line → text note
+  - clipboard image → image note (§9)
 
-### 8.3 How to carry the Studio-native payload — **[DECIDED: Option B — HTML flavor]**
+**Textarea selection still copies plain text.** When editing inside a textarea,
+the dispatcher gates out (`isEditableTarget`), so `Mod+c` is the browser's native
+plain-text copy. Studio's rich card-copy runs only when a card is selected and
+you're *not* editing.
 
-Write **two clipboard flavors** on copy via the async Clipboard API (no Rust
-plugin needed if the webview cooperates):
+### 7.3 Studio-native payload — HTML flavor
+
+Write **two flavors** on copy via the async Clipboard API (no Rust plugin if the
+webview cooperates):
 
 ```js
 navigator.clipboard.write([ new ClipboardItem({
   "text/html":  new Blob([richHtml], { type: "text/html" }),  // embeds note JSON
-  "text/plain": new Blob([degraded], { type: "text/plain" }), // 8.2 degraded form
+  "text/plain": new Blob([degraded], { type: "text/plain" }), // §7.2 degraded form
 })]);
 ```
 
 - The note JSON (type + content + theme/fonts/span) is embedded in the
-  `text/html` flavor — e.g. inside a `<script type="application/studio-notes">`
-  blob or a `data-studio` attribute, alongside human-readable HTML.
-- **Studio paste** reads `text/html`, finds the embedded JSON → reconstructs
-  notes with full fidelity. External apps get rich text (HTML) or plain text.
-- **Plain-text-only sources** (and the textarea case below) → no embedded JSON →
-  fall through to the §8.2 text-parsing path.
-
-**Implementation notes / risk:**
-- Verify `navigator.clipboard.read()` returns the `text/html` flavor in the
-  Tauri WKWebView (history of `readText()` being finicky there — see the
-  existing `read_clipboard_text`/`pbpaste` workaround). If read fails, add a
-  Rust clipboard-crate command for the **read** path only; write stays in JS.
-- Image notes (§10.5): the embedded JSON references an asset; paste must
-  materialize the file into the destination project's `notes/`.
-
-**Textarea selection still copies plain text.** When focus is inside a textarea
-(editing), the keyboard dispatcher gates out (`isEditableTarget`, §4.1), so
-`Mod+c` is the browser's native copy of the selected text — plain text only,
-Studio does not intercept. Studio's rich card-copy only runs when a card is
-selected and you're *not* editing.
+  `text/html` flavor (e.g. a `<script type="application/studio-notes">` blob or
+  `data-studio` attribute) alongside human-readable HTML.
+- **Studio paste** reads `text/html`, finds the JSON → reconstructs notes.
+  External apps get rich text (HTML) or plain text. Plain-text-only sources fall
+  through to the §7.2 text-parsing path.
+- **Risk:** verify `navigator.clipboard.read()` returns `text/html` (and that
+  `write` accepts `image/png`) in the Tauri WKWebView — there's history of
+  `readText()` being finicky (hence the `pbpaste` workaround). If read fails, add
+  a Rust read-path command; write stays in JS.
+- For image notes, the embedded JSON references an asset; cross-project paste
+  must materialize the file into the destination's `notes/` (§9.5).
 
 ---
 
-## 9. Drag & Drop
+## 8. Drag & Drop
 
-### 9.0 Constraint (current reality)
+### 8.0 Constraint
 
-Tauri's native file-drop (`dragDropEnabled: true`, default) **swallows HTML5
-`dragover`/`drop`** in the webview. Consequences, now codified as rules:
+Tauri's native file-drop (`dragDropEnabled: true`) **swallows HTML5
+`dragover`/`drop`** in the webview. Rules:
 - **External file drops** use the Tauri `drag-enter/over/leave/drop` events.
-- **Internal reordering** must use **pointer events** (as Notes card reorder
-  already does) — never HTML5 DnD.
-- Any internal pointer-drag sets a flag that **suppresses the external file-drop
-  overlay** (today: `draggingNoteId`; generalize to `internalDragActive`).
+- **Internal reordering** uses **pointer events** (as Notes card reorder does) —
+  never HTML5 DnD.
+- An internal pointer-drag sets a flag (`internalDragActive`) that **suppresses
+  the external file-drop overlay**.
 
-### 9.1 External file drop (OS files → app)
+### 8.1 External file drop (OS files → app)
 
-Behavior is driven by **what is dropped**, not which panel it lands on (drop
-anywhere in the window). The only context split is overview vs an open project.
+Behavior is driven by **what is dropped**, not which panel it lands on. The only
+context split is overview vs an open project.
 
-**In an open project window** (drop anywhere in the window):
-| Dropped item | Behavior |
+**In an open project window** (drop anywhere):
+| Dropped | Behavior |
 |---|---|
-| Image file | **Move into project `media/`** (keep current behavior). Always → media, regardless of panel. Image *notes* are made via paste only (§10.4), never by drop. |
-| Non-image file | Move the file into the project folder. |
-| **Folder** | **Add a folder entry to the Workspace**, with an **"Open in Finder"** action. Does **not** move/copy the folder; stores its path. (Needs a new Workspace list type — see below.) |
+| Image file | move into project `media/` (any panel). Image notes are made via paste / internal drag only (§9.4), never by external file drop. |
+| Non-image file | move into the project folder |
+| Folder | add a **folder entry to the Workspace** with an **Open-in-Finder** action; references the path, doesn't move/copy it |
 
 **On the Projects overview** (no project open):
-| Dropped item | Behavior |
+| Dropped | Behavior |
 |---|---|
-| Folder | Add as a project, referencing the folder in place (don't move it into `/Projects`). |
-| File | **[DECIDED: ignore]** |
+| Folder | add as a project, referencing the folder in place |
+| File | ignore |
 
-**New Workspace list type for dropped folders:** add a `folders` entry to
-`LIST_META` (icon `folder_open`, label "Folder"), holding folder paths. Its row
-action opens the folder in Finder (`reveal_in_finder` / `open_path`). This is
-also the differentiation the user asked for: **files move in, folders get
-referenced + an open-in-Finder action.**
+**New Workspace list type:** add `folders` to `LIST_META` (icon `folder_open`,
+label "Folder") holding folder paths; row action opens in Finder
+(`reveal_in_finder` / `open_path`). This is the file-vs-folder differentiation:
+files move in, folders get referenced + an open action.
 
-Overlay: keep the single global dropzone overlay, but **label it by what's being
-dropped / where** — e.g. "Move image to Media", "Add folder to Workspace", "Add
-project" on the overview. The drop handler classifies each path
-(image-file / other-file / folder) and routes accordingly.
+**Overlay:** keep the single dropzone overlay, labeled by what's dropped / where
+("Move image to Media", "Add folder to Workspace", "Add project"). The handler
+classifies each path (image-file / other-file / folder) and routes.
 
-### 9.2 Internal drag (within the app, pointer-based)
+### 8.2 Internal drag (pointer-based)
 
 | Panel | Internal drag |
 |---|---|
-| Notes | reorder cards (done; horizontal drop indicator between column items) |
-| Media | **[DECIDED: manual reorder, add sort toggle buttons]** |
-| Projects | **[DECIDED: reorder tiles]** |
-| Cross-panel | **[DECIDED: drag a media tile into Notes Tab to create an image note]** |
+| Notes | reorder cards (done; horizontal indicator between column items) |
+| Media | manual reorder; add sort-toggle buttons (default sort + manual override) |
+| Projects | reorder tiles |
+| Cross-panel | drag a media tile into the Notes tab → create an image note (references the `media/` file in place, §9.1) |
 
-### 9.3 Drag + selection interplay — **[DECIDED: yes]**
+### 8.3 Drag + selection interplay
 
 When a drag starts on an item:
-- If the item **is** in the current selection → drag the **whole selection**.
-- If the item is **not** selected → `sel.set(item)` first, then drag just it.
-
-Confirm this is the rule (it's the platform-standard behavior).
-
-### 9.4 Open decisions (Copy/Paste + DnD)
-
-1. Media copy/paste — **DECIDED: adjustments-first (keep current).** `Mod+c`
-   copies adjustments; `Mod+v` pastes adjustments to selection, falling back to
-   clipboard-image import only when no adjustments are copied.
-2. Notes copy — **DECIDED: Studio-native payload includes theme/fonts/span;
-   the system-clipboard (external) form is plain content with no styling.**
-3. Checklist external form — `- [ ]` checkboxes or plain bullets?
-4. Paste multi-line text into Notes — **DECIDED: checklist.**
-5. Paste image into Notes — **DECIDED: image note** (see §10).
-6. Studio-native payload mechanism — **DECIDED: Option B (HTML flavor via
-   `ClipboardItem`).** Verify WKWebView `read()` of `text/html`; Rust read
-   fallback if needed.
-7. File drop targets — **DECIDED (§9.1):** image file → `media/` (any panel);
-   folder → Workspace folder entry + Open-in-Finder; non-image file → moved into
-   project folder; folder on overview → add as project.
-8. Non-image file drops — **DECIDED: move into the project folder.**
-9. Context-aware drop overlay — **DECIDED: keep single overlay, labeled by what's
-   dropped / where.**
-10. Media/Projects internal reorder — **DECIDED: allow**
-11. Drag+selection rule (9.3) —  **DECIDED: yes**
+- if the item **is** in the current selection → drag the **whole selection**;
+- if it's **not** selected → `sel.set(item)` first, then drag just it.
 
 ---
 
-## 10. Image notes (data model)
+## 9. Image notes (data model)
 
-**Decision: store the image as a file (not inline base64), in a dedicated
-`notes/` folder in the project. Separate from `media/` (Option B), so note
-images don't appear in the Media tab.**
+Store the image as a **file** (never inline base64), in a dedicated `notes/`
+folder, separate from `media/` so note images don't appear in the Media tab.
 
-### 10.1 Project layout
+### 9.1 Project layout
 
 ```
 <project>/
   media/                 # Media-tab images (unchanged)
-  notes/                 # NEW: image-note asset files live here
+  notes/                 # image-note asset files
     <noteId>.<ext>
-  notes.json             # stays at project root; references notes/ files
+  notes.json             # at project root; references files
   .<file>.studio.json    # edit sidecars (media only)
 ```
 
-`notes.json` holds only a **reference**, never image bytes. The `src` may point
-into **either** `notes/` (note-owned asset) **or** an existing `media/` file:
+`notes.json` holds a **reference**, never bytes. `src` may point into **either**
+`notes/` (note-owned) **or** an existing `media/` file:
 
 ```jsonc
 {
   "kind": "image",
   "id": "n…",
   "src": "notes/n….png",   // project-relative; may also be "media/foo.png"
-  "w": 1200, "h": 800,      // natural pixel size (for layout / bento sizing)
-  "caption": "",            // optional
-  "theme": "…", "span": 1   // same styling fields as other notes
+  "w": 1200, "h": 800,      // natural size (bento row-span sizing)
+  "caption": "",
+  "theme": "…", "span": 1
 }
 ```
 
-**Don't duplicate files already in the project.** If the image being turned into
-a note already lives in the project (e.g. it's a `media/` file), the note just
-**references that path in place** — no copy into `notes/`. Only images coming
-from *outside* the project (clipboard paste, external file) get written into
-`notes/`. So `src` is `notes/…` for note-owned imports and `media/…` for images
-already present.
+**Don't duplicate files already in the project.** An image already in the project
+(e.g. a `media/` file) is referenced **in place** — no copy. Only images from
+*outside* the project (clipboard, external file) are written into `notes/`.
 
-### 10.2 Display
+### 9.2 Display
 
-- Render via `convertFileSrc(<project>/notes/<file>)` directly — image notes are
-  shown, not edited, so they do **not** need the Media WebGL/thumbnail pipeline.
-  (If we later want editing or perf thumbnails, revisit.)
-- `w`/`h` feed bento row-span sizing so the card reserves correct height before
-  the image loads.
+- Render via `convertFileSrc(<project>/<src>)` directly — image notes are shown,
+  not edited, so they skip the Media WebGL/thumbnail pipeline.
+- `w`/`h` feed bento row-span sizing so the card reserves height before load.
+- (Later, optional) bake a perf thumbnail if needed.
 
-### 10.3 Rust commands (new, parallel to media but simpler)
+### 9.3 Rust commands + lifecycle
 
-- `import_note_image(project_path, file) -> src` — copy an **external** file
-  into `notes/`, return the project-relative path. (Skip the copy and just
-  reference the path if the file is already inside the project.)
-- `paste_note_image(project_path) -> src` — write a clipboard image into
-  `notes/` (mirrors `paste_image`, different target dir).
-- **Deletion is path-scoped:** removing an image note deletes its asset **only
-  if `src` is under `notes/`** (note-owned). If `src` points into `media/`, the
-  file is shared with the Media tab — leave it; just remove the note. No
-  reference-counting needed: ownership is decided by which folder the file is in.
+- `import_note_image(project_path, file) -> src` — copy an **external** file into
+  `notes/`; if the file is already inside the project, just reference it.
+- `paste_note_image(project_path) -> src` — write a clipboard image into `notes/`
+  (mirrors `paste_image`, different dir).
+- **Deletion is path-scoped:** deleting an image note removes its asset **only if
+  `src` is under `notes/`**. A `media/` reference is left alone (owned by Media).
+  Ownership is decided by folder — no reference-counting.
 
-### 10.4 Creation paths
+### 9.4 Creation paths
 
-- **Paste** a clipboard image while in Notes → `paste_note_image` → new image
-  note (per §8.2 decision). **This is the only drag/drop/paste route to an image
-  note.**
-- **Drag-dropping an image file does NOT create an image note** — image-file
-  drops always go to `media/` (§9.1). So image notes come from paste (or the
-  optional toolbar button below) only.
-- **[DECIDED: no toolbar "Image" button]
+- **Paste** a clipboard image in Notes → `paste_note_image` → image note.
+- **Internal drag** of a media tile into the Notes tab → image note referencing
+  the `media/` file in place (§8.2).
+- **External image-file drop does NOT create an image note** — it goes to
+  `media/` (§8.1).
+- No toolbar "Image" add-button (paste / drag only).
 
-### 10.5 Copy/paste of image notes (ties to §8)
+### 9.5 Copy/paste of image notes
 
-- **Within Studio:** the Studio-native payload references the asset. Pasting in
-  the **same** project reuses the file in place (whether `src` is `notes/…` or
-  `media/…`). Pasting into a **different** project must **copy the file into the
-  destination's `notes/`** and rewrite `src` to that new path — regardless of
-  whether the source was `notes/` or `media/` (the dest may not have that media
-  file). So "copy carries a file" is required for image notes.
-- **Outside Studio:** degrade to the **image on the system clipboard** (no
-  theme/caption). **[DECIDE: confirm external paste = raw image, not a file
-  reference.]**
-
-### 10.6 Open decisions (image notes)
-
-1. Toolbar "Image" add-button, or paste/drop only? (10.4)
-2. External copy of an image note → raw image on clipboard? (10.5)
-3. Caption — show/edit UI now, or schema-only for later?
-4. Filename in `notes/` — `<noteId>.<ext>` (proposed) vs original name? Using the
-   note id avoids collisions and makes orphan cleanup trivial.
+- **In Studio:** the Studio-native payload references the asset. Same-project
+  paste reuses the file in place (`notes/…` or `media/…`). **Cross-project** paste
+  copies the file into the destination's `notes/` and rewrites `src` — regardless
+  of source folder (the dest may lack that media file). "Copy carries a file."
+- **Outside Studio:** degrade to the raw image on the system clipboard (no
+  theme/caption).
 
 ---
 
-## 11. Project icons
+## 10. Project icons
 
-**Lightweight, convention-file based — no metadata store, no `list_projects`
-change.**
+Lightweight, convention-file based — no metadata store, no `list_projects` change.
 
-### 11.1 Storage
+- **Storage:** a hidden file `<project>/.studio-icon.png`. Dot-prefixed → already
+  skipped by `scan_projects`, and it travels with the folder.
+- **Display:** the overview card renders
+  `<img src=convertFileSrc(<project>/.studio-icon.png)>` with `onerror` → fall
+  back to the letter/initial avatar. The load failure *is* the existence check,
+  so display needs no Rust change. (Later, optional: bake a ~256px square via
+  `quicklook_thumb` for large grids.)
+- **Setting:** select a project, then `Mod+v` with a clipboard image → new Rust
+  command `set_project_icon(project_path)` writes `.studio-icon.png` and repaints
+  the card. No-op if no clipboard image / no single project selected.
 
-- The icon is a fixed hidden file in the project folder: **`.studio-icon.png`**.
-- Dot-prefixed → already skipped by `scan_projects` (ignores dotfiles), and it
-  **travels with the folder** (copy/move the project, the icon comes along).
+---
 
-### 11.2 Display
+## 11. Open items
 
-- The overview card renders
-  `<img src=convertFileSrc(<project>/.studio-icon.png)>` with an `onerror`
-  handler that falls back to the current **letter/initial avatar**.
-- The `img` failing to load *is* the existence check → **no Rust change needed
-  to display** icons.
-- Perf (later, optional): if grids get large, bake a ~256px square via
-  `quicklook_thumb` so cards don't decode full-res photos.
+Genuinely undecided, plus implementation risks to verify.
 
-### 11.3 Setting an icon — **paste onto the selected project**
+**Decisions still open**
+1. Media `Shift+Mod+v` = force-import clipboard image? (`Mod+v` is shadowed by
+   adjustments-paste while `copiedEdits` is held.) (§7.1)
+2. Confirm external copy of an image note = raw image on clipboard (not a file
+   reference). (§9.5)
+3. Image-note caption — show/edit UI now, or schema-only for later? (§9)
+4. Image-note filename in `notes/` — `<noteId>.<ext>` (recommended: collision-free,
+   trivial orphan cleanup) vs original name. (§9.1)
+5. Media sort-toggle — which sorts (date / name / …) and the default? (§8.2)
+6. Project icon: a reset/remove action to delete `.studio-icon.png`? (§10)
+7. Project icon: non-square images — center-crop to square on set, or letterbox
+   in the card? (§10)
 
-- In the Projects overview, **select a project** (single), then **`Mod+v`** with
-  a clipboard image → writes it to that project's `.studio-icon.png` and
-  repaints the card.
-- New Rust command `set_project_icon(project_path)` — write the clipboard image
-  to `<project>/.studio-icon.png` (mirrors `paste_image`, fixed filename).
-- This adds `Mod+v` to the **Projects keymap** (§4.3): "paste clipboard image →
-  set icon of selected project". No-op if the clipboard has no image or no
-  single project is selected.
-
-### 11.4 Open decisions (project icons)
-
-1. Remove/reset icon — a key or menu action to delete `.studio-icon.png`?
-2. Non-square images — center-crop to square on set, or letterbox in the card?
+**Implementation risks to verify (not decisions)**
+- WKWebView async Clipboard API: `write` with `image/png`, and `read` of
+  `text/html`. Rust fallback for whichever direction fails. (§7.1, §7.3)
