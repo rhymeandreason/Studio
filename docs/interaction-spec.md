@@ -308,26 +308,38 @@ you're *not* editing.
 
 ### 7.3 Studio-native payload — HTML flavor
 
-Write **two flavors** on copy via the async Clipboard API (no Rust plugin if the
-webview cooperates):
+**Write in JS, read via Rust** (verified by the clipboard spike — see notes).
+
+**Copy (JS).** Write two flavors with the async Clipboard API:
 
 ```js
+// MUST be called synchronously in the gesture handler — no `await` before this.
 navigator.clipboard.write([ new ClipboardItem({
   "text/html":  new Blob([richHtml], { type: "text/html" }),  // embeds note JSON
   "text/plain": new Blob([degraded], { type: "text/plain" }), // §7.2 degraded form
 })]);
 ```
 
-- The note JSON (type + content + theme/fonts/span) is embedded in the
-  `text/html` flavor (e.g. a `<script type="application/studio-notes">` blob or
-  `data-studio` attribute) alongside human-readable HTML.
-- **Studio paste** reads `text/html`, finds the JSON → reconstructs notes.
-  External apps get rich text (HTML) or plain text. Plain-text-only sources fall
-  through to the §7.2 text-parsing path.
-- **Risk:** verify `navigator.clipboard.read()` returns `text/html` (and that
-  `write` accepts `image/png`) in the Tauri WKWebView — there's history of
-  `readText()` being finicky (hence the `pbpaste` workaround). If read fails, add
-  a Rust read-path command; write stays in JS.
+- The note JSON (type + content + theme/fonts/span; absolute source path for
+  image notes) is embedded in the `text/html` flavor (e.g. a
+  `<script type="application/studio-notes">` blob or `data-studio` attribute)
+  alongside human-readable HTML.
+- **Gesture rule (WebKit):** do **not** `await` anything before `clipboard.write`
+  — WebKit drops the user-gesture token after an await. Pass any async work as a
+  `Promise` *inside* the `ClipboardItem` (e.g. `{ "image/png": canvasToBlob() }`).
+
+**Paste (Rust read, NOT `navigator.clipboard.read()`).** The async read API
+triggers a macOS permission dialog on every paste in the Tauri WKWebView
+(upstream Tauri issue), so:
+- HTML flavor → new command **`read_clipboard_html()`** via `pbpaste -Prefer
+  html` (falls back to plain text when no HTML flavor; caller checks for a
+  leading `<` / the embedded marker).
+- plain text → existing `read_clipboard_text` (`pbpaste`).
+- image → existing `paste_image` / `PBIMAGE_BIN`.
+
+Studio paste reads the HTML, finds the embedded JSON → reconstructs notes.
+External apps get rich text (HTML) or plain text. Plain-text-only sources fall
+through to the §7.2 text-parsing path.
 - For image notes, the embedded JSON carries the asset's **absolute source
   path**; cross-project paste copies that file into the destination's `notes/`
   (§9.5).
@@ -513,12 +525,12 @@ Lightweight, convention-file based — no metadata store, no `list_projects` cha
 
 ## 11. Open items
 
-All design decisions are settled and folded into the sections above. What
-remains is implementation risk to verify during the build:
+All design decisions are settled and folded into the sections above.
 
-- **WKWebView async Clipboard API:** confirm `write` with `image/png` and `read`
-  of `text/html` work in the Tauri webview (history of `readText()` being
-  finicky → the `pbpaste` workaround). Add a Rust command for whichever
-  direction fails; the other stays in JS. (§7.1, §7.3)
-- **Project-icon reset** (delete `.studio-icon.png`): deferred to later, not
-  scoped now.
+**Clipboard API (resolved by spike):** writes work in JS (`ClipboardItem`,
+no-await gesture rule); reads must go through Rust — new `read_clipboard_html`
+(`pbpaste -Prefer html`) for HTML, existing `read_clipboard_text` / `paste_image`
+for text / image. `navigator.clipboard.read()` is avoided (per-paste macOS
+permission dialog in the Tauri WKWebView). Details in §7.3.
+
+**Deferred:** project-icon reset (delete `.studio-icon.png`) — not scoped now.

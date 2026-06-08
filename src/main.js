@@ -4,9 +4,17 @@
 // filesystem work.
 
 import { NOTE_THEMES, NOTE_FONTS } from "./themes.js";
+import { createSelection } from "./selection.js";
+import { installKeyDispatcher } from "./keymap.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
+
+// Which panel keyboard input routes to (interaction-spec §4). Set by selectTab
+// and by entering/leaving the projects overview.
+let activePanel = "workspace";
+const panelKeymaps = {};
+const globalKeymap = {};
 
 // --- Native file/folder pickers --------------------------------------------
 
@@ -66,6 +74,7 @@ function render(project) {
 // --- All-projects overview -------------------------------------------------
 
 async function showOverview() {
+  activePanel = "projects";
   const projects = await invoke("list_projects");
   const grid = document.getElementById("overview-grid");
   grid.innerHTML = "";
@@ -116,6 +125,7 @@ async function showOverview() {
 // --- Tabs ------------------------------------------------------------------
 
 function selectTab(name) {
+  activePanel = name;
   document.querySelectorAll(".tab").forEach((t) => {
     t.classList.toggle("is-active", t.dataset.tab === name);
   });
@@ -2931,36 +2941,27 @@ function initMedia() {
 let notesData = { version: 1, notes: [] };
 let selectedCol = null; // { note, ci, thEls, tdEls }
 let selectedRow = null; // { note, ri, trEl }
-let selectedNoteId = null;
+// Card selection (interaction-spec §3). Multi-select; the panel repaints
+// is-selected from this on every change.
+const notesSelection = createSelection({
+  mode: "multi",
+  onChange: () => repaintNotesSelection(),
+});
 
-document.addEventListener("keydown", (e) => {
-  const tag = document.activeElement?.tagName;
-  const isEditable =
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    document.activeElement?.isContentEditable;
+function repaintNotesSelection() {
+  const listEl = document.getElementById("notes-list");
+  listEl
+    ?.querySelectorAll(".notecard")
+    .forEach((c) =>
+      c.classList.toggle("is-selected", notesSelection.has(c.dataset.noteId)),
+    );
+  updateNotesChrome();
+}
 
-  // Left/Right move a selected note one position within the grid.
-  if (
-    selectedNoteId &&
-    !isEditable &&
-    (e.key === "ArrowLeft" || e.key === "ArrowRight")
-  ) {
-    e.preventDefault();
-    const idx = notesData.notes.findIndex((n) => n.id === selectedNoteId);
-    if (idx === -1) return;
-    const delta = e.key === "ArrowLeft" ? -1 : 1;
-    const newIdx = idx + delta;
-    if (newIdx < 0 || newIdx >= notesData.notes.length) return;
-    const [note] = notesData.notes.splice(idx, 1);
-    notesData.notes.splice(newIdx, 0, note);
-    renderNotes();
-    scheduleNotesSave();
-    return;
-  }
+// --- Notes keymap actions (registered in panelKeymaps.notes) ---------------
 
-  if (e.key !== "Delete" && e.key !== "Backspace") return;
-  if (isEditable) return;
+// Delete: a selected table col/row takes priority over card deletion.
+function deleteNotesSelection() {
   if (selectedCol) {
     const { note, ci } = selectedCol;
     note.columns.splice(ci, 1);
@@ -2972,14 +2973,43 @@ document.addEventListener("keydown", (e) => {
     selectedCol = null;
     renderNotes();
     scheduleNotesSave();
-  } else if (selectedRow) {
+    return;
+  }
+  if (selectedRow) {
     const { note, ri } = selectedRow;
     note.rows.splice(ri, 1);
     selectedRow = null;
     renderNotes();
     scheduleNotesSave();
+    return;
   }
-});
+  const ids = new Set(notesSelection.get());
+  if (!ids.size) return;
+  notesData.notes = notesData.notes.filter((n) => !ids.has(n.id));
+  notesSelection.clear();
+  renderNotes();
+  scheduleNotesSave();
+}
+
+// Reorder the selected card by one position — single selection only.
+function moveSelectedNote(delta) {
+  if (notesSelection.size() !== 1) return;
+  const id = notesSelection.get()[0];
+  const idx = notesData.notes.findIndex((n) => n.id === id);
+  if (idx === -1) return;
+  const newIdx = idx + delta;
+  if (newIdx < 0 || newIdx >= notesData.notes.length) return;
+  const [note] = notesData.notes.splice(idx, 1);
+  notesData.notes.splice(newIdx, 0, note);
+  renderNotes();
+  scheduleNotesSave();
+}
+
+function clearNotesSelection() {
+  clearColSelection();
+  clearRowSelection();
+  notesSelection.clear();
+}
 
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".ntable__col-handle")) clearColSelection();
@@ -3574,7 +3604,7 @@ function renderNotes() {
     card.dataset.noteId = note.id;
     card.style.gridColumn = `span ${note.span || 1}`;
     applyNoteStyle(card, note);
-    if (note.id === selectedNoteId) card.classList.add("is-selected");
+    if (notesSelection.has(note.id)) card.classList.add("is-selected");
 
     // Drag-to-reorder via pointer events (Tauri's native file-drop swallows
     // HTML5 dragover/drop in the webview). Only starts from a non-interactive
@@ -3588,14 +3618,14 @@ function renderNotes() {
       if (e.target.closest("select, button, input, textarea, a")) return;
       const rect = card.getBoundingClientRect();
       if (e.clientY - rect.top <= 8) {
-        selectedNoteId = selectedNoteId === note.id ? null : note.id;
-        listEl.querySelectorAll(".notecard").forEach((c) => {
-          c.classList.toggle(
-            "is-selected",
-            c.dataset.noteId === selectedNoteId,
+        if (e.shiftKey) {
+          notesSelection.range(
+            notesData.notes.map((n) => n.id),
+            note.id,
           );
-        });
-        updateNotesChrome();
+        } else {
+          notesSelection.toggle(note.id, e.metaKey || e.ctrlKey);
+        }
       }
     });
     listEl.append(card);
@@ -3614,8 +3644,13 @@ let dropTargetIndex = null;
 let noteDrag = null; // { note, card, startX, startY, active }
 let lastNoteDragEnd = 0;
 
+// The single selected note (style controls target exactly one); null if zero
+// or many are selected.
 function selectedNote() {
-  return notesData.notes.find((n) => n.id === selectedNoteId) || null;
+  const ids = notesSelection.get();
+  return ids.length === 1
+    ? notesData.notes.find((n) => n.id === ids[0]) || null
+    : null;
 }
 
 // Show the per-card style controls in the toolbar when a card is selected and
@@ -3827,18 +3862,37 @@ function initNotes() {
     setSelectedNoteStyle("bodyFont", bodyFontSel.value),
   );
 
+  // Clicking empty space in the notes panel or the project header clears
+  // selection — but NOT the tabs (so selection persists across tab switches),
+  // nor a card / the style chrome.
   document.addEventListener("click", (e) => {
+    const inDeselectZone =
+      e.target.closest('[data-panel="notes"]') ||
+      e.target.closest("#project-header");
     if (
-      selectedNoteId &&
+      notesSelection.size() &&
+      inDeselectZone &&
+      !e.target.closest("#tabs") &&
       !e.target.closest(".notecard") &&
       !e.target.closest("#notes-card-style")
     ) {
-      selectedNoteId = null;
-      document
-        .querySelectorAll(".notecard.is-selected")
-        .forEach((c) => c.classList.remove("is-selected"));
-      updateNotesChrome();
+      notesSelection.clear();
     }
+  });
+
+  // Register the Notes keymap and install the shared keyboard dispatcher.
+  panelKeymaps.notes = {
+    Delete: deleteNotesSelection,
+    Backspace: deleteNotesSelection,
+    ArrowLeft: () => moveSelectedNote(-1),
+    ArrowRight: () => moveSelectedNote(1),
+    Escape: clearNotesSelection,
+  };
+  installKeyDispatcher({
+    getActivePanel: () => activePanel,
+    panelKeymaps,
+    globalKeymap,
+    anyModalOpen: () => false, // modals still handled by existing code (pre-migration)
   });
 
   // Paste on the notes panel is handled via the keydown Cmd+V path calling pasteIntoNotes()
