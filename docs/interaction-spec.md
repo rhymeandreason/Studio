@@ -171,6 +171,7 @@ More combos for project/window browsing to come later.
 | `Delete` / `Backspace` | trash selected media |
 | `Mod+c` | copy adjustments (§7.1) |
 | `Mod+v` | paste adjustments to selection; else import clipboard image (§7.1) |
+| `Shift+Mod+v` | force-import clipboard image (bypasses adjustments-paste) (§7.1) |
 | `Shift+Mod+c` | copy image — baked (orig fallback); bitmap if single, file refs if multi (§7.1) |
 | `Enter` | open lightbox for selected (= double-click) |
 | `Arrow*` | move selection across grid |
@@ -253,6 +254,9 @@ and `paste()`, routed from `Mod+c` / `Mod+v`.
   the file/path).
 - `Mod+v`: if `copiedEdits` exists → paste adjustments onto selected tiles; only
   with no copied adjustments does it fall back to importing a clipboard image.
+- `Shift+Mod+v` always **force-imports** the clipboard image, bypassing the
+  adjustments-paste shadow (so a just-copied image is reachable while
+  `copiedEdits` is held).
 
 **Media `Shift+Mod+c` — copy the actual image:**
 - **Pixels:** the **baked (edited) result**, falling back to the original when
@@ -324,8 +328,9 @@ navigator.clipboard.write([ new ClipboardItem({
   `write` accepts `image/png`) in the Tauri WKWebView — there's history of
   `readText()` being finicky (hence the `pbpaste` workaround). If read fails, add
   a Rust read-path command; write stays in JS.
-- For image notes, the embedded JSON references an asset; cross-project paste
-  must materialize the file into the destination's `notes/` (§9.5).
+- For image notes, the embedded JSON carries the asset's **absolute source
+  path**; cross-project paste copies that file into the destination's `notes/`
+  (§9.5).
 
 ---
 
@@ -373,7 +378,7 @@ classifies each path (image-file / other-file / folder) and routes.
 | Panel | Internal drag |
 |---|---|
 | Notes | reorder cards (done; horizontal indicator between column items) |
-| Media | manual reorder; add sort-toggle buttons (default sort + manual override) |
+| Media | manual reorder + sort-toggle buttons: **date added** (newest first, default) / **date edited** (newest first) / **name** / **user-sorted**. Switching to user-sorted seeds order from date-added, then manual drag overrides. |
 | Projects | reorder tiles |
 | Cross-panel | drag a media tile into the Notes tab → create an image note (references the `media/` file in place, §9.1) |
 
@@ -410,7 +415,7 @@ folder, separate from `media/` so note images don't appear in the Media tab.
   "id": "n…",
   "src": "notes/n….png",   // project-relative; may also be "media/foo.png"
   "w": 1200, "h": 800,      // natural size (bento row-span sizing)
-  "caption": "",
+  "caption": "",            // editable via a textarea on the card
   "theme": "…", "span": 1
 }
 ```
@@ -424,6 +429,8 @@ folder, separate from `media/` so note images don't appear in the Media tab.
 - Render via `convertFileSrc(<project>/<src>)` directly — image notes are shown,
   not edited, so they skip the Media WebGL/thumbnail pipeline.
 - `w`/`h` feed bento row-span sizing so the card reserves height before load.
+- A **caption textarea** under the image edits `caption` (same save path as
+  other note edits).
 - (Later, optional) bake a perf thumbnail if needed.
 
 ### 9.3 Rust commands + lifecycle
@@ -447,12 +454,40 @@ folder, separate from `media/` so note images don't appear in the Media tab.
 
 ### 9.5 Copy/paste of image notes
 
-- **In Studio:** the Studio-native payload references the asset. Same-project
-  paste reuses the file in place (`notes/…` or `media/…`). **Cross-project** paste
-  copies the file into the destination's `notes/` and rewrites `src` — regardless
-  of source folder (the dest may lack that media file). "Copy carries a file."
-- **Outside Studio:** degrade to the raw image on the system clipboard (no
-  theme/caption).
+Primary use case: **copy an image note into another Project.** Cross-project paste
+works by **carrying the absolute source path** in the Studio JSON, not by
+embedding image bytes — on paste, Studio copies the file(s) from disk into the
+destination's `notes/`. This keeps the clipboard small and makes multi-image copy
+trivial (just a list of paths).
+
+Copy writes a `ClipboardItem`:
+| Flavor | Carries | Used by |
+|---|---|---|
+| `text/html` | Studio JSON: `{kind:"image", srcAbs:"/…/ProjectA/notes/n.png", caption, theme, span, w, h}` (array for multiple notes) | Studio paste |
+| `text/plain` | caption(s) — degraded form | external text paste |
+| `image/png` *(optional, single image only)* | raw image bytes (HEIC → png via `heic_preview`) | external image editors |
+
+`srcAbs` is the **absolute** source path (project-relative `src` is meaningless
+elsewhere). For a `media/` or `notes/` file, resolve it against the source
+project root at copy time.
+
+**Paste outcomes:**
+- **Studio, same project** → reuse the source file in place (no copy).
+- **Studio, different project** (primary) → copy each `srcAbs` file into the
+  dest's `notes/<newId>.<ext>`, rewrite `src`, restore caption/theme/span. Works
+  for any number of image notes.
+- **External app** → caption as text, or (single image) the raw `image/png`.
+
+**Caveat:** path-based paste relies on the source files still existing at
+`srcAbs`. True for the normal copy-A-then-paste-B flow; it fails cleanly if the
+source project was moved/deleted between copy and paste.
+
+**Why not embed bytes:** the clipboard holds only one `image/*` flavor, so
+byte-embedding would force base64-in-JSON for multi-image copies. Paths avoid
+that entirely. External raw-image paste is a single-image convenience only —
+`Shift+Mod+c` in Media (§7.1) is the dedicated "real image on clipboard" path.
+
+Captions always travel — in the JSON (Studio) and as `text/plain` (external).
 
 ---
 
@@ -470,26 +505,20 @@ Lightweight, convention-file based — no metadata store, no `list_projects` cha
 - **Setting:** select a project, then `Mod+v` with a clipboard image → new Rust
   command `set_project_icon(project_path)` writes `.studio-icon.png` and repaints
   the card. No-op if no clipboard image / no single project selected.
+- **Non-square images:** center-crop to square in CSS (`object-fit: cover`); the
+  full image is stored, the card just crops the display.
+- **Reset/remove:** deferred (no action scoped yet).
 
 ---
 
 ## 11. Open items
 
-Genuinely undecided, plus implementation risks to verify.
+All design decisions are settled and folded into the sections above. What
+remains is implementation risk to verify during the build:
 
-**Decisions still open**
-1. Media `Shift+Mod+v` = force-import clipboard image? (`Mod+v` is shadowed by
-   adjustments-paste while `copiedEdits` is held.) (§7.1)
-2. Confirm external copy of an image note = raw image on clipboard (not a file
-   reference). (§9.5)
-3. Image-note caption — show/edit UI now, or schema-only for later? (§9)
-4. Image-note filename in `notes/` — `<noteId>.<ext>` (recommended: collision-free,
-   trivial orphan cleanup) vs original name. (§9.1)
-5. Media sort-toggle — which sorts (date / name / …) and the default? (§8.2)
-6. Project icon: a reset/remove action to delete `.studio-icon.png`? (§10)
-7. Project icon: non-square images — center-crop to square on set, or letterbox
-   in the card? (§10)
-
-**Implementation risks to verify (not decisions)**
-- WKWebView async Clipboard API: `write` with `image/png`, and `read` of
-  `text/html`. Rust fallback for whichever direction fails. (§7.1, §7.3)
+- **WKWebView async Clipboard API:** confirm `write` with `image/png` and `read`
+  of `text/html` work in the Tauri webview (history of `readText()` being
+  finicky → the `pbpaste` workaround). Add a Rust command for whichever
+  direction fails; the other stays in JS. (§7.1, §7.3)
+- **Project-icon reset** (delete `.studio-icon.png`): deferred to later, not
+  scoped now.
