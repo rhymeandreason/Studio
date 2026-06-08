@@ -111,8 +111,10 @@ Notes has three selection scopes that are currently independent globals:
 document.addEventListener("keydown", (e) => {
   if (anyModalOpen()) { modalKeymap(e); return; }      // modals win
   if (isEditableTarget(e.target)) return;              // typing → let it through
-  const map = panelKeymaps[activePanel];
-  const handler = map?.[keyName(e)];
+  const key = keyName(e);
+  // Panel map first, then global fallback. This is how Mod+n means "new note"
+  // in Notes but "new project" everywhere else.
+  const handler = panelKeymaps[activePanel]?.[key] ?? globalKeymap[key];
   if (handler) { e.preventDefault(); handler(e); }
 });
 ```
@@ -121,11 +123,16 @@ document.addEventListener("keydown", (e) => {
   `selectTab()` and by entering/leaving the overview.
 - `isEditableTarget(el)`: INPUT / TEXTAREA / SELECT / contentEditable. The single
   source of truth (replaces the duplicated checks).
-- `anyModalOpen()`: generate / extend / lightbox / new-project modal.
-  **[DECIDED: lightbox is Media's own mode. Escape key closes]**
+- `anyModalOpen()`: generate / extend / new-project modal. (Lightbox is **not**
+  a modal — it's Media's own mode; see 4.3.)
 - `keyName(e)`: normalizes to strings like `"Delete"`, `"Enter"`, `"Escape"`,
   `"ArrowLeft"`, `"Mod+c"`, `"Mod+v"`, `"Shift+ArrowDown"`. `Mod` = Cmd on mac,
-  Ctrl elsewhere.
+  Ctrl elsewhere. **`Space` normalizes to `Enter`** (so every panel's Enter
+  handler also fires on Space). Space/Enter in a field is gated out by
+  `isEditableTarget`.
+- **Resolution order:** panel keymap → global keymap. There is no separate
+  "checked before" global tier; global is the *fallback*, so a panel can always
+  override a global key.
 
 ### 4.2 Keymap registration
 
@@ -145,13 +152,15 @@ panelKeymaps.notes = {
 
 Fill in / correct these — this is the heart of the spec.
 
-**Global (any panel, checked before panel maps):** **[DECIDED: global key combos add later for project/window browsing]**
+**Global (fallback — fires only if the active panel didn't claim the key):**
+More combos for project/window browsing to be added later.
 | Key | Action |
 |---|---|
-| `Mod+n` | New project. New text note in Notes. **[DECIDED: yes]** |
+| `Mod+n` | New project. (In Notes, the panel keymap overrides this to "new text note".) |
 | `Escape` | clear selection in the active panel (fallback) |
 
-**[DECIDED: add 'Space' does same as 'Enter' for everything]**
+> `Space` is normalized to `Enter` everywhere (see 4.1).
+
 **Projects**
 | Key | Action |
 |---|---|
@@ -183,8 +192,8 @@ Fill in / correct these — this is the heart of the spec.
 | Key | Action |
 |---|---|
 | `Delete` / `Backspace` | delete selected card(s), or selected table col/row |
-| `ArrowLeft/Right` | reorder selected card |
-| `ArrowUp/Down` | **[DECIDED: keep removed]** |
+| `ArrowLeft/Right` | reorder selected card — **only when exactly one card is selected** (multi-select reorder is **[DECIDE: disable, or move the whole block keeping order?]**) |
+| `ArrowUp/Down` | none (kept removed) |
 | `Escape` | clear card / table selection |
 | `Mod+c` | copy note **[DECIDED: new, copy/paste notes should preserve type of note inside studio, allow copy/paste between projects. Outside of studio, it should paste as text, TSV, or bulleted list]** |
 | `Mod+v` | paste into notes (existing pasteIntoNotes) **[DECIDED: keep]** |
@@ -241,3 +250,153 @@ While a modal is open, only the modal's keys fire (everything else swallowed):
 9. Delete confirm dialog for projects - yes
 10. Post-delete selection — clear
 11. Selection on tab switch — preserve
+
+---
+
+## 8. Copy / Paste
+
+### 8.0 Constraint (current reality)
+
+There is **no Tauri clipboard plugin** today. Clipboard is:
+- **Text:** `navigator.clipboard.readText/writeText` (webview) + macOS `pbpaste`
+  via the `read_clipboard_text` Rust command.
+- **Image:** `paste_image` Rust command (macOS shell) reads a clipboard image
+  into a project's `media/`.
+
+So the system clipboard, as wired today, carries **plain text or an image** —
+no rich/HTML flavor, macOS-only. Anything richer needs a new mechanism (8.3).
+
+### 8.1 Model
+
+"Copy" / "Paste" act on the **active panel's selection**. Each panel defines
+`copy()` and `paste()`; the dispatcher routes `Mod+c` / `Mod+v` to them.
+
+| Panel | `Mod+c` copies | `Mod+v` pastes |
+|---|---|---|
+| Media | image **adjustments** (in-mem `copiedEdits`) — from the editor-active image or the selected tile | **adjustments → selected tiles** (priority); only if there are no copied adjustments does it fall back to importing a clipboard image |
+| Notes | selected note(s) — Studio-native (8.2) | clipboard → new note(s) (8.2) |
+| Projects | **[DECIDED:nothing]** | — |
+| Workspace | **[DECIDED: copy selected field value]** | — |
+
+**Media is adjustments-first (decided — keep current behavior):**
+- `Mod+c` always copies the image **adjustments** into the in-memory
+  `copiedEdits` (never the image file or path).
+- `Mod+v` precedence: if `copiedEdits` exists → paste adjustments onto the
+  selected tiles. Only when there are no copied adjustments does `Mod+v` fall
+  back to importing a clipboard image into the project.
+
+### 8.2 Notes copy/paste — the rich case
+
+Decided behavior — **copy writes two payloads; only the Studio one has styling:**
+- **Within Studio (incl. cross-project, cross-window):** the Studio-native
+  payload preserves note **type** (text / checklist / table), content, **and
+  styling — theme, title/body fonts, span.** Pasting in Studio recreates the
+  card exactly, theme included.
+- **Outside Studio:** the system clipboard carries only the degraded **plain
+  content — no theme, no fonts, no span.** So external apps never see styling;
+  Studio does.
+
+This is the whole reason for the two-representation mechanism in 8.3: the rich
+flavor (Studio) carries the theme, the plain flavor (system clipboard) does not.
+
+- **Outside Studio**, degrade to plain content:
+  - text note → its body text
+  - checklist → bulleted list, one item per line **[DECIDE: include checkbox
+    state, e.g. `- [x]` / `- [ ]`, or plain `• item`?]**
+  - table → **TSV** (header row + rows, tab-separated)
+  - multiple notes → concatenated, blank line between.
+
+Paste **into** Notes:
+- If the clipboard holds a Studio-native payload (8.3) → reconstruct the
+  note(s) with type preserved.
+- Else parse the system text (existing `pasteIntoNotes` logic):
+  - contains tabs → table note
+  - multiple lines → **[DECIDE: checklist, or text note?]** (today: text)
+  - single line / plain → text note
+  - clipboard image → **[DECIDE: import to media (today), or make an image
+    note?]**
+
+### 8.3 How to carry the Studio-native payload — **[DECIDE between A and B]**
+
+**Option A — Sidecar "Studio clipboard" file.**
+On copy: write rich note JSON to a known app-cache file via a Rust command
+*and* write the degraded text to the system clipboard. On paste: read the
+sidecar file; if its stored degraded-text still equals the current system
+clipboard text, use the rich payload (type preserved); else fall back to
+parsing system text.
+- ✓ Works cross-window & cross-project (shared file). ✓ No new plugin.
+  External apps get the degraded text.
+- ✗ Relies on the "system text still matches" heuristic to detect staleness.
+
+**Option B — Real clipboard with an HTML flavor.**
+Add a clipboard plugin/crate that writes `text/html` + `text/plain`. Embed the
+note JSON in the HTML (data attribute or a typed `<script>` blob); plain text is
+the degraded form. Studio reads the HTML flavor; external apps get HTML rich
+text or plain text.
+- ✓ Standard, no staleness heuristic. ✗ New dependency + capability; must
+  confirm the WKWebView/Tauri path actually round-trips an HTML flavor.
+
+> Recommendation: **A** for now (no new deps, satisfies all the decided
+> requirements), revisit **B** if/when we want true rich-text interop.
+
+---
+
+## 9. Drag & Drop
+
+### 9.0 Constraint (current reality)
+
+Tauri's native file-drop (`dragDropEnabled: true`, default) **swallows HTML5
+`dragover`/`drop`** in the webview. Consequences, now codified as rules:
+- **External file drops** use the Tauri `drag-enter/over/leave/drop` events.
+- **Internal reordering** must use **pointer events** (as Notes card reorder
+  already does) — never HTML5 DnD.
+- Any internal pointer-drag sets a flag that **suppresses the external file-drop
+  overlay** (today: `draggingNoteId`; generalize to `internalDragActive`).
+
+### 9.1 External file drop (OS files → app)
+
+| Drop onto | Behavior |
+|---|---|
+| Media panel | import image files into project `media/` (today: works, switches to Media tab) |
+| Notes panel | **[DECIDE: create image note? import to media + reference? ignore?]** |
+| Workspace | **[DECIDE: set the relevant path field from a dropped file/folder? ignore?]** |
+| Projects overview | **[DECIDE: dropped folder → open/add as project? ignore?]** |
+| Non-image files anywhere | **[DECIDE: ignore, or import as generic media via QuickLook thumbs?]** |
+
+Overlay: today a single global dropzone overlay. **[DECIDE: make it
+context-aware — highlight only the panel that will receive the drop, with a
+per-target label like "Add to Media" / "New note"?]**
+
+### 9.2 Internal drag (within the app, pointer-based)
+
+| Panel | Internal drag |
+|---|---|
+| Notes | reorder cards (done; horizontal drop indicator between column items) |
+| Media | **[DECIDE: manual reorder, or stay sorted (date/name) with no manual order?]** |
+| Projects | **[DECIDE: reorder tiles, or fixed order?]** |
+| Cross-panel | **[DECIDE/Future: drag a media tile into a note to embed an image?]** |
+
+### 9.3 Drag + selection interplay — **[DECIDE]**
+
+When a drag starts on an item:
+- If the item **is** in the current selection → drag the **whole selection**.
+- If the item is **not** selected → `sel.set(item)` first, then drag just it.
+
+Confirm this is the rule (it's the platform-standard behavior).
+
+### 9.4 Open decisions (Copy/Paste + DnD)
+
+1. Media copy/paste — **DECIDED: adjustments-first (keep current).** `Mod+c`
+   copies adjustments; `Mod+v` pastes adjustments to selection, falling back to
+   clipboard-image import only when no adjustments are copied.
+2. Notes copy — **DECIDED: Studio-native payload includes theme/fonts/span;
+   the system-clipboard (external) form is plain content with no styling.**
+3. Checklist external form — `- [ ]` checkboxes or plain bullets?
+4. Paste multi-line text into Notes — checklist or text note?
+5. Paste image into Notes — import to media, or image note?
+6. Studio-native payload mechanism — Option A (sidecar file) or B (HTML flavor)?
+7. File drop targets — Notes / Workspace / Projects behaviors (9.1)?
+8. Non-image file drops — ignore or import as generic media?
+9. Context-aware drop overlay — yes/no?
+10. Media/Projects internal reorder — allow or not?
+11. Drag+selection rule (9.3) — confirm.
