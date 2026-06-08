@@ -3,6 +3,8 @@
 // flow. The tray (Rust side) owns discovery/activation; commands handle the
 // filesystem work.
 
+import { NOTE_THEMES, NOTE_FONTS } from "./themes.js";
+
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
@@ -3126,6 +3128,22 @@ function newNote(kind) {
   scheduleNotesSave();
 }
 
+function setCardVar(elm, prop, val) {
+  if (val) elm.style.setProperty(prop, val);
+  else elm.style.removeProperty(prop);
+}
+
+// Translate a note's theme + font choices into scoped CSS variables on its card.
+function applyNoteStyle(card, note) {
+  const theme = NOTE_THEMES.find((t) => t.id === note.theme) || NOTE_THEMES[0];
+  setCardVar(card, "--note-bg", theme.bg);
+  setCardVar(card, "--note-title-color", theme.titleColor);
+  setCardVar(card, "--note-body-color", theme.bodyColor);
+  setCardVar(card, "--note-title-font", note.titleFont);
+  // Overrides the list-level --notes-font for this card only.
+  setCardVar(card, "--notes-font", note.bodyFont);
+}
+
 function noteHeader(note) {
   const head = el("div", "notecard__head");
   const title = el("input", "notecard__title", {
@@ -3555,6 +3573,7 @@ function renderNotes() {
     card.append(noteFooter(note));
     card.dataset.noteId = note.id;
     card.style.gridColumn = `span ${note.span || 1}`;
+    applyNoteStyle(card, note);
     if (note.id === selectedNoteId) card.classList.add("is-selected");
 
     // Drag-to-reorder via pointer events (Tauri's native file-drop swallows
@@ -3566,6 +3585,7 @@ function renderNotes() {
 
     card.addEventListener("click", (e) => {
       if (Date.now() - lastNoteDragEnd < 300) return; // ignore click after drag
+      if (e.target.closest("select, button, input, textarea, a")) return;
       const rect = card.getBoundingClientRect();
       if (e.clientY - rect.top <= 8) {
         selectedNoteId = selectedNoteId === note.id ? null : note.id;
@@ -3575,10 +3595,13 @@ function renderNotes() {
             c.dataset.noteId === selectedNoteId,
           );
         });
+        updateNotesChrome();
       }
     });
     listEl.append(card);
   }
+
+  updateNotesChrome();
 
   // Bento packing: card heights aren't known until textareas auto-size, so
   // measure on the next frames and translate each card's height into a
@@ -3591,9 +3614,39 @@ let dropTargetIndex = null;
 let noteDrag = null; // { note, card, startX, startY, active }
 let lastNoteDragEnd = 0;
 
+function selectedNote() {
+  return notesData.notes.find((n) => n.id === selectedNoteId) || null;
+}
+
+// Show the per-card style controls in the toolbar when a card is selected and
+// sync their values to that card.
+function updateNotesChrome() {
+  const group = document.getElementById("notes-card-style");
+  if (!group) return;
+  const note = selectedNote();
+  group.hidden = !note;
+  if (!note) return;
+  const theme = document.getElementById("note-theme-select");
+  const titleFont = document.getElementById("note-titlefont-select");
+  const bodyFont = document.getElementById("note-bodyfont-select");
+  if (theme) theme.value = note.theme || "default";
+  if (titleFont) titleFont.value = note.titleFont || "";
+  if (bodyFont) bodyFont.value = note.bodyFont || "";
+}
+
+function setSelectedNoteStyle(key, value) {
+  const note = selectedNote();
+  if (!note) return;
+  note[key] = value;
+  const card = document.querySelector(`.notecard[data-note-id="${note.id}"]`);
+  if (card) applyNoteStyle(card, note);
+  scheduleNotesSave();
+}
+
 function onNotePointerDown(e, note, card) {
   if (e.button !== 0) return;
-  if (e.target.closest("textarea, input, button, a, [contenteditable]")) return;
+  if (e.target.closest("textarea, input, select, button, a, [contenteditable]"))
+    return;
   noteDrag = { note, card, startX: e.clientX, startY: e.clientY, active: false };
   window.addEventListener("pointermove", onNotePointerMove);
   window.addEventListener("pointerup", onNotePointerUp);
@@ -3756,12 +3809,35 @@ function initNotes() {
     if (!e.target.closest("#notes-font-wrap")) fontMenu.hidden = true;
   });
 
+  // Per-card style controls (toolbar) target the currently selected card.
+  const themeSel = document.getElementById("note-theme-select");
+  const titleFontSel = document.getElementById("note-titlefont-select");
+  const bodyFontSel = document.getElementById("note-bodyfont-select");
+  NOTE_THEMES.forEach((t) => themeSel.append(new Option(t.name, t.id)));
+  [titleFontSel, bodyFontSel].forEach((sel) =>
+    NOTE_FONTS.forEach((f) => sel.append(new Option(f.name, f.value))),
+  );
+  themeSel.addEventListener("change", () =>
+    setSelectedNoteStyle("theme", themeSel.value),
+  );
+  titleFontSel.addEventListener("change", () =>
+    setSelectedNoteStyle("titleFont", titleFontSel.value),
+  );
+  bodyFontSel.addEventListener("change", () =>
+    setSelectedNoteStyle("bodyFont", bodyFontSel.value),
+  );
+
   document.addEventListener("click", (e) => {
-    if (selectedNoteId && !e.target.closest(".notecard")) {
+    if (
+      selectedNoteId &&
+      !e.target.closest(".notecard") &&
+      !e.target.closest("#notes-card-style")
+    ) {
       selectedNoteId = null;
       document
         .querySelectorAll(".notecard.is-selected")
         .forEach((c) => c.classList.remove("is-selected"));
+      updateNotesChrome();
     }
   });
 
