@@ -56,11 +56,11 @@ API:
 | `add(id)` / `delete(id)` | multi-mode primitives |
 | `toggle(id, additive)` | see rules below |
 | `clear()` | empty it |
-| `anchor` | last single-set id, for range-select **[DECIDE: do we want shift-range?]** |
+| `anchor` | last single-set id, for range-select **[DECIDED: yes shift-range]** |
 
 `toggle(id, additive)` rules:
 - **single mode:** ignores `additive`; clicking the selected item again →
-  **[DECIDE: deselect, or no-op/keep selected?]** (Notes currently deselects.)
+  **[DECIDED: deselect]** (Notes currently deselects.)
 - **multi mode, `additive=false`:** replace selection with `id`.
 - **multi mode, `additive=true`** (Cmd/Ctrl-click): flip `id` in/out of the set.
 
@@ -73,9 +73,9 @@ API:
 |---|---|---|
 | Projects | project path | multi |
 | Media | media path | multi |
-| Notes (cards) | note id | **[DECIDE: single or multi?]** today single |
+| Notes (cards) | note id | **[DECIDED: multi]** today single |
 | Notes (table col/row) | see 3.3 | single, separate |
-| Workspace | row index / field id | **[DECIDE: is row selection even needed here?]** |
+| Workspace | row index / field id | **[DECIDED: same selection behavior as other panels]** |
 
 ### 3.3 Notes' nested selection (the tricky one)
 
@@ -85,8 +85,7 @@ Notes has three selection scopes that are currently independent globals:
 - One **card** Selection at the panel level.
 - Table col/row selection is a **sub-selection local to the focused table
   note**, mutually exclusive with each other.
-- Selecting a card clears any table sub-selection and vice versa. **[DECIDE:
-  confirm this mutual-exclusion is what we want.]**
+- Selecting a card clears any table sub-selection and vice versa. **[DECIDED: Yes.]**
 
 ### 3.4 Click semantics (must be consistent)
 
@@ -94,13 +93,13 @@ Notes has three selection scopes that are currently independent globals:
 |---|---|
 | Click item | `sel.set(id)` (replace) |
 | Cmd/Ctrl-click | `sel.toggle(id, additive=true)` |
-| Shift-click | range select **[DECIDE: support? Media/Projects grids only?]** |
+| Shift-click | range select **[DECIDED: yes for all]** |
 | Click empty space in panel | `sel.clear()` |
-| Double-click | panel "open/activate" action (Projects → open project; Media → open lightbox; Notes → **[DECIDE: edit? nothing?]**) |
+| Double-click | panel "open/activate" action (Projects → open project; Media → open lightbox; Notes → **[DECIDED: open in Modal]**, Workspace → launch item;) **[DECIDED: new]**|
 
 > **Projects behavior change:** today single-click *opens* a project. To match
 > Media/Notes, single-click would *select* and double-click (or Enter) opens.
-> **[DECIDE: accept this change, or keep single-click-opens + add keyboard only?]**
+> **[DECIDED: accept this change]**
 
 ---
 
@@ -123,7 +122,7 @@ document.addEventListener("keydown", (e) => {
 - `isEditableTarget(el)`: INPUT / TEXTAREA / SELECT / contentEditable. The single
   source of truth (replaces the duplicated checks).
 - `anyModalOpen()`: generate / extend / lightbox / new-project modal.
-  **[DECIDE: should the lightbox count as a modal, or as Media's own mode?]**
+  **[DECIDED: lightbox is Media's own mode. Escape key closes]**
 - `keyName(e)`: normalizes to strings like `"Delete"`, `"Enter"`, `"Escape"`,
   `"ArrowLeft"`, `"Mod+c"`, `"Mod+v"`, `"Shift+ArrowDown"`. `Mod` = Cmd on mac,
   Ctrl elsewhere.
@@ -146,25 +145,29 @@ panelKeymaps.notes = {
 
 Fill in / correct these — this is the heart of the spec.
 
-**Global (any panel, checked before panel maps):** **[DECIDE: any truly global keys?]**
+**Global (any panel, checked before panel maps):** **[DECIDED: global key combos add later for project/window browsing]**
 | Key | Action |
 |---|---|
-| `Mod+n` | New project? New note in Notes? **[DECIDE]** |
+| `Mod+n` | New project. New text note in Notes. **[DECIDED: yes]** |
 | `Escape` | clear selection in the active panel (fallback) |
 
+**[DECIDED: add 'Space' does same as 'Enter' for everything]**
 **Projects**
 | Key | Action |
 |---|---|
 | `Enter` | open selected project (single) |
-| `Delete` / `Backspace` | trash selected project(s) **[DECIDE: confirm dialog?]** |
+| `Delete` / `Backspace` | trash selected project(s) **[DECIDED: add confirm dialog]** |
 | `ArrowLeft/Right/Up/Down` | move selection across grid |
-| `Mod+a` | select all **[DECIDE]** |
+| `Mod+a` | select all **[DECIDED: no]** |
 | `Escape` | clear selection |
 
 **Workspace**
 | Key | Action |
 |---|---|
-| ... | **[DECIDE: does Workspace need grid keyboard at all, or stay form-only?]** |
+| `Enter` | Launch app or open link (single) |
+| `Delete` / `Backspace` | delete selected item(s) |
+| `ArrowLeft/Right/Up/Down` | move selection across grid | **[DECIDED: add grid keyboard behavior]** |
+| `Escape` | clear selection |
 
 **Media**
 | Key | Action |
@@ -172,18 +175,19 @@ Fill in / correct these — this is the heart of the spec.
 | `Delete` / `Backspace` | trash selected media |
 | `Mod+c` | copy adjustments (when editor active) |
 | `Mod+v` | paste adjustments to selection / paste clipboard image |
-| `Enter` | open lightbox for selected **[DECIDE: currently click does this]** |
-| `ArrowLeft/Right/Up/Down` | move selection across grid **[DECIDE: new]** |
+| `Enter` | open lightbox for selected **[DECIDED: same as double click]** |
+| `ArrowLeft/Right/Up/Down` | move selection across grid **[DECIDED: yes]** |
 | `Escape` | close lightbox → else clear selection |
 
 **Notes**
 | Key | Action |
 |---|---|
-| `Delete` / `Backspace` | delete selected card, or selected table col/row |
+| `Delete` / `Backspace` | delete selected card(s), or selected table col/row |
 | `ArrowLeft/Right` | reorder selected card |
-| `ArrowUp/Down` | **[DECIDE: removed earlier — keep removed?]** |
+| `ArrowUp/Down` | **[DECIDED: keep removed]** |
 | `Escape` | clear card / table selection |
-| `Mod+v` | paste into notes (existing pasteIntoNotes) **[DECIDE: keep here]** |
+| `Mod+c` | copy note **[DECIDED: new, copy/paste notes should preserve type of note inside studio, allow copy/paste between projects. Outside of studio, it should paste as text, TSV, or bulleted list]** |
+| `Mod+v` | paste into notes (existing pasteIntoNotes) **[DECIDED: keep]** |
 
 ### 4.4 Modal keymap
 
@@ -192,6 +196,7 @@ While a modal is open, only the modal's keys fire (everything else swallowed):
 |---|---|
 | `Escape` | close modal |
 | `Enter` | confirm (new-project create, etc.) |
+| `ArrowLeft/Right` | browse to next item **[DECIDED: new]**| 
 
 ---
 
@@ -202,10 +207,9 @@ While a modal is open, only the modal's keys fire (everything else swallowed):
   rename, Esc to cancel) are registered on the field, not the dispatcher.
 - **Selection survives re-render:** panels rebuild DOM often (`renderNotes`,
   `loadMedia`). Selection is keyed by stable id, repaint reads `sel.has(id)`.
-- **Deleting selected items:** after delete, selection should **[DECIDE: clear,
-  or move to next item?]**
+- **Deleting selected items:** after delete, selection should **[DECIDED: clear]**
 - **Switching tabs/windows:** `activePanel` changes; selection per panel is
-  **[DECIDE: preserved or cleared on tab switch?]**
+  **[DECIDED: preserved]**
 - **Click-after-drag:** Notes already suppresses the click that follows a drag
   (300ms guard) — keep this in the click→select path.
 
@@ -224,17 +228,16 @@ While a modal is open, only the modal's keys fire (everything else swallowed):
 
 ---
 
-## 7. Open decisions summary (collected for quick editing)
+## 7. Open decisions summary (collected for quick editing) **[DECIDED]**
 
-1. Shift-range select — support it, and where (grids only)?
-2. Single-mode re-click — deselect or keep?
-3. Notes cards — single or multi select?
-4. Workspace — any grid selection/keyboard, or form-only?
-5. Projects — accept single-click-selects (double/Enter opens), or keep
-   single-click-opens?
-6. Lightbox — modal or Media sub-mode?
-7. Truly global shortcuts (Mod+n, Mod+a, etc.)?
-8. Notes ArrowUp/Down — keep removed?
-9. Delete confirm dialog for projects?
-10. Post-delete selection — clear or advance to next?
-11. Selection on tab switch — preserve or clear?
+1. Shift-range select — support it, grids only 
+2. Single-mode re-click — deselect 
+3. Notes cards — multi select
+4. Workspace — grid selection/keyboard added
+5. Projects — single-click-selects (double/Enter opens)
+6. Lightbox — Media sub-mode (because it also opens Modals)
+7. Truly global shortcuts - see above
+8. Notes ArrowUp/Down — keep removed
+9. Delete confirm dialog for projects - yes
+10. Post-delete selection — clear
+11. Selection on tab switch — preserve
