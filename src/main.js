@@ -1813,13 +1813,34 @@ async function closeLightbox() {
 async function initDragDrop() {
   const { listen } = window.__TAURI__.event;
   const zone = document.getElementById("dropzone");
-  const show = () => {
-    // Ignore internal pointer-drags (reordering note cards or media tiles).
-    if (draggingNoteId || mediaDragActive) return;
-    if (activeProject) zone.hidden = false;
-  };
-  await listen("tauri://drag-enter", show);
-  await listen("tauri://drag-over", show);
+  const IMG_RE = /\.(png|jpe?g|gif|webp|heic|heif|tiff?|bmp)$/i;
+  // Heuristic preview of what a drop will do (the actual handling on drop uses
+  // Rust is_dir for accuracy). Extensionless paths are treated as folders.
+  function dropPreview(paths) {
+    if (!paths.length)
+      return { icon: "add_photo_alternate", label: "Drop to add to this project" };
+    const hasFolder = paths.some((p) => !/\.[^/]+$/.test(p.split("/").pop()));
+    if (hasFolder)
+      return { icon: "create_new_folder", label: "Add folder to Workspace" };
+    if (paths.every((p) => IMG_RE.test(p)))
+      return { icon: "add_photo_alternate", label: "Move images into Project" };
+    return { icon: "note_add", label: "Move files into the project" };
+  }
+
+  const blocked = () => draggingNoteId || mediaDragActive || !activeProject;
+  // Only drag-enter carries paths in Tauri v2 (drag-over is position-only), so
+  // set the label on enter and just keep the overlay visible on over.
+  await listen("tauri://drag-enter", (e) => {
+    if (blocked()) return;
+    const preview = dropPreview((e.payload && e.payload.paths) || []);
+    document.getElementById("dropzone-icon").textContent = preview.icon;
+    document.getElementById("dropzone-label").textContent = preview.label;
+    zone.hidden = false;
+  });
+  await listen("tauri://drag-over", () => {
+    if (blocked()) return;
+    zone.hidden = false;
+  });
   await listen("tauri://drag-leave", () => (zone.hidden = true));
   await listen("tauri://drag-drop", async (e) => {
     zone.hidden = true;
