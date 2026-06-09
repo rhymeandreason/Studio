@@ -7,9 +7,34 @@ lightweight **notes**.
 
 ## Stack
 - **Tauri v2** (Rust backend) + **vanilla JS/HTML/CSS** frontend (no bundler).
-- Frontend: `src/` (`index.html`, `main.js`, `styles.css`); vendored libs in
-  `src/vendor/` (`marked`). Design = warm "Runes" theme, Futura + Material Symbols.
+- Frontend: `src/` ES modules (loaded via `<script type="module" src="/main.js">`),
+  `index.html`, `styles.css`; vendored libs in `src/vendor/` (`marked`). Design =
+  warm "Runes" theme, Futura + Material Symbols.
 - Backend: `src-tauri/src/lib.rs` (all `#[tauri::command]`s + the tray).
+
+### Frontend modules (`src/`)
+The frontend is being split out of the original monolithic `main.js`:
+- `main.js` — app shell: boot, `render()`/`selectTab()`, notes, projects,
+  workspace, modals, the keyboard dispatcher install. (~2150 lines)
+- `media.js` — the **whole media subsystem**: grid, tiles, selection, sort +
+  drag-reorder, the image editor (tonal/crop/geometry, WebGL), lightbox,
+  export, and the tools (remove-bg, extend, generate). (~2600 lines)
+- `state.js` — `export const state = {}`: the mutable globals shared **across
+  module boundaries** (`activePanel`, `activeProject`, `activeItem`,
+  `notesData`, `notesProjectPath`, `draggingNoteId`, `mediaDragActive`).
+  Feature-local mutable state stays as module-locals in its own file.
+- `selection.js` — `createSelection({mode, onChange})` primitive (see below).
+- `keymap.js` — `keyName` normalization, `isEditableTarget`, the
+  `installKeyDispatcher`, and the `panelKeymaps`/`globalKeymap` registry.
+- `dom.js` (`el`/`mi`/`genId`/`clamp`), `imageutil.js`, `gl.js` (WebGL tonal
+  pipeline), `themes.js` (note card themes/fonts).
+- `main.js` and `media.js` **import each other** (circular). It's eval-safe
+  because only hoisted function declarations cross at module-eval time; no
+  cross-module calls run at the top level. When adding a cross-module call,
+  export it and import it (don't reach for a bare global) — and if it's a
+  reassigned `let` used on both sides, move it onto `state`.
+- Status/plan for the remaining split (notes/projects/workspace) is in
+  `BACKLOG.md` → "Full file-split refactor".
 - Native Swift helpers compiled by `src-tauri/build.rs`, called as subprocesses:
   `bgremove` (Vision background removal), `qlthumb` (QuickLook thumbnails),
   `pbimage` (clipboard image). WebP encoded via `webp` crate; HEIC via `sips`.
@@ -30,13 +55,58 @@ app — no Dock icon; click the tray icon. Test projects live in `~/Projects/`.
 
 **Layout:** `body` is a flex row with `.app-left` (flex: 1 1 auto, full app) and `.app-right` (flex: 0 0 320px, editor column). Window width is controlled via `invoke("set_window_width", { width })` — CSS layout alone doesn't resize the native window.
 
-**Notes:** Stored in `notes.json` per project. `notesData` is the in-memory store. Font/size preference stored as `notesData.font` / `notesData.fontSize`, applied via CSS custom properties `--notes-font` / `--notes-font-size` on `#notes-list`.
+**Notes:** Stored in `notes.json` per project; `state.notesData` is the in-memory
+store, `renderNotes()` fully re-renders the bento grid from it. Note kinds:
+`text` / `checklist` / `table` / `image`. Image notes store a project-relative
+`src` (`notes/<id>.<ext>` for note-owned assets, or `media/…` referenced in
+place) — never inline base64. Per-note styling (theme/fonts/span) is applied as
+scoped CSS variables on the card; the project-wide font preference is
+`notesData.font`/`fontSize` via `--notes-font`/`--notes-font-size` on
+`#notes-list`. The grid is a **bento layout** — `layoutBento()` measures card
+heights and sets row-spans, so re-pack on any height change (and after a panel
+becomes visible — hidden elements measure as 0).
 
-**Workspace:** Stored in `workspace.json` per project via `Workspace` Rust struct. The `pinnedTab` field (renamed from `pinned_tab` via serde) controls which tab opens on project load. `readList()` queries `textarea` elements (not `input`).
+**Workspace:** Stored in `workspace.json` per project via `Workspace` Rust struct.
+The `pinnedTab` field (serde-renamed from `pinned_tab`) controls which tab opens
+on project load. List types live in `LIST_META` (repo/figma/apps/files/folders/
+urls); `readList()` queries `textarea` elements (not `input`).
 
-**Key globals:** `activeProject`, `notesData`, `selectedNoteId`, `wsPinnedTab`, `wsEditor`, `wsClaude`.
+**Interaction model (interaction-spec):** All four panels (Projects, Workspace,
+Media, Notes) share one selection + keyboard model. See
+`docs/interaction-spec.md` for the full design.
+- **Selection:** each panel owns a `createSelection({mode, onChange})` instance
+  (`notesSelection`, `mediaSelection`, `projectsSelection`, `workspaceSelection`).
+  Multi-select with click / Cmd-click (toggle) / Shift-click (range). The panel
+  repaints `is-selected` from the selection's `onChange`. (There is **no**
+  `selectedNoteId` anymore.)
+- **Keyboard:** one `document` keydown dispatcher (`installKeyDispatcher`) gates
+  once (`isEditableTarget`, `anyModalOpen`) then routes the normalized key to
+  `panelKeymaps[state.activePanel]` → `globalKeymap`. Register a panel's keys via
+  `panelKeymaps.<panel> = {...}`. `state.activePanel` is set by `selectTab()`.
+- **Click-off deselect:** shared `installOffClickDeselect({panel, keep, ...})`
+  — clears on clicks in the panel or `#project-header`, but never on `#tabs` (so
+  selection survives tab switches). New panels should use it.
+- **Modals** are detected by the `.modal` class; Escape closes the topmost.
 
-**Patterns:** All Tauri commands use `invoke()`. Saves are debounced via `scheduleNotesSave()` / `scheduleWorkspaceSave()`. The `el()` helper creates DOM elements. `renderNotes()` fully re-renders the notes grid from `notesData`.
+**Clipboard:** No Tauri clipboard plugin. **Writes** use the async Clipboard API
+(`ClipboardItem`) — keep the write synchronous in the gesture (no `await`
+before it; pass async work as a Promise inside the item). **Reads** go through
+Rust (`pbpaste`/`PBIMAGE_BIN`), never `navigator.clipboard.read()` (it prompts
+per paste in WKWebView). Notes copy/paste carries a Studio-native payload via an
+**app-cache sidecar file** (`set_note_clipboard`/`get_note_clipboard`) keyed to
+the degraded clipboard text — WebKit strips custom HTML on clipboard write, so an
+HTML flavor can't carry it.
+
+**Asset protocol:** images display via `convertFileSrc()`. The scope in
+`tauri.conf.json` (`assetProtocol.scope`) must list paths — note that the glob
+`**` does **not** match leading-dot files, so dotfiles (e.g. `.studio-icon.png`)
+need an explicit scope entry.
+
+**Patterns:** All Tauri commands use `invoke()`. Saves are debounced
+(`scheduleNotesSave()` / `scheduleWorkspaceSave()` / `scheduleMediaMeta`-style).
+Internal drag-reorder uses **pointer events** (Tauri's native file-drop swallows
+HTML5 dragover/drop); set `state.draggingNoteId`/`state.mediaDragActive` during
+an internal drag so the OS file-drop overlay stays suppressed.
 
 ## Conventions
 The human tests each step in the running app before committing. `cargo check` in `src-tauri/` after Rust edits. 

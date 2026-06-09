@@ -37,17 +37,20 @@ export function isEditableTarget(el) {
 }
 
 // Install the global dispatcher. Dependencies are injected so this module stays
+// Shared keymap registry. Each feature module registers its panel's keys
+// (e.g. `panelKeymaps.notes = {...}`); `globalKeymap` is the fallback. Living
+// here lets feature modules register without importing main.js.
+export const panelKeymaps = {};
+export const globalKeymap = {};
+
+// Install the global dispatcher. Dependencies injected so this stays
 // app-agnostic:
 //   getActivePanel() -> "projects" | "workspace" | "media" | "notes"
-//   panelKeymaps     -> { [panel]: { [keyName]: handler } }  (read live)
-//   globalKeymap     -> { [keyName]: handler }               (fallback)
 //   anyModalOpen()   -> bool; when true, only modalKeymap fires
 //   modalKeymap(e)   -> handles keys while a modal is open
 // Returns a teardown function.
 export function installKeyDispatcher({
   getActivePanel,
-  panelKeymaps,
-  globalKeymap = {},
   anyModalOpen,
   modalKeymap,
 }) {
