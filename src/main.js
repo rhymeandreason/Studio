@@ -406,17 +406,7 @@ async function showOverview() {
       path.className = "card__path";
       path.textContent = p.path;
 
-      const trash = document.createElement("button");
-      trash.className = "card__trash";
-      trash.type = "button";
-      trash.title = "Move to Trash";
-      trash.innerHTML = mi("delete");
-      trash.addEventListener("click", (e) => {
-        e.stopPropagation();
-        trashProjects([p.path]);
-      });
-
-      card.append(name, path, trash);
+      card.append(name, path);
       card.addEventListener("pointerdown", (e) =>
         onProjectCardPointerDown(e, p, card),
       );
