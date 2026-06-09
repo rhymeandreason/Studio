@@ -78,3 +78,26 @@ Studio is a thin native surface over your files, so prefer macOS frameworks.
   Image only for the final baked export. Quality upgrade, not a replacement.
 - **AVFoundation video** (`AVAssetImageGenerator` poster frames; trimming). For
   when video editing enters scope — the plan's v0.2 "trim" candidate.
+
+## Interaction layer — remaining (interaction-spec.md)
+Most of the spec is built and committed (selection/keyboard, copy/paste, image
+notes, drag-drop, project icons, activate actions). These are the deferred bits:
+
+- **Overview folder-drop → "add as project."** Dropping a folder on the
+  all-projects overview should add it as a project, referencing it in place.
+  Blocked on a design decision since projects currently must live under
+  `~/Projects` (`scan_projects`): symlink the dropped folder into `~/Projects`,
+  add a project registry (config list of external paths that `scan_projects`
+  also includes), or restrict to folders already under `~/Projects`.
+- **Native multi-file-refs for `Shift+Mod+c`.** Single-image copy (baked PNG
+  bitmap) is done. Multi-select "copy as file references" (Finder-style) needs a
+  native `NSPasteboard` write of file URLs (`objc2-app-kit`), with edited images
+  baked to temp files and unedited referenced in place. For now multi-select
+  copies the first selected image as a bitmap. (interaction-spec §7.1)
+- **Project icon reset.** A key/menu action to remove `.studio-icon.png` and
+  revert to the letter avatar. (interaction-spec §10/§11)
+- **Full file-split refactor (Phase 6 remainder).** dom.js/gl.js/imageutil.js
+  were extracted, but the feature modules (notes/media/projects/workspace) still
+  live in main.js because they reassign shared module-`let` globals, which
+  read-only ES imports forbid. A one-time state-object refactor (`export const
+  state = {}`, mutate `state.activePanel = …`) would unblock splitting them out.
