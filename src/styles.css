@@ -459,6 +459,26 @@ body {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent), var(--shadow-sm);
 }
 
+.card__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    object-fit: cover;
+    margin-bottom: 4px;
+}
+
+.card__icon--letter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-family: var(--serif);
+    font-size: 20px;
+    font-weight: 600;
+    user-select: none;
+}
+
 .card__name {
     font-family: var(--serif);
     font-size: 16px;

@@ -99,22 +99,36 @@ function render(project) {
     loadNotes(project.path);
     loadMedia(project.path);
   } else {
-    header.hidden = true;
-    empty.hidden = false;
-    content.hidden = true;
+    // No active project → show the all-projects overview, never a dead-end
+    // "No project active" screen.
     notesProjectPath = null;
     notesData = { version: 1, notes: [] };
+    showOverview();
   }
 }
 
 // --- All-projects overview -------------------------------------------------
 
 let overviewProjects = []; // last-rendered projects, in display order
+let iconVersion = Date.now(); // cache-bust project icon <img> URLs after a change
 
 const projectsSelection = createSelection({
   mode: "multi",
   onChange: () => repaintProjectsSelection(),
 });
+
+// Mod+v: set the selected project's icon from the clipboard image.
+async function setSelectedProjectIcon() {
+  const sel = projectsSelection.get();
+  if (sel.length !== 1) return;
+  try {
+    await invoke("set_project_icon", { projectPath: sel[0] });
+    iconVersion = Date.now();
+    showOverview();
+  } catch (_) {
+    // No image in clipboard.
+  }
+}
 
 function repaintProjectsSelection() {
   document
@@ -179,6 +193,7 @@ function moveProjectsSelection(dir) {
 
 panelKeymaps.projects = {
   Enter: openSelectedProject,
+  "Mod+v": setSelectedProjectIcon,
   Delete: () => trashProjects(projectsSelection.get()),
   Backspace: () => trashProjects(projectsSelection.get()),
   ArrowLeft: () => moveProjectsSelection("left"),
@@ -207,6 +222,21 @@ async function showOverview() {
       card.className = "card";
       card.dataset.path = p.path;
       if (projectsSelection.has(p.path)) card.classList.add("is-selected");
+
+      // Icon: the project's .studio-icon.png if present, else a letter avatar.
+      // The img failing to load IS the existence check (no Rust call needed).
+      const icon = document.createElement("img");
+      icon.className = "card__icon";
+      icon.src =
+        window.__TAURI__.core.convertFileSrc(`${p.path}/.studio-icon.png`) +
+        `?v=${iconVersion}`;
+      icon.addEventListener("error", () => {
+        const letter = document.createElement("div");
+        letter.className = "card__icon card__icon--letter";
+        letter.textContent = (p.name[0] || "?").toUpperCase();
+        icon.replaceWith(letter);
+      });
+      card.append(icon);
 
       const name = document.createElement("span");
       name.className = "card__name";

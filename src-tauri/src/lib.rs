@@ -374,10 +374,20 @@ fn walk_media(dir: &Path, out: &mut Vec<MediaItem>) {
         let raw_name = entry.file_name();
         let name = raw_name.to_string_lossy();
         if path.is_dir() {
-            if name == ".git" || name == "node_modules" || name.starts_with('.') {
+            // Skip hidden/vendored dirs and `notes/` (image-note assets live
+            // there and must not appear in the Media tab).
+            if name == ".git"
+                || name == "node_modules"
+                || name == "notes"
+                || name.starts_with('.')
+            {
                 continue;
             }
             walk_media(&path, out);
+            continue;
+        }
+        // Skip hidden files (e.g. the project's .studio-icon.png).
+        if name.starts_with('.') {
             continue;
         }
         let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
@@ -1124,6 +1134,24 @@ fn delete_note_asset(project_path: String, src: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Write the clipboard image as a project's icon (`.studio-icon.png`).
+#[tauri::command]
+fn set_project_icon(project_path: String) -> Result<(), String> {
+    let dest = PathBuf::from(&project_path).join(".studio-icon.png");
+    let status = Command::new(env!("PBIMAGE_BIN"))
+        .arg(&dest)
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !status.success() {
+        return Err("No image in clipboard".into());
+    }
+    // Downsize so the longest side is at most 512px (icons don't need more).
+    if let Some(p) = dest.to_str() {
+        let _ = Command::new("sips").args(["-Z", "512", p]).status();
+    }
+    Ok(())
+}
+
 /// Reveal a file in Finder.
 #[tauri::command]
 fn reveal_in_finder(path: String) -> Result<(), String> {
@@ -1286,6 +1314,7 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
             paste_note_image,
             copy_note_asset,
             delete_note_asset,
+            set_project_icon,
             read_clipboard_text,
             set_note_clipboard,
             get_note_clipboard,

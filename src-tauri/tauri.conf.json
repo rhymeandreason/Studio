@@ -24,7 +24,11 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$HOME/Projects/**", "$APPCACHE/**"]
+        "scope": [
+          "$HOME/Projects/**",
+          "$HOME/Projects/*/.studio-icon.png",
+          "$APPCACHE/**"
+        ]
       }
     }
   },
