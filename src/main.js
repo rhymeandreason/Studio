@@ -117,6 +117,166 @@ const projectsSelection = createSelection({
   onChange: () => repaintProjectsSelection(),
 });
 
+// Global manual project order (paths). Empty = sort by name.
+let projectOrder = [];
+
+async function loadProjectOrder() {
+  try {
+    const raw = await invoke("read_project_order");
+    projectOrder = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(projectOrder)) projectOrder = [];
+  } catch (_) {
+    projectOrder = [];
+  }
+}
+
+// Ordered first by the manual order, then any new projects by name.
+function applyProjectOrder(projects) {
+  if (!projectOrder.length) return projects;
+  const idx = new Map(projectOrder.map((p, i) => [p, i]));
+  const rank = (p) => (idx.has(p) ? idx.get(p) : Infinity);
+  return [...projects].sort(
+    (a, b) =>
+      rank(a.path) - rank(b.path) ||
+      a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+  );
+}
+
+function saveProjectOrder() {
+  invoke("save_project_order", { data: JSON.stringify(projectOrder) });
+}
+
+// --- Project card drag-reorder (pointer-based) -----------------------------
+
+let projectDrag = null; // { p, card, pointerId, startX, startY, active }
+let lastProjectDragEnd = 0;
+let projectDropIndex = null;
+
+function onProjectCardPointerDown(e, p, card) {
+  if (e.button !== 0) return;
+  if (e.target.closest("button, input, textarea, a")) return; // trash btn etc.
+  try {
+    card.setPointerCapture(e.pointerId);
+  } catch (_) {}
+  projectDrag = {
+    p,
+    card,
+    pointerId: e.pointerId,
+    startX: e.clientX,
+    startY: e.clientY,
+    active: false,
+  };
+  window.addEventListener("pointermove", onProjectPointerMove);
+  window.addEventListener("pointerup", onProjectPointerUp);
+  window.addEventListener("pointercancel", onProjectPointerUp);
+}
+
+function onProjectPointerMove(e) {
+  if (!projectDrag) return;
+  if (!projectDrag.active) {
+    if (
+      Math.hypot(e.clientX - projectDrag.startX, e.clientY - projectDrag.startY) <
+      5
+    )
+      return;
+    projectDrag.active = true;
+    projectDrag.card.classList.add("is-dragging");
+    document.body.classList.add("note-dragging");
+  }
+  e.preventDefault();
+  const grid = document.getElementById("overview-grid");
+  const target = computeCardDrop(grid, e.clientX, e.clientY);
+  projectDropIndex = target ? target.index : null;
+  showProjectDropIndicator(grid, target);
+}
+
+function onProjectPointerUp() {
+  window.removeEventListener("pointermove", onProjectPointerMove);
+  window.removeEventListener("pointerup", onProjectPointerUp);
+  window.removeEventListener("pointercancel", onProjectPointerUp);
+  const drag = projectDrag;
+  projectDrag = null;
+  document.body.classList.remove("note-dragging");
+  hideProjectDropIndicator();
+  if (drag) {
+    try {
+      drag.card.releasePointerCapture(drag.pointerId);
+    } catch (_) {}
+  }
+  if (!drag || !drag.active) return;
+  lastProjectDragEnd = Date.now();
+  drag.card.classList.remove("is-dragging");
+  const to = projectDropIndex;
+  projectDropIndex = null;
+  if (to == null) return;
+
+  const grid = document.getElementById("overview-grid");
+  const order = [...grid.querySelectorAll(".card")].map((c) => c.dataset.path);
+  const from = order.indexOf(drag.p.path);
+  if (from === -1) return;
+  order.splice(from, 1);
+  let dest = from < to ? to - 1 : to;
+  dest = Math.max(0, Math.min(dest, order.length));
+  order.splice(dest, 0, drag.p.path);
+
+  projectOrder = order;
+  saveProjectOrder();
+  showOverview();
+}
+
+// Vertical drop indicator between cards in a uniform grid (shared by Projects).
+function computeCardDrop(grid, x, y) {
+  const cards = [...grid.querySelectorAll(".card")];
+  if (!cards.length) return { index: 0, card: null, after: false };
+  let rowHit;
+  for (let i = 0; i < cards.length; i++) {
+    const r = cards[i].getBoundingClientRect();
+    if (y < r.top || y > r.bottom) continue;
+    if (x < r.left + r.width / 2)
+      return { index: i, card: cards[i], after: false };
+    rowHit = { index: i + 1, card: cards[i], after: true };
+  }
+  if (rowHit) return rowHit;
+  let best = null;
+  let bestDist = Infinity;
+  cards.forEach((c, i) => {
+    const r = c.getBoundingClientRect();
+    const dx = x - (r.left + r.width / 2);
+    const dy = y - (r.top + r.height / 2);
+    const d = dx * dx + dy * dy;
+    if (d < bestDist) {
+      bestDist = d;
+      const after = x >= r.left + r.width / 2;
+      best = { index: after ? i + 1 : i, card: c, after };
+    }
+  });
+  return best;
+}
+
+function showProjectDropIndicator(grid, target) {
+  let bar = grid.querySelector(".card-drop-indicator");
+  if (!bar) {
+    bar = el("div", "card-drop-indicator");
+    grid.append(bar);
+  }
+  if (!target || !target.card) {
+    bar.style.display = "none";
+    return;
+  }
+  const gr = grid.getBoundingClientRect();
+  const r = target.card.getBoundingClientRect();
+  const gap = parseFloat(getComputedStyle(grid).columnGap) || 16;
+  const edgeX = target.after ? r.right + gap / 2 : r.left - gap / 2;
+  bar.style.display = "block";
+  bar.style.left = edgeX - gr.left - 1.5 + "px";
+  bar.style.top = r.top - gr.top + "px";
+  bar.style.height = r.height + "px";
+}
+
+function hideProjectDropIndicator() {
+  document.querySelector(".card-drop-indicator")?.remove();
+}
+
 // Mod+v: set the selected project's icon from the clipboard image.
 async function setSelectedProjectIcon() {
   const sel = projectsSelection.get();
@@ -205,7 +365,8 @@ panelKeymaps.projects = {
 
 async function showOverview() {
   activePanel = "projects";
-  const projects = await invoke("list_projects");
+  await loadProjectOrder();
+  const projects = applyProjectOrder(await invoke("list_projects"));
   const grid = document.getElementById("overview-grid");
   grid.innerHTML = "";
 
@@ -256,8 +417,12 @@ async function showOverview() {
       });
 
       card.append(name, path, trash);
+      card.addEventListener("pointerdown", (e) =>
+        onProjectCardPointerDown(e, p, card),
+      );
       // Single-click selects; double-click opens (interaction-spec §3.4).
       card.addEventListener("click", (e) => {
+        if (Date.now() - lastProjectDragEnd < 300) return; // ignore click after drag
         if (e.shiftKey) {
           projectsSelection.range(
             overviewProjects.map((x) => x.path),

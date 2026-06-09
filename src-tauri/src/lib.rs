@@ -855,6 +855,20 @@ fn handle_dropped_paths(project_path: String, paths: Vec<String>) -> Result<Drop
     })
 }
 
+/// Global manual project order (paths), persisted in the app config dir.
+#[tauri::command]
+fn read_project_order(app: AppHandle) -> Result<String, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    Ok(std::fs::read_to_string(dir.join("project-order.json")).unwrap_or_default())
+}
+
+#[tauri::command]
+fn save_project_order(app: AppHandle, data: String) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("project-order.json"), data).map_err(|e| e.to_string())
+}
+
 /// Per-project media view metadata (sort mode + manual order). Stored hidden so
 /// it's skipped by walk_media and doesn't show in the Media grid.
 #[tauri::command]
@@ -1411,6 +1425,8 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
             handle_dropped_paths,
             read_media_meta,
             save_media_meta,
+            read_project_order,
+            save_project_order,
             paste_image,
             paste_note_image,
             copy_note_asset,

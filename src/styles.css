@@ -397,6 +397,22 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 12px;
+    position: relative;
+}
+
+.card-drop-indicator {
+    position: absolute;
+    display: none;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--accent);
+    pointer-events: none;
+    z-index: 5;
+    transition: left 0.08s ease, top 0.08s ease, height 0.08s ease;
+}
+
+.card.is-dragging {
+    opacity: 0.4;
 }
 
 .card {
