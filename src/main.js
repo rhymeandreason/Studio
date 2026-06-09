@@ -9,13 +9,14 @@ import { installKeyDispatcher } from "./keymap.js";
 import { el, mi, genId, clamp } from "./dom.js";
 import { glAdjust } from "./gl.js";
 import { loadImage, srcW, srcH, makePreview, renderOriented, defaultEdits } from "./imageutil.js";
+import { state } from "./state.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
 // Which panel keyboard input routes to (interaction-spec §4). Set by selectTab
 // and by entering/leaving the projects overview.
-let activePanel = "workspace";
+state.activePanel = "workspace";
 const panelKeymaps = {};
 const globalKeymap = {};
 
@@ -25,7 +26,7 @@ const globalKeymap = {};
 // element matching one of `keep`. Only acts while its panel is active.
 function installOffClickDeselect({ panel, keep, hasSelection, clear }) {
   document.addEventListener("click", (e) => {
-    if (activePanel !== panel || !hasSelection()) return;
+    if (state.activePanel !== panel || !hasSelection()) return;
     const inZone =
       e.target.closest(`[data-panel="${panel}"]`) ||
       e.target.closest("#project-header");
@@ -74,12 +75,12 @@ function appNameFromPath(path) {
   return base.replace(/\.app$/i, "");
 }
 
-let activeProject = null;
+state.activeProject = null;
 
 // --- Project rendering -----------------------------------------------------
 
 function render(project) {
-  activeProject = project;
+  state.activeProject = project;
   const empty = document.getElementById("empty-state");
   const content = document.getElementById("project-content");
   const header = document.getElementById("project-header");
@@ -364,7 +365,7 @@ panelKeymaps.projects = {
 };
 
 async function showOverview() {
-  activePanel = "projects";
+  state.activePanel = "projects";
   await loadProjectOrder();
   const projects = applyProjectOrder(await invoke("list_projects"));
   const grid = document.getElementById("overview-grid");
@@ -448,7 +449,7 @@ async function showOverview() {
 // --- Tabs ------------------------------------------------------------------
 
 function selectTab(name) {
-  activePanel = name;
+  state.activePanel = name;
   document.querySelectorAll(".tab").forEach((t) => {
     t.classList.toggle("is-active", t.dataset.tab === name);
   });
@@ -470,7 +471,7 @@ function selectTab(name) {
       document.getElementById("media-side").hidden = true;
       invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
     }
-  } else if (activeItem && mediaSelection.has(activeItem.path)) {
+  } else if (state.activeItem && mediaSelection.has(state.activeItem.path)) {
     // Returning to media: re-open the editor column for the selection that
     // still owns it (it was only hidden, not torn down).
     const appRight = document.getElementById("app-right");
@@ -509,11 +510,11 @@ function initLaunch() {
 
   const btn = document.getElementById("launch-btn");
   btn.addEventListener("click", async () => {
-    if (!activeProject) return;
+    if (!state.activeProject) return;
     btn.disabled = true;
     btn.innerHTML = `${mi("hourglass_top")}Launching…`;
     try {
-      await invoke("launch_workspace", { path: activeProject.path });
+      await invoke("launch_workspace", { path: state.activeProject.path });
       btn.innerHTML = `${mi("check")}Launched`;
     } catch (err) {
       btn.innerHTML = `${mi("error")}Error`;
@@ -789,10 +790,10 @@ function updatePinButton() {
 }
 
 async function saveWorkspaceNow() {
-  if (!activeProject) return;
+  if (!state.activeProject) return;
   try {
     await invoke("save_workspace", {
-      path: activeProject.path,
+      path: state.activeProject.path,
       workspace: readWorkspaceForm(),
     });
     setStatus("Saved ✓");
@@ -802,7 +803,7 @@ async function saveWorkspaceNow() {
 }
 
 function scheduleWorkspaceSave() {
-  if (!activeProject) return;
+  if (!state.activeProject) return;
   setStatus("Saving…");
   clearTimeout(wsSaveTimer);
   wsSaveTimer = setTimeout(saveWorkspaceNow, 400);
@@ -968,7 +969,7 @@ function saveMediaMeta() {
 // --- Media tile drag-reorder (pointer-based; sets sort to "user") ----------
 
 let mediaDrag = null; // { item, tile, startX, startY, active }
-let mediaDragActive = false; // suppresses the OS file-drop overlay
+state.mediaDragActive = false; // suppresses the OS file-drop overlay
 let lastMediaDragEnd = 0;
 let mediaDropIndex = null;
 let mediaDropToNotes = false; // dragging an image tile onto the Notes tab
@@ -1023,7 +1024,7 @@ function onMediaPointerMove(e) {
     if (Math.hypot(e.clientX - mediaDrag.startX, e.clientY - mediaDrag.startY) < 5)
       return;
     mediaDrag.active = true;
-    mediaDragActive = true;
+    state.mediaDragActive = true;
     mediaDrag.tile.classList.add("is-dragging");
     document.body.classList.add("note-dragging"); // shared no-select/grab cursor
   }
@@ -1061,7 +1062,7 @@ function onMediaPointerUp() {
       drag.tile.releasePointerCapture(drag.pointerId);
     } catch (_) {}
   }
-  mediaDragActive = false;
+  state.mediaDragActive = false;
   document.body.classList.remove("note-dragging");
   hideMediaDropIndicator();
   document
@@ -1166,7 +1167,7 @@ function updateSelbar() {
   // Hide the batch bar only when the sole selected item is the one the editor
   // is already showing; otherwise show it (incl. multi-select with editor open).
   const editorOwnsSelection =
-    n === 1 && activeItem && mediaSelection.has(activeItem.path);
+    n === 1 && state.activeItem && mediaSelection.has(state.activeItem.path);
   document.getElementById("selbar").hidden = n === 0 || editorOwnsSelection;
   document.getElementById("sel-count").textContent = `${n} selected`;
   document.getElementById("sel-paste").disabled = !copiedEdits || n === 0;
@@ -1193,8 +1194,8 @@ async function selectOnly(item) {
 
   // Claim editor ownership *before* the selection repaint so the batch bar
   // never flashes between the selection update and the (async) editor load.
-  const alreadyShown = activeItem && activeItem.path === item.path;
-  activeItem = item;
+  const alreadyShown = state.activeItem && state.activeItem.path === item.path;
+  state.activeItem = item;
   mediaSelection.set(item.path); // onChange → updateSelectionUI (sees ownership)
   if (alreadyShown) return;
 
@@ -1222,7 +1223,7 @@ function clearSelection() {
 // Delete from the keyboard: in the editor/lightbox, trash the selection or the
 // focused image; in the grid, trash the selection.
 function mediaDeleteFromKeyboard() {
-  const editorActive = !document.getElementById("lightbox").hidden || !!activeItem;
+  const editorActive = !document.getElementById("lightbox").hidden || !!state.activeItem;
   if (editorActive) {
     const targets = mediaSelection.size()
       ? mediaSelection.get()
@@ -1243,7 +1244,7 @@ async function trashMedia(paths) {
   // sidecar that trash_media is about to remove.
   if (editItem && paths.includes(editItem.path)) {
     editDirty = false;
-    activeItem = null;
+    state.activeItem = null;
     editItem = null;
     editThumb = editImg = editPreview = editState = null;
     document.getElementById("lightbox").hidden = true;
@@ -1309,11 +1310,11 @@ async function mediaSrc(item) {
 
 // Paste an image from the clipboard into the active project's media/.
 async function pasteImageFromClipboard() {
-  if (!activeProject) return;
+  if (!state.activeProject) return;
   try {
-    await invoke("paste_image", { projectPath: activeProject.path });
+    await invoke("paste_image", { projectPath: state.activeProject.path });
     selectTab("media");
-    loadMedia(activeProject.path);
+    loadMedia(state.activeProject.path);
   } catch (err) {
     // Usually just "No image in clipboard" — ignore quietly.
     console.debug("paste_image:", err);
@@ -1580,8 +1581,8 @@ async function loadMedia(path) {
   updateSelbar();
 
   // Drop the inline edit focus if its file is gone.
-  if (activeItem && !present.has(activeItem.path)) {
-    activeItem = null;
+  if (state.activeItem && !present.has(state.activeItem.path)) {
+    state.activeItem = null;
     document.getElementById("media-side").hidden = true;
     document.getElementById("app-right").hidden = true;
     invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
@@ -1656,7 +1657,7 @@ async function loadMedia(path) {
 // The inline-selected image (its edit controls live in the right side column).
 // The editor DOM is a single shared node that we reparent between the side
 // column and the lightbox overlay, so there's only ever one editor instance.
-let activeItem = null;
+state.activeItem = null;
 
 // Move the (single) editor node into a host container if it isn't there already.
 function moveEditor(host) {
@@ -1745,10 +1746,10 @@ async function loadEditor(item) {
 // Tear down the inline editor (no selection change). Refreshes the grid
 // thumbnail if edits were made.
 async function closeInlineEditor() {
-  if (!activeItem) return;
+  if (!state.activeItem) return;
   const dirty = editDirty;
   await flushEditSave();
-  activeItem = null;
+  state.activeItem = null;
   document.getElementById("lightbox").hidden = true;
   moveEditor(document.getElementById("media-side-editor"));
   document.getElementById("media-side").hidden = true;
@@ -1766,10 +1767,10 @@ async function closeInlineEditor() {
 
 // Double-click (or the side "Lightbox" button): open the full-screen editor.
 async function openLightbox(item) {
-  if (!activeItem || activeItem.path !== item.path) {
+  if (!state.activeItem || state.activeItem.path !== item.path) {
     await selectOnly(item); // selects + loads the inline editor
   }
-  if (!activeItem) return; // not an image — nothing to show
+  if (!state.activeItem) return; // not an image — nothing to show
   moveEditor(document.getElementById("lb-stage"));
   document.getElementById("lightbox").hidden = false;
   renderEditorPreview(); // show the thumbnail immediately…
@@ -1787,7 +1788,7 @@ async function closeLightbox() {
   document.getElementById("lightbox").hidden = true;
   // Return the editor to the side column; keep editing inline if still selected.
   moveEditor(document.getElementById("media-side-editor"));
-  if (activeItem) {
+  if (state.activeItem) {
     renderEditorPreview();
   } else {
     editItem = null;
@@ -1817,7 +1818,7 @@ async function initDragDrop() {
     return { icon: "note_add", label: "Move files into the project" };
   }
 
-  const blocked = () => draggingNoteId || mediaDragActive || !activeProject;
+  const blocked = () => state.draggingNoteId || state.mediaDragActive || !state.activeProject;
   // Only drag-enter carries paths in Tauri v2 (drag-over is position-only), so
   // set the label on enter and just keep the overlay visible on over.
   await listen("tauri://drag-enter", (e) => {
@@ -1834,14 +1835,14 @@ async function initDragDrop() {
   await listen("tauri://drag-leave", () => (zone.hidden = true));
   await listen("tauri://drag-drop", async (e) => {
     zone.hidden = true;
-    if (!activeProject || draggingNoteId) return;
+    if (!state.activeProject || state.draggingNoteId) return;
     const paths = (e.payload && e.payload.paths) || [];
     if (!paths.length) return;
     try {
       // Classify the drop (§8.1): images → media/, files → project root,
       // folders → Workspace entries (referenced in place).
       const res = await invoke("handle_dropped_paths", {
-        projectPath: activeProject.path,
+        projectPath: state.activeProject.path,
         paths,
       });
       if (res.folders.length) {
@@ -1850,7 +1851,7 @@ async function initDragDrop() {
         selectTab("workspace");
       } else if (res.images.length) {
         selectTab("media");
-        loadMedia(activeProject.path);
+        loadMedia(state.activeProject.path);
       } else if (res.files.length) {
         // Non-image files moved into the project root; nothing to surface.
       }
@@ -1940,18 +1941,18 @@ function renderEditorPreview() {
 let liveThumbRaf = 0;
 let liveThumbOriented = null;
 function scheduleLiveThumb(oriented) {
-  if (!activeItem) return;
+  if (!state.activeItem) return;
   liveThumbOriented = oriented;
   if (liveThumbRaf) return;
   liveThumbRaf = requestAnimationFrame(() => {
     liveThumbRaf = 0;
-    if (!activeItem || !editState || !liveThumbOriented) return;
+    if (!state.activeItem || !editState || !liveThumbOriented) return;
     const tile = document.querySelector(
-      `.mediatile[data-path="${CSS.escape(activeItem.path)}"]`,
+      `.mediatile[data-path="${CSS.escape(state.activeItem.path)}"]`,
     );
     if (!tile) return;
     const url = bakeThumbFromOriented(liveThumbOriented, editState);
-    thumbCache.set(activeItem.path, url);
+    thumbCache.set(state.activeItem.path, url);
     tile.querySelector(".mediatile__img").src = url;
   });
 }
@@ -3167,11 +3168,11 @@ const GEN_SHORTCUT_TEXT = "Studio Generate";
 const GEN_SHORTCUT_PHOTO = "Studio Generate From Photo";
 
 function openGenerate() {
-  if (!activeProject) return;
+  if (!state.activeProject) return;
   document.getElementById("generate-prompt").value = "";
   document.getElementById("generate-status").textContent = "";
   // Offer "use selected image" only when a single image is selected.
-  const seedable = !!(activeItem && activeItem.kind === "image");
+  const seedable = !!(state.activeItem && state.activeItem.kind === "image");
   document.getElementById("generate-seed-row").hidden = !seedable;
   document.getElementById("generate-seed").checked = false;
   document.getElementById("generate").hidden = false;
@@ -3179,18 +3180,18 @@ function openGenerate() {
 }
 
 async function runGenerate() {
-  if (!activeProject) return;
+  if (!state.activeProject) return;
   const prompt = document.getElementById("generate-prompt").value.trim();
   const seed =
     document.getElementById("generate-seed").checked &&
-    activeItem &&
-    activeItem.kind === "image";
+    state.activeItem &&
+    state.activeItem.kind === "image";
   if (!prompt && !seed) {
     document.getElementById("generate-status").textContent = "Enter a prompt";
     return;
   }
 
-  const out = `${activeProject.path}/media/generated-${Date.now()}.png`;
+  const out = `${state.activeProject.path}/media/generated-${Date.now()}.png`;
   const status = document.getElementById("generate-status");
   const btn = document.getElementById("generate-run");
   status.textContent = "Generating…";
@@ -3199,7 +3200,7 @@ async function runGenerate() {
     if (seed) {
       await invoke("run_shortcut", {
         name: GEN_SHORTCUT_PHOTO,
-        inputPath: activeItem.path,
+        inputPath: state.activeItem.path,
         clipboardText: prompt,
         outputPath: out,
       });
@@ -3392,7 +3393,7 @@ function initMedia() {
 
   // Side column: open the full lightbox for the selected image.
   document.getElementById("side-lightbox").addEventListener("click", () => {
-    if (activeItem) openLightbox(activeItem);
+    if (state.activeItem) openLightbox(state.activeItem);
   });
 
   // "More" dropdown in the editor side column.
@@ -3440,7 +3441,7 @@ function initMedia() {
   // Media keyboard, routed through the shared dispatcher. The lightbox / inline
   // editor are Media sub-modes (not modals), so the handlers branch on mode.
   const lbOpen = () => !document.getElementById("lightbox").hidden;
-  const editorActive = () => lbOpen() || !!activeItem;
+  const editorActive = () => lbOpen() || !!state.activeItem;
   const activateSelectedMedia = () => {
     const ids = mediaSelection.get();
     if (ids.length !== 1) return;
@@ -4463,7 +4464,7 @@ function renderNotes() {
   requestAnimationFrame(() => requestAnimationFrame(layoutBento));
 }
 
-let draggingNoteId = null;
+state.draggingNoteId = null;
 let dropTargetIndex = null;
 let noteDrag = null; // { note, card, startX, startY, active }
 let lastNoteDragEnd = 0;
@@ -4518,7 +4519,7 @@ function onNotePointerMove(e) {
     if (Math.hypot(e.clientX - noteDrag.startX, e.clientY - noteDrag.startY) < 5)
       return;
     noteDrag.active = true;
-    draggingNoteId = noteDrag.note.id;
+    state.draggingNoteId = noteDrag.note.id;
     noteDrag.card.classList.add("is-dragging");
     document.body.classList.add("note-dragging");
     document.body.style.cursor = "grabbing";
@@ -4541,7 +4542,7 @@ function onNotePointerUp() {
   if (!drag || !drag.active) return; // was a click, not a drag
   lastNoteDragEnd = Date.now();
   drag.card.classList.remove("is-dragging");
-  draggingNoteId = null;
+  state.draggingNoteId = null;
   hideDropIndicator();
   const to0 = dropTargetIndex;
   dropTargetIndex = null;
@@ -4705,7 +4706,7 @@ function initNotes() {
     Escape: clearNotesSelection,
   };
   installKeyDispatcher({
-    getActivePanel: () => activePanel,
+    getActivePanel: () => state.activePanel,
     panelKeymaps,
     globalKeymap,
     anyModalOpen,
@@ -4739,8 +4740,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // overview if visible. Notes/workspace forms are left alone (avoid clobbering
   // in-progress edits).
   await listen("fs-changed", () => {
-    if (activeProject && !document.getElementById("project-content").hidden) {
-      loadMedia(activeProject.path);
+    if (state.activeProject && !document.getElementById("project-content").hidden) {
+      loadMedia(state.activeProject.path);
     }
     if (!document.getElementById("overview").hidden) {
       showOverview();
