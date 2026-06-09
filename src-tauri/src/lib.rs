@@ -1072,6 +1072,58 @@ fn paste_image(project_path: String) -> Result<String, String> {
     Ok(dest.to_string_lossy().to_string())
 }
 
+fn millis() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0)
+}
+
+/// Write a clipboard image into `<project>/notes/` for an image note. Returns
+/// the project-relative path (e.g. "notes/img-123.png").
+#[tauri::command]
+fn paste_note_image(project_path: String) -> Result<String, String> {
+    let dir = PathBuf::from(&project_path).join("notes");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let name = format!("img-{}.png", millis());
+    let dest = dir.join(&name);
+    let status = Command::new(env!("PBIMAGE_BIN"))
+        .arg(&dest)
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !status.success() {
+        return Err("No image in clipboard".into());
+    }
+    Ok(format!("notes/{name}"))
+}
+
+/// Copy an external image file into `<project>/notes/` (cross-project image-note
+/// paste). Returns the new project-relative path.
+#[tauri::command]
+fn copy_note_asset(src_abs: String, project_path: String) -> Result<String, String> {
+    let src = PathBuf::from(&src_abs);
+    let ext = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("png")
+        .to_string();
+    let dir = PathBuf::from(&project_path).join("notes");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let name = format!("img-{}.{ext}", millis());
+    std::fs::copy(&src, dir.join(&name)).map_err(|e| e.to_string())?;
+    Ok(format!("notes/{name}"))
+}
+
+/// Delete an image note's asset — only if it's note-owned (under `notes/`). A
+/// `media/` reference is shared with the Media tab and left untouched.
+#[tauri::command]
+fn delete_note_asset(project_path: String, src: String) -> Result<(), String> {
+    if src.starts_with("notes/") {
+        let _ = std::fs::remove_file(PathBuf::from(&project_path).join(&src));
+    }
+    Ok(())
+}
+
 /// Reveal a file in Finder.
 #[tauri::command]
 fn reveal_in_finder(path: String) -> Result<(), String> {
@@ -1231,6 +1283,9 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
             heic_preview,
             import_media,
             paste_image,
+            paste_note_image,
+            copy_note_asset,
+            delete_note_asset,
             read_clipboard_text,
             set_note_clipboard,
             get_note_clipboard,

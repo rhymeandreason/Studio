@@ -3000,6 +3000,12 @@ function deleteNotesSelection() {
   }
   const ids = new Set(notesSelection.get());
   if (!ids.size) return;
+  // Delete note-owned image assets (under notes/); shared media/ files are left.
+  for (const n of notesData.notes) {
+    if (ids.has(n.id) && n.kind === "image" && n.src && notesProjectPath) {
+      invoke("delete_note_asset", { projectPath: notesProjectPath, src: n.src });
+    }
+  }
   notesData.notes = notesData.notes.filter((n) => !ids.has(n.id));
   notesSelection.clear();
   renderNotes();
@@ -3031,6 +3037,7 @@ function clearNotesSelection() {
 function buildNoteCard(note) {
   if (note.kind === "checklist") return buildChecklist(note);
   if (note.kind === "table") return buildTable(note);
+  if (note.kind === "image") return buildImageNote(note);
   return buildTextNote(note);
 }
 
@@ -3072,7 +3079,28 @@ function openSelectedNoteModal() {
 
 function stripNoteForCopy(n) {
   const { id, createdAt, ...rest } = n;
+  // Image notes carry an absolute source path so cross-project paste can copy
+  // the file (the project-relative `src` is meaningless elsewhere).
+  if (n.kind === "image" && notesProjectPath && n.src) {
+    rest.srcAbs = `${notesProjectPath}/${n.src}`;
+  }
   return rest;
+}
+
+// Resolve a copied image note's absolute source into this project: reuse the
+// relative path if it's already ours, else copy the file into notes/.
+async function materializeNoteImage(srcAbs) {
+  if (!notesProjectPath) return "";
+  const prefix = notesProjectPath + "/";
+  if (srcAbs.startsWith(prefix)) return srcAbs.slice(prefix.length);
+  try {
+    return await invoke("copy_note_asset", {
+      srcAbs,
+      projectPath: notesProjectPath,
+    });
+  } catch (_) {
+    return "";
+  }
 }
 
 // Degraded plain-text form (external apps). Title (if any) leads as a heading.
@@ -3086,6 +3114,7 @@ function noteToPlainText(n) {
     body = [n.columns || [], ...(n.rows || [])]
       .map((r) => r.join("\t"))
       .join("\n");
+  else if (n.kind === "image") body = n.caption || "";
   else body = n.body || "";
 
   // Tables stay pure TSV (a title line would misalign spreadsheet paste); text
@@ -3111,29 +3140,40 @@ function copyNotes() {
 
 // Mod+v: use the rich sidecar if it still matches the live clipboard text
 // (meaning the Studio copy is the most recent), else parse the system text.
+// Reconstruct Studio-native notes from the sidecar if it still matches the live
+// clipboard `text`. Returns true if it pasted. Shared by the Notes and Media
+// paste paths so a copied note pastes the same from either tab.
+async function tryPasteStudioNotes(text) {
+  try {
+    const stash = await invoke("get_note_clipboard");
+    if (!stash) return false;
+    const { text: stashText, notes } = JSON.parse(stash);
+    if (!Array.isArray(notes) || stashText !== text) return false;
+    const created = [];
+    for (const n of notes) {
+      const note = { ...n, id: genId(), createdAt: new Date().toISOString() };
+      if (note.kind === "image" && note.srcAbs) {
+        note.src = await materializeNoteImage(note.srcAbs);
+      }
+      delete note.srcAbs;
+      created.push(note);
+    }
+    notesData.notes.unshift(...created);
+    renderNotes();
+    scheduleNotesSave();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 async function pasteIntoNotes() {
   let text = "";
   try {
     text = await invoke("read_clipboard_text");
   } catch (_) {}
 
-  try {
-    const stash = await invoke("get_note_clipboard");
-    if (stash) {
-      const { text: stashText, notes } = JSON.parse(stash);
-      if (Array.isArray(notes) && stashText === text) {
-        const created = notes.map((n) => ({
-          ...n,
-          id: genId(),
-          createdAt: new Date().toISOString(),
-        }));
-        notesData.notes.unshift(...created);
-        renderNotes();
-        scheduleNotesSave();
-        return;
-      }
-    }
-  } catch (_) {}
+  if (await tryPasteStudioNotes(text)) return;
 
   const now = () => new Date().toISOString();
 
@@ -3177,9 +3217,28 @@ async function pasteIntoNotes() {
       createdAt: now(),
     });
   } else {
-    // No text — clipboard image. Image notes (§9) aren't built yet, so fall
-    // back to importing into media for now. TODO: create an image note.
-    pasteImageFromClipboard();
+    // No text — clipboard image → image note (§9).
+    if (!notesProjectPath) return;
+    try {
+      const src = await invoke("paste_note_image", {
+        projectPath: notesProjectPath,
+      });
+      const { w, h } = await imageDims(`${notesProjectPath}/${src}`);
+      notesData.notes.unshift({
+        id: genId(),
+        kind: "image",
+        title: "",
+        src,
+        w,
+        h,
+        caption: "",
+        createdAt: now(),
+      });
+      renderNotes();
+      scheduleNotesSave();
+    } catch (_) {
+      // No image in clipboard — nothing to paste.
+    }
     return;
   }
   renderNotes();
@@ -3261,6 +3320,13 @@ async function pasteFromClipboard() {
   try {
     text = await invoke("read_clipboard_text");
   } catch (_) {}
+
+  // A copied Studio note reconstructs fully (and jumps to Notes), even from the
+  // Media tab.
+  if (await tryPasteStudioNotes(text)) {
+    selectTab("notes");
+    return;
+  }
 
   if (text.includes("\t")) {
     // TSV → table note; first row becomes column headers.
@@ -3356,6 +3422,9 @@ function noteHeader(note) {
     innerHTML: mi("close"),
   });
   del.addEventListener("click", () => {
+    if (note.kind === "image" && note.src && notesProjectPath) {
+      invoke("delete_note_asset", { projectPath: notesProjectPath, src: note.src });
+    }
     notesData.notes = notesData.notes.filter((n) => n.id !== note.id);
     renderNotes();
     scheduleNotesSave();
@@ -3443,6 +3512,53 @@ function linkLabel(url) {
 function openExternalUrl(url) {
   if (!/^https?:\/\//i.test(url)) return;
   invoke("open_path", { path: url });
+}
+
+// Resolve an image note's project-relative `src` to a displayable asset URL.
+function noteImageUrl(src) {
+  if (!notesProjectPath || !src) return "";
+  return window.__TAURI__.core.convertFileSrc(`${notesProjectPath}/${src}`);
+}
+
+// Natural pixel size of an image at an absolute path (for bento sizing).
+async function imageDims(absPath) {
+  try {
+    const img = await loadImage(window.__TAURI__.core.convertFileSrc(absPath));
+    return { w: img.naturalWidth, h: img.naturalHeight };
+  } catch {
+    return { w: 0, h: 0 };
+  }
+}
+
+function buildImageNote(note) {
+  const card = el("div", "notecard");
+  card.append(noteHeader(note));
+
+  const img = el("img", "notecard__image", { alt: note.caption || "" });
+  if (note.src) img.src = noteImageUrl(note.src);
+  // Reserve height from known dimensions so bento sizing is right before load.
+  if (note.w && note.h) img.style.aspectRatio = `${note.w} / ${note.h}`;
+  img.addEventListener("load", () => scheduleBentoLayout());
+  card.append(img);
+
+  const cap = el("textarea", "notecard__caption", {
+    placeholder: "Caption…",
+    rows: 1,
+  });
+  cap.value = note.caption || "";
+  const resizeCap = () => {
+    cap.style.height = "auto";
+    cap.style.height = cap.scrollHeight + "px";
+  };
+  cap.addEventListener("input", () => {
+    note.caption = cap.value;
+    resizeCap();
+    scheduleBentoLayout();
+    scheduleNotesSave();
+  });
+  requestAnimationFrame(resizeCap);
+  card.append(cap);
+  return card;
 }
 
 function buildTextNote(note) {
@@ -3763,6 +3879,8 @@ function renderNotes() {
       if (!Array.isArray(note.columns)) note.columns = ["Column"];
       if (!Array.isArray(note.rows)) note.rows = [];
       card = buildTable(note);
+    } else if (note.kind === "image") {
+      card = buildImageNote(note);
     } else {
       continue;
     }

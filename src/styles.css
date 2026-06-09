@@ -980,6 +980,27 @@ input.notecard__title {
     color: var(--text-muted);
 }
 
+.notecard__image {
+    display: block;
+    width: 100%;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+}
+
+.notecard__caption {
+    background: transparent;
+    border: none;
+    color: var(--note-body-color, var(--text-muted));
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow: hidden;
+    padding: 0;
+    resize: none;
+    width: 100%;
+    outline: none;
+}
+
 .notecard__links {
     display: flex;
     flex-direction: column;
