@@ -5,7 +5,7 @@
 
 import { NOTE_THEMES, NOTE_FONTS } from "./themes.js";
 import { createSelection } from "./selection.js";
-import { installKeyDispatcher } from "./keymap.js";
+import { installKeyDispatcher, panelKeymaps } from "./keymap.js";
 import { el, mi, genId, clamp } from "./dom.js";
 import { glAdjust } from "./gl.js";
 import { loadImage, srcW, srcH, makePreview, renderOriented, defaultEdits } from "./imageutil.js";
@@ -17,8 +17,6 @@ const { listen } = window.__TAURI__.event;
 // Which panel keyboard input routes to (interaction-spec §4). Set by selectTab
 // and by entering/leaving the projects overview.
 state.activePanel = "workspace";
-const panelKeymaps = {};
-const globalKeymap = {};
 
 // Shared "click-off to deselect" for the in-project panels. Clears the panel's
 // selection when the user clicks empty space in that panel or the project
@@ -4707,8 +4705,6 @@ function initNotes() {
   };
   installKeyDispatcher({
     getActivePanel: () => state.activePanel,
-    panelKeymaps,
-    globalKeymap,
     anyModalOpen,
     modalKeymap,
   });
