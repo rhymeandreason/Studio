@@ -398,6 +398,7 @@ body {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 12px;
     position: relative;
+    padding-bottom: 100px;
 }
 
 .card-drop-indicator {
@@ -623,6 +624,7 @@ select.field__input {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
+    padding-bottom: 100px;
 }
 
 /* Workspace item card */
@@ -842,6 +844,7 @@ select.field__input {
     gap: 14px;
     position: relative;
     --notes-font: system-ui;
+    padding-bottom: 100px;
 }
 
 /* Drop-position indicator: a narrow rounded bar drawn in the gap between cards. */
@@ -1276,6 +1279,7 @@ td.ntable__total-cell {
 
 .media-main {
     width: 100%;
+    padding-bottom: 100px;
 }
 
 .media-side {
