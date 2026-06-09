@@ -855,6 +855,20 @@ fn handle_dropped_paths(project_path: String, paths: Vec<String>) -> Result<Drop
     })
 }
 
+/// Per-project media view metadata (sort mode + manual order). Stored hidden so
+/// it's skipped by walk_media and doesn't show in the Media grid.
+#[tauri::command]
+fn read_media_meta(path: String) -> Result<String, String> {
+    let f = PathBuf::from(&path).join(".studio-media.json");
+    Ok(std::fs::read_to_string(f).unwrap_or_default())
+}
+
+#[tauri::command]
+fn save_media_meta(path: String, data: String) -> Result<(), String> {
+    let f = PathBuf::from(&path).join(".studio-media.json");
+    std::fs::write(f, data).map_err(|e| e.to_string())
+}
+
 /// MIME type for an image extension (used for data URLs).
 fn mime_for(ext: &str) -> &'static str {
     match ext {
@@ -1395,6 +1409,8 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
             heic_preview,
             import_media,
             handle_dropped_paths,
+            read_media_meta,
+            save_media_meta,
             paste_image,
             paste_note_image,
             copy_note_asset,

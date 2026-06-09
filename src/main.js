@@ -758,6 +758,201 @@ const mediaSelection = createSelection({
 });
 const mediaItemsByPath = new Map(); // path → MediaItem, refreshed by loadMedia
 
+// Media sort (interaction-spec §8.2): added | edited | name | user, persisted
+// per project in .studio-media.json.
+let mediaSortMode = "added";
+let mediaManualOrder = []; // paths, for "user" sort
+
+function sortMediaItems(items) {
+  const arr = [...items];
+  if (mediaSortMode === "name")
+    return arr.sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true }),
+    );
+  if (mediaSortMode === "edited")
+    return arr.sort((a, b) => (b.edits_mtime || 0) - (a.edits_mtime || 0));
+  if (mediaSortMode === "user") {
+    const idx = new Map(mediaManualOrder.map((p, i) => [p, i]));
+    const rank = (p) => (idx.has(p) ? idx.get(p) : Number.MAX_SAFE_INTEGER);
+    return arr.sort(
+      (a, b) => rank(a.path) - rank(b.path) || (b.modified || 0) - (a.modified || 0),
+    );
+  }
+  return arr.sort((a, b) => (b.modified || 0) - (a.modified || 0)); // added
+}
+
+function updateMediaSortUI() {
+  document.querySelectorAll("#media-sort .sort-btn").forEach((b) => {
+    b.classList.toggle("is-active", b.dataset.sort === mediaSortMode);
+    if (b.dataset.sort === "user") b.hidden = mediaManualOrder.length === 0;
+  });
+}
+
+async function loadMediaMeta(path) {
+  mediaSortMode = "added";
+  mediaManualOrder = [];
+  try {
+    const raw = await invoke("read_media_meta", { path });
+    if (raw) {
+      const m = JSON.parse(raw);
+      if (m.sort) mediaSortMode = m.sort;
+      if (Array.isArray(m.order)) mediaManualOrder = m.order;
+    }
+  } catch (_) {}
+  updateMediaSortUI();
+}
+
+function saveMediaMeta() {
+  if (!mediaProjectPath) return;
+  invoke("save_media_meta", {
+    path: mediaProjectPath,
+    data: JSON.stringify({ sort: mediaSortMode, order: mediaManualOrder }),
+  });
+}
+
+// --- Media tile drag-reorder (pointer-based; sets sort to "user") ----------
+
+let mediaDrag = null; // { item, tile, startX, startY, active }
+let mediaDragActive = false; // suppresses the OS file-drop overlay
+let lastMediaDragEnd = 0;
+let mediaDropIndex = null;
+
+function onMediaTilePointerDown(e, item, tile) {
+  if (e.button !== 0) return;
+  // The tile itself is a <button>, so only exclude the rename field / links —
+  // NOT "button" (that would match the tile and never start a drag).
+  if (e.target.closest("textarea, input, a")) return;
+  // Capture the pointer so WebKit doesn't hijack the drag over the image.
+  try {
+    tile.setPointerCapture(e.pointerId);
+  } catch (_) {}
+  mediaDrag = {
+    item,
+    tile,
+    pointerId: e.pointerId,
+    startX: e.clientX,
+    startY: e.clientY,
+    active: false,
+  };
+  window.addEventListener("pointermove", onMediaPointerMove);
+  window.addEventListener("pointerup", onMediaPointerUp);
+  window.addEventListener("pointercancel", onMediaPointerUp);
+}
+
+function onMediaPointerMove(e) {
+  if (!mediaDrag) return;
+  if (!mediaDrag.active) {
+    if (Math.hypot(e.clientX - mediaDrag.startX, e.clientY - mediaDrag.startY) < 5)
+      return;
+    mediaDrag.active = true;
+    mediaDragActive = true;
+    mediaDrag.tile.classList.add("is-dragging");
+    document.body.classList.add("note-dragging"); // shared no-select/grab cursor
+  }
+  e.preventDefault();
+  const grid = document.getElementById("media-grid");
+  const target = computeMediaDrop(grid, e.clientX, e.clientY);
+  mediaDropIndex = target ? target.index : null;
+  showMediaDropIndicator(grid, target);
+}
+
+function onMediaPointerUp() {
+  window.removeEventListener("pointermove", onMediaPointerMove);
+  window.removeEventListener("pointerup", onMediaPointerUp);
+  window.removeEventListener("pointercancel", onMediaPointerUp);
+  const drag = mediaDrag;
+  mediaDrag = null;
+  if (drag) {
+    try {
+      drag.tile.releasePointerCapture(drag.pointerId);
+    } catch (_) {}
+  }
+  mediaDragActive = false;
+  document.body.classList.remove("note-dragging");
+  hideMediaDropIndicator();
+  if (!drag || !drag.active) return;
+  lastMediaDragEnd = Date.now();
+  drag.tile.classList.remove("is-dragging");
+  const to = mediaDropIndex;
+  mediaDropIndex = null;
+  if (to == null) return;
+
+  const grid = document.getElementById("media-grid");
+  const order = [...grid.querySelectorAll(".mediatile")].map((t) => t.dataset.path);
+  const from = order.indexOf(drag.item.path);
+  if (from === -1) return;
+  order.splice(from, 1);
+  let dest = from < to ? to - 1 : to;
+  dest = Math.max(0, Math.min(dest, order.length));
+  order.splice(dest, 0, drag.item.path);
+
+  mediaManualOrder = order;
+  mediaSortMode = "user";
+  updateMediaSortUI();
+  saveMediaMeta();
+  if (mediaProjectPath) loadMedia(mediaProjectPath);
+}
+
+function computeMediaDrop(grid, x, y) {
+  const tiles = [...grid.querySelectorAll(".mediatile")];
+  if (!tiles.length) return { index: 0, tile: null, after: false };
+  let rowHit;
+  for (let i = 0; i < tiles.length; i++) {
+    const r = tiles[i].getBoundingClientRect();
+    if (y < r.top || y > r.bottom) continue; // not in this row band
+    if (x < r.left + r.width / 2)
+      return { index: i, tile: tiles[i], after: false };
+    rowHit = { index: i + 1, tile: tiles[i], after: true };
+  }
+  if (rowHit) return rowHit;
+  // Pointer in a gap/below: snap to the nearest tile by center.
+  let best = null;
+  let bestDist = Infinity;
+  tiles.forEach((t, i) => {
+    const r = t.getBoundingClientRect();
+    const dx = x - (r.left + r.width / 2);
+    const dy = y - (r.top + r.height / 2);
+    const d = dx * dx + dy * dy;
+    if (d < bestDist) {
+      bestDist = d;
+      const after = x >= r.left + r.width / 2;
+      best = { index: after ? i + 1 : i, tile: t, after };
+    }
+  });
+  return best;
+}
+
+function ensureMediaIndicator(grid) {
+  let bar = grid.querySelector(".media-drop-indicator");
+  if (!bar) {
+    bar = el("div", "media-drop-indicator");
+    grid.append(bar);
+  }
+  return bar;
+}
+
+function showMediaDropIndicator(grid, target) {
+  const bar = ensureMediaIndicator(grid);
+  if (!target || !target.tile) {
+    bar.style.display = "none";
+    return;
+  }
+  const gr = grid.getBoundingClientRect();
+  const r = target.tile.getBoundingClientRect();
+  const gap = parseFloat(getComputedStyle(grid).columnGap) || 12;
+  const edgeX = target.after ? r.right + gap / 2 : r.left - gap / 2;
+  bar.style.display = "block";
+  bar.style.left = edgeX - gr.left - 1.5 + "px";
+  bar.style.top = r.top - gr.top + "px";
+  bar.style.height = r.height + "px";
+}
+
+function hideMediaDropIndicator() {
+  // Remove (not just hide) so it never lingers as a grid child and confuses
+  // loadMedia's tile-diff ordering.
+  document.querySelector(".media-drop-indicator")?.remove();
+}
+
 function updateSelbar() {
   const n = mediaSelection.size();
   // Hide the batch bar only when the sole selected item is the one the editor
@@ -1046,7 +1241,11 @@ function buildMediaTile(item, edited) {
   tile.dataset.path = item.path;
   tile.dataset.sig = `${item.modified}|${item.edits_mtime}`;
   const thumb = el("div", "mediatile__thumb"); // the card visual + selection ring
-  const img = el("img", "mediatile__img", { loading: "lazy", alt: item.name });
+  const img = el("img", "mediatile__img", {
+    loading: "lazy",
+    alt: item.name,
+    draggable: false, // pointer-drag is ours; block native image drag
+  });
   if (item.is_heic) {
     thumb.append(el("span", "mediatile__badge", { textContent: "HEIC" }));
   } else if (isImage && isWebExport(item.name)) {
@@ -1083,7 +1282,11 @@ function buildMediaTile(item, edited) {
 
   if (mediaSelection.has(item.path)) tile.classList.add("is-selected");
 
+  tile.addEventListener("pointerdown", (e) =>
+    onMediaTilePointerDown(e, item, tile),
+  );
   tile.addEventListener("click", (e) => {
+    if (Date.now() - lastMediaDragEnd < 300) return; // ignore click after drag
     // Shift-click selects a range; ⌘/Ctrl-click toggles; plain click selects
     // only it (and opens the editor when it's a single image).
     if (e.shiftKey) {
@@ -1156,7 +1359,8 @@ async function ensureEditedThumb(item) {
 async function loadMedia(path) {
   mediaProjectPath = path;
   const grid = document.getElementById("media-grid");
-  const items = await invoke("list_media", { path });
+  await loadMediaMeta(path);
+  const items = sortMediaItems(await invoke("list_media", { path }));
 
   mediaItemsByPath.clear();
   for (const it of items) mediaItemsByPath.set(it.path, it);
@@ -1392,8 +1596,8 @@ async function initDragDrop() {
   const { listen } = window.__TAURI__.event;
   const zone = document.getElementById("dropzone");
   const show = () => {
-    // Ignore drags that originate from reordering a note card.
-    if (draggingNoteId) return;
+    // Ignore internal pointer-drags (reordering note cards or media tiles).
+    if (draggingNoteId || mediaDragActive) return;
     if (activeProject) zone.hidden = false;
   };
   await listen("tauri://drag-enter", show);
@@ -2825,6 +3029,16 @@ function initExtend() {
 
 function initEditor() {
   buildTonalSliders();
+
+  // Media sort toggles.
+  document.getElementById("media-sort").addEventListener("click", (e) => {
+    const btn = e.target.closest(".sort-btn");
+    if (!btn) return;
+    mediaSortMode = btn.dataset.sort;
+    updateMediaSortUI();
+    saveMediaMeta();
+    if (mediaProjectPath) loadMedia(mediaProjectPath);
+  });
   document
     .getElementById("lb-export")
     .addEventListener("click", () => exportEdited(false));

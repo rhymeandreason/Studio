@@ -1399,7 +1399,39 @@ td.ntable__total-cell {
 .media-toolbar {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
     margin-bottom: 14px;
+}
+
+.media-sort {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 2px;
+}
+
+.sort-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--sans);
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.sort-btn:hover {
+    color: var(--text);
+}
+
+.sort-btn.is-active {
+    background: var(--elevated);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
 }
 
 .media-toolbar .btn-ghost {
@@ -1438,6 +1470,22 @@ td.ntable__total-cell {
     grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
     align-items: start;
     gap: 12px;
+    position: relative;
+}
+
+.media-drop-indicator {
+    position: absolute;
+    display: none;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--accent);
+    pointer-events: none;
+    z-index: 5;
+    transition: left 0.08s ease, top 0.08s ease, height 0.08s ease;
+}
+
+.mediatile.is-dragging {
+    opacity: 0.4;
 }
 
 .mediatile {
