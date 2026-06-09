@@ -42,6 +42,8 @@ struct Workspace {
     #[serde(default)]
     files: Vec<String>,
     #[serde(default)]
+    folders: Vec<String>,
+    #[serde(default)]
     urls: Vec<String>,
     #[serde(default)]
     claude: ClaudeCfg,
@@ -771,6 +773,88 @@ fn import_media(project_path: String, files: Vec<String>) -> Result<Vec<String>,
     Ok(imported)
 }
 
+/// A collision-free destination in `dir` for `src`'s filename (name-1.ext, …).
+fn unique_dest(dir: &Path, src: &Path) -> Option<PathBuf> {
+    let fname = src.file_name()?;
+    let mut dest = dir.join(fname);
+    if dest.exists() {
+        let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+        let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("");
+        let mut n = 1;
+        loop {
+            let cand = if ext.is_empty() {
+                dir.join(format!("{stem}-{n}"))
+            } else {
+                dir.join(format!("{stem}-{n}.{ext}"))
+            };
+            if !cand.exists() {
+                dest = cand;
+                break;
+            }
+            n += 1;
+        }
+    }
+    Some(dest)
+}
+
+/// Move a file, falling back to copy+delete across volumes (rename EXDEV).
+fn move_into(src: &Path, dest: &Path) -> Result<(), String> {
+    if std::fs::rename(src, dest).is_err() {
+        std::fs::copy(src, dest).map_err(|e| e.to_string())?;
+        std::fs::remove_file(src).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+struct DropResult {
+    images: Vec<String>,
+    files: Vec<String>,
+    folders: Vec<String>,
+}
+
+/// Route OS-dropped paths (interaction-spec §8.1): image files → media/,
+/// non-image files → the project root, folders → returned for the Workspace
+/// (referenced in place, not moved).
+#[tauri::command]
+fn handle_dropped_paths(project_path: String, paths: Vec<String>) -> Result<DropResult, String> {
+    let proj = PathBuf::from(&project_path);
+    let media_dir = proj.join("media");
+    let mut images = Vec::new();
+    let mut files = Vec::new();
+    let mut folders = Vec::new();
+    for p in &paths {
+        let src = PathBuf::from(p);
+        if src.is_dir() {
+            folders.push(p.clone());
+            continue;
+        }
+        let is_image = src
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| IMAGE_EXTS.contains(&e.to_lowercase().as_str()))
+            .unwrap_or(false);
+        let dir = if is_image { &media_dir } else { &proj };
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        let Some(dest) = unique_dest(dir, &src) else {
+            continue;
+        };
+        if move_into(&src, &dest).is_ok() {
+            let s = dest.to_string_lossy().to_string();
+            if is_image {
+                images.push(s);
+            } else {
+                files.push(s);
+            }
+        }
+    }
+    Ok(DropResult {
+        images,
+        files,
+        folders,
+    })
+}
+
 /// MIME type for an image extension (used for data URLs).
 fn mime_for(ext: &str) -> &'static str {
     match ext {
@@ -1310,6 +1394,7 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
             run_shortcut,
             heic_preview,
             import_media,
+            handle_dropped_paths,
             paste_image,
             paste_note_image,
             copy_note_asset,

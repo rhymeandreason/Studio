@@ -397,6 +397,12 @@ const LIST_META = {
     placeholder: "~/code/file.ts",
     browse: "file",
   },
+  folders: {
+    icon: "folder_open",
+    label: "Folder",
+    placeholder: "~/some/folder",
+    browse: "dir",
+  },
   urls: { icon: "link", label: "URL", placeholder: "https://…" },
 };
 
@@ -591,6 +597,7 @@ async function loadWorkspace(path) {
   setList("figma", ws.figma ? [ws.figma] : []);
   setList("apps", ws.apps);
   setList("files", ws.files);
+  setList("folders", ws.folders);
   setList("urls", ws.urls);
   setStatus("");
   wsPinnedTab = ws.pinnedTab || null;
@@ -614,6 +621,7 @@ function readWorkspaceForm() {
     claude: { mode: wsClaude },
     apps: readList("apps"),
     files: readList("files"),
+    folders: readList("folders"),
     urls: readList("urls"),
     pinnedTab: wsPinnedTab,
   };
@@ -1397,16 +1405,24 @@ async function initDragDrop() {
     const paths = (e.payload && e.payload.paths) || [];
     if (!paths.length) return;
     try {
-      const imported = await invoke("import_media", {
+      // Classify the drop (§8.1): images → media/, files → project root,
+      // folders → Workspace entries (referenced in place).
+      const res = await invoke("handle_dropped_paths", {
         projectPath: activeProject.path,
-        files: paths,
+        paths,
       });
-      if (imported.length) {
+      if (res.folders.length) {
+        res.folders.forEach((f) => addRow("folders", f));
+        scheduleWorkspaceSave();
+        selectTab("workspace");
+      } else if (res.images.length) {
         selectTab("media");
         loadMedia(activeProject.path);
+      } else if (res.files.length) {
+        // Non-image files moved into the project root; nothing to surface.
       }
     } catch (err) {
-      console.error("Import failed:", err);
+      console.error("Drop failed:", err);
     }
   });
 }
