@@ -313,6 +313,13 @@ body {
     border-bottom-color: var(--accent);
 }
 
+/* Highlighted as a drop target (e.g. dragging a media tile onto Notes). */
+.tab.is-drop-target {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    border-radius: 8px;
+    color: var(--text);
+}
+
 /* Main scroll area */
 .window {
     flex: 1 1 auto;
