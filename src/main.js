@@ -2059,6 +2059,51 @@ function blobToBase64(blob) {
   });
 }
 
+// Bake a media item (geometry + crop + tonal applied) to a full-res PNG Blob,
+// independent of the editor. Unedited images bake to identity (original pixels).
+async function bakeItemToBlob(item) {
+  const [dataUrl, saved] = await Promise.all([
+    invoke("read_image_data", { path: item.path }),
+    invoke("read_edits", { path: item.path }),
+  ]);
+  const img = await loadImage(dataUrl);
+  const edits = { ...defaultEdits(), ...saved };
+  const oriented = renderOriented(img, edits);
+  exportGLCanvas.width = oriented.width;
+  exportGLCanvas.height = oriented.height;
+  glAdjust(exportGLCanvas, oriented, edits);
+  let out = exportGLCanvas;
+  const c = edits.crop;
+  if (c && (c.x > 0 || c.y > 0 || c.w < 1 || c.h < 1)) {
+    const sx = Math.round(c.x * exportGLCanvas.width);
+    const sy = Math.round(c.y * exportGLCanvas.height);
+    const sw = Math.max(1, Math.round(c.w * exportGLCanvas.width));
+    const sh = Math.max(1, Math.round(c.h * exportGLCanvas.height));
+    const cropped = document.createElement("canvas");
+    cropped.width = sw;
+    cropped.height = sh;
+    cropped.getContext("2d").drawImage(exportGLCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+    out = cropped;
+  }
+  return await new Promise((res) => out.toBlob(res, "image/png"));
+}
+
+// Shift+Mod+c: copy the actual image. Single → baked PNG bitmap on the
+// clipboard (pastes into editors and Notes image-notes). The write must stay
+// synchronous in the gesture, so the (async) bake rides as a Promise inside the
+// ClipboardItem. (Multi-select → Finder-style file references is a native
+// follow-up; for now it copies the first selected image as a bitmap.)
+function copyMediaImage() {
+  const items = mediaSelection
+    .get()
+    .map((p) => mediaItemsByPath.get(p))
+    .filter((it) => it && it.kind === "image");
+  if (!items.length) return;
+  navigator.clipboard
+    .write([new ClipboardItem({ "image/png": bakeItemToBlob(items[0]) })])
+    .catch((e) => console.error("Copy image failed:", e));
+}
+
 async function exportEdited(replace) {
   if (!editItem) return;
   await ensureFullRes();
@@ -3234,6 +3279,7 @@ function initMedia() {
     "Mod+c": () => {
       if (editorActive()) copyAdjustments();
     },
+    "Mod+Shift+c": copyMediaImage,
     "Mod+v": () => {
       if (editorActive()) pasteAdjustments();
       else if (mediaSelection.size()) batchPaste();
