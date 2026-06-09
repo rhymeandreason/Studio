@@ -6,6 +6,9 @@
 import { NOTE_THEMES, NOTE_FONTS } from "./themes.js";
 import { createSelection } from "./selection.js";
 import { installKeyDispatcher } from "./keymap.js";
+import { el, mi, genId, clamp } from "./dom.js";
+import { glAdjust } from "./gl.js";
+import { loadImage, srcW, srcH, makePreview, renderOriented, defaultEdits } from "./imageutil.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -69,11 +72,6 @@ async function pickPath(opts = {}) {
 function appNameFromPath(path) {
   const base = path.split("/").pop() || path;
   return base.replace(/\.app$/i, "");
-}
-
-// Material Symbols icon markup.
-function mi(name, sm = true) {
-  return `<span class="mi${sm ? " mi-sm" : ""}">${name}</span>`;
 }
 
 let activeProject = null;
@@ -891,15 +889,6 @@ function invalidateThumb(path) {
   thumbCache.delete(path);
 }
 
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
-}
-
 // Bake a thumbnail (geometry + crop + tonal) from an in-memory source image or
 // canvas → data URL. Source must be clean (data-URL/canvas) so toDataURL works.
 // Bake a thumbnail from an already-oriented (rotate/flip/straighten) canvas,
@@ -1408,52 +1397,9 @@ let editState = null; // current adjustments
 let editSaveTimer = null;
 let editDirty = false; // true once an edit control has changed editState
 
-// Longest side (px) for the inline thumbnail and the lightbox preview.
+// Longest side (px) for the inline thumbnail.
 const THUMB_MAX = 768;
-const PREVIEW_MAX = 2048;
 
-// Width/height of an image source (HTMLImageElement or canvas).
-function srcW(s) {
-  return s.naturalWidth || s.width;
-}
-function srcH(s) {
-  return s.naturalHeight || s.height;
-}
-
-// A downscaled copy of `img` (longest side ≤ max) for fast preview rendering.
-// Returns the image itself when it's already small enough. Derived from the
-// clean data-URL image, so it stays WebGL/export-safe.
-function makePreview(img, max = PREVIEW_MAX) {
-  const w = srcW(img);
-  const h = srcH(img);
-  const scale = Math.min(1, max / Math.max(w, h));
-  if (scale === 1) return img;
-  const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(w * scale));
-  c.height = Math.max(1, Math.round(h * scale));
-  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-  return c;
-}
-
-function defaultEdits() {
-  return {
-    version: 1,
-    rotate: 0,
-    flipH: false,
-    flipV: false,
-    straighten: 0,
-    crop: null, // { x, y, w, h } as fractions of the oriented image; null = full
-    cropAspect: null, // width/height ratio for locked resizing; null = free
-    // Tonal adjustments, each -100..100 (0 = no change).
-    exposure: 0,
-    contrast: 0,
-    saturation: 0,
-    temperature: 0,
-    tint: 0,
-    highlights: 0,
-    shadows: 0,
-  };
-}
 
 // The seven always-visible tonal sliders.
 const TONAL = [
@@ -1466,51 +1412,6 @@ const TONAL = [
   { key: "shadows", label: "Shadows" },
 ];
 
-function clamp(v, min, max) {
-  return Math.max(min, Math.min(max, v));
-}
-
-// Minimum uniform scale so rotating a w×h frame by `deg` leaves no empty corners.
-function coverScale(w, h, deg) {
-  const r = (Math.abs(deg) * Math.PI) / 180;
-  if (!r) return 1;
-  const cos = Math.cos(r);
-  const sin = Math.sin(r);
-  return Math.max((w * cos + h * sin) / w, (w * sin + h * cos) / h);
-}
-
-// Render the oriented (rotate + flip + straighten) image (HTMLImageElement or
-// canvas) at its source resolution.
-function renderOriented(img, edits) {
-  const iw = srcW(img);
-  const ih = srcH(img);
-  const rot = (((edits.rotate || 0) % 360) + 360) % 360;
-  const swap = rot === 90 || rot === 270;
-  const ow = swap ? ih : iw;
-  const oh = swap ? iw : ih;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = ow;
-  canvas.height = oh;
-  const ctx = canvas.getContext("2d");
-
-  // Straighten: rotate around center, scaled to cover the frame.
-  const sdeg = edits.straighten || 0;
-  if (sdeg) {
-    const s = coverScale(ow, oh, sdeg);
-    ctx.translate(ow / 2, oh / 2);
-    ctx.rotate((sdeg * Math.PI) / 180);
-    ctx.scale(s, s);
-    ctx.translate(-ow / 2, -oh / 2);
-  }
-  // Orientation: 90° rotation + flips, image drawn centered.
-  ctx.translate(ow / 2, oh / 2);
-  ctx.rotate((rot * Math.PI) / 180);
-  ctx.scale(edits.flipH ? -1 : 1, edits.flipV ? -1 : 1);
-  ctx.drawImage(img, -iw / 2, -ih / 2);
-
-  return canvas;
-}
 
 // Cache the oriented (geometry-only) canvas; recompute just when geometry changes.
 let orientedCache = null;
@@ -1534,117 +1435,6 @@ function getOriented(src = editPreview, tag = "preview") {
     orientedSig = sig;
   }
   return orientedCache;
-}
-
-// --- WebGL tonal-adjustment pipeline ---------------------------------------
-
-const TONAL_FRAG = `
-  precision mediump float;
-  varying vec2 v_uv;
-  uniform sampler2D u_tex;
-  uniform float u_exposure, u_contrast, u_saturation, u_temp, u_tint,
-                u_highlights, u_shadows;
-  const vec3 LUMA = vec3(0.299, 0.587, 0.114);
-  void main() {
-    vec4 t = texture2D(u_tex, v_uv);
-    vec3 c = t.rgb;
-    c *= u_exposure;                       // exposure (factor)
-    c.r += u_temp * 0.1; c.b -= u_temp * 0.1; // temperature
-    c.g += u_tint * 0.1;                   // tint
-    c = (c - 0.5) * u_contrast + 0.5;      // contrast
-    float l1 = dot(clamp(c, 0.0, 1.0), LUMA);
-    c += u_shadows * (1.0 - smoothstep(0.0, 0.5, l1));    // lift/lower shadows
-    c += u_highlights * smoothstep(0.5, 1.0, l1);         // recover/boost highlights
-    float l2 = dot(clamp(c, 0.0, 1.0), LUMA);
-    c = mix(vec3(l2), c, u_saturation);    // saturation
-    gl_FragColor = vec4(clamp(c, 0.0, 1.0), t.a);
-  }`;
-
-const TONAL_VERT = `
-  attribute vec2 a_pos;
-  varying vec2 v_uv;
-  void main() {
-    v_uv = (a_pos + 1.0) * 0.5;
-    gl_Position = vec4(a_pos, 0.0, 1.0);
-  }`;
-
-function compileShader(gl, type, src) {
-  const sh = gl.createShader(type);
-  gl.shaderSource(sh, src);
-  gl.compileShader(sh);
-  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-    throw new Error(gl.getShaderInfoLog(sh));
-  }
-  return sh;
-}
-
-function getGL(canvas) {
-  if (canvas._glctx) return canvas._glctx;
-  const gl = canvas.getContext("webgl", {
-    preserveDrawingBuffer: true,
-    premultipliedAlpha: false,
-  });
-  const prog = gl.createProgram();
-  gl.attachShader(prog, compileShader(gl, gl.VERTEX_SHADER, TONAL_VERT));
-  gl.attachShader(prog, compileShader(gl, gl.FRAGMENT_SHADER, TONAL_FRAG));
-  gl.linkProgram(prog);
-  gl.useProgram(prog);
-
-  const buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
-    gl.STATIC_DRAW,
-  );
-  const aPos = gl.getAttribLocation(prog, "a_pos");
-  gl.enableVertexAttribArray(aPos);
-  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-
-  const tex = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-
-  const u = (n) => gl.getUniformLocation(prog, n);
-  canvas._glctx = {
-    gl,
-    tex,
-    lastSource: null,
-    u: {
-      exposure: u("u_exposure"),
-      contrast: u("u_contrast"),
-      saturation: u("u_saturation"),
-      temp: u("u_temp"),
-      tint: u("u_tint"),
-      highlights: u("u_highlights"),
-      shadows: u("u_shadows"),
-    },
-  };
-  return canvas._glctx;
-}
-
-// Draw `source` (a canvas) into `canvas` with the tonal adjustments applied.
-function glAdjust(canvas, source, ed) {
-  const ctx = getGL(canvas);
-  const { gl, u, tex } = ctx;
-  gl.viewport(0, 0, canvas.width, canvas.height);
-  if (ctx.lastSource !== source) {
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-    ctx.lastSource = source;
-  }
-  gl.uniform1f(u.exposure, Math.pow(2, (ed.exposure || 0) / 100));
-  gl.uniform1f(u.contrast, 1 + (ed.contrast || 0) / 100);
-  gl.uniform1f(u.saturation, 1 + (ed.saturation || 0) / 100);
-  gl.uniform1f(u.temp, (ed.temperature || 0) / 100);
-  gl.uniform1f(u.tint, (ed.tint || 0) / 100);
-  gl.uniform1f(u.highlights, ((ed.highlights || 0) / 100) * 0.5);
-  gl.uniform1f(u.shadows, ((ed.shadows || 0) / 100) * 0.5);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
 function renderEditorPreview() {
@@ -3299,16 +3089,7 @@ function clearRowSelection() {
 let notesProjectPath = null;
 let notesSaveTimer = null;
 
-function el(tag, className, props = {}) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  Object.assign(node, props);
-  return node;
-}
 
-function genId() {
-  return "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
 
 function setNotesStatus(text) {
   document.getElementById("notes-status").textContent = text;
