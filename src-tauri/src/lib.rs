@@ -1399,6 +1399,7 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
 }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
