@@ -448,6 +448,14 @@ async function showOverview() {
   document.getElementById("empty-state").hidden = true;
   document.getElementById("project-content").hidden = true;
   document.getElementById("overview").hidden = false;
+
+  // Hide the editor side panel if it was open.
+  const appRight = document.getElementById("app-right");
+  if (appRight && !appRight.hidden) {
+    appRight.hidden = true;
+    document.getElementById("media-side").hidden = true;
+    invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+  }
 }
 
 // --- Tabs ------------------------------------------------------------------
