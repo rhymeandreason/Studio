@@ -475,8 +475,24 @@ function bakeThumbFromOriented(oriented, edits) {
 
   const MAX = 400;
   const scale = Math.min(1, MAX / Math.max(base.width, base.height));
-  thumbGLCanvas.width = Math.max(1, Math.round(base.width * scale));
-  thumbGLCanvas.height = Math.max(1, Math.round(base.height * scale));
+  const tw = Math.max(1, Math.round(base.width * scale));
+  const th = Math.max(1, Math.round(base.height * scale));
+
+  // Skip WebGL entirely when no tonal edits are applied — avoids spinning up
+  // the GPU process just to view/browse images.
+  const hasTonal =
+    edits.exposure || edits.contrast || edits.saturation ||
+    edits.temperature || edits.tint || edits.highlights || edits.shadows;
+  if (!hasTonal) {
+    const plain = document.createElement("canvas");
+    plain.width = tw;
+    plain.height = th;
+    plain.getContext("2d").drawImage(base, 0, 0, tw, th);
+    return plain.toDataURL("image/png");
+  }
+
+  thumbGLCanvas.width = tw;
+  thumbGLCanvas.height = th;
   glAdjust(thumbGLCanvas, base, edits);
   return thumbGLCanvas.toDataURL("image/png");
 }
