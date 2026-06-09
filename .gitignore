@@ -23,3 +23,4 @@ dist-ssr
 *.sln
 *.sw?
 
+.claude/worktrees/agent-a7cabae77db2dab01/
