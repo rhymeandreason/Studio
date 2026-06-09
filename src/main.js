@@ -3068,6 +3068,124 @@ function openSelectedNoteModal() {
   if (n) openNoteModal(n);
 }
 
+// --- Note copy / paste (interaction-spec §7) -------------------------------
+
+function stripNoteForCopy(n) {
+  const { id, createdAt, ...rest } = n;
+  return rest;
+}
+
+// Degraded plain-text form (external apps). Title (if any) leads as a heading.
+function noteToPlainText(n) {
+  let body;
+  if (n.kind === "checklist")
+    body = (n.items || [])
+      .map((i) => `- [${i.done ? "x" : " "}] ${i.text || ""}`)
+      .join("\n");
+  else if (n.kind === "table")
+    body = [n.columns || [], ...(n.rows || [])]
+      .map((r) => r.join("\t"))
+      .join("\n");
+  else body = n.body || "";
+
+  // Tables stay pure TSV (a title line would misalign spreadsheet paste); text
+  // and checklists get the title as a leading heading.
+  const title = (n.title || "").trim();
+  return title && n.kind !== "table" ? `${title}\n${body}` : body;
+}
+
+// Mod+c: degraded text → system clipboard (for external apps); the rich
+// Studio-native payload → an app-cache sidecar keyed by that text (§7.3). WebKit
+// strips custom HTML on clipboard write, so the sidecar — not an HTML flavor —
+// carries type + styling, and works across windows/projects.
+function copyNotes() {
+  const ids = new Set(notesSelection.get());
+  const notes = notesData.notes.filter((n) => ids.has(n.id));
+  if (!notes.length) return;
+  const text = notes.map(noteToPlainText).join("\n\n");
+  navigator.clipboard.writeText(text).catch((e) => console.error(e));
+  invoke("set_note_clipboard", {
+    data: JSON.stringify({ text, notes: notes.map(stripNoteForCopy) }),
+  });
+}
+
+// Mod+v: use the rich sidecar if it still matches the live clipboard text
+// (meaning the Studio copy is the most recent), else parse the system text.
+async function pasteIntoNotes() {
+  let text = "";
+  try {
+    text = await invoke("read_clipboard_text");
+  } catch (_) {}
+
+  try {
+    const stash = await invoke("get_note_clipboard");
+    if (stash) {
+      const { text: stashText, notes } = JSON.parse(stash);
+      if (Array.isArray(notes) && stashText === text) {
+        const created = notes.map((n) => ({
+          ...n,
+          id: genId(),
+          createdAt: new Date().toISOString(),
+        }));
+        notesData.notes.unshift(...created);
+        renderNotes();
+        scheduleNotesSave();
+        return;
+      }
+    }
+  } catch (_) {}
+
+  const now = () => new Date().toISOString();
+
+  if (text.includes("\t")) {
+    const rows = text
+      .trimEnd()
+      .split(/\r?\n/)
+      .map((r) => r.split("\t"));
+    const columns = rows[0].map((h) => h.trim() || "Column");
+    const dataRows = rows
+      .slice(1)
+      .map((r) => columns.map((_, ci) => (r[ci] ?? "").trim()));
+    notesData.notes.unshift({
+      id: genId(),
+      kind: "table",
+      title: "",
+      columns,
+      rows: dataRows,
+      totals: [],
+      createdAt: now(),
+    });
+  } else if (/\r?\n/.test(text.trim())) {
+    // Multiple lines → checklist (interaction-spec §7.2).
+    const items = text
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => ({ text: line.trim(), done: false }));
+    notesData.notes.unshift({
+      id: genId(),
+      kind: "checklist",
+      title: "",
+      items,
+      createdAt: now(),
+    });
+  } else if (text.trim()) {
+    notesData.notes.unshift({
+      id: genId(),
+      kind: "text",
+      title: "",
+      body: text.trim(),
+      createdAt: now(),
+    });
+  } else {
+    // No text — clipboard image. Image notes (§9) aren't built yet, so fall
+    // back to importing into media for now. TODO: create an image note.
+    pasteImageFromClipboard();
+    return;
+  }
+  renderNotes();
+  scheduleNotesSave();
+}
+
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".ntable__col-handle")) clearColSelection();
   if (!e.target.closest(".ntable__row-handle")) clearRowSelection();
@@ -3929,6 +4047,8 @@ function initNotes() {
     Backspace: deleteNotesSelection,
     ArrowLeft: () => moveSelectedNote(-1),
     ArrowRight: () => moveSelectedNote(1),
+    "Mod+c": copyNotes,
+    "Mod+v": pasteIntoNotes,
     Escape: clearNotesSelection,
   };
   installKeyDispatcher({

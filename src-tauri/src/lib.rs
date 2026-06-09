@@ -1029,6 +1029,27 @@ fn read_clipboard_text() -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// Studio-native note clipboard sidecar (interaction-spec §7.3, Option A).
+/// WebKit sanitizes clipboard HTML on write (stripping our marker), so the rich
+/// payload is stashed in an app-cache file and matched against the live system
+/// clipboard text on paste. Works across windows and projects.
+#[tauri::command]
+fn set_note_clipboard(app: AppHandle, data: String) -> Result<(), String> {
+    let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("note-clipboard.json"), data).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_note_clipboard(app: AppHandle) -> Result<String, String> {
+    let path = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("note-clipboard.json");
+    Ok(std::fs::read_to_string(path).unwrap_or_default())
+}
+
 /// Paste an image from the clipboard into a project's media/ folder (PNG).
 /// Returns the new file path; errors if the clipboard has no image.
 #[tauri::command]
@@ -1211,6 +1232,8 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
             import_media,
             paste_image,
             read_clipboard_text,
+            set_note_clipboard,
+            get_note_clipboard,
             reveal_in_finder,
             remove_background,
             extend_background,
