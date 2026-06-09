@@ -2049,10 +2049,17 @@ function hideDropIndicator() {
 function layoutBento() {
   const listEl = document.getElementById("notes-list");
   if (!listEl) return;
+
   const style = getComputedStyle(listEl);
+  // Clamp card spans to the actual column count so wide cards don't overflow.
+  const cols = style.gridTemplateColumns.split(" ").length;
   const row = parseFloat(style.gridAutoRows) || 8;
   const gap = parseFloat(style.rowGap) || 0;
   listEl.querySelectorAll(".notecard").forEach((card) => {
+    const noteId = card.dataset.noteId;
+    const note = noteId ? state.notesData.notes.find((n) => n.id === noteId) : null;
+    card.style.gridColumn = `span ${Math.min(note?.span || 1, cols)}`;
+
     // Reset so we measure the card's natural (content) height.
     card.style.gridRowEnd = "";
     const h = card.getBoundingClientRect().height;
