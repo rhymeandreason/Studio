@@ -679,16 +679,6 @@ export function addRow(list, value = "") {
   head.className = "ws-item__head";
   head.innerHTML = `${mi(meta.icon)}<span class="ws-item__type">${meta.label}</span>`;
 
-  const remove = document.createElement("button");
-  remove.type = "button";
-  remove.className = "btn-remove";
-  remove.innerHTML = mi("close");
-  remove.addEventListener("click", () => {
-    card.remove();
-    scheduleWorkspaceSave();
-    if (meta.singleton) setSingletonBtn(list, false);
-  });
-  head.append(remove);
   card.append(head);
 
   // Value input
@@ -1378,19 +1368,7 @@ function noteHeader(note) {
     scheduleNotesSave();
   });
 
-  const del = el("button", "btn-remove", {
-    type: "button",
-    innerHTML: mi("close"),
-  });
-  del.addEventListener("click", () => {
-    if (note.kind === "image" && note.src && state.notesProjectPath) {
-      invoke("delete_note_asset", { projectPath: state.notesProjectPath, src: note.src });
-    }
-    state.notesData.notes = state.notesData.notes.filter((n) => n.id !== note.id);
-    renderNotes();
-    scheduleNotesSave();
-  });
-  head.append(title, del);
+  head.append(title);
   return head;
 }
 
