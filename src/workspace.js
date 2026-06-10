@@ -2,7 +2,7 @@
 // folders/urls cards), and its autosave. Extracted from main.js. See
 // interaction-spec / BACKLOG file-split.
 
-import { mi } from "./dom.js";
+import { el, mi } from "./dom.js";
 import { createSelection } from "./selection.js";
 import { panelKeymaps } from "./keymap.js";
 import { state } from "./state.js";
@@ -367,7 +367,7 @@ async function refreshMemory() {
   if (!sysEl || !appEl || !devEl) return;
   try {
     const stats = await invoke("get_memory_stats");
-    sysEl.textContent = `System: ${stats.system_used_gb.toFixed(1)} / ${stats.system_total_gb.toFixed(0)} GB`;
+    sysEl.textContent = `Swap used: ${stats.swap_used_mb.toFixed(0)} / ${stats.swap_total_mb.toFixed(0)} MB`;
     appEl.textContent = `Studio app: ${stats.app_mb.toFixed(0)} MB`;
     devEl.textContent = stats.dev_server_mb
       ? `Dev server: ${stats.dev_server_mb.toFixed(0)} MB`
@@ -385,8 +385,61 @@ function startMemoryPolling() {
   memTimer = setInterval(refreshMemory, 5000);
 }
 
+async function openMemoryModal() {
+  const modal = document.getElementById("memory-modal");
+  const current = document.getElementById("mem-modal-current");
+  const list = document.getElementById("mem-modal-list");
+  current.textContent = "Loading…";
+  list.innerHTML = "";
+  modal.hidden = false;
+
+  try {
+    const [stats, procs] = await Promise.all([
+      invoke("get_memory_stats"),
+      invoke("get_top_processes"),
+    ]);
+    current.innerHTML = "";
+    current.append(
+      el("div", null, {
+        textContent: `Swap used: ${stats.swap_used_mb.toFixed(0)} / ${stats.swap_total_mb.toFixed(0)} MB`,
+      }),
+      el("div", null, { textContent: `Studio app: ${stats.app_mb.toFixed(0)} MB` }),
+    );
+    if (stats.dev_server_mb) {
+      current.append(
+        el("div", null, { textContent: `Dev server: ${stats.dev_server_mb.toFixed(0)} MB` }),
+      );
+    }
+    procs.forEach((p) => {
+      const tr = el("tr");
+      const label = p.count > 1 ? `${p.name} (${p.count})` : p.name;
+      tr.append(
+        el("td", null, { textContent: label }),
+        el("td", null, { textContent: `${p.mb.toFixed(0)} MB` }),
+      );
+      list.append(tr);
+    });
+  } catch (err) {
+    current.textContent = `Error: ${err}`;
+  }
+}
+
+function closeMemoryModal() {
+  document.getElementById("memory-modal").hidden = true;
+}
+
+function initMemoryModal() {
+  document
+    .getElementById("projhead-memory")
+    .addEventListener("click", openMemoryModal);
+  document
+    .getElementById("memory-modal-close")
+    .addEventListener("click", closeMemoryModal);
+}
+
 export function initWorkspaceForm() {
   startMemoryPolling();
+  initMemoryModal();
 
   document
     .querySelectorAll("[data-add-list]")

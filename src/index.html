@@ -653,6 +653,22 @@
         </div>
 
         <!-- New project modal -->
+        <div class="modal" id="memory-modal" hidden>
+            <div class="modal__card mem-modal__card">
+                <h2 class="modal__title">Memory usage</h2>
+                <div class="mem-modal__current" id="mem-modal-current"></div>
+                <table class="mem-modal__table">
+                    <thead>
+                        <tr><th>Process</th><th>RAM</th></tr>
+                    </thead>
+                    <tbody id="mem-modal-list"></tbody>
+                </table>
+                <div class="modal__actions">
+                    <button class="btn-ghost" id="memory-modal-close">Close</button>
+                </div>
+            </div>
+        </div>
+
         <div class="modal" id="new-modal" hidden>
             <div class="modal__card">
                 <h2 class="modal__title">New project</h2>

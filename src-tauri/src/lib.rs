@@ -1333,52 +1333,106 @@ struct MemoryStats {
     app_mb: f64,
     /// Vite dev server's resident memory, in MB (0 if not running).
     dev_server_mb: f64,
-    /// Total system memory in use, in GB (active + wired + compressed).
-    system_used_gb: f64,
-    /// Total installed system memory, in GB.
-    system_total_gb: f64,
+    /// Swap space currently in use, in MB. The clearest "things are getting
+    /// tight, consider quitting something" signal — unlike raw memory-used,
+    /// macOS keeps memory busy with disk cache even when there's no pressure.
+    swap_used_mb: f64,
+    /// Total swap space, in MB.
+    swap_total_mb: f64,
+}
+
+#[derive(Clone, Serialize)]
+struct ProcessMemory {
+    name: String,
+    mb: f64,
+    /// How many processes were summed into this entry (e.g. a browser's
+    /// renderer/GPU/helper processes are grouped under the app name).
+    count: u32,
+}
+
+/// macOS app bundles run as `/path/To/App.app/Contents/MacOS/Binary` (often
+/// with " Helper (Renderer)" etc suffixes on the binary itself). Group those
+/// under the bundle's name so e.g. all of Chrome's helpers count as one
+/// "Google Chrome" entry; everything else falls back to its own binary name.
+fn process_group_name(comm: &str) -> String {
+    let path = Path::new(comm);
+    for ancestor in path.ancestors() {
+        if let Some(name) = ancestor.file_name().and_then(|n| n.to_str()) {
+            if let Some(app_name) = name.strip_suffix(".app") {
+                return app_name.to_string();
+            }
+        }
+    }
+    path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| comm.to_string())
+}
+
+/// The top 10 apps by resident memory (helper/renderer processes grouped under
+/// their parent app), for the memory-usage modal — surfaces background apps
+/// the user might not realize are running.
+#[tauri::command]
+fn get_top_processes() -> Result<Vec<ProcessMemory>, String> {
+    let out = Command::new("ps")
+        .args(["-axo", "rss=,comm="])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let mut grouped: std::collections::HashMap<String, (f64, u32)> = std::collections::HashMap::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let line = line.trim();
+        let Some((rss, comm)) = line.split_once(' ') else { continue };
+        let Ok(mb) = rss.trim().parse::<f64>().map(|kb| kb / 1024.0) else { continue };
+        let entry = grouped.entry(process_group_name(comm.trim())).or_insert((0.0, 0));
+        entry.0 += mb;
+        entry.1 += 1;
+    }
+
+    let mut procs: Vec<ProcessMemory> = grouped
+        .into_iter()
+        .map(|(name, (mb, count))| ProcessMemory { name, mb, count })
+        .collect();
+    procs.sort_by(|a, b| b.mb.partial_cmp(&a.mb).unwrap_or(std::cmp::Ordering::Equal));
+    procs.truncate(10);
+    Ok(procs)
+}
+
+/// Parse a `sysctl vm.swapusage`-style value like "1024.00M" or "1.50G" into MB.
+fn parse_swap_value_mb(s: &str) -> Option<f64> {
+    let s = s.trim();
+    let (num, unit) = s.split_at(s.len().checked_sub(1)?);
+    let val: f64 = num.parse().ok()?;
+    match unit {
+        "M" => Some(val),
+        "G" => Some(val * 1024.0),
+        "K" => Some(val / 1024.0),
+        _ => None,
+    }
 }
 
 /// Memory stats for the Workspace header: Studio's own RAM, the Vite dev
-/// server's RAM (if running), and overall system memory usage.
+/// server's RAM (if running), and system swap usage.
 #[tauri::command]
 fn get_memory_stats() -> Result<MemoryStats, String> {
     let app_mb = rss_mb_for_pid(&std::process::id().to_string()).unwrap_or(0.0);
     let dev_server_mb = rss_mb_for_pattern("tauri dev");
 
-    let total_out = Command::new("sysctl")
-        .args(["-n", "hw.memsize"])
+    let swap_out = Command::new("sysctl")
+        .args(["-n", "vm.swapusage"])
         .output()
         .map_err(|e| e.to_string())?;
-    let total_bytes: f64 = String::from_utf8_lossy(&total_out.stdout)
-        .trim()
-        .parse()
-        .map_err(|_| "could not parse sysctl output".to_string())?;
-    let system_total_gb = total_bytes / 1024.0 / 1024.0 / 1024.0;
+    let swap_text = String::from_utf8_lossy(&swap_out.stdout);
+    let mut swap_used_mb = 0.0;
+    let mut swap_total_mb = 0.0;
+    for part in swap_text.split_whitespace().collect::<Vec<_>>().windows(3) {
+        match part {
+            ["total", "=", v] => swap_total_mb = parse_swap_value_mb(v).unwrap_or(0.0),
+            ["used", "=", v] => swap_used_mb = parse_swap_value_mb(v).unwrap_or(0.0),
+            _ => {}
+        }
+    }
 
-    let vm_out = Command::new("vm_stat").output().map_err(|e| e.to_string())?;
-    let vm_text = String::from_utf8_lossy(&vm_out.stdout);
-    let page_size: f64 = vm_text
-        .lines()
-        .next()
-        .and_then(|l| l.split("page size of ").nth(1))
-        .and_then(|s| s.split(' ').next())
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(4096.0);
-    let page_count = |label: &str| -> f64 {
-        vm_text
-            .lines()
-            .find(|l| l.starts_with(label))
-            .and_then(|l| l.split(':').nth(1))
-            .and_then(|s| s.trim().trim_end_matches('.').parse().ok())
-            .unwrap_or(0.0)
-    };
-    let used_pages = page_count("Pages active")
-        + page_count("Pages wired down")
-        + page_count("Pages occupied by compressor");
-    let system_used_gb = used_pages * page_size / 1024.0 / 1024.0 / 1024.0;
-
-    Ok(MemoryStats { app_mb, dev_server_mb, system_used_gb, system_total_gb })
+    Ok(MemoryStats { app_mb, dev_server_mb, swap_used_mb, swap_total_mb })
 }
 
 /// Launch a project's workspace: open apps, files, URLs, the Figma design, and
@@ -1485,6 +1539,7 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
             save_workspace,
             launch_workspace,
             get_memory_stats,
+            get_top_processes,
             read_notes,
             save_notes,
             list_media,

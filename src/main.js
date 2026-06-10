@@ -542,6 +542,7 @@ document.addEventListener("click", (e) => {
   if (id === "extend")   { document.getElementById("extend").hidden   = true; return; }
   if (id === "webexport"){ document.getElementById("webexport").hidden = true; return; }
   if (id === "cutout")   { document.getElementById("cutout").hidden   = true; return; }
+  if (id === "memory-modal") { document.getElementById("memory-modal").hidden = true; return; }
 });
 
 function showNewError(msg) {
