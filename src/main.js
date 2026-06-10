@@ -18,6 +18,7 @@ import {
 } from "./media.js";
 import {
   initLaunch,
+  initClaudeButton,
   initWorkspaceForm,
   loadWorkspace,
   scheduleWorkspaceSave,
@@ -1810,6 +1811,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   initTabs();
   initAllProjectsButton();
   initLaunch();
+  initClaudeButton();
   initWorkspaceForm();
   initNotes();
   initMedia();

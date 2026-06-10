@@ -31,6 +31,14 @@ function appNameFromPath(path) {
 
 const LAUNCH_LABEL = `${mi("rocket_launch")}Launch workspace`;
 
+export function initClaudeButton() {
+  const btn = document.getElementById("claude-btn");
+  btn.addEventListener("click", () => {
+    if (!state.activeProject) return;
+    invoke("open_claude_window", { projectPath: state.activeProject.path });
+  });
+}
+
 export function initLaunch() {
   const btn = document.getElementById("launch-btn");
   btn.addEventListener("click", async () => {

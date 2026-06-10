@@ -1,7 +1,9 @@
 mod patchmatch;
 
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -1728,6 +1730,258 @@ fn launch_workspace(app: AppHandle, path: String) -> Result<(), String> {
     Ok(())
 }
 
+// --- Claude companion window -------------------------------------------
+
+/// GUI apps don't inherit the user's shell PATH (nvm, homebrew, etc.), so
+/// spawning "claude" — and "claude" itself spawning "node" via its shebang —
+/// often fails even though it works fine from a terminal. Resolve PATH via a
+/// login shell (which sources nvm/profile scripts) once, falling back to the
+/// app's own PATH plus common install dirs.
+fn claude_path() -> String {
+    if let Ok(out) = Command::new("/bin/zsh")
+        .args(["-l", "-c", "echo $PATH"])
+        .output()
+    {
+        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !path.is_empty() {
+            return path;
+        }
+    }
+    let mut path = std::env::var("PATH").unwrap_or_default();
+    for extra in ["/opt/homebrew/bin", "/usr/local/bin"] {
+        path.push(':');
+        path.push_str(extra);
+    }
+    path
+}
+
+/// A running `claude -p` subprocess for one companion-window chat session.
+struct ClaudeProc {
+    child: Child,
+    stdin: ChildStdin,
+}
+
+#[derive(Default)]
+struct ClaudeState {
+    procs: Mutex<HashMap<String, ClaudeProc>>,
+}
+
+/// Open (or focus) the Claude companion window, then tell it which session
+/// (and project) to show. The frontend listens for "claude-jump".
+#[tauri::command]
+fn open_claude_window(
+    app: AppHandle,
+    key: Option<String>,
+    project_path: Option<String>,
+) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("claude") {
+        let _ = win.show();
+        let _ = win.set_focus();
+    } else {
+        WebviewWindowBuilder::new(&app, "claude", WebviewUrl::App("claude/index.html".into()))
+            .title("Claude")
+            .inner_size(600.0, 800.0)
+            .min_inner_size(420.0, 360.0)
+            .build()
+            .map_err(|e| e.to_string())?;
+    }
+    let _ = app.emit(
+        "claude-jump",
+        serde_json::json!({ "key": key, "projectPath": project_path }),
+    );
+    Ok(())
+}
+
+/// Send a message to a companion-window chat session, spawning the `claude`
+/// subprocess for it on first use. `key` is a UI-side session id used to
+/// route streamed output back via the "claude-stream-<key>" event; `resume`
+/// is the underlying Claude Code session id to resume, if any.
+#[tauri::command]
+fn claude_send(
+    app: AppHandle,
+    state: tauri::State<ClaudeState>,
+    key: String,
+    project_path: String,
+    model: String,
+    text: String,
+    resume: Option<String>,
+) -> Result<(), String> {
+    let mut procs = state.procs.lock().unwrap();
+    if !procs.contains_key(&key) {
+        let mut cmd = Command::new("claude");
+        cmd.env("PATH", claude_path())
+            .current_dir(&project_path)
+            .arg("-p")
+            .args(["--input-format", "stream-json"])
+            .args(["--output-format", "stream-json"])
+            .arg("--verbose")
+            .arg("--include-partial-messages");
+        if !model.trim().is_empty() {
+            cmd.args(["--model", model.trim()]);
+        }
+        if let Some(r) = &resume {
+            if !r.trim().is_empty() {
+                cmd.args(["--resume", r.trim()]);
+            }
+        }
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+        let stdout = child.stdout.take().ok_or("no stdout")?;
+        let stderr = child.stderr.take().ok_or("no stderr")?;
+        let stdin = child.stdin.take().ok_or("no stdin")?;
+
+        let handle = app.clone();
+        let event_key = key.clone();
+        std::thread::spawn(move || {
+            let event_name = format!("claude-stream-{event_key}");
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                let Ok(line) = line else { break };
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let _ = handle.emit(&event_name, line);
+            }
+            let _ = handle.emit(&event_name, "{\"type\":\"__closed__\"}".to_string());
+        });
+
+        let handle = app.clone();
+        let event_key = key.clone();
+        std::thread::spawn(move || {
+            let event_name = format!("claude-stream-{event_key}");
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                let Ok(line) = line else { break };
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let payload = serde_json::json!({ "type": "__stderr__", "line": line });
+                let _ = handle.emit(&event_name, payload.to_string());
+            }
+        });
+
+        procs.insert(key.clone(), ClaudeProc { child, stdin });
+    }
+
+    let proc = procs.get_mut(&key).unwrap();
+    let msg = serde_json::json!({
+        "type": "user",
+        "message": { "role": "user", "content": [{ "type": "text", "text": text }] }
+    });
+    writeln!(proc.stdin, "{}", msg).map_err(|e| e.to_string())?;
+    proc.stdin.flush().map_err(|e| e.to_string())
+}
+
+/// Kill a companion-window chat session's subprocess, if running.
+#[tauri::command]
+fn claude_stop(state: tauri::State<ClaudeState>, key: String) {
+    if let Some(mut proc) = state.procs.lock().unwrap().remove(&key) {
+        let _ = proc.child.kill();
+    }
+}
+
+/// Persisted list of companion-window sessions (id, name, project, model, etc),
+/// stored as opaque JSON managed entirely by the frontend.
+#[tauri::command]
+fn read_claude_sessions(app: AppHandle) -> String {
+    let dir = match app.path().app_config_dir() {
+        Ok(d) => d,
+        Err(_) => return String::new(),
+    };
+    std::fs::read_to_string(dir.join("claude-sessions.json")).unwrap_or_default()
+}
+
+#[tauri::command]
+fn save_claude_sessions(app: AppHandle, data: String) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("claude-sessions.json"), data).map_err(|e| e.to_string())
+}
+
+/// One existing Claude Code session found on disk for a project.
+#[derive(Clone, Serialize)]
+struct ClaudeHistorySession {
+    session_id: String,
+    summary: String,
+    modified: u64,
+}
+
+/// List Claude Code sessions previously recorded for `project_path`, by
+/// reading `~/.claude/projects/<encoded-path>/*.jsonl` (the format Claude
+/// Code itself uses for `--resume`). Newest first.
+#[tauri::command]
+fn list_claude_project_sessions(app: AppHandle, project_path: String) -> Vec<ClaudeHistorySession> {
+    let Ok(home) = app.path().home_dir() else {
+        return Vec::new();
+    };
+    let encoded = project_path.replace('/', "-");
+    let dir = home.join(".claude/projects").join(encoded);
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+
+    let mut sessions = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+        let Some(session_id) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let modified = entry
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
+        // First user message becomes the summary.
+        let mut summary = String::new();
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            for line in text.lines() {
+                let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+                    continue;
+                };
+                if v.get("type").and_then(|t| t.as_str()) == Some("user") {
+                    let content = &v["message"]["content"];
+                    let text = if let Some(s) = content.as_str() {
+                        Some(s.to_string())
+                    } else if let Some(arr) = content.as_array() {
+                        arr.iter()
+                            .find(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
+                            .and_then(|b| b["text"].as_str())
+                            .map(|s| s.to_string())
+                    } else {
+                        None
+                    };
+                    if let Some(text) = text {
+                        if !text.trim().is_empty() {
+                            summary = text.trim().chars().take(60).collect();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if summary.is_empty() {
+            continue;
+        }
+
+        sessions.push(ClaudeHistorySession {
+            session_id: session_id.to_string(),
+            summary,
+            modified,
+        });
+    }
+    sessions.sort_by(|a, b| b.modified.cmp(&a.modified));
+    sessions
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
 /// Move an entire project folder to the Trash.
@@ -1760,7 +2014,14 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .manage(ClaudeState::default())
         .invoke_handler(tauri::generate_handler![
+            open_claude_window,
+            claude_send,
+            claude_stop,
+            read_claude_sessions,
+            save_claude_sessions,
+            list_claude_project_sessions,
             get_active_project,
             clear_active_project,
             save_tool_export,
