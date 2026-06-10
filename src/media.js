@@ -11,14 +11,13 @@ import { state } from "./state.js";
 import {
   selectTab,
   render,
-  scheduleWorkspaceSave,
   scheduleNotesSave,
   renderNotes,
-  addRow,
   pasteFromClipboard,
   installOffClickDeselect,
   scheduleBentoLayout,
 } from "./main.js";
+import { scheduleWorkspaceSave, addRow } from "./workspace.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
