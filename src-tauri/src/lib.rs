@@ -1333,6 +1333,10 @@ struct MemoryStats {
     app_mb: f64,
     /// Vite dev server's resident memory, in MB (0 if not running).
     dev_server_mb: f64,
+    /// Total system memory in use, in GB (active + wired + compressed).
+    system_used_gb: f64,
+    /// Total installed system memory, in GB.
+    system_total_gb: f64,
     /// Swap space currently in use, in MB. The clearest "things are getting
     /// tight, consider quitting something" signal — unlike raw memory-used,
     /// macOS keeps memory busy with disk cache even when there's no pressure.
@@ -1417,6 +1421,38 @@ fn get_memory_stats() -> Result<MemoryStats, String> {
     let app_mb = rss_mb_for_pid(&std::process::id().to_string()).unwrap_or(0.0);
     let dev_server_mb = rss_mb_for_pattern("tauri dev");
 
+    let total_out = Command::new("sysctl")
+        .args(["-n", "hw.memsize"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    let total_bytes: f64 = String::from_utf8_lossy(&total_out.stdout)
+        .trim()
+        .parse()
+        .map_err(|_| "could not parse sysctl output".to_string())?;
+    let system_total_gb = total_bytes / 1024.0 / 1024.0 / 1024.0;
+
+    let vm_out = Command::new("vm_stat").output().map_err(|e| e.to_string())?;
+    let vm_text = String::from_utf8_lossy(&vm_out.stdout);
+    let page_size: f64 = vm_text
+        .lines()
+        .next()
+        .and_then(|l| l.split("page size of ").nth(1))
+        .and_then(|s| s.split(' ').next())
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4096.0);
+    let page_count = |label: &str| -> f64 {
+        vm_text
+            .lines()
+            .find(|l| l.starts_with(label))
+            .and_then(|l| l.split(':').nth(1))
+            .and_then(|s| s.trim().trim_end_matches('.').parse().ok())
+            .unwrap_or(0.0)
+    };
+    let used_pages = page_count("Pages active")
+        + page_count("Pages wired down")
+        + page_count("Pages occupied by compressor");
+    let system_used_gb = used_pages * page_size / 1024.0 / 1024.0 / 1024.0;
+
     let swap_out = Command::new("sysctl")
         .args(["-n", "vm.swapusage"])
         .output()
@@ -1432,7 +1468,14 @@ fn get_memory_stats() -> Result<MemoryStats, String> {
         }
     }
 
-    Ok(MemoryStats { app_mb, dev_server_mb, swap_used_mb, swap_total_mb })
+    Ok(MemoryStats {
+        app_mb,
+        dev_server_mb,
+        system_used_gb,
+        system_total_gb,
+        swap_used_mb,
+        swap_total_mb,
+    })
 }
 
 /// Launch a project's workspace: open apps, files, URLs, the Figma design, and

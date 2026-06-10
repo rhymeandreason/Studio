@@ -363,11 +363,14 @@ let memTimer = null;
 async function refreshMemory() {
   const sysEl = document.getElementById("mem-system");
   const appEl = document.getElementById("mem-app");
+  const swapEl = document.getElementById("mem-swap");
   const devEl = document.getElementById("mem-devserver");
-  if (!sysEl || !appEl || !devEl) return;
+  if (!sysEl || !appEl || !swapEl || !devEl) return;
   try {
     const stats = await invoke("get_memory_stats");
-    sysEl.textContent = `Swap used: ${stats.swap_used_mb.toFixed(0)} / ${stats.swap_total_mb.toFixed(0)} MB`;
+    sysEl.textContent = `Memory: ${stats.system_used_gb.toFixed(1)} / ${stats.system_total_gb.toFixed(0)} GB`;
+    swapEl.textContent = `Swap used: ${stats.swap_used_mb.toFixed(0)} / ${stats.swap_total_mb.toFixed(0)} MB`;
+
     appEl.textContent = `Studio app: ${stats.app_mb.toFixed(0)} MB`;
     devEl.textContent = stats.dev_server_mb
       ? `Dev server: ${stats.dev_server_mb.toFixed(0)} MB`
@@ -375,6 +378,7 @@ async function refreshMemory() {
   } catch (_) {
     sysEl.textContent = "";
     appEl.textContent = "";
+    swapEl.textContent = "";
     devEl.textContent = "";
   }
 }
@@ -401,9 +405,12 @@ async function openMemoryModal() {
     current.innerHTML = "";
     current.append(
       el("div", null, {
-        textContent: `Swap used: ${stats.swap_used_mb.toFixed(0)} / ${stats.swap_total_mb.toFixed(0)} MB`,
+        textContent: `Memory: ${stats.system_used_gb.toFixed(1)} / ${stats.system_total_gb.toFixed(0)} GB`,
       }),
       el("div", null, { textContent: `Studio app: ${stats.app_mb.toFixed(0)} MB` }),
+      el("div", null, {
+        textContent: `Swap used: ${stats.swap_used_mb.toFixed(0)} / ${stats.swap_total_mb.toFixed(0)} MB`,
+      }),
     );
     if (stats.dev_server_mb) {
       current.append(
