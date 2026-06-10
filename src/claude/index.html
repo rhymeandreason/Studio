@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Claude</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,300,0,0"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="../styles.css" />
+        <link rel="stylesheet" href="claude.css" />
+        <script type="module" src="claude.js" defer></script>
+    </head>
+    <body class="claude-body">
+        <div class="claude-app">
+            <header class="claude-bar">
+                <button class="iconbtn-round" id="sessions-toggle" title="Sessions">
+                    <span class="mi mi-sm">menu</span>
+                </button>
+                <select class="field__input claude-model" id="model-select">
+                    <option value="sonnet">Sonnet</option>
+                    <option value="opus">Opus</option>
+                    <option value="fable">Fable</option>
+                    <option value="haiku">Haiku</option>
+                </select>
+                <span class="claude-session-name" id="session-name">New session</span>
+                <button class="iconbtn-round" id="new-session" title="New session">
+                    <span class="mi mi-sm">add</span>
+                </button>
+            </header>
+
+            <div class="claude-usage" id="usage-bars">
+                <div class="claude-meter">
+                    <div class="claude-meter__label">
+                        <span class="mi mi-sm">data_usage</span>
+                        <span class="claude-meter__label-text">Context</span>
+                        <span id="context-pct">0%</span>
+                    </div>
+                    <div class="claude-meter__track">
+                        <div class="claude-meter__fill" id="context-fill"></div>
+                    </div>
+                </div>
+                <div class="claude-meter">
+                    <div class="claude-meter__label">
+                        <span class="mi mi-sm">schedule</span>
+                        <span class="claude-meter__label-text">5-hour usage</span>
+                        <span id="plan-status">—</span>
+                    </div>
+                    <div class="claude-meter__track">
+                        <div class="claude-meter__fill claude-meter__fill--plan" id="plan-fill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="claude-main">
+                <aside class="claude-sessions" id="sessions-panel" hidden>
+                    <div class="claude-sessions__head">
+                        <span>Sessions</span>
+                        <button class="iconbtn-round" id="new-session-side" title="New session">
+                            <span class="mi mi-sm">add_circle</span>
+                        </button>
+                    </div>
+                    <div class="claude-sessions__list" id="sessions-list"></div>
+                    <div class="claude-sessions__head">
+                        <span>Recent — <span id="history-project"></span></span>
+                    </div>
+                    <div class="claude-sessions__list" id="history-list"></div>
+                </aside>
+
+                <div class="claude-chat">
+                    <div class="claude-transcript" id="transcript"></div>
+                    <form class="claude-input" id="input-form">
+                        <textarea
+                            class="field__input claude-textarea"
+                            id="prompt-input"
+                            rows="2"
+                            placeholder="Message Claude…"
+                        ></textarea>
+                        <button class="iconbtn-round claude-send" id="send-btn" type="submit" title="Send">
+                            <span class="mi mi-sm">arrow_upward</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
