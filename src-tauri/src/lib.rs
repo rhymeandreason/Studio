@@ -1340,9 +1340,9 @@ struct MemoryStats {
     /// Swap space currently in use, in MB. The clearest "things are getting
     /// tight, consider quitting something" signal — unlike raw memory-used,
     /// macOS keeps memory busy with disk cache even when there's no pressure.
+    /// Swap's "total" is a dynamic file size, not a meaningful ceiling, so we
+    /// only report usage.
     swap_used_mb: f64,
-    /// Total swap space, in MB.
-    swap_total_mb: f64,
 }
 
 #[derive(Clone, Serialize)]
@@ -1459,12 +1459,9 @@ fn get_memory_stats() -> Result<MemoryStats, String> {
         .map_err(|e| e.to_string())?;
     let swap_text = String::from_utf8_lossy(&swap_out.stdout);
     let mut swap_used_mb = 0.0;
-    let mut swap_total_mb = 0.0;
     for part in swap_text.split_whitespace().collect::<Vec<_>>().windows(3) {
-        match part {
-            ["total", "=", v] => swap_total_mb = parse_swap_value_mb(v).unwrap_or(0.0),
-            ["used", "=", v] => swap_used_mb = parse_swap_value_mb(v).unwrap_or(0.0),
-            _ => {}
+        if let ["used", "=", v] = part {
+            swap_used_mb = parse_swap_value_mb(v).unwrap_or(0.0);
         }
     }
 
@@ -1474,7 +1471,6 @@ fn get_memory_stats() -> Result<MemoryStats, String> {
         system_used_gb,
         system_total_gb,
         swap_used_mb,
-        swap_total_mb,
     })
 }
 

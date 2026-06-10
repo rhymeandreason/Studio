@@ -61,10 +61,11 @@ polled every 5s via the `get_memory_stats` Tauri command:
 - **Memory** — total system memory in use vs. installed, in GB (from
   `vm_stat` active+wired+compressed pages / `sysctl hw.memsize`).
 - **Studio app** — Studio's own RSS via `ps -o rss=`.
-- **Swap used** — `sysctl vm.swapusage` used/total, in MB. This is the "should
-  I quit something?" signal — macOS keeps memory busy with disk cache even
-  under no pressure, so memory-used alone is a poor proxy. Rising swap usage
-  means real pressure.
+- **Swap used** — current swap usage in MB, from `sysctl vm.swapusage` (no
+  "total" — swap's total is a dynamic file size, not a meaningful ceiling).
+  This is the "should I quit something?" signal — macOS keeps memory busy with
+  disk cache even under no pressure, so memory-used alone is a poor proxy.
+  Rising swap usage means real pressure.
 - **Dev server** — RSS of the `tauri dev` watcher process (via `pgrep -f
   "tauri dev"`), hidden when not running (e.g. in a production build). There's
   no separate Vite/localhost server in this app — Tauri serves `frontendDist`
