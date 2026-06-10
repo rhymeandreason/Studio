@@ -343,7 +343,7 @@ async function saveWorkspaceNow() {
       path: state.activeProject.path,
       workspace: readWorkspaceForm(),
     });
-    setStatus("Saved ✓");
+    setStatus("");
   } catch (err) {
     setStatus(`Error: ${err}`);
   }
