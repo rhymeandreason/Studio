@@ -1308,6 +1308,79 @@ fn resolve_path(home: &Path, project_dir: &Path, raw: &str) -> PathBuf {
     }
 }
 
+/// RSS (in MB) for a single pid via `ps`.
+fn rss_mb_for_pid(pid: &str) -> Option<f64> {
+    let out = Command::new("ps").args(["-o", "rss=", "-p", pid]).output().ok()?;
+    String::from_utf8_lossy(&out.stdout).trim().parse::<f64>().ok().map(|kb| kb / 1024.0)
+}
+
+/// Summed RSS (in MB) of all processes whose command line matches `pattern`
+/// (`pgrep -f`). Returns 0 if none are running.
+fn rss_mb_for_pattern(pattern: &str) -> f64 {
+    let out = match Command::new("pgrep").args(["-f", pattern]).output() {
+        Ok(o) => o,
+        Err(_) => return 0.0,
+    };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|pid| rss_mb_for_pid(pid.trim()))
+        .sum()
+}
+
+#[derive(Clone, Serialize)]
+struct MemoryStats {
+    /// Studio app's own resident memory, in MB.
+    app_mb: f64,
+    /// Vite dev server's resident memory, in MB (0 if not running).
+    dev_server_mb: f64,
+    /// Total system memory in use, in GB (active + wired + compressed).
+    system_used_gb: f64,
+    /// Total installed system memory, in GB.
+    system_total_gb: f64,
+}
+
+/// Memory stats for the Workspace header: Studio's own RAM, the Vite dev
+/// server's RAM (if running), and overall system memory usage.
+#[tauri::command]
+fn get_memory_stats() -> Result<MemoryStats, String> {
+    let app_mb = rss_mb_for_pid(&std::process::id().to_string()).unwrap_or(0.0);
+    let dev_server_mb = rss_mb_for_pattern("tauri dev");
+
+    let total_out = Command::new("sysctl")
+        .args(["-n", "hw.memsize"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    let total_bytes: f64 = String::from_utf8_lossy(&total_out.stdout)
+        .trim()
+        .parse()
+        .map_err(|_| "could not parse sysctl output".to_string())?;
+    let system_total_gb = total_bytes / 1024.0 / 1024.0 / 1024.0;
+
+    let vm_out = Command::new("vm_stat").output().map_err(|e| e.to_string())?;
+    let vm_text = String::from_utf8_lossy(&vm_out.stdout);
+    let page_size: f64 = vm_text
+        .lines()
+        .next()
+        .and_then(|l| l.split("page size of ").nth(1))
+        .and_then(|s| s.split(' ').next())
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4096.0);
+    let page_count = |label: &str| -> f64 {
+        vm_text
+            .lines()
+            .find(|l| l.starts_with(label))
+            .and_then(|l| l.split(':').nth(1))
+            .and_then(|s| s.trim().trim_end_matches('.').parse().ok())
+            .unwrap_or(0.0)
+    };
+    let used_pages = page_count("Pages active")
+        + page_count("Pages wired down")
+        + page_count("Pages occupied by compressor");
+    let system_used_gb = used_pages * page_size / 1024.0 / 1024.0 / 1024.0;
+
+    Ok(MemoryStats { app_mb, dev_server_mb, system_used_gb, system_total_gb })
+}
+
 /// Launch a project's workspace: open apps, files, URLs, the Figma design, and
 /// (per claude.mode) drop into `claude` in a terminal at the repo path.
 #[tauri::command]
@@ -1411,6 +1484,7 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
             read_workspace,
             save_workspace,
             launch_workspace,
+            get_memory_stats,
             read_notes,
             save_notes,
             list_media,

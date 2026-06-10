@@ -356,7 +356,38 @@ export function scheduleWorkspaceSave() {
   wsSaveTimer = setTimeout(saveWorkspaceNow, 400);
 }
 
+// --- Memory usage display (header, top right) -------------------------------
+
+let memTimer = null;
+
+async function refreshMemory() {
+  const sysEl = document.getElementById("mem-system");
+  const appEl = document.getElementById("mem-app");
+  const devEl = document.getElementById("mem-devserver");
+  if (!sysEl || !appEl || !devEl) return;
+  try {
+    const stats = await invoke("get_memory_stats");
+    sysEl.textContent = `System: ${stats.system_used_gb.toFixed(1)} / ${stats.system_total_gb.toFixed(0)} GB`;
+    appEl.textContent = `Studio app: ${stats.app_mb.toFixed(0)} MB`;
+    devEl.textContent = stats.dev_server_mb
+      ? `Dev server: ${stats.dev_server_mb.toFixed(0)} MB`
+      : "";
+  } catch (_) {
+    sysEl.textContent = "";
+    appEl.textContent = "";
+    devEl.textContent = "";
+  }
+}
+
+function startMemoryPolling() {
+  refreshMemory();
+  clearInterval(memTimer);
+  memTimer = setInterval(refreshMemory, 5000);
+}
+
 export function initWorkspaceForm() {
+  startMemoryPolling();
+
   document
     .querySelectorAll("[data-add-list]")
     .forEach((btn) =>

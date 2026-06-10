@@ -190,6 +190,16 @@ body {
     word-break: break-all;
 }
 
+.projhead__memory {
+    margin-left: auto;
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
 /* Pill buttons */
 .btn-launch,
 .btn-save {

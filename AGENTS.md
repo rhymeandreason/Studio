@@ -16,13 +16,8 @@ lightweight **notes**.
 The frontend is being split out of the original monolithic `main.js`:
 - `main.js` — app shell: boot, `render()`/`selectTab()`, notes, projects,
   modals, the keyboard dispatcher install. (~1800 lines)
-- `workspace.js` — the **Workspace tab**: launch button (`initLaunch`), the
-  form (repo/figma/apps/files/folders/urls cards via `LIST_META`,
-  `readList()` queries `textarea`s not `input`s), the repo card's "open in"
-  editor picker (`EDITOR_OPTIONS` — Zed/Atom/VS Code/Sublime Text/Xcode, stored
-  as `wsEditor`/`workspace.json`'s `editor`), and its debounced autosave
-  (`scheduleWorkspaceSave`/`loadWorkspace`). Pin state (`wsPinnedTab`) is
-  toggled from `main.js`'s tab bar via `togglePinnedTab`/`updatePinButton`.
+- `workspace.js` — the **Workspace tab** (launch, form, editor picker, memory
+  display, autosave, tab pinning). See `docs/workspace.md`.
 - `media.js` — the **whole media subsystem**: grid, tiles, selection, sort +
   drag-reorder, the image editor (tonal/crop/geometry, WebGL), lightbox,
   export, and the tools (remove-bg, extend, generate). (~2600 lines)
@@ -73,13 +68,9 @@ scoped CSS variables on the card; the project-wide font preference is
 heights and sets row-spans, so re-pack on any height change (and after a panel
 becomes visible — hidden elements measure as 0).
 
-**Workspace:** Stored in `workspace.json` per project via `Workspace` Rust struct.
-The `pinnedTab` field (serde-renamed from `pinned_tab`) controls which tab opens
-on project load. List types live in `LIST_META` (repo/figma/apps/files/folders/
-urls); `readList()` queries `textarea` elements (not `input`). The repo card
-also has an editor `<select>` (`EDITOR_OPTIONS` in `workspace.js`) that sets
-`workspace.json`'s `editor` field — `lib.rs`'s `launch_workspace` opens the repo
-with `open -a <editor>` (blank = Zed).
+**Workspace:** Per-project launchpad (repo/figma/apps/files/folders/urls cards
++ Launch button), stored in `workspace.json`. See `docs/workspace.md` for
+storage format, `LIST_META`, the editor picker, and the launch flow.
 
 **Interaction model (interaction-spec):** All four panels (Projects, Workspace,
 Media, Notes) share one selection + keyboard model. See
