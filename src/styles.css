@@ -538,8 +538,28 @@ body {
 }
 
 .card.is-selected {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent), var(--shadow-sm);
+    background: var(--text);
+    color: var(--bg);
+    border-color: var(--text);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 25%, transparent), var(--shadow-md);
+}
+
+.card.is-selected .card__path {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.card.is-selected .card__icon--letter {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--bg);
+}
+
+.card.is-selected .card__trash {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.card.is-selected .card__trash:hover {
+    color: var(--rose);
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .card__icon {
