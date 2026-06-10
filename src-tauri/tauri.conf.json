@@ -36,7 +36,8 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "../Tools.json": "Tools.json"
+      "../Tools.json": "Tools.json",
+      "../src/tools": "tools"
     },
     "icon": [
       "icons/32x32.png",

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager, Url, WebviewUrl, WebviewWindowBuilder, Wry,
+    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Wry,
 };
 
 /// A discovered project: a folder directly under ~/Projects/.
@@ -93,9 +93,10 @@ fn scan_projects(app: &AppHandle) -> Vec<Project> {
     projects
 }
 
-/// ~/Projects/Tools — single-file HTML utilities, opened in their own window.
+/// `tools/` — single-file HTML utilities bundled with Studio (see
+/// `bundle.resources` in `tauri.conf.json`), opened in their own window.
 fn tools_dir(app: &AppHandle) -> Option<PathBuf> {
-    projects_root(app).map(|root| root.join("Tools"))
+    app.path().resource_dir().ok().map(|d| d.join("tools"))
 }
 
 /// One entry in `~/Projects/Tools/Tools.json`.
@@ -192,7 +193,11 @@ fn open_tool_window(app: &AppHandle, path: &str) {
         return;
     }
 
-    let Ok(url) = Url::from_file_path(path) else {
+    // Load via the app's tauri://localhost protocol (the tool's HTML lives
+    // in src/tools/, part of frontendDist) rather than file://: file://
+    // windows send `Origin: null`, which Tauri's IPC rejects ("Origin
+    // header not valid URL").
+    let Some(filename) = Path::new(path).file_name().and_then(|n| n.to_str()) else {
         return;
     };
     let title = Path::new(path)
@@ -201,10 +206,14 @@ fn open_tool_window(app: &AppHandle, path: &str) {
         .unwrap_or("Tool")
         .to_string();
 
-    let _ = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
-        .title(title)
-        .inner_size(900.0, 640.0)
-        .build();
+    let _ = WebviewWindowBuilder::new(
+        app,
+        label,
+        WebviewUrl::App(format!("tools/{filename}").into()),
+    )
+    .title(title)
+    .inner_size(900.0, 640.0)
+    .build();
 }
 
 /// Build the tray menu: optional active-project header, Open Studio, New Project,
@@ -376,6 +385,33 @@ fn activate_project(app: &AppHandle, path: &str) {
 #[tauri::command]
 fn get_active_project(state: tauri::State<AppState>) -> Option<Project> {
     state.active.lock().unwrap().clone()
+}
+
+/// Save a Tools export (e.g. from bento-grid.html) into the active project's
+/// `designs/` folder. Used by tool windows in lieu of a save-file dialog,
+/// which isn't available in a `file://` webview.
+#[tauri::command]
+fn save_tool_export(
+    state: tauri::State<AppState>,
+    filename: String,
+    content: String,
+) -> Result<String, String> {
+    let project = state
+        .active
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or("No active project — open one in Studio first.")?;
+
+    if filename.contains('/') || filename.contains('\\') || filename.starts_with('.') {
+        return Err("Invalid filename.".into());
+    }
+
+    let dir = PathBuf::from(&project.path).join("designs");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(&filename);
+    std::fs::write(&path, content).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
 }
 
 /// All projects under ~/Projects — backs the overview screen.
@@ -1700,6 +1736,7 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             get_active_project,
+            save_tool_export,
             list_projects,
             open_project,
             create_project,

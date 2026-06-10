@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bento Grid Playground</title>
+<style>
+  :root {
+    --bg:          #0f0f0f;
+    --toolbar-bg:  #1a1a1a;
+    --toolbar-border: #2a2a2a;
+    --btn-bg:      #252525;
+    --btn-border:  #3a3a3a;
+    --btn-hover:   #333;
+    --btn-color:   #ddd;
+    --sep:         #2a2a2a;
+    --cell-bg:     #1c1c1c;
+    --cell-border: #2a2a2a;
+    --cell-hover-bg:     #222;
+    --cell-hover-border: #444;
+    --track-bg:    #333;
+    --label-color: #333;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    transition: background 0.3s;
+  }
+
+  #toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--toolbar-bg);
+    border-bottom: 1px solid var(--toolbar-border);
+    flex-shrink: 0;
+    z-index: 10;
+    transition: background 0.3s, border-color 0.3s;
+  }
+
+  #toolbar button {
+    padding: 6px 14px;
+    border: 1px solid var(--btn-border);
+    background: var(--btn-bg);
+    color: var(--btn-color);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  #toolbar button:hover {
+    background: var(--btn-hover);
+    border-color: #555;
+  }
+
+  .slider-group {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: #666;
+  }
+
+  .slider-group label {
+    white-space: nowrap;
+    min-width: 4ch;
+    text-align: right;
+    color: #888;
+  }
+
+  .slider-group input[type=range] {
+    -webkit-appearance: none;
+    width: 90px;
+    height: 3px;
+    background: var(--track-bg);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .slider-group input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #4a9eff;
+    cursor: pointer;
+  }
+
+  .slider-group .val {
+    min-width: 3ch;
+    color: #555;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sep {
+    width: 1px;
+    height: 18px;
+    background: var(--sep);
+    flex-shrink: 0;
+  }
+
+  /* ── Theme chips ── */
+  #theme-chips {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .theme-chip {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+
+  .theme-chip:hover { transform: scale(1.2); }
+  .theme-chip.active { border-color: #fff; }
+
+  #hint {
+    margin-left: auto;
+    font-size: 12px;
+    color: #555;
+  }
+
+  #hint span {
+    display: inline-block;
+    background: #222;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: 0 2px;
+    color: #888;
+  }
+
+  #grid-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #grid {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .cell {
+    background: var(--cell-bg);
+    border: 1.5px solid var(--cell-border);
+    border-radius: 10px;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s, background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .cell:hover {
+    border-color: var(--cell-hover-border);
+    background: var(--cell-hover-bg);
+  }
+
+  .cell.selected {
+    border-color: #4a9eff;
+    background: #1a2a3a;
+    box-shadow: 0 0 0 1px #4a9eff33;
+  }
+
+  .cell.hovered {
+    border-color: #555;
+  }
+
+  .cell .cell-label {
+    font-size: 11px;
+    color: var(--label-color);
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .cell.selected .cell-label {
+    color: #4a9eff66;
+  }
+
+  /* Key hint overlay on hover */
+  .cell .key-hints {
+    position: absolute;
+    bottom: 6px;
+    right: 8px;
+    display: none;
+    gap: 4px;
+  }
+
+  .cell:hover .key-hints {
+    display: flex;
+  }
+
+  .cell.selected .key-hints {
+    display: none;
+  }
+
+  .key-hints kbd {
+    font-size: 10px;
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: #666;
+    font-family: inherit;
+  }
+
+  #status {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: #888;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  #status.show {
+    opacity: 1;
+  }
+
+  #btn-present {
+    margin-left: 4px;
+  }
+
+  :fullscreen #toolbar {
+    display: none;
+  }
+
+  :fullscreen #grid-container {
+    background: var(--bg);
+  }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button id="btn-col">+ Column</button>
+  <button id="btn-row">+ Row</button>
+  <div class="sep"></div>
+  <div id="theme-chips"></div>
+  <div class="sep"></div>
+  <div class="slider-group">
+    <span>Gap</span>
+    <input type="range" id="slider-gap" min="0" max="32" value="6" step="1">
+    <span class="val" id="val-gap">6px</span>
+  </div>
+  <div class="sep"></div>
+  <div class="slider-group">
+    <span>Radius</span>
+    <input type="range" id="slider-radius" min="0" max="40" value="10" step="1">
+    <span class="val" id="val-radius">10px</span>
+  </div>
+  <button id="btn-export-html">↓ HTML</button>
+  <button id="btn-export-svg">↓ SVG</button>
+  <button id="btn-present" style="margin-left:auto">⛶ Present</button>
+</div>
+
+<div id="grid-container">
+  <div id="grid"></div>
+</div>
+
+<div id="status"></div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+
+// Grid is represented as a CSS grid with explicit column/row tracks.
+// Each cell stores its grid-area: colStart, rowStart, colEnd, rowEnd (1-indexed, exclusive end).
+// We start with a 2×2 grid.
+
+let cols = 2;
+let rows = 2;
+let colSizes = [1, 1]; // fr values per column track
+let rowSizes = [1, 1]; // fr values per row track
+let cells = []; // [{id, cs, rs, ce, re}]  ce/re are exclusive
+let nextId = 1;
+let hoveredCell = null;
+let selectedCells = []; // up to 2 ids
+let history = []; // snapshots for undo
+
+function snapshot() {
+  history.push({ cols, rows, colSizes: [...colSizes], rowSizes: [...rowSizes], nextId, cells: cells.map(c => ({...c})) });
+}
+
+function undo() {
+  if (!history.length) { showStatus('Nothing to undo'); return; }
+  const s = history.pop();
+  cols = s.cols; rows = s.rows;
+  colSizes = s.colSizes; rowSizes = s.rowSizes;
+  nextId = s.nextId;
+  cells = s.cells;
+  selectedCells = [];
+  render();
+  showStatus('Undo');
+}
+
+const grid = document.getElementById('grid');
+const status = document.getElementById('status');
+let statusTimer = null;
+
+function showStatus(msg) {
+  status.textContent = msg;
+  status.classList.add('show');
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => status.classList.remove('show'), 2000);
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
+function initGrid() {
+  snapshot();
+  cols = 2; rows = 2; nextId = 1; cells = [];
+  colSizes = [1, 1]; rowSizes = [1, 1];
+  for (let r = 1; r <= rows; r++) {
+    for (let c = 1; c <= cols; c++) {
+      cells.push({ id: nextId++, cs: c, rs: r, ce: c + 1, re: r + 1 });
+    }
+  }
+  render();
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+
+function render() {
+  grid.style.gridTemplateColumns = colSizes.map(s => `${s}fr`).join(' ');
+  grid.style.gridTemplateRows    = rowSizes.map(s => `${s}fr`).join(' ');
+
+  // Reconcile DOM: remove stale, add new
+  const existingEls = {};
+  grid.querySelectorAll('.cell').forEach(el => {
+    existingEls[el.dataset.id] = el;
+  });
+
+  const currentIds = new Set(cells.map(c => String(c.id)));
+
+  // Remove deleted
+  Object.keys(existingEls).forEach(id => {
+    if (!currentIds.has(id)) existingEls[id].remove();
+  });
+
+  cells.forEach(cell => {
+    let el = existingEls[String(cell.id)];
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'cell';
+      el.dataset.id = cell.id;
+      el.innerHTML = `<span class="cell-label"></span>`;
+      el.addEventListener('mouseenter', () => { hoveredCell = cell.id; });
+      el.addEventListener('mouseleave', () => { if (hoveredCell === cell.id) hoveredCell = null; });
+      el.addEventListener('click', () => selectCell(cell.id));
+      grid.appendChild(el);
+    }
+    el.style.borderRadius = sliderRadius ? sliderRadius.value + 'px' : '10px';
+    // Update position
+    el.style.gridColumn = `${cell.cs} / ${cell.ce}`;
+    el.style.gridRow = `${cell.rs} / ${cell.re}`;
+    el.querySelector('.cell-label').textContent = `${cell.cs},${cell.rs}`;
+
+    // Selection state
+    const sel = selectedCells.includes(cell.id);
+    el.classList.toggle('selected', sel);
+  });
+}
+
+// ─── Selection ────────────────────────────────────────────────────────────────
+
+function selectCell(id) {
+  if (selectedCells.includes(id)) {
+    selectedCells = selectedCells.filter(x => x !== id);
+  } else {
+    selectedCells = [...selectedCells, id].slice(-2);
+  }
+  render();
+  if (selectedCells.length === 2) showStatus('Press M to merge if adjacent');
+}
+
+// ─── Add Column / Row ─────────────────────────────────────────────────────────
+
+function addColumn() {
+  snapshot();
+  cols++;
+  colSizes.push(1);
+  const newCol = cols;
+  for (let r = 1; r <= rows; r++) {
+    cells.push({ id: nextId++, cs: newCol, rs: r, ce: newCol + 1, re: r + 1 });
+  }
+  render();
+  showStatus(`Added column ${cols}`);
+}
+
+function addRow() {
+  snapshot();
+  rows++;
+  rowSizes.push(1);
+  const newRow = rows;
+  for (let c = 1; c <= cols; c++) {
+    cells.push({ id: nextId++, cs: c, rs: newRow, ce: c + 1, re: newRow + 1 });
+  }
+  render();
+  showStatus(`Added row ${rows}`);
+}
+
+// ─── Split ────────────────────────────────────────────────────────────────────
+
+function splitCellRows(id) {
+  snapshot();
+  const cell = cells.find(c => c.id === id);
+  if (!cell) return;
+  const span = cell.re - cell.rs;
+  if (span < 2) {
+    // Insert a new track at insertAt, each half the size of the original track
+    const insertAt = cell.rs + 1; // 1-indexed; insert after cell.rs
+    const trackIdx = cell.rs - 1; // 0-indexed into rowSizes
+    const half = rowSizes[trackIdx] / 2;
+    rowSizes[trackIdx] = half;
+    rowSizes.splice(trackIdx + 1, 0, half); // insert new half-size track right after
+    // Shift all other cells
+    cells.forEach(c => {
+      if (c.id === cell.id) return;
+      if (c.rs >= insertAt) { c.rs++; c.re++; }
+      else if (c.re >= insertAt) { c.re++; }
+    });
+    rows++;
+    const bot = { id: nextId++, cs: cell.cs, rs: insertAt, ce: cell.ce, re: insertAt + 1 };
+    cell.re = insertAt;
+    cells.push(bot);
+  } else {
+    // Cell spans multiple tracks — split at midpoint, no new track needed
+    const mid = cell.rs + Math.floor(span / 2);
+    const bot = { id: nextId++, cs: cell.cs, rs: mid, ce: cell.ce, re: cell.re };
+    cell.re = mid;
+    cells.push(bot);
+  }
+  render();
+  showStatus('Split into 2 rows');
+}
+
+function splitCellCols(id) {
+  snapshot();
+  const cell = cells.find(c => c.id === id);
+  if (!cell) return;
+  const span = cell.ce - cell.cs;
+  if (span < 2) {
+    const insertAt = cell.cs + 1;
+    const trackIdx = cell.cs - 1;
+    const half = colSizes[trackIdx] / 2;
+    colSizes[trackIdx] = half;
+    colSizes.splice(trackIdx + 1, 0, half);
+    cells.forEach(c => {
+      if (c.id === cell.id) return;
+      if (c.cs >= insertAt) { c.cs++; c.ce++; }
+      else if (c.ce >= insertAt) { c.ce++; }
+    });
+    cols++;
+    const right = { id: nextId++, cs: insertAt, rs: cell.rs, ce: insertAt + 1, re: cell.re };
+    cell.ce = insertAt;
+    cells.push(right);
+  } else {
+    const mid = cell.cs + Math.floor(span / 2);
+    const right = { id: nextId++, cs: mid, rs: cell.rs, ce: cell.ce, re: cell.re };
+    cell.ce = mid;
+    cells.push(right);
+  }
+  render();
+  showStatus('Split into 2 columns');
+}
+
+// ─── Merge ────────────────────────────────────────────────────────────────────
+
+function mergeCells() {
+  snapshot();
+  if (selectedCells.length !== 2) { showStatus('Select exactly 2 cells to merge'); return; }
+  const [a, b] = selectedCells.map(id => cells.find(c => c.id === id));
+  if (!a || !b) return;
+
+  // Check adjacency: they share an edge exactly
+  const shareHEdge = a.ce === b.cs || b.ce === a.cs;
+  const shareVEdge = a.re === b.rs || b.re === a.rs;
+
+  if (shareHEdge) {
+    // Horizontal neighbors — must have same row span
+    if (a.rs !== b.rs || a.re !== b.re) { showStatus('Cells must have matching row spans to merge'); return; }
+    const left  = a.cs < b.cs ? a : b;
+    const right = a.cs < b.cs ? b : a;
+    left.ce = right.ce;
+    cells = cells.filter(c => c.id !== right.id);
+  } else if (shareVEdge) {
+    // Vertical neighbors — must have same col span
+    if (a.cs !== b.cs || a.ce !== b.ce) { showStatus('Cells must have matching column spans to merge'); return; }
+    const top = a.rs < b.rs ? a : b;
+    const bot = a.rs < b.rs ? b : a;
+    top.re = bot.re;
+    cells = cells.filter(c => c.id !== bot.id);
+  } else {
+    showStatus('Cells are not adjacent'); return;
+  }
+
+  selectedCells = [];
+  render();
+  showStatus('Merged!');
+}
+
+// ─── Keyboard ─────────────────────────────────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'r' && e.metaKey) { e.preventDefault(); initGrid(); return; }
+  if (e.key === 'z' && e.metaKey) { e.preventDefault(); undo(); return; }
+  if (e.target !== document.body) return;
+  const key = e.key.toLowerCase();
+
+  if (key === 'r' && hoveredCell !== null) {
+    e.preventDefault();
+    splitCellRows(hoveredCell);
+  } else if (key === 'c' && hoveredCell !== null) {
+    e.preventDefault();
+    splitCellCols(hoveredCell);
+  } else if (key === 'm') {
+    e.preventDefault();
+    mergeCells();
+  } else if (key === 'escape') {
+    selectedCells = [];
+    render();
+  }
+});
+
+// ─── Buttons ──────────────────────────────────────────────────────────────────
+
+document.getElementById('btn-export-html').addEventListener('click', exportHTML);
+document.getElementById('btn-export-svg').addEventListener('click', exportSVG);
+document.getElementById('btn-col').addEventListener('click', addColumn);
+document.getElementById('btn-row').addEventListener('click', addRow);
+document.getElementById('btn-present').addEventListener('click', () => {
+  document.documentElement.requestFullscreen();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.fullscreenElement) {
+    document.exitFullscreen();
+  }
+});
+
+// ─── Export ───────────────────────────────────────────────────────────────────
+
+async function saveFile(content, filename, mimeType) {
+  // Running inside Studio: save into the active project's designs/ folder.
+  if (window.__TAURI__) {
+    try {
+      const path = await window.__TAURI__.core.invoke('save_tool_export', { filename, content });
+      showStatus(`Saved to ${path}`);
+      return;
+    } catch (e) {
+      showStatus(String(e));
+      return;
+    }
+  }
+  if (window.showSaveFilePicker) {
+    try {
+      const ext = filename.split('.').pop();
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: filename, accept: { [mimeType]: ['.' + ext] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      showStatus(`Saved ${handle.name}`);
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return; // user cancelled
+    }
+  }
+  // Fallback: trigger browser download
+  const blob = new Blob([content], { type: mimeType });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showStatus(`Downloaded ${filename}`);
+}
+
+function getVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function exportHTML() {
+  const gap    = sliderGap.value + 'px';
+  const radius = sliderRadius.value + 'px';
+  const bgColor     = getVar('--bg');
+  const cellBg      = getVar('--cell-bg');
+  const cellBorder  = getVar('--cell-border');
+
+  const itemCSS = cells.map((c, i) =>
+    `.cell-${i + 1} {\n  grid-column: ${c.cs} / ${c.ce};\n  grid-row: ${c.rs} / ${c.re};\n}`
+  ).join('\n');
+
+  const itemHTML = cells.map((c, i) =>
+    `  <div class="cell cell-${i + 1}"></div>`
+  ).join('\n');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bento Grid</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    width: 100vw;
+    height: 100vh;
+    background: ${bgColor};
+  }
+
+  .grid {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: ${colSizes.map(s => `${s}fr`).join(' ')};
+    grid-template-rows: ${rowSizes.map(s => `${s}fr`).join(' ')};
+    gap: ${gap};
+    padding: ${gap};
+  }
+
+  .cell {
+    background: ${cellBg};
+    border: 1.5px solid ${cellBorder};
+    border-radius: ${radius};
+  }
+
+${itemCSS}
+</style>
+</head>
+<body>
+<div class="grid">
+${itemHTML}
+</div>
+</body>
+</html>`;
+
+  saveFile(html, 'bento-grid.html', 'text/html');
+}
+
+function exportSVG() {
+  const gap    = parseInt(sliderGap.value);
+  const radius = parseInt(sliderRadius.value);
+  const bgColor    = getVar('--bg');
+  const cellBg     = getVar('--cell-bg');
+  const cellBorder = getVar('--cell-border');
+  const W = 1200, H = 800;
+  const pad = gap;
+
+  // Compute pixel positions respecting fr track sizes
+  function trackPositions(sizes, totalPx, gapPx, padPx) {
+    const totalFr = sizes.reduce((a, b) => a + b, 0);
+    const available = totalPx - padPx * 2 - gapPx * (sizes.length - 1);
+    const positions = []; // [{start, size}]
+    let cursor = padPx;
+    sizes.forEach(fr => {
+      const sz = (fr / totalFr) * available;
+      positions.push({ start: cursor, size: sz });
+      cursor += sz + gapPx;
+    });
+    return positions;
+  }
+
+  const colPos = trackPositions(colSizes, W, gap, pad);
+  const rowPos = trackPositions(rowSizes, H, gap, pad);
+
+  const rects = cells.map(c => {
+    const x = colPos[c.cs - 1].start;
+    const y = rowPos[c.rs - 1].start;
+    const w = colPos[c.ce - 2].start + colPos[c.ce - 2].size - x;
+    const h = rowPos[c.re - 2].start + rowPos[c.re - 2].size - y;
+    return `  <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${radius}" ry="${radius}" fill="${cellBg}" stroke="${cellBorder}" stroke-width="1.5"/>`;
+  }).join('\n');
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">\n  <rect width="${W}" height="${H}" fill="${bgColor}"/>\n${rects}\n</svg>`;
+
+  saveFile(svg, 'bento-grid.svg', 'image/svg+xml');
+}
+
+// ─── Themes ───────────────────────────────────────────────────────────────────
+
+const THEMES = [
+  { name: 'Obsidian',  chip: '#1c1c1c', vars: { '--bg': '#0f0f0f', '--toolbar-bg': '#1a1a1a', '--toolbar-border': '#2a2a2a', '--btn-bg': '#252525', '--btn-border': '#3a3a3a', '--btn-hover': '#333', '--btn-color': '#ddd', '--sep': '#2a2a2a', '--cell-bg': '#1c1c1c', '--cell-border': '#2a2a2a', '--cell-hover-bg': '#222', '--cell-hover-border': '#444', '--track-bg': '#333', '--label-color': '#333' } },
+  { name: 'Fog',       chip: '#c8c8c8', vars: { '--bg': '#e8e8e8', '--toolbar-bg': '#ddd', '--toolbar-border': '#c4c4c4', '--btn-bg': '#d4d4d4', '--btn-border': '#bbb', '--btn-hover': '#cacaca', '--btn-color': '#444', '--sep': '#bbb', '--cell-bg': '#b8b8b8', '--cell-border': '#a8a8a8', '--cell-hover-bg': '#b0b0b0', '--cell-hover-border': '#999', '--track-bg': '#bbb', '--label-color': '#a0a0a0' } },
+  { name: 'Chalk',     chip: '#e8e4dc', vars: { '--bg': '#f0ece4', '--toolbar-bg': '#e4e0d8', '--toolbar-border': '#ccc8c0', '--btn-bg': '#dedad2', '--btn-border': '#c8c4bc', '--btn-hover': '#d0ccc4', '--btn-color': '#333', '--sep': '#c8c4bc', '--cell-bg': '#faf8f4', '--cell-border': '#d8d4cc', '--cell-hover-bg': '#f0ece6', '--cell-hover-border': '#bbb8b0', '--track-bg': '#ccc8c0', '--label-color': '#ccc' } },
+  { name: 'Slate',     chip: '#2a3a52', vars: { '--bg': '#141e2e', '--toolbar-bg': '#1a2438', '--toolbar-border': '#2a3448', '--btn-bg': '#1e2c42', '--btn-border': '#2e3c52', '--btn-hover': '#283448', '--btn-color': '#9ab', '--sep': '#2a3448', '--cell-bg': '#1a2840', '--cell-border': '#253550', '--cell-hover-bg': '#1e2e48', '--cell-hover-border': '#3a4a62', '--track-bg': '#243040', '--label-color': '#243040' } },
+  { name: 'Forest',    chip: '#1a3020', vars: { '--bg': '#0d1f10', '--toolbar-bg': '#142018', '--toolbar-border': '#1e3022', '--btn-bg': '#182818', '--btn-border': '#22382a', '--btn-hover': '#1e3020', '--btn-color': '#8ba', '--sep': '#1e3022', '--cell-bg': '#172418', '--cell-border': '#1e3020', '--cell-hover-bg': '#1c2a1c', '--cell-hover-border': '#2e4432', '--track-bg': '#1e3022', '--label-color': '#1e3022' } },
+  { name: 'Merlot',    chip: '#3a1020', vars: { '--bg': '#1a0810', '--toolbar-bg': '#221018', '--toolbar-border': '#341820', '--btn-bg': '#2a1018', '--btn-border': '#3a1e28', '--btn-hover': '#321520', '--btn-color': '#c9a', '--sep': '#341820', '--cell-bg': '#241018', '--cell-border': '#341820', '--cell-hover-bg': '#2a1418', '--cell-hover-border': '#461e2a', '--track-bg': '#2e1420', '--label-color': '#2e1420' } },
+  { name: 'Dusk',      chip: '#3a2a50', vars: { '--bg': '#160e28', '--toolbar-bg': '#1e1432', '--toolbar-border': '#2e1e44', '--btn-bg': '#221838', '--btn-border': '#32224a', '--btn-hover': '#2a1e40', '--btn-color': '#b9a', '--sep': '#2e1e44', '--cell-bg': '#1e1632', '--cell-border': '#2e2044', '--cell-hover-bg': '#241c3a', '--cell-hover-border': '#3e2c58', '--track-bg': '#281e3c', '--label-color': '#281e3c' } },
+];
+
+let activeTheme = 0;
+
+function applyTheme(idx) {
+  activeTheme = idx;
+  const vars = THEMES[idx].vars;
+  const root = document.documentElement;
+  Object.entries(vars).forEach(([k, v]) => root.style.setProperty(k, v));
+  document.querySelectorAll('.theme-chip').forEach((el, i) => el.classList.toggle('active', i === idx));
+  localStorage.setItem('bento-theme', idx);
+}
+
+function buildThemeChips() {
+  const container = document.getElementById('theme-chips');
+  THEMES.forEach((t, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'theme-chip' + (i === activeTheme ? ' active' : '');
+    chip.title = t.name;
+    chip.style.background = t.chip;
+    chip.addEventListener('click', () => applyTheme(i));
+    container.appendChild(chip);
+  });
+}
+
+buildThemeChips();
+const savedTheme = localStorage.getItem('bento-theme');
+if (savedTheme !== null) applyTheme(parseInt(savedTheme));
+
+// ─── Sliders ──────────────────────────────────────────────────────────────────
+
+const sliderGap    = document.getElementById('slider-gap');
+const sliderRadius = document.getElementById('slider-radius');
+const valGap       = document.getElementById('val-gap');
+const valRadius    = document.getElementById('val-radius');
+
+function applyGap(v) {
+  valGap.textContent = v + 'px';
+  grid.style.gap = v + 'px';
+  grid.style.padding = v + 'px';
+}
+
+function applyRadius(v) {
+  valRadius.textContent = v + 'px';
+  document.querySelectorAll('.cell').forEach(el => el.style.borderRadius = v + 'px');
+}
+
+sliderGap.addEventListener('input', () => {
+  applyGap(sliderGap.value);
+  localStorage.setItem('bento-gap', sliderGap.value);
+});
+
+sliderRadius.addEventListener('input', () => {
+  applyRadius(sliderRadius.value);
+  localStorage.setItem('bento-radius', sliderRadius.value);
+});
+
+// Restore saved values
+const savedGap = localStorage.getItem('bento-gap');
+const savedRadius = localStorage.getItem('bento-radius');
+if (savedGap !== null) { sliderGap.value = savedGap; applyGap(savedGap); }
+if (savedRadius !== null) { sliderRadius.value = savedRadius; applyRadius(savedRadius); }
+
+// ─── Start ────────────────────────────────────────────────────────────────────
+
+initGrid();
+</script>
+</body>
+</html>
