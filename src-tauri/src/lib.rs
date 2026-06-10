@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager, Wry,
+    AppHandle, Emitter, Manager, Url, WebviewUrl, WebviewWindowBuilder, Wry,
 };
 
 /// A discovered project: a folder directly under ~/Projects/.
@@ -59,6 +59,7 @@ struct AppState {
 
 const TRAY_ID: &str = "studio-tray";
 const PROJECT_PREFIX: &str = "proj:";
+const TOOL_PREFIX: &str = "tool:";
 
 /// ~/Projects — the single folder Studio scans for projects.
 fn projects_root(app: &AppHandle) -> Option<PathBuf> {
@@ -90,6 +91,120 @@ fn scan_projects(app: &AppHandle) -> Vec<Project> {
     }
     projects.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     projects
+}
+
+/// ~/Projects/Tools — single-file HTML utilities, opened in their own window.
+fn tools_dir(app: &AppHandle) -> Option<PathBuf> {
+    projects_root(app).map(|root| root.join("Tools"))
+}
+
+/// One entry in `~/Projects/Tools/Tools.json`.
+#[derive(Deserialize)]
+struct ToolEntry {
+    file: String,
+    #[serde(default)]
+    name: Option<String>,
+}
+
+/// `Tools.json`, bundled with Studio (see `tauri.conf.json` →
+/// `bundle.resources`) — explicit list/order of tools to show in the tray.
+/// `file` paths within it are resolved relative to `~/Projects/Tools/`.
+/// Missing/unreadable file falls back to `None` (scan all *.html).
+fn read_tools_manifest(app: &AppHandle) -> Option<Vec<ToolEntry>> {
+    let dir = app.path().resource_dir().ok()?;
+    let text = std::fs::read_to_string(dir.join("Tools.json")).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// Tools to show in the tray: from `Tools.json` if present (in the order
+/// listed there), otherwise every *.html file in ~/Projects/Tools, sorted by
+/// name.
+fn scan_tools(app: &AppHandle) -> Vec<Project> {
+    let Some(dir) = tools_dir(app) else {
+        return Vec::new();
+    };
+
+    if let Some(entries) = read_tools_manifest(app) {
+        return entries
+            .into_iter()
+            .filter_map(|entry| {
+                let path = dir.join(&entry.file);
+                if !path.is_file() {
+                    return None;
+                }
+                let name = entry.name.unwrap_or_else(|| {
+                    Path::new(&entry.file)
+                        .file_stem()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or(&entry.file)
+                        .to_string()
+                });
+                Some(Project {
+                    name,
+                    path: path.to_string_lossy().to_string(),
+                })
+            })
+            .collect();
+    }
+
+    let mut tools = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            if path.extension().and_then(|e| e.to_str()) != Some("html") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if stem.starts_with('.') {
+                continue;
+            }
+            tools.push(Project {
+                name: stem.to_string(),
+                path: path.to_string_lossy().to_string(),
+            });
+        }
+    }
+    tools.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    tools
+}
+
+/// Open (or focus) a tool's HTML file in its own native window.
+fn open_tool_window(app: &AppHandle, path: &str) {
+    let label = format!(
+        "tool-{}",
+        Path::new(path)
+            .file_stem()
+            .and_then(|n| n.to_str())
+            .unwrap_or("tool")
+            .chars()
+            .map(|c| if c.is_alphanumeric() { c } else { '-' })
+            .collect::<String>()
+    );
+
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return;
+    }
+
+    let Ok(url) = Url::from_file_path(path) else {
+        return;
+    };
+    let title = Path::new(path)
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Tool")
+        .to_string();
+
+    let _ = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
+        .title(title)
+        .inner_size(900.0, 640.0)
+        .build();
 }
 
 /// Build the tray menu: optional active-project header, Open Studio, New Project,
@@ -136,6 +251,20 @@ fn build_tray_menu(
                 app,
                 format!("{PROJECT_PREFIX}{}", p.path),
                 label,
+                true,
+                None::<&str>,
+            )?));
+        }
+    }
+
+    let tools = scan_tools(app);
+    if !tools.is_empty() {
+        items.push(Box::new(PredefinedMenuItem::separator(app)?));
+        for t in &tools {
+            items.push(Box::new(MenuItem::with_id(
+                app,
+                format!("{TOOL_PREFIX}{}", t.path),
+                format!("🔧 {}", t.name),
                 true,
                 None::<&str>,
             )?));
@@ -1653,6 +1782,9 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
                         "quit" => app.exit(0),
                         _ if id.starts_with(PROJECT_PREFIX) => {
                             activate_project(app, &id[PROJECT_PREFIX.len()..]);
+                        }
+                        _ if id.starts_with(TOOL_PREFIX) => {
+                            open_tool_window(app, &id[TOOL_PREFIX.len()..]);
                         }
                         _ => {}
                     }
