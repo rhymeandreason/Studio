@@ -15,7 +15,14 @@ lightweight **notes**.
 ### Frontend modules (`src/`)
 The frontend is being split out of the original monolithic `main.js`:
 - `main.js` — app shell: boot, `render()`/`selectTab()`, notes, projects,
-  workspace, modals, the keyboard dispatcher install. (~2150 lines)
+  modals, the keyboard dispatcher install. (~1800 lines)
+- `workspace.js` — the **Workspace tab**: launch button (`initLaunch`), the
+  form (repo/figma/apps/files/folders/urls cards via `LIST_META`,
+  `readList()` queries `textarea`s not `input`s), the repo card's "open in"
+  editor picker (`EDITOR_OPTIONS` — Zed/Atom/VS Code/Sublime Text/Xcode, stored
+  as `wsEditor`/`workspace.json`'s `editor`), and its debounced autosave
+  (`scheduleWorkspaceSave`/`loadWorkspace`). Pin state (`wsPinnedTab`) is
+  toggled from `main.js`'s tab bar via `togglePinnedTab`/`updatePinButton`.
 - `media.js` — the **whole media subsystem**: grid, tiles, selection, sort +
   drag-reorder, the image editor (tonal/crop/geometry, WebGL), lightbox,
   export, and the tools (remove-bg, extend, generate). (~2600 lines)
@@ -28,12 +35,12 @@ The frontend is being split out of the original monolithic `main.js`:
   `installKeyDispatcher`, and the `panelKeymaps`/`globalKeymap` registry.
 - `dom.js` (`el`/`mi`/`genId`/`clamp`), `imageutil.js`, `gl.js` (WebGL tonal
   pipeline), `themes.js` (note card themes/fonts).
-- `main.js` and `media.js` **import each other** (circular). It's eval-safe
-  because only hoisted function declarations cross at module-eval time; no
-  cross-module calls run at the top level. When adding a cross-module call,
-  export it and import it (don't reach for a bare global) — and if it's a
-  reassigned `let` used on both sides, move it onto `state`.
-- Status/plan for the remaining split (notes/projects/workspace) is in
+- `main.js`, `media.js`, and `workspace.js` **import each other** (circular).
+  It's eval-safe because only hoisted function declarations cross at
+  module-eval time; no cross-module calls run at the top level. When adding a
+  cross-module call, export it and import it (don't reach for a bare global) —
+  and if it's a reassigned `let` used on both sides, move it onto `state`.
+- Status/plan for the remaining split (notes/projects) is in
   `BACKLOG.md` → "Full file-split refactor".
 - Native Swift helpers compiled by `src-tauri/build.rs`, called as subprocesses:
   `bgremove` (Vision background removal), `qlthumb` (QuickLook thumbnails),
@@ -69,7 +76,10 @@ becomes visible — hidden elements measure as 0).
 **Workspace:** Stored in `workspace.json` per project via `Workspace` Rust struct.
 The `pinnedTab` field (serde-renamed from `pinned_tab`) controls which tab opens
 on project load. List types live in `LIST_META` (repo/figma/apps/files/folders/
-urls); `readList()` queries `textarea` elements (not `input`).
+urls); `readList()` queries `textarea` elements (not `input`). The repo card
+also has an editor `<select>` (`EDITOR_OPTIONS` in `workspace.js`) that sets
+`workspace.json`'s `editor` field — `lib.rs`'s `launch_workspace` opens the repo
+with `open -a <editor>` (blank = Zed).
 
 **Interaction model (interaction-spec):** All four panels (Projects, Workspace,
 Media, Notes) share one selection + keyboard model. See
