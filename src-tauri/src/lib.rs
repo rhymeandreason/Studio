@@ -1982,8 +1982,6 @@ fn list_claude_project_sessions(app: AppHandle, project_path: String) -> Vec<Cla
     sessions
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
 /// Move an entire project folder to the Trash.
 #[tauri::command]
 fn trash_project(path: String) -> Result<(), String> {
@@ -2009,6 +2007,8 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
     Ok(new.to_string_lossy().to_string())
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
