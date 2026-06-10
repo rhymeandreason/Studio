@@ -86,6 +86,16 @@ const LIST_META = {
   urls: { icon: "link", label: "URL", placeholder: "https://…" },
 };
 
+// Code editors offered for the Repo card's "Open in" picker. Empty value =
+// Zed, the Rust-side default when `editor` is blank.
+const EDITOR_OPTIONS = [
+  { value: "", label: "Zed" },
+  { value: "Atom", label: "Atom" },
+  { value: "Visual Studio Code", label: "VS Code" },
+  { value: "Sublime Text", label: "Sublime Text" },
+  { value: "Xcode", label: "Xcode" },
+];
+
 // Workspace item selection (interaction-spec §3). Multi-select over the form's
 // item cards; ids are per-render (rows have no persistent id).
 let wsRowCounter = 0;
@@ -207,6 +217,25 @@ export function addRow(list, value = "") {
   // Resize after the card is in the DOM so scrollHeight is correct
   requestAnimationFrame(resizeInput);
   card.append(input);
+
+  // Repo card: "Open in" editor picker.
+  if (list === "repo") {
+    const editorSel = document.createElement("select");
+    editorSel.className = "ws-item__editor";
+    editorSel.title = "Open in";
+    EDITOR_OPTIONS.forEach((opt) => {
+      const o = document.createElement("option");
+      o.value = opt.value;
+      o.textContent = opt.label;
+      editorSel.append(o);
+    });
+    editorSel.value = wsEditor;
+    editorSel.addEventListener("change", () => {
+      wsEditor = editorSel.value;
+      scheduleWorkspaceSave();
+    });
+    card.append(editorSel);
+  }
 
   // Browse button for repo, apps, and files
   if (meta.browse) {

@@ -688,6 +688,23 @@ select.field__input {
     color: var(--text-soft);
 }
 
+.ws-item__editor {
+    align-self: flex-start;
+    margin-top: auto;
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 12px;
+    padding: 5px 8px;
+}
+
+.ws-item__editor:hover {
+    color: var(--text);
+}
+
 .ws-item__browse {
     align-self: flex-end;
     margin-top: auto;
