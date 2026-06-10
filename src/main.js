@@ -471,8 +471,16 @@ export function selectTab(name) {
 
   // The notes bento layout measures card heights; if it ran while the panel
   // was hidden every card collapsed to one row. Re-pack now that it's visible.
+  // Also re-size textareas: their scrollHeight is 0 while hidden, so the
+  // initial resize in buildTextNote leaves them at height 0px.
   if (name === "notes") {
-    requestAnimationFrame(() => requestAnimationFrame(layoutBento));
+    requestAnimationFrame(() => {
+      document.querySelectorAll("#notes-list textarea").forEach((ta) => {
+        ta.style.height = "auto";
+        ta.style.height = ta.scrollHeight + "px";
+      });
+      requestAnimationFrame(layoutBento);
+    });
   }
 
   // Close the editor column when leaving the media tab.
