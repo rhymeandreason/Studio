@@ -387,29 +387,55 @@ fn get_active_project(state: tauri::State<AppState>) -> Option<Project> {
     state.active.lock().unwrap().clone()
 }
 
+/// Frontend calls this when showing the "All Projects" overview, so nothing
+/// is considered active (e.g. `save_tool_export` falls back to a save
+/// dialog instead of writing into a project's `designs/` folder).
+#[tauri::command]
+fn clear_active_project(app: AppHandle, state: tauri::State<AppState>) {
+    *state.active.lock().unwrap() = None;
+    refresh_tray(&app, None);
+}
+
 /// Save a Tools export (e.g. from bento-grid.html) into the active project's
 /// `designs/` folder. Used by tool windows in lieu of a save-file dialog,
 /// which isn't available in a `file://` webview.
 #[tauri::command]
-fn save_tool_export(
-    state: tauri::State<AppState>,
+async fn save_tool_export(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
     filename: String,
     content: String,
 ) -> Result<String, String> {
-    let project = state
-        .active
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or("No active project — open one in Studio first.")?;
+    use tauri_plugin_dialog::DialogExt;
 
     if filename.contains('/') || filename.contains('\\') || filename.starts_with('.') {
         return Err("Invalid filename.".into());
     }
 
-    let dir = PathBuf::from(&project.path).join("designs");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = dir.join(&filename);
+    let project = state.active.lock().unwrap().clone();
+    let path = match project {
+        Some(project) => {
+            let dir = PathBuf::from(&project.path).join("designs");
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            dir.join(&filename)
+        }
+        // No active project — fall back to a normal save dialog. Use the
+        // async variant: `blocking_save_file` deadlocks when called from
+        // the main thread (the dialog itself needs the main thread).
+        None => {
+            let (tx, mut rx) = tauri::async_runtime::channel(1);
+            app.dialog()
+                .file()
+                .set_file_name(&filename)
+                .save_file(move |picked| {
+                    let _ = tx.try_send(picked);
+                });
+            match rx.recv().await.ok_or("dialog closed")? {
+                Some(file_path) => file_path.into_path().map_err(|e| e.to_string())?,
+                None => return Err("__cancelled__".into()),
+            }
+        }
+    };
     std::fs::write(&path, content).map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
 }
@@ -1736,6 +1762,7 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             get_active_project,
+            clear_active_project,
             save_tool_export,
             list_projects,
             open_project,

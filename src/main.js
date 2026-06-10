@@ -362,6 +362,7 @@ panelKeymaps.projects = {
 
 async function showOverview() {
   state.activePanel = "projects";
+  invoke("clear_active_project");
   await loadProjectOrder();
   const projects = applyProjectOrder(await invoke("list_projects"));
   const grid = document.getElementById("overview-grid");

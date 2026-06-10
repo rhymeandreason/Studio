@@ -5,6 +5,7 @@
   "windows": ["tool-*"],
   "permissions": [
     "core:default",
-    "core:event:default"
+    "core:event:default",
+    "dialog:default"
   ]
 }

@@ -579,7 +579,7 @@ async function saveFile(content, filename, mimeType) {
       showStatus(`Saved to ${path}`);
       return;
     } catch (e) {
-      showStatus(String(e));
+      if (String(e) !== '__cancelled__') showStatus(String(e));
       return;
     }
   }
