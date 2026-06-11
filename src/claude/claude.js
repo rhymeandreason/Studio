@@ -74,14 +74,18 @@ function renderSessionsList() {
         return;
     }
     for (const s of sessions) {
-        const btn = document.createElement("button");
-        btn.className = "claude-session-item" + (s.key === activeKey ? " is-active" : "");
-        btn.innerHTML = `<span class="claude-session-item__name"></span><span class="claude-session-item__project"><span class="mi mi-sm">folder</span><span></span></span>`;
-        btn.querySelector(".claude-session-item__name").textContent = s.name;
-        btn.querySelector(".claude-session-item__project span:last-child").textContent =
+        const item = document.createElement("div");
+        item.className = "claude-session-item" + (s.key === activeKey ? " is-active" : "");
+        item.innerHTML = `<span class="claude-session-item__name"></span><span class="claude-session-item__project"><span class="mi mi-sm">folder</span><span></span></span><button class="claude-session-item__delete" title="Delete session"><span class="mi">delete</span></button>`;
+        item.querySelector(".claude-session-item__name").textContent = s.name;
+        item.querySelector(".claude-session-item__project span:last-child").textContent =
             s.projectName;
-        btn.addEventListener("click", () => switchTo(s.key));
-        sessionsListEl.appendChild(btn);
+        item.addEventListener("click", () => switchTo(s.key));
+        item.querySelector(".claude-session-item__delete").addEventListener("click", (e) => {
+            e.stopPropagation();
+            deleteSession(s.key);
+        });
+        sessionsListEl.appendChild(item);
     }
 }
 
@@ -182,6 +186,44 @@ async function switchTo(key) {
     renderSessionsList();
     ensureListener(session.key);
     renderHistoryList(session.projectPath, session.projectName);
+}
+
+async function deleteSession(key) {
+    const idx = sessions.findIndex((s) => s.key === key);
+    if (idx === -1) return;
+    const [removed] = sessions.splice(idx, 1);
+
+    // Tear down the subprocess and its stream listener, if any.
+    try {
+        await invoke("claude_stop", { key });
+    } catch {
+        // ignore — proc may not be running
+    }
+    const unlisten = listeners.get(key);
+    if (unlisten) {
+        unlisten.then((fn) => fn()).catch(() => {});
+        listeners.delete(key);
+    }
+    liveBubbles.delete(key);
+
+    await persistSessions();
+
+    // If we deleted the active session, fall back to another (or empty state).
+    if (activeKey === key) {
+        activeKey = null;
+        if (sessions.length) {
+            await switchTo(sessions[0].key);
+        } else {
+            sessionNameEl.textContent = "New session";
+            transcriptEl.innerHTML = "";
+            renderTranscript({ transcript: [] });
+            resetUsageBars();
+            renderSessionsList();
+            if (removed) renderHistoryList(removed.projectPath, removed.projectName);
+        }
+    } else {
+        renderSessionsList();
+    }
 }
 
 async function createSession(projectPath, projectName) {
