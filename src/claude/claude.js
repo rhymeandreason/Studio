@@ -181,7 +181,13 @@ function appendBubble(role, text) {
     transcriptEl.querySelector(".claude-empty")?.remove();
     const el = document.createElement("div");
     el.className = `claude-msg claude-msg--${role}`;
-    if (role !== "system") {
+    if (role === "assistant") {
+        const icon = document.createElement("img");
+        icon.className = "claude-msg__icon claude-msg__icon--svg";
+        icon.src = "claude-icon.svg";
+        icon.alt = "";
+        el.appendChild(icon);
+    } else if (role !== "system") {
         const icon = document.createElement("span");
         icon.className = "mi claude-msg__icon";
         icon.textContent = ROLE_ICONS[role] || "circle";
@@ -415,10 +421,13 @@ function handleStreamLine(key, line) {
             updateUsage(session, msg.usage, msg.modelUsage);
             persistSessions();
             renderSessionsList();
+            // A turn just completed — refresh account quota usage.
+            refreshUsage();
             break;
         }
         case "rate_limit_event": {
-            updatePlanStatus(session, msg.rate_limit_info);
+            // Quota changed; pull fresh account usage for the 5-hour bar.
+            refreshUsage();
             break;
         }
         case "__stderr__": {
@@ -448,13 +457,28 @@ function updateUsage(session, usage, modelUsage) {
     if (session.key === activeKey) renderUsageBars(session);
 }
 
-function updatePlanStatus(session, info) {
-    if (!info) return;
-    session.plan = { status: info.status };
-    if (session.key === activeKey) renderUsageBars(session);
+// Account-wide quota usage (the numbers behind Claude's /usage), fetched from
+// the backend. Shared across sessions, so kept module-global rather than on a
+// session. Shape: { five_hour:{utilization,resets_at}, seven_day:{...} }.
+let accountUsage = null;
+
+async function refreshUsage() {
+    try {
+        accountUsage = await invoke("get_claude_usage");
+    } catch {
+        accountUsage = null;
+    }
+    renderUsageBars(sessions.find((s) => s.key === activeKey));
 }
 
-// Paint both bars from whatever is stored on the session (empty if nothing yet).
+function fillColor(pct) {
+    if (pct >= 90) return "var(--rose)";
+    if (pct >= 70) return "var(--amber, var(--sage))";
+    return "var(--sage)";
+}
+
+// Paint both bars: context from the active session, 5-hour quota from the
+// account usage (with the 7-day figure appended).
 function renderUsageBars(session) {
     const usage = session?.usage;
     if (usage) {
@@ -466,11 +490,17 @@ function renderUsageBars(session) {
         contextPct.textContent = "0%";
     }
 
-    const plan = session?.plan;
-    if (plan) {
-        planStatus.textContent = plan.status === "allowed" ? "OK" : plan.status;
-        planFill.style.width = plan.status === "allowed" ? "10%" : "100%";
-        planFill.style.background = plan.status === "allowed" ? "var(--sage)" : "var(--rose)";
+    const fiveHour = accountUsage?.five_hour;
+    if (fiveHour && typeof fiveHour.utilization === "number") {
+        const pct = Math.round(fiveHour.utilization);
+        const sevenDay = accountUsage?.seven_day;
+        const sevenPct =
+            sevenDay && typeof sevenDay.utilization === "number"
+                ? ` · 7d ${Math.round(sevenDay.utilization)}%`
+                : "";
+        planStatus.textContent = `${pct}%${sevenPct}`;
+        planFill.style.width = `${pct}%`;
+        planFill.style.background = fillColor(pct);
     } else {
         planFill.style.width = "0%";
         planStatus.textContent = "—";
@@ -606,6 +636,7 @@ listen("claude-jump", async (event) => {
 (async function init() {
     await loadSessions();
     renderSessionsList();
+    refreshUsage();
     if (sessions.length) {
         // Return to the last active session if it still exists, else the newest.
         const lastKey = localStorage.getItem("claude.activeKey");

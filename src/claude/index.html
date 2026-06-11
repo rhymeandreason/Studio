@@ -20,12 +20,15 @@
                 <button class="iconbtn-round" id="sessions-toggle" title="Sessions">
                     <span class="mi mi-sm">menu</span>
                 </button>
-                <select class="field__input claude-model" id="model-select">
-                    <option value="sonnet">Sonnet</option>
-                    <option value="opus">Opus</option>
-                    <option value="fable">Fable</option>
-                    <option value="haiku">Haiku</option>
-                </select>
+                <div class="claude-model-wrap">
+                    <img class="claude-model__icon" src="claude-icon.svg" alt="" />
+                    <select class="field__input claude-model" id="model-select">
+                        <option value="sonnet">Sonnet</option>
+                        <option value="opus">Opus</option>
+                        <option value="fable">Fable</option>
+                        <option value="haiku">Haiku</option>
+                    </select>
+                </div>
                 <span class="claude-session-name" id="session-name">New session</span>
                 <button class="iconbtn-round" id="new-session" title="New session">
                     <span class="mi mi-sm">add</span>
@@ -81,7 +84,7 @@
                             class="field__input claude-textarea"
                             id="prompt-input"
                             rows="2"
-                            placeholder="Message Claude…"
+                            placeholder="What shall we do next?"
                         ></textarea>
                         <button class="iconbtn-round claude-send" id="send-btn" type="submit" title="Send">
                             <span class="mi mi-sm">arrow_upward</span>

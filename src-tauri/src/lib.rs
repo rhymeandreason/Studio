@@ -2083,6 +2083,37 @@ fn read_claude_session_log(
     out
 }
 
+/// Current account usage (the numbers behind Claude's `/usage`): 5-hour and
+/// 7-day quota utilization, fetched from `/api/oauth/usage` with the OAuth
+/// token Claude Code stores in the macOS Keychain. Account-wide, not per
+/// session. Returns the raw JSON (`five_hour`/`seven_day`/`extra_usage`).
+#[tauri::command]
+fn get_claude_usage() -> Result<serde_json::Value, String> {
+    // The OAuth token lives in the login keychain under this service name.
+    let out = Command::new("security")
+        .args(["find-generic-password", "-s", "Claude Code-credentials", "-w"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err("Could not read Claude credentials from Keychain".into());
+    }
+    let creds: serde_json::Value =
+        serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())?;
+    let token = creds["claudeAiOauth"]["accessToken"]
+        .as_str()
+        .ok_or("No OAuth access token found")?;
+
+    let resp = ureq::get("https://api.anthropic.com/api/oauth/usage")
+        .set("Authorization", &format!("Bearer {token}"))
+        .set("anthropic-beta", "oauth-2025-04-20")
+        .call()
+        .map_err(|e| match e {
+            ureq::Error::Status(code, _) => format!("usage request failed ({code})"),
+            other => other.to_string(),
+        })?;
+    resp.into_json().map_err(|e| e.to_string())
+}
+
 /// Move an entire project folder to the Trash.
 #[tauri::command]
 fn trash_project(path: String) -> Result<(), String> {
@@ -2124,6 +2155,7 @@ pub fn run() {
             save_claude_sessions,
             list_claude_project_sessions,
             read_claude_session_log,
+            get_claude_usage,
             get_active_project,
             clear_active_project,
             save_tool_export,

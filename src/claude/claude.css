@@ -28,6 +28,7 @@
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
+    background: var(--surface);
     border-bottom: 1px solid var(--hairline);
     -webkit-app-region: drag;
 }
@@ -37,10 +38,25 @@
     -webkit-app-region: no-drag;
 }
 
+.claude-model-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+}
+
+.claude-model__icon {
+    position: absolute;
+    left: 10px;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+}
+
 .claude-model {
     width: auto;
     flex: 0 0 auto;
-    padding: 6px 28px 6px 12px;
+    padding: 6px 28px 6px 30px;
     font-size: 12px;
     font-weight: 600;
 }
@@ -60,6 +76,7 @@
     display: flex;
     gap: 16px;
     padding: 8px 14px;
+    background: var(--surface);
     border-bottom: 1px solid var(--hairline);
 }
 
@@ -89,7 +106,7 @@
 .claude-meter__track {
     height: 5px;
     border-radius: 3px;
-    background: var(--surface);
+    background: var(--hairline-strong);
     overflow: hidden;
 }
 
@@ -97,6 +114,7 @@
     height: 100%;
     width: 0%;
     background: var(--accent);
+    box-shadow: inset 0 0 0 9999px rgba(0, 0, 0, 0.08);
     transition: width 0.25s ease;
 }
 
@@ -381,6 +399,10 @@
     font-size: 16px;
 }
 
+.claude-msg__icon--svg {
+    padding: 5px;
+}
+
 .claude-msg--user .claude-msg__icon {
     background: var(--accent-soft);
     color: var(--accent);
@@ -454,4 +476,11 @@
 .claude-send:disabled {
     opacity: 0.4;
     cursor: default;
+}
+.claude-input {
+    padding-left:10px;
+}
+#prompt-input{
+    padding:10px;
+    height:48px;
 }
