@@ -19,6 +19,8 @@ use tauri::{
 struct Project {
     name: String,
     path: String,
+    /// Last-modified time of the project folder, as Unix epoch seconds.
+    modified: u64,
 }
 
 /// The `claude` block of a workspace manifest.
@@ -84,9 +86,16 @@ fn scan_projects(app: &AppHandle) -> Vec<Project> {
                 if name.starts_with('.') {
                     continue;
                 }
+                let modified = std::fs::metadata(&path)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
                 projects.push(Project {
                     name: name.to_string(),
                     path: path.to_string_lossy().to_string(),
+                    modified,
                 });
             }
         }
@@ -145,6 +154,7 @@ fn scan_tools(app: &AppHandle) -> Vec<Project> {
                 Some(Project {
                     name,
                     path: path.to_string_lossy().to_string(),
+                    modified: 0,
                 })
             })
             .collect();
@@ -169,6 +179,7 @@ fn scan_tools(app: &AppHandle) -> Vec<Project> {
             tools.push(Project {
                 name: stem.to_string(),
                 path: path.to_string_lossy().to_string(),
+                modified: 0,
             });
         }
     }
@@ -499,6 +510,7 @@ fn create_project(app: AppHandle, name: String) -> Result<Project, String> {
     Ok(Project {
         name: name.to_string(),
         path,
+        modified: 0,
     })
 }
 

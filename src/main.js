@@ -400,8 +400,14 @@ async function showOverview() {
       const name = document.createElement("span");
       name.className = "card__name";
       name.textContent = p.name;
-
       card.append(name);
+
+      if (p.modified) {
+        const modified = document.createElement("span");
+        modified.className = "card__modified";
+        modified.textContent = relativeDate(p.modified * 1000);
+        card.append(modified);
+      }
       card.addEventListener("pointerdown", (e) =>
         onProjectCardPointerDown(e, p, card),
       );
@@ -1055,6 +1061,21 @@ function noteHeader(note) {
 
   head.append(title);
   return head;
+}
+
+// "Yesterday" / "3 days ago" / "1 week ago" for recent dates; falls back to
+// a plain date once it's more than a week old.
+function relativeDate(ms) {
+  const days = Math.floor((Date.now() - ms) / 86400000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 14) return "1 week ago";
+  return new Date(ms).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 // Width toggle, shown centered at the bottom of every note card. 1–3 dots =
