@@ -207,6 +207,8 @@ async function switchTo(key) {
     activeKey = key;
     const session = sessions.find((s) => s.key === key);
     if (!session) return;
+    // Remember the last active session so reopening the window returns to it.
+    localStorage.setItem("claude.activeKey", key);
     sessionNameEl.textContent = `${session.name} · ${session.projectName}`;
     modelSelect.value = session.model || "sonnet";
     renderTranscript(session);
@@ -577,11 +579,16 @@ listen("claude-jump", async (event) => {
         return;
     }
     if (projectPath) {
-        // Reopen the most recent session for this project if one exists
-        // (sessions are kept newest-first), rather than starting fresh.
-        const existing = sessions.find((s) => s.projectPath === projectPath);
-        if (existing) {
-            await switchTo(existing.key);
+        // Return to the last active session for this project if it still
+        // exists, else its most recent (sessions are kept newest-first),
+        // rather than starting fresh.
+        const recent = sessions.find((s) => s.projectPath === projectPath);
+        if (recent) {
+            const lastKey = localStorage.getItem("claude.activeKey");
+            const lastActive = sessions.find(
+                (s) => s.key === lastKey && s.projectPath === projectPath,
+            );
+            await switchTo(lastActive ? lastActive.key : recent.key);
             return;
         }
         let projectName = projectPath.split("/").filter(Boolean).pop();
@@ -600,7 +607,10 @@ listen("claude-jump", async (event) => {
     await loadSessions();
     renderSessionsList();
     if (sessions.length) {
-        await switchTo(sessions[0].key);
+        // Return to the last active session if it still exists, else the newest.
+        const lastKey = localStorage.getItem("claude.activeKey");
+        const restore = sessions.some((s) => s.key === lastKey) ? lastKey : sessions[0].key;
+        await switchTo(restore);
     } else {
         resetUsageBars();
         const proj = await defaultProject();
