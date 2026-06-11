@@ -91,10 +91,11 @@
     font: inherit;
     font-weight: 600;
     color: var(--text);
-    background: var(--elevated, var(--bg));
-    border: 1px solid var(--accent);
-    border-radius: 6px;
-    padding: 3px 7px;
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 4px 8px;
+    outline: none;
     -webkit-app-region: no-drag;
 }
 
@@ -231,7 +232,7 @@
 .claude-usage {
     display: flex;
     gap: 16px;
-    padding: 10px 16px 16px 16px;
+    padding: 12px 16px 8px 16px;
     background: var(--surface);
     border-bottom: 1px solid var(--hairline);
 }
@@ -814,6 +815,6 @@
     padding-left:10px;
 }
 #prompt-input{
-    padding:10px;
-    height:48px;
+    padding:8px;
+    height:54px;
 }
