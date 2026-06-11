@@ -762,7 +762,14 @@ function updateUsage(session, usage, modelUsage) {
 // Account-wide quota usage (the numbers behind Claude's /usage), fetched from
 // the backend. Shared across sessions, so kept module-global rather than on a
 // session. Shape: { five_hour:{utilization,resets_at}, seven_day:{...} }.
+// Seeded from localStorage so the bar shows the last known value immediately
+// (and never blanks) even if the first fetch is rate-limited.
 let accountUsage = null;
+try {
+    accountUsage = JSON.parse(localStorage.getItem("claude.accountUsage") || "null");
+} catch {
+    accountUsage = null;
+}
 
 // The /api/oauth/usage endpoint rate-limits (429) if hit too often, which
 // would blank the bar — so throttle to at most once per minute and coalesce
@@ -776,17 +783,25 @@ async function refreshUsage(force) {
     if (!force && now - lastUsageFetch < USAGE_MIN_INTERVAL_MS) return;
     usageFetching = true;
     lastUsageFetch = now;
+    let ok = false;
     try {
         const next = await invoke("get_claude_usage");
         // Only adopt a well-formed payload; keep the last good value otherwise
         // so a transient fetch/auth/keychain failure doesn't blank the bar.
-        if (next && next.five_hour) accountUsage = next;
+        if (next && next.five_hour) {
+            accountUsage = next;
+            localStorage.setItem("claude.accountUsage", JSON.stringify(next));
+            ok = true;
+        }
     } catch {
         // keep last known accountUsage
     } finally {
         usageFetching = false;
     }
     renderUsageBars(sessions.find((s) => s.key === activeKey));
+    // If a fetch failed (e.g. transient 429), retry in the background rather
+    // than waiting for the next turn — otherwise the bar can stay stale.
+    if (!ok) setTimeout(() => refreshUsage(true), 30000);
 }
 
 function fillColor(pct) {
