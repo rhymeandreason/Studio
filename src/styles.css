@@ -1159,17 +1159,97 @@ textarea.notecard__title {
     gap: 4px;
 }
 
-.notecard__style-select {
+/* Custom dropdown for the per-card theme/font pickers (replaces <select> so
+   the menu and its swatches/font previews can be fully styled). */
+.notedrop {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.notedrop__btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     font-family: var(--sans);
     font-size: 11px;
     color: var(--text-muted);
     background: var(--bg);
     border: 1px solid var(--hairline);
     border-radius: 6px;
-    padding: 2px 4px;
-    max-width: 88px;
+    padding: 2px 6px;
+    max-width: 100px;
     cursor: pointer;
     outline: none;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.notedrop__btn:hover {
+    border-color: var(--text-soft);
+    color: var(--text);
+}
+
+.notedrop:focus-within .notedrop__btn {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.notedrop__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notedrop__chev {
+    margin-left: auto;
+    flex: 0 0 auto;
+    font-size: 14px;
+    color: var(--text-soft);
+}
+
+.notedrop__swatch {
+    flex: 0 0 auto;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 1px solid var(--hairline-strong);
+    background: var(--elevated);
+}
+
+.notedrop__swatch--none {
+    background: var(--elevated);
+    background-image: linear-gradient(to bottom right, transparent calc(50% - 1px), var(--hairline-strong), transparent calc(50% + 1px));
+}
+
+.notedrop__menu {
+    top: calc(100% + 6px);
+    right: 0;
+    left: auto;
+    min-width: 140px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.notedrop__item {
+    gap: 8px;
+    justify-content: space-between;
+}
+
+.notedrop__item::after {
+    font-family: "Material Symbols Rounded";
+    font-size: 16px;
+    content: "";
+    color: var(--accent);
+    opacity: 0;
+    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+}
+
+.notedrop__item.is-active {
+    color: var(--text);
+}
+
+.notedrop__item.is-active::after {
+    content: "check";
+    opacity: 1;
 }
 
 .notecard__footer {

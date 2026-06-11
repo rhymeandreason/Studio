@@ -1635,12 +1635,72 @@ function updateNotesChrome() {
   const note = selectedNote();
   group.hidden = !note;
   if (!note) return;
-  const theme = document.getElementById("note-theme-select");
-  const titleFont = document.getElementById("note-titlefont-select");
-  const bodyFont = document.getElementById("note-bodyfont-select");
-  if (theme) theme.value = note.theme || "default";
-  if (titleFont) titleFont.value = note.titleFont || "";
-  if (bodyFont) bodyFont.value = note.bodyFont || "";
+  noteThemeDrop?.setValue(note.theme || "default");
+  noteTitleFontDrop?.setValue(note.titleFont || "");
+  noteBodyFontDrop?.setValue(note.bodyFont || "");
+}
+
+let noteThemeDrop = null;
+let noteTitleFontDrop = null;
+let noteBodyFontDrop = null;
+
+// A small custom dropdown for the per-card style controls (theme/font
+// pickers): a trigger button showing the current choice, and a menu of
+// options — each rendered with a colour swatch (themes) or in its own font
+// (fonts) so you can preview the choice before picking it.
+function createStyleDropdown(container, items, onSelect) {
+  const hasSwatches = items.some((i) => "swatch" in i);
+  const btn = el("button", "notedrop__btn", { type: "button" });
+  const swatch = hasSwatches ? el("span", "notedrop__swatch") : null;
+  const label = el("span", "notedrop__label");
+  if (swatch) btn.append(swatch);
+  btn.append(label, el("span", "mi mi-sm notedrop__chev", { textContent: "expand_more" }));
+
+  const menu = el("div", "menu notedrop__menu", { hidden: true });
+  items.forEach((item) => {
+    const opt = el("button", "menu__item notedrop__item", {
+      type: "button",
+      textContent: item.label,
+    });
+    if (item.font) opt.style.fontFamily = item.font;
+    if (item.swatch) {
+      opt.prepend(el("span", "notedrop__swatch", { style: `background:${item.swatch}` }));
+    } else if ("swatch" in item) {
+      opt.prepend(el("span", "notedrop__swatch notedrop__swatch--none"));
+    }
+    opt.dataset.value = item.value;
+    opt.addEventListener("click", () => {
+      menu.hidden = true;
+      setValue(item.value);
+      onSelect(item.value);
+    });
+    menu.append(opt);
+  });
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    menu.hidden = !menu.hidden;
+  });
+  document.addEventListener("click", (e) => {
+    if (!container.contains(e.target)) menu.hidden = true;
+  });
+
+  function setValue(value) {
+    const item = items.find((i) => i.value === value) || items[0];
+    label.textContent = item.label;
+    if (swatch) {
+      swatch.style.background = item.swatch || "";
+      swatch.classList.toggle("notedrop__swatch--none", !item.swatch);
+    }
+    label.style.fontFamily = item.font || "";
+    menu.querySelectorAll(".notedrop__item").forEach((opt) => {
+      opt.classList.toggle("is-active", opt.dataset.value === item.value);
+    });
+  }
+
+  container.append(btn, menu);
+  setValue(items[0].value);
+  return { setValue };
 }
 
 function setSelectedNoteStyle(key, value) {
@@ -1839,21 +1899,20 @@ function initNotes() {
   });
 
   // Per-card style controls (toolbar) target the currently selected card.
-  const themeSel = document.getElementById("note-theme-select");
-  const titleFontSel = document.getElementById("note-titlefont-select");
-  const bodyFontSel = document.getElementById("note-bodyfont-select");
-  NOTE_THEMES.forEach((t) => themeSel.append(new Option(t.name, t.id)));
-  [titleFontSel, bodyFontSel].forEach((sel) =>
-    NOTE_FONTS.forEach((f) => sel.append(new Option(f.name, f.value))),
+  noteThemeDrop = createStyleDropdown(
+    document.getElementById("note-theme-drop"),
+    NOTE_THEMES.map((t) => ({ value: t.id, label: t.name, swatch: t.bg })),
+    (value) => setSelectedNoteStyle("theme", value),
   );
-  themeSel.addEventListener("change", () =>
-    setSelectedNoteStyle("theme", themeSel.value),
+  noteTitleFontDrop = createStyleDropdown(
+    document.getElementById("note-titlefont-drop"),
+    NOTE_FONTS.map((f) => ({ value: f.value, label: f.name, font: f.value })),
+    (value) => setSelectedNoteStyle("titleFont", value),
   );
-  titleFontSel.addEventListener("change", () =>
-    setSelectedNoteStyle("titleFont", titleFontSel.value),
-  );
-  bodyFontSel.addEventListener("change", () =>
-    setSelectedNoteStyle("bodyFont", bodyFontSel.value),
+  noteBodyFontDrop = createStyleDropdown(
+    document.getElementById("note-bodyfont-drop"),
+    NOTE_FONTS.map((f) => ({ value: f.value, label: f.name, font: f.value })),
+    (value) => setSelectedNoteStyle("bodyFont", value),
   );
 
   installOffClickDeselect({
