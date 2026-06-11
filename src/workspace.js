@@ -422,6 +422,13 @@ function renderSchedules() {
   wsSchedules.forEach((task) => container.append(buildScheduleRow(task)));
 }
 
+// Recompute the system wake schedule from all enabled tasks. Only called on
+// time/day/enabled/remove changes (not every keystroke) since it triggers an
+// admin-password prompt (`pmset schedule wake` via osascript).
+function updateWakeSchedule() {
+  invoke("update_wake_schedule").catch((err) => console.error("update_wake_schedule:", err));
+}
+
 function setLastRunText(span, task) {
   if (!task.lastRunAt) {
     span.textContent = "";
@@ -462,6 +469,7 @@ function buildScheduleRow(task) {
   time.addEventListener("change", () => {
     task.time = time.value;
     scheduleWorkspaceSave();
+    updateWakeSchedule();
   });
 
   const days = el("div", "ws-schedule__days");
@@ -476,6 +484,7 @@ function buildScheduleRow(task) {
       else task.days.splice(at, 1);
       day.classList.toggle("is-active", task.days.includes(idx));
       scheduleWorkspaceSave();
+      updateWakeSchedule();
     });
     days.append(day);
   });
@@ -514,6 +523,7 @@ function buildScheduleRow(task) {
   toggleInput.addEventListener("change", () => {
     task.enabled = toggleInput.checked;
     scheduleWorkspaceSave();
+    updateWakeSchedule();
   });
   const toggleTrack = el("span", "claude-toggle__track");
   toggleTrack.append(el("span", "claude-toggle__thumb"));
@@ -545,6 +555,7 @@ function buildScheduleRow(task) {
     wsSchedules = wsSchedules.filter((t) => t !== task);
     renderSchedules();
     scheduleWorkspaceSave();
+    updateWakeSchedule();
   });
 
   row.append(toggle, main, run, remove);

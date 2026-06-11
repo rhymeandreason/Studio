@@ -1902,6 +1902,68 @@ fn run_due_schedules(app: &AppHandle) {
     }
 }
 
+/// Recompute the set of upcoming wake times needed for all enabled scheduled
+/// tasks (across every project) and apply them via `pmset schedule wake`,
+/// replacing any previously-set schedule. Runs `pmset` through `osascript
+/// ... with administrator privileges`, which prompts for the admin password —
+/// called when the user adds/edits/toggles a scheduled task, so the prompt
+/// happens while they're present, not at 5am.
+///
+/// Note: `pmset schedule cancelall` clears *all* scheduled sleep/wake/poweron
+/// events system-wide, not just Studio's — fine for a single-user machine,
+/// but worth knowing if something else relies on `pmset schedule`.
+#[tauri::command]
+fn update_wake_schedule(app: AppHandle) -> Result<(), String> {
+    use chrono::{Datelike, Duration, Local, NaiveTime, TimeZone};
+
+    let now = Local::now();
+    let mut times = Vec::new();
+    for project in scan_projects(&app) {
+        let Ok(ws) = read_workspace(project.path.clone()) else {
+            continue;
+        };
+        for task in &ws.schedules {
+            if !task.enabled {
+                continue;
+            }
+            let Ok(time_of_day) = NaiveTime::parse_from_str(&task.time, "%H:%M") else {
+                continue;
+            };
+            // Find the next day (today..+7) whose weekday matches `days`
+            // (empty = every day) and whose time hasn't passed yet.
+            for offset in 0..8 {
+                let day = (now + Duration::days(offset)).date_naive();
+                let weekday = day.weekday().num_days_from_sunday() as u8;
+                if !task.days.is_empty() && !task.days.contains(&weekday) {
+                    continue;
+                }
+                let Some(candidate) = Local.from_local_datetime(&day.and_time(time_of_day)).single()
+                else {
+                    continue;
+                };
+                if candidate > now {
+                    times.push(candidate);
+                    break;
+                }
+            }
+        }
+    }
+    times.sort();
+    times.dedup();
+    times.truncate(10); // pmset only supports a handful of scheduled events
+
+    let mut script = String::from("pmset schedule cancelall");
+    for t in &times {
+        script.push_str(&format!(" && pmset schedule wake \"{}\"", t.format("%m/%d/%y %H:%M:%S")));
+    }
+    let osa = format!("do shell script \"{}\" with administrator privileges", script.replace('"', "\\\""));
+    Command::new("osascript")
+        .args(["-e", &osa])
+        .output()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Manually fire a scheduled task immediately (the "Run now" button), without
 /// waiting for the scheduler loop or touching `lastRun`.
 #[tauri::command]
@@ -2379,6 +2441,7 @@ pub fn run() {
             claude_send,
             claude_stop,
             run_schedule_now,
+            update_wake_schedule,
             read_claude_sessions,
             save_claude_sessions,
             list_claude_project_sessions,

@@ -113,6 +113,26 @@ own when Studio quits. Studio still needs to be running (even just in the
 menu bar); if the Mac sleeps anyway (e.g. on battery) or Studio is quit,
 missed runs are skipped, not backfilled.
 
+### Waking the Mac (e.g. for an early-morning task)
+
+If the Mac is fully asleep, `caffeinate` can't help. Whenever a task's
+`time`/`days`/`enabled` changes (or it's removed), the frontend calls
+`update_wake_schedule`, which:
+
+1. Scans every project's enabled schedules and finds each one's next
+   occurrence (today..+7 days, respecting `days`).
+2. Runs `pmset schedule cancelall && pmset schedule wake "MM/dd/yy HH:MM:SS"`
+   (one `wake` per upcoming occurrence, up to 10) via `osascript ... with
+   administrator privileges` — macOS prompts for the admin password at this
+   point, while you're present making the edit.
+
+`pmset schedule cancelall` clears *all* scheduled sleep/wake/poweron events
+system-wide (not just Studio's), so this is single-user-only behavior.
+Because each task only schedules its *next* occurrence, a recurring task
+needs Studio open again afterward (the wake itself doesn't re-trigger
+`update_wake_schedule` — it only schedules ~7 days out from whenever you
+last edited the task).
+
 A background loop (`start_scheduler`, started in `setup`) wakes every 30s,
 scans every project under `~/Projects/`, and fires any enabled task whose
 `time`/`days` match now and that hasn't run today. Firing runs (in
