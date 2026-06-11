@@ -1794,12 +1794,18 @@ fn open_claude_window(
         let _ = win.show();
         let _ = win.set_focus();
     } else {
-        WebviewWindowBuilder::new(&app, "claude", WebviewUrl::App("claude/index.html".into()))
-            .title("Claude")
-            .inner_size(600.0, 800.0)
-            .min_inner_size(420.0, 360.0)
-            .build()
-            .map_err(|e| e.to_string())?;
+        use tauri_plugin_window_state::{StateFlags, WindowExt};
+        let win =
+            WebviewWindowBuilder::new(&app, "claude", WebviewUrl::App("claude/index.html".into()))
+                .title("Claude")
+                .inner_size(600.0, 800.0)
+                .min_inner_size(420.0, 360.0)
+                .build()
+                .map_err(|e| e.to_string())?;
+        // The window is created dynamically, so the window-state plugin doesn't
+        // auto-restore it — apply the saved size/position explicitly. It's saved
+        // again on app exit by the plugin.
+        let _ = win.restore_state(StateFlags::SIZE | StateFlags::POSITION);
     }
     let _ = app.emit(
         "claude-jump",

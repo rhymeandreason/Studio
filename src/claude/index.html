@@ -20,13 +20,15 @@
                 <button class="claude-toggle-btn" id="sessions-toggle" title="Sessions">
                     <span class="mi mi-sm">side_navigation</span>
                 </button>
-                <div class="claude-tabs" id="tabs"></div>
+
                 <button class="claude-toggle-btn claude-newtab" id="new-session" title="New session">
                     <span class="mi mi-sm">add</span>
                 </button>
+                <div class="claude-tabs" id="tabs"></div>
             </div>
 
             <header class="claude-bar">
+                <span class="claude-session-name" id="session-name" title="Click to rename">New session</span>
                 <div class="claude-model-wrap">
                     <img class="claude-model__icon" src="claude-icon.svg" alt="" />
                     <select class="field__input claude-model" id="model-select">
@@ -46,7 +48,7 @@
                     <option value="plan">Plan</option>
                     <option value="bypassPermissions">Bypass</option>
                 </select>
-                <span class="claude-session-name" id="session-name" title="Click to rename">New session</span>
+
             </header>
 
             <div class="claude-usage" id="usage-bars">
