@@ -285,6 +285,11 @@ body {
     cursor: default;
 }
 
+.claude-btn__icon {
+    width: 16px;
+    height: 16px;
+}
+
 .btn-ghost {
     background: transparent;
     color: var(--text-muted);
@@ -299,6 +304,9 @@ body {
         background 0.15s,
         color 0.15s,
         border-color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .btn-ghost:hover {

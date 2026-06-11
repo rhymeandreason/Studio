@@ -54,6 +54,11 @@ async function loadSessions() {
     } catch {
         sessions = [];
     }
+    // Drop usage stored by the old (cumulative, >100%) calculation so it
+    // doesn't show a bogus number until the session's next turn recomputes it.
+    for (const s of sessions) {
+        if (s.usage && s.usage.used > s.usage.contextWindow) delete s.usage;
+    }
 }
 
 async function persistSessions() {
@@ -388,6 +393,11 @@ function handleStreamLine(key, line) {
         }
         case "stream_event": {
             const ev = msg.event;
+            // message_start carries this turn's prompt usage (current context
+            // occupancy) — capture it for the context bar.
+            if (ev?.type === "message_start" && ev.message?.usage) {
+                live.lastUsage = ev.message.usage;
+            }
             if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta") {
                 if (!live.assistantEl && isActive) {
                     live.assistantEl = appendBubble("assistant", "");
@@ -401,6 +411,9 @@ function handleStreamLine(key, line) {
             break;
         }
         case "assistant": {
+            // The latest assistant message's usage reflects the current prompt
+            // size (per-turn, not cumulative) — best estimate of context used.
+            if (msg.message?.usage) live.lastUsage = msg.message.usage;
             const blocks = msg.message?.content || [];
             for (const block of blocks) {
                 if (block.type === "tool_use" && !live.toolKeys.has(block.id)) {
@@ -430,7 +443,8 @@ function handleStreamLine(key, line) {
                 if (firstUser) session.name = firstUser.text.slice(0, 40);
             }
 
-            updateUsage(session, msg.usage, msg.modelUsage);
+            updateUsage(session, live.lastUsage, msg.modelUsage);
+            live.lastUsage = null;
             persistSessions();
             renderSessionsList();
             // A turn just completed — refresh account quota usage.
@@ -455,16 +469,25 @@ function handleStreamLine(key, line) {
     }
 }
 
-// Record the latest usage/plan numbers on the session so the bars can be
-// restored when the session is reopened, then refresh the bars if it's active.
+// Record the context usage on the session so the bar can be restored when the
+// session is reopened, then refresh if it's active.
+//
+// `usage` is the LAST turn's prompt usage (from the latest assistant/message_start
+// message) — input + cache-read + cache-creation tokens, i.e. how full the
+// context window is right now. NOTE: the result event's own `usage`/`modelUsage`
+// are *cumulative* over the process lifetime and grow past the window, so they
+// must not be used here. The context window itself is read from modelUsage
+// (a constant per model; take the largest, which is the conversational model's).
 function updateUsage(session, usage, modelUsage) {
     if (!usage) return;
-    const contextWindow =
-        Object.values(modelUsage || {})[0]?.contextWindow || CONTEXT_WINDOW_DEFAULT;
     const used =
         (usage.input_tokens || 0) +
         (usage.cache_read_input_tokens || 0) +
         (usage.cache_creation_input_tokens || 0);
+    const windows = Object.values(modelUsage || {})
+        .map((m) => m.contextWindow || 0)
+        .filter(Boolean);
+    const contextWindow = windows.length ? Math.max(...windows) : CONTEXT_WINDOW_DEFAULT;
     session.usage = { used, contextWindow };
     if (session.key === activeKey) renderUsageBars(session);
 }
