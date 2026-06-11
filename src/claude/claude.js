@@ -40,6 +40,17 @@ const listeners = new Map(); // key -> unlisten fn
 const liveBubbles = new Map(); // key -> { assistantEl, toolKeys: Set }
 const busyKeys = new Set(); // sessions with a turn in progress
 
+// Auto-scroll only when the user is already at the bottom, so scrolling up to
+// read tool output isn't yanked back down by new messages/streamed text.
+let stickToBottom = true;
+function scrollToBottom(force) {
+    if (force || stickToBottom) transcriptEl.scrollTop = transcriptEl.scrollHeight;
+}
+transcriptEl.addEventListener("scroll", () => {
+    const gap = transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight;
+    stickToBottom = gap < 80;
+});
+
 // Show the stop button (instead of send) while the given session has a turn
 // running; only reflects the UI when it's the active session.
 function setBusy(key, busy) {
@@ -210,7 +221,9 @@ function renderTranscript(session) {
     for (const msg of session.transcript) {
         appendBubble(msg.role, msg.text);
     }
-    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    // Switching into a session: jump to the latest.
+    stickToBottom = true;
+    scrollToBottom(true);
 }
 
 function appendBubble(role, text) {
@@ -234,7 +247,8 @@ function appendBubble(role, text) {
     body.textContent = text;
     el.appendChild(body);
     transcriptEl.appendChild(el);
-    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    // Always follow the user's own message; otherwise only if pinned to bottom.
+    scrollToBottom(role === "user");
     return body;
 }
 
@@ -430,7 +444,7 @@ function handleStreamLine(key, line) {
                 }
                 if (live.assistantEl) {
                     live.assistantEl.textContent += ev.delta.text;
-                    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+                    if (isActive) scrollToBottom();
                 }
                 live.assistantText = (live.assistantText || "") + ev.delta.text;
             }

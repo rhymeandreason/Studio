@@ -351,6 +351,9 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    /* We manage scroll position manually (stick-to-bottom); stop the browser
+       from also nudging scrollTop as content streams in. */
+    overflow-anchor: none;
 }
 
 .claude-empty {
