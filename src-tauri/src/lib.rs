@@ -1913,8 +1913,11 @@ fn run_due_schedules(app: &AppHandle) {
 /// events system-wide, not just Studio's — fine for a single-user machine,
 /// but worth knowing if something else relies on `pmset schedule`.
 /// The next wake time for each enabled scheduled task across every project
-/// (today..+7 days, respecting `days`), sorted and capped at 10 — `pmset`
-/// only holds a handful of scheduled events.
+/// (today..+7 days, respecting `days`), sorted, deduped, and capped at 3 —
+/// `pmset` only holds a handful of scheduled events, and tasks sharing a
+/// time collapse into one slot. With one daily task, the 3 slots cover the
+/// next 3 days; `roll_wake_schedule` keeps adding a new day's slot after
+/// each run.
 fn compute_wake_times(app: &AppHandle) -> Vec<chrono::DateTime<chrono::Local>> {
     use chrono::{Datelike, Duration, Local, NaiveTime, TimeZone};
 
@@ -1952,7 +1955,7 @@ fn compute_wake_times(app: &AppHandle) -> Vec<chrono::DateTime<chrono::Local>> {
     }
     times.sort();
     times.dedup();
-    times.truncate(10);
+    times.truncate(3);
     times
 }
 
