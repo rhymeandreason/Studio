@@ -1732,6 +1732,22 @@ fn launch_workspace(app: AppHandle, path: String) -> Result<(), String> {
 
 // --- Claude companion window -------------------------------------------
 
+/// The directory Claude should run in for a project: the workspace's resolved
+/// `repo` path if set, otherwise the project folder itself. Keeps the companion
+/// window pointed at the actual git repo, in sync with the terminal-mode launch
+/// (which also cd's into the repo).
+fn claude_cwd(app: &AppHandle, project_path: &str) -> PathBuf {
+    let project_dir = PathBuf::from(project_path);
+    let ws = read_workspace(project_path.to_string()).unwrap_or_default();
+    if ws.repo.trim().is_empty() {
+        return project_dir;
+    }
+    match app.path().home_dir() {
+        Ok(home) => resolve_path(&home, &project_dir, &ws.repo),
+        Err(_) => project_dir,
+    }
+}
+
 /// GUI apps don't inherit the user's shell PATH (nvm, homebrew, etc.), so
 /// spawning "claude" — and "claude" itself spawning "node" via its shebang —
 /// often fails even though it works fine from a terminal. Resolve PATH via a
@@ -1810,7 +1826,7 @@ fn claude_send(
     if !procs.contains_key(&key) {
         let mut cmd = Command::new("claude");
         cmd.env("PATH", claude_path())
-            .current_dir(&project_path)
+            .current_dir(claude_cwd(&app, &project_path))
             .arg("-p")
             .args(["--input-format", "stream-json"])
             .args(["--output-format", "stream-json"])
@@ -1917,7 +1933,10 @@ fn list_claude_project_sessions(app: AppHandle, project_path: String) -> Vec<Cla
     let Ok(home) = app.path().home_dir() else {
         return Vec::new();
     };
-    let encoded = project_path.replace('/', "-");
+    // Claude records sessions under the cwd it ran in — the repo, not the
+    // project folder — so encode that path to find them.
+    let cwd = claude_cwd(&app, &project_path);
+    let encoded = cwd.to_string_lossy().replace('/', "-");
     let dir = home.join(".claude/projects").join(encoded);
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return Vec::new();
