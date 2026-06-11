@@ -107,6 +107,12 @@ Below the cards grid, the Workspace tab has a "Scheduled tasks" section
 
 ### Execution
 
+On startup, `start_caffeinate()` spawns `caffeinate -s -w <studio-pid>` so
+macOS won't sleep (on AC power) while Studio is running — it exits on its
+own when Studio quits. Studio still needs to be running (even just in the
+menu bar); if the Mac sleeps anyway (e.g. on battery) or Studio is quit,
+missed runs are skipped, not backfilled.
+
 A background loop (`start_scheduler`, started in `setup`) wakes every 30s,
 scans every project under `~/Projects/`, and fires any enabled task whose
 `time`/`days` match now and that hasn't run today. Firing runs (in
