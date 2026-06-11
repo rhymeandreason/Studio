@@ -1821,6 +1821,7 @@ fn claude_send(
     model: String,
     text: String,
     resume: Option<String>,
+    permission_mode: Option<String>,
 ) -> Result<(), String> {
     let mut procs = state.procs.lock().unwrap();
     if !procs.contains_key(&key) {
@@ -1834,6 +1835,11 @@ fn claude_send(
             .arg("--include-partial-messages");
         if !model.trim().is_empty() {
             cmd.args(["--model", model.trim()]);
+        }
+        if let Some(mode) = permission_mode.as_deref().map(str::trim) {
+            if !mode.is_empty() {
+                cmd.args(["--permission-mode", mode]);
+            }
         }
         if let Some(r) = &resume {
             if !r.trim().is_empty() {

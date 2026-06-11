@@ -61,6 +61,10 @@
     font-weight: 600;
 }
 
+.claude-permission {
+    padding-left: 12px;
+}
+
 .claude-session-name {
     flex: 1;
     overflow: hidden;
@@ -75,7 +79,7 @@
 .claude-usage {
     display: flex;
     gap: 16px;
-    padding: 8px 14px;
+    padding: 10px 16px 16px 16px;
     background: var(--surface);
     border-bottom: 1px solid var(--hairline);
 }

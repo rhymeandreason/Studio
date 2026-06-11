@@ -11,6 +11,7 @@ const transcriptEl = document.getElementById("transcript");
 const form = document.getElementById("input-form");
 const promptInput = document.getElementById("prompt-input");
 const modelSelect = document.getElementById("model-select");
+const permissionSelect = document.getElementById("permission-select");
 const newSessionBtn = document.getElementById("new-session");
 const contextFill = document.getElementById("context-fill");
 const contextPct = document.getElementById("context-pct");
@@ -22,6 +23,9 @@ const CONTEXT_WINDOW_DEFAULT = 200000;
 /** @type {Array<Session>} */
 let sessions = [];
 let activeKey = null;
+// The project whose sessions the sidebar shows. The Claude window is scoped to
+// one project at a time, so sessions from other projects are hidden.
+let currentProjectPath = null;
 // Whether to surface Claude Code sessions started outside Studio (the "Recent"
 // list, read from ~/.claude/projects). Persisted across launches.
 let includeOutside = localStorage.getItem("claude.includeOutside") !== "false";
@@ -75,14 +79,18 @@ function modelLabel(model) {
 
 function renderSessionsList() {
     sessionsListEl.innerHTML = "";
-    if (!sessions.length) {
+    // Only show sessions for the current project.
+    const visible = currentProjectPath
+        ? sessions.filter((s) => s.projectPath === currentProjectPath)
+        : sessions;
+    if (!visible.length) {
         const empty = document.createElement("div");
         empty.className = "claude-sessions__empty";
         empty.textContent = "No sessions yet.";
         sessionsListEl.appendChild(empty);
         return;
     }
-    for (const s of sessions) {
+    for (const s of visible) {
         const item = document.createElement("div");
         item.className = "claude-session-item" + (s.key === activeKey ? " is-active" : "");
         item.innerHTML = `<span class="claude-session-item__name"></span><span class="claude-session-item__project"><span class="mi mi-sm">folder</span><span></span></span><span class="claude-session-item__model"></span><button class="claude-session-item__rename" title="Rename session"><span class="mi">edit</span></button><button class="claude-session-item__delete" title="Delete session"><span class="mi">delete</span></button>`;
@@ -154,6 +162,7 @@ async function resumeHistorySession(h, projectPath, projectName) {
         projectPath,
         projectName,
         model: modelSelect.value || "sonnet",
+        permissionMode: permissionSelect.value || "default",
         resumeId: h.session_id,
         transcript,
     };
@@ -213,10 +222,12 @@ async function switchTo(key) {
     activeKey = key;
     const session = sessions.find((s) => s.key === key);
     if (!session) return;
+    currentProjectPath = session.projectPath;
     // Remember the last active session so reopening the window returns to it.
     localStorage.setItem("claude.activeKey", key);
     sessionNameEl.textContent = `${session.name} · ${session.projectName}`;
     modelSelect.value = session.model || "sonnet";
+    permissionSelect.value = session.permissionMode || "default";
     renderTranscript(session);
     renderUsageBars(session);
     renderSessionsList();
@@ -311,6 +322,7 @@ async function createSession(projectPath, projectName) {
         projectPath,
         projectName,
         model: modelSelect.value || "sonnet",
+        permissionMode: permissionSelect.value || "default",
         resumeId: null,
         transcript: [],
     };
@@ -542,6 +554,7 @@ async function sendMessage(text) {
             model: session.model,
             text,
             resume: session.resumeId,
+            permissionMode: session.permissionMode || "default",
         });
         console.log("[claude] claude_send returned");
     } catch (err) {
@@ -570,6 +583,20 @@ modelSelect.addEventListener("change", () => {
     if (session) {
         session.model = modelSelect.value;
         persistSessions();
+    }
+});
+
+permissionSelect.addEventListener("change", () => {
+    const session = sessions.find((s) => s.key === activeKey);
+    if (!session) return;
+    session.permissionMode = permissionSelect.value;
+    persistSessions();
+    // --permission-mode is applied when the session's claude process starts,
+    // so a change mid-session takes effect after it restarts. If one is
+    // already running, restart it on the next send so the new mode applies.
+    if (!session._dead && listeners.has(session.key)) {
+        invoke("claude_stop", { key: session.key }).catch(() => {});
+        session._dead = true;
     }
 });
 
@@ -609,6 +636,8 @@ listen("claude-jump", async (event) => {
         return;
     }
     if (projectPath) {
+        // Scope the sidebar to this project from here on.
+        currentProjectPath = projectPath;
         // Return to the last active session for this project if it still
         // exists, else its most recent (sessions are kept newest-first),
         // rather than starting fresh.

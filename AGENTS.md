@@ -72,6 +72,11 @@ becomes visible — hidden elements measure as 0).
 + Launch button), stored in `workspace.json`. See `docs/workspace.md` for
 storage format, `LIST_META`, the editor picker, and the launch flow.
 
+**Claude window:** In-app chat UI (`src/claude/`) driving the `claude` CLI as a
+per-session subprocess over stream-json — a custom front end alternative to
+`claude.mode: "terminal"`. See `docs/claude-window.md` for the window
+capability, process/streaming model, sessions, usage bars, and permission mode.
+
 **Interaction model (interaction-spec):** All four panels (Projects, Workspace,
 Media, Notes) share one selection + keyboard model. See
 `docs/interaction-spec.md` for the full design.
