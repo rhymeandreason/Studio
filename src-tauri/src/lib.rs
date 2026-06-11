@@ -2055,13 +2055,58 @@ fn wake_schedule_script(times: &[chrono::DateTime<chrono::Local>]) -> String {
 /// but worth knowing if something else relies on `pmset schedule`.
 #[tauri::command]
 fn update_wake_schedule(app: AppHandle) -> Result<(), String> {
+    // The admin-password prompt is only worth showing when the wake schedule
+    // actually changes. Editing a task's prompt/model/output/project doesn't
+    // affect wake times, so skip the prompt when the schedule definition
+    // (enabled tasks' time + days) matches the last one we applied.
+    let signature = wake_signature(&app);
+    if let Some(path) = wake_signature_path(&app) {
+        if std::fs::read_to_string(&path).ok().as_deref() == Some(signature.as_str()) {
+            return Ok(());
+        }
+    }
+
     let script = wake_schedule_script(&compute_wake_times(&app));
     let osa = format!("do shell script \"{}\" with administrator privileges", script.replace('"', "\\\""));
-    Command::new("osascript")
+    let out = Command::new("osascript")
         .args(["-e", &osa])
         .output()
         .map_err(|e| e.to_string())?;
+    // Record the applied signature only on success, so a cancelled/failed
+    // prompt is retried next save.
+    if out.status.success() {
+        if let Some(path) = wake_signature_path(&app) {
+            let _ = std::fs::write(path, signature);
+        }
+    }
     Ok(())
+}
+
+/// Path to the cached "last applied wake schedule" signature.
+fn wake_signature_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|dir| dir.join("wake-signature.txt"))
+}
+
+/// A stable string capturing everything about the schedule that affects wake
+/// times: each enabled task's time and days, sorted. Unchanged across edits
+/// that don't touch timing (prompt, model, output file, project).
+fn wake_signature(app: &AppHandle) -> String {
+    let mut entries: Vec<String> = read_schedules_file(app)
+        .tasks
+        .iter()
+        .filter(|t| t.enabled)
+        .map(|t| {
+            let mut days = t.days.clone();
+            days.sort_unstable();
+            let days: Vec<String> = days.iter().map(|d| d.to_string()).collect();
+            format!("{}@{}", t.time, days.join(","))
+        })
+        .collect();
+    entries.sort();
+    entries.join(";")
 }
 
 /// Best-effort roll-forward of the wake schedule after a scheduled task runs,

@@ -144,6 +144,16 @@ save and calls `update_wake_schedule` once (see below), then returns to
 "Saved" — so the single admin prompt happens after you're done editing, not
 per-keystroke.
 
+`update_wake_schedule` only prompts when the wake schedule actually changes.
+It builds a signature of the schedule's timing definition (each enabled
+task's `time` + sorted `days`, via `wake_signature`) and compares it to the
+last applied one cached in `wake-signature.txt` (app config dir); if they
+match it returns early without running `pmset` or prompting. So saves that
+only touched a prompt, model, output file, or project produce no password
+prompt — only changing a slot time, days, enabled state, or adding/removing
+a task does. The signature is recorded only on a successful prompt, so a
+cancelled dialog is retried on the next save.
+
 ### Execution
 
 On startup, `start_caffeinate()` spawns `caffeinate -s -w <studio-pid>` so
