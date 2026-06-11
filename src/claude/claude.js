@@ -184,6 +184,11 @@ function renderStatus() {
     }
     statusEl.hidden = false;
     statusEl.querySelector(".claude-status__label").textContent = live.activity || "Working";
+    const toolEl = statusEl.querySelector(".claude-status__tool");
+    toolEl.hidden = !live.toolSummary;
+    if (live.toolSummary) {
+        toolEl.querySelector(".claude-status__tool-name").textContent = live.toolSummary;
+    }
     const secs = live.turnStart ? Math.floor((Date.now() - live.turnStart) / 1000) : 0;
     const ctx = live.promptTokens ? ` · ↑ ${fmtTokens(live.promptTokens)} ctx` : "";
     const out = ` · ↓ ${fmtTokens(live.outputTokens || 0)} tok`;
@@ -683,6 +688,7 @@ function handleStreamLine(key, line) {
                 }
                 live.assistantText = (live.assistantText || "") + ev.delta.text;
                 live.activity = "Writing";
+                live.toolSummary = null;
             }
             break;
         }
@@ -698,6 +704,7 @@ function handleStreamLine(key, line) {
                     if (isActive) appendBubble("tool", summary);
                     session.transcript.push({ role: "tool", text: summary });
                     live.activity = `Running ${block.name}`;
+                    live.toolSummary = summary;
                     if (isActive) renderStatus();
                 }
             }
@@ -714,6 +721,7 @@ function handleStreamLine(key, line) {
             live.assistantEl = null;
             live.assistantText = "";
             live.toolKeys = new Set();
+            live.toolSummary = null;
 
             // Auto-name the session from the first exchange.
             if (session.name === "New session") {

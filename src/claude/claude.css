@@ -559,9 +559,36 @@
     }
 }
 
+.claude-status__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
 .claude-status__label {
     font-weight: 600;
     color: var(--text);
+}
+
+.claude-status__tool {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-soft);
+}
+
+.claude-status__tool-icon {
+    font-size: 13px;
+}
+
+.claude-status__tool-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .claude-status__meta {
