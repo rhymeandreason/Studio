@@ -736,7 +736,199 @@ select.field__input {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
+}
+
+/* Scheduled tasks (Workspace tab) */
+.ws-schedules {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 18px;
     padding-bottom: 100px;
+}
+
+.ws-schedules__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-top: 1px solid var(--hairline);
+    padding-top: 14px;
+}
+
+.ws-schedules__title {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    flex: 1 1 auto;
+}
+
+.ws-schedules__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ws-schedule {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--elevated);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 10px 12px;
+}
+
+.ws-schedule__main {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.ws-schedule__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ws-schedule__prompt {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+    min-height: 19px;
+    outline: none;
+    resize: none;
+    width: 100%;
+    padding: 0;
+}
+
+.ws-schedule__prompt::placeholder {
+    color: var(--text-soft);
+}
+
+.ws-schedule__time {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 12px;
+    padding: 4px 6px;
+}
+
+.ws-schedule__model {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 12px;
+    padding: 4px 6px;
+}
+
+.ws-schedule__days {
+    display: flex;
+    gap: 4px;
+}
+
+.ws-schedule__day {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 11px;
+    line-height: 1;
+    padding: 5px 6px;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.ws-schedule__day.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--surface);
+}
+
+.ws-schedule__output {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 4px 6px;
+    width: 150px;
+}
+
+.ws-schedule__output::placeholder {
+    color: var(--text-soft);
+}
+
+.ws-schedule__last {
+    font-size: 11px;
+    color: var(--text-soft);
+    flex: 1 1 auto;
+}
+
+.ws-schedule__last.is-error {
+    color: var(--rose);
+}
+
+.ws-schedule__run {
+    flex: 0 0 auto;
+    background: var(--surface);
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+    transition:
+        color 0.15s,
+        background 0.15s;
+}
+
+.ws-schedule__run:hover {
+    color: var(--accent);
+    background: var(--accent-ring);
+}
+
+.ws-schedule__run:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.ws-schedule__toggle {
+    flex: 0 0 auto;
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: 50%;
+    color: var(--text-soft);
+    cursor: pointer;
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+    transition:
+        color 0.15s,
+        background 0.15s,
+        border-color 0.15s;
+}
+
+.ws-schedule__toggle.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--surface);
 }
 
 /* Workspace item card */

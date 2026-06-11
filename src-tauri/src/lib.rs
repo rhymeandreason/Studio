@@ -60,6 +60,52 @@ struct Workspace {
     sprite: String,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "pinnedTab")]
     pinned_tab: Option<String>,
+    /// Recurring `claude -p` prompts run by the background scheduler.
+    #[serde(default)]
+    schedules: Vec<ScheduledTask>,
+}
+
+fn default_schedule_model() -> String {
+    "haiku".to_string()
+}
+
+fn default_schedule_output_file() -> String {
+    "Scheduled Output.md".to_string()
+}
+
+/// A recurring task: run `claude -p <prompt>` in the project's repo at a
+/// given local time on the given days (empty `days` = every day).
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct ScheduledTask {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    prompt: String,
+    /// "HH:MM", 24-hour, local time.
+    #[serde(default)]
+    time: String,
+    /// 0 = Sunday .. 6 = Saturday. Empty = every day.
+    #[serde(default)]
+    days: Vec<u8>,
+    #[serde(default)]
+    enabled: bool,
+    /// Model passed to `claude --model`, e.g. "haiku", "sonnet", "opus".
+    #[serde(default = "default_schedule_model")]
+    model: String,
+    /// Markdown file (relative to the project folder) the output is written
+    /// to, overwritten on each run. Blank = `default_schedule_output_file()`.
+    #[serde(default, rename = "outputFile")]
+    output_file: String,
+    /// "YYYY-MM-DD" of the last day this task ran, to avoid double-firing.
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "lastRun")]
+    last_run: Option<String>,
+    /// "YYYY-MM-DD HH:MM" of the last time this task ran (scheduled or "Run
+    /// now"), shown in the UI.
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "lastRunAt")]
+    last_run_at: Option<String>,
+    /// Whether the last run's `claude` process exited successfully.
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "lastRunOk")]
+    last_run_ok: Option<bool>,
 }
 
 /// App-wide state: which project is currently active (if any).
@@ -1797,6 +1843,141 @@ fn claude_path() -> String {
     path
 }
 
+/// Start the background loop that fires due `Workspace::schedules` entries.
+/// Checks every 30s; a task fires when its `time` matches the current
+/// HH:MM, today's weekday is in `days` (or `days` is empty), and it hasn't
+/// already run today.
+fn start_scheduler(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || loop {
+        run_due_schedules(&app);
+        std::thread::sleep(std::time::Duration::from_secs(30));
+    });
+}
+
+fn run_due_schedules(app: &AppHandle) {
+    use chrono::{Datelike, Local};
+    let now = Local::now();
+    let today = now.format("%Y-%m-%d").to_string();
+    let hm = now.format("%H:%M").to_string();
+    let weekday = now.weekday().num_days_from_sunday() as u8;
+
+    for project in scan_projects(app) {
+        let Ok(mut ws) = read_workspace(project.path.clone()) else {
+            continue;
+        };
+        let mut changed = false;
+        for task in ws.schedules.iter_mut() {
+            if !task.enabled || task.time != hm {
+                continue;
+            }
+            if !task.days.is_empty() && !task.days.contains(&weekday) {
+                continue;
+            }
+            if task.last_run.as_deref() == Some(today.as_str()) {
+                continue;
+            }
+            task.last_run = Some(today.clone());
+            changed = true;
+            run_scheduled_task(
+                app,
+                project.path.clone(),
+                task.prompt.clone(),
+                task.model.clone(),
+                task.output_file.clone(),
+                task.id.clone(),
+            );
+        }
+        if changed {
+            let _ = save_workspace(project.path.clone(), ws);
+        }
+    }
+}
+
+/// Manually fire a scheduled task immediately (the "Run now" button), without
+/// waiting for the scheduler loop or touching `lastRun`.
+#[tauri::command]
+fn run_schedule_now(
+    app: AppHandle,
+    project_path: String,
+    prompt: String,
+    model: String,
+    output_file: String,
+    task_id: String,
+) {
+    run_scheduled_task(&app, project_path, prompt, model, output_file, task_id);
+}
+
+/// Run `claude -p <prompt>` headless in the project's repo dir, write the
+/// result to `<project>/<output_file>` (overwriting it), and emit
+/// `"schedule-ran"` so the UI can show it if the project is open.
+fn run_scheduled_task(
+    app: &AppHandle,
+    project_path: String,
+    prompt: String,
+    model: String,
+    output_file: String,
+    task_id: String,
+) {
+    let app = app.clone();
+    let cwd = claude_cwd(&app, &project_path);
+    std::thread::spawn(move || {
+        let mut cmd = Command::new("claude");
+        cmd.env("PATH", claude_path())
+            .current_dir(&cwd)
+            .arg("-p")
+            // Headless: nobody is around to approve tool-use prompts.
+            .arg("--permission-mode")
+            .arg("bypassPermissions");
+        if !model.trim().is_empty() {
+            cmd.args(["--model", model.trim()]);
+        }
+        let output = cmd.arg(&prompt).output();
+        let (ok, text) = match output {
+            Ok(o) if o.status.success() => (true, String::from_utf8_lossy(&o.stdout).to_string()),
+            Ok(o) => (false, String::from_utf8_lossy(&o.stderr).to_string()),
+            Err(e) => (false, e.to_string()),
+        };
+
+        let file_name = if output_file.trim().is_empty() {
+            default_schedule_output_file()
+        } else {
+            output_file.trim().to_string()
+        };
+        let file_name = if file_name.to_lowercase().ends_with(".md") {
+            file_name
+        } else {
+            format!("{file_name}.md")
+        };
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+        let section = if ok { "Output" } else { "Error" };
+        let contents = format!("# Scheduled task — {timestamp}\n\n**{section}:**\n\n{text}\n");
+        let _ = std::fs::write(PathBuf::from(&project_path).join(&file_name), contents);
+
+        // Record when (and how) this task last ran, for both scheduled and
+        // manual runs.
+        if let Ok(mut ws) = read_workspace(project_path.clone()) {
+            if let Some(task) = ws.schedules.iter_mut().find(|t| t.id == task_id) {
+                task.last_run_at = Some(timestamp.clone());
+                task.last_run_ok = Some(ok);
+                let _ = save_workspace(project_path.clone(), ws);
+            }
+        }
+
+        let _ = app.emit(
+            "schedule-ran",
+            serde_json::json!({
+                "projectPath": project_path,
+                "taskId": task_id,
+                "ok": ok,
+                "output": text,
+                "outputFile": file_name,
+                "lastRunAt": timestamp,
+            }),
+        );
+    });
+}
+
 /// A running `claude -p` subprocess for one companion-window chat session.
 struct ClaudeProc {
     child: Child,
@@ -2189,6 +2370,7 @@ pub fn run() {
             open_claude_window,
             claude_send,
             claude_stop,
+            run_schedule_now,
             read_claude_sessions,
             save_claude_sessions,
             list_claude_project_sessions,
@@ -2290,6 +2472,9 @@ pub fn run() {
 
             // Live-refresh when files change in ~/Projects (Finder, other apps).
             start_watching(&handle);
+
+            // Periodically run any due scheduled `claude -p` tasks.
+            start_scheduler(&handle);
 
             Ok(())
         })

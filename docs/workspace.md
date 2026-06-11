@@ -18,6 +18,7 @@ struct in `src-tauri/src/lib.rs`):
   `claude`.
 - `pinnedTab` (serde: `pinned_tab`) — which tab (`workspace`/`media`/`notes`)
   opens automatically when the project loads.
+- `schedules` — recurring `claude -p` tasks; see "Scheduled tasks" below.
 
 Saves are debounced via `scheduleWorkspaceSave()` (400ms after the last edit).
 
@@ -83,6 +84,54 @@ are running.
 The pin button (`#tab-pin`) toggles `wsPinnedTab` via `togglePinnedTab()` /
 `updatePinButton()` (called from `main.js`'s tab-bar click handler).
 `loadWorkspace()` selects the pinned tab (or `"workspace"`) on project load.
+
+## Scheduled tasks
+
+Below the cards grid, the Workspace tab has a "Scheduled tasks" section
+(`#ws-schedules` in `index.html`, built by `workspace.js`'s
+`renderSchedules`/`buildScheduleRow`/`initSchedules`). Each task is stored in
+`workspace.json`'s `schedules` array (`ScheduledTask` in `lib.rs`):
+
+- `prompt` — text passed to `claude -p`.
+- `time` — 24-hour `"HH:MM"`, local time.
+- `days` — `0`(Sun)–`6`(Sat); empty = every day.
+- `enabled` — toggled via the `history_toggle_off` icon button.
+- `model` — passed as `claude --model`; defaults to `"haiku"`.
+- `outputFile` — markdown file (relative to the project folder) the result
+  is written to, overwritten each run; blank = `"Scheduled Output.md"`,
+  `.md` appended if missing.
+- `lastRun` — `"YYYY-MM-DD"`, used by the scheduler to avoid firing twice in
+  one day.
+- `lastRunAt` / `lastRunOk` — timestamp and success flag of the last run
+  (scheduled or manual), shown as `✓ Last ran …` / `✗ Last ran …`.
+
+### Execution
+
+A background loop (`start_scheduler`, started in `setup`) wakes every 30s,
+scans every project under `~/Projects/`, and fires any enabled task whose
+`time`/`days` match now and that hasn't run today. Firing runs (in
+`run_scheduled_task`):
+
+```
+claude -p <prompt> --permission-mode bypassPermissions [--model <model>]
+```
+
+in the project's repo dir (`claude_cwd`, same resolution as the Claude
+companion window), with `PATH` resolved via `claude_path()` (login-shell
+PATH, since GUI apps don't inherit nvm/homebrew). `bypassPermissions` is used
+because headless runs have no one to approve tool prompts — keep scheduled
+prompts to things you're comfortable running unattended.
+
+The result (stdout on success, stderr on failure) is written to
+`<project>/<outputFile>` as `# Scheduled task — <timestamp>` +
+`**Output:**`/`**Error:**` + the text (no prompt echoed). `lastRunAt`/
+`lastRunOk` are persisted back to `workspace.json`, and a `"schedule-ran"`
+event (`{ projectPath, taskId, ok, output, outputFile, lastRunAt }`) is
+emitted so an open project's UI updates live.
+
+The ▶ "Run now" button calls `run_schedule_now` (same execution path, but
+doesn't touch `lastRun`'s once-a-day dedupe) for testing a task without
+waiting for its scheduled time.
 
 ## Ideas / open questions for expansion
 

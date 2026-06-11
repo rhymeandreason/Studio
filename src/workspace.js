@@ -2,7 +2,7 @@
 // folders/urls cards), and its autosave. Extracted from main.js. See
 // interaction-spec / BACKLOG file-split.
 
-import { el, mi } from "./dom.js";
+import { el, mi, genId } from "./dom.js";
 import { createSelection } from "./selection.js";
 import { panelKeymaps } from "./keymap.js";
 import { state } from "./state.js";
@@ -314,6 +314,8 @@ export async function loadWorkspace(path) {
   selectTab(wsPinnedTab || "workspace");
   updatePinButton();
   renderSpriteBadge();
+  wsSchedules = ws.schedules || [];
+  renderSchedules();
 }
 
 function renderSpriteBadge() {
@@ -346,6 +348,7 @@ function setStatus(text) {
 let wsSaveTimer = null;
 let wsEditor = "";
 let wsPinnedTab = null;
+let wsSchedules = [];
 
 function readWorkspaceForm() {
   return {
@@ -359,6 +362,7 @@ function readWorkspaceForm() {
     urls: readList("urls"),
     pinnedTab: wsPinnedTab,
     sprite: wsSprite,
+    schedules: wsSchedules,
   };
 }
 
@@ -390,6 +394,190 @@ export function scheduleWorkspaceSave() {
   setStatus("Saving…");
   clearTimeout(wsSaveTimer);
   wsSaveTimer = setTimeout(saveWorkspaceNow, 400);
+}
+
+// --- Scheduled tasks ---------------------------------------------------------
+//
+// Each entry runs `claude -p <prompt>` headless in the project's repo at a
+// given local time, on the selected days (none selected = every day). The
+// scheduling loop lives in Rust (`start_scheduler`); this UI just edits the
+// `schedules` array persisted in workspace.json.
+
+const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+
+const SCHEDULE_MODELS = [
+  { value: "haiku", label: "Haiku" },
+  { value: "sonnet", label: "Sonnet" },
+  { value: "opus", label: "Opus" },
+  { value: "fable", label: "Fable" },
+];
+
+function schedulesContainer() {
+  return document.getElementById("ws-schedules");
+}
+
+function renderSchedules() {
+  const container = schedulesContainer();
+  container.innerHTML = "";
+  wsSchedules.forEach((task) => container.append(buildScheduleRow(task)));
+}
+
+function setLastRunText(span, task) {
+  if (!task.lastRunAt) {
+    span.textContent = "";
+    return;
+  }
+  const mark = task.lastRunOk === false ? "✗ " : task.lastRunOk === true ? "✓ " : "";
+  span.textContent = `${mark}Last ran ${task.lastRunAt}`;
+  span.classList.toggle("is-error", task.lastRunOk === false);
+}
+
+function buildScheduleRow(task) {
+  const row = el("div", "ws-schedule");
+
+  const main = el("div", "ws-schedule__main");
+
+  const prompt = el("textarea", "ws-schedule__prompt", {
+    placeholder: "Prompt for claude -p…",
+    rows: 1,
+    value: task.prompt || "",
+  });
+  const resizePrompt = () => {
+    prompt.style.height = "auto";
+    prompt.style.height = prompt.scrollHeight + "px";
+  };
+  prompt.addEventListener("input", () => {
+    task.prompt = prompt.value;
+    resizePrompt();
+    scheduleWorkspaceSave();
+  });
+  requestAnimationFrame(resizePrompt);
+
+  const controls = el("div", "ws-schedule__row");
+
+  const time = el("input", "ws-schedule__time", {
+    type: "time",
+    value: task.time || "09:00",
+  });
+  time.addEventListener("change", () => {
+    task.time = time.value;
+    scheduleWorkspaceSave();
+  });
+
+  const days = el("div", "ws-schedule__days");
+  DAY_LABELS.forEach((label, idx) => {
+    const day = el("button", "ws-schedule__day", { type: "button", textContent: label });
+    day.title = "Toggle day (none selected = every day)";
+    day.classList.toggle("is-active", task.days?.includes(idx));
+    day.addEventListener("click", () => {
+      task.days = task.days || [];
+      const at = task.days.indexOf(idx);
+      if (at === -1) task.days.push(idx);
+      else task.days.splice(at, 1);
+      day.classList.toggle("is-active", task.days.includes(idx));
+      scheduleWorkspaceSave();
+    });
+    days.append(day);
+  });
+
+  const model = el("select", "ws-schedule__model");
+  SCHEDULE_MODELS.forEach((opt) => {
+    model.append(el("option", null, { value: opt.value, textContent: opt.label }));
+  });
+  model.value = task.model || "haiku";
+  model.addEventListener("change", () => {
+    task.model = model.value;
+    scheduleWorkspaceSave();
+  });
+
+  const output = el("input", "ws-schedule__output", {
+    type: "text",
+    placeholder: "Scheduled Output.md",
+    value: task.outputFile || "",
+    title: "Markdown file (in the project folder) the result is written to",
+  });
+  output.addEventListener("change", () => {
+    task.outputFile = output.value.trim();
+    scheduleWorkspaceSave();
+  });
+
+  const last = el("span", "ws-schedule__last", {});
+  setLastRunText(last, task);
+
+  controls.append(time, days, model, output, last);
+  main.append(prompt, controls);
+
+  const toggle = el("button", "ws-schedule__toggle", {
+    type: "button",
+    title: "Enabled",
+  });
+  toggle.innerHTML = mi("history_toggle_off");
+  toggle.classList.toggle("is-active", task.enabled !== false);
+  toggle.addEventListener("click", () => {
+    task.enabled = task.enabled === false;
+    toggle.classList.toggle("is-active", task.enabled !== false);
+    scheduleWorkspaceSave();
+  });
+
+  const run = el("button", "ws-schedule__run", { type: "button", title: "Run now" });
+  run.innerHTML = mi("play_arrow");
+  run.addEventListener("click", async () => {
+    run.disabled = true;
+    run.innerHTML = mi("hourglass_top");
+    try {
+      await invoke("run_schedule_now", {
+        projectPath: state.activeProject.path,
+        prompt: task.prompt,
+        model: task.model || "haiku",
+        outputFile: task.outputFile || "",
+        taskId: task.id,
+      });
+    } finally {
+      run.disabled = false;
+      run.innerHTML = mi("play_arrow");
+    }
+  });
+
+  const remove = el("button", "btn-remove", { type: "button", title: "Remove" });
+  remove.innerHTML = mi("close");
+  remove.addEventListener("click", () => {
+    wsSchedules = wsSchedules.filter((t) => t !== task);
+    renderSchedules();
+    scheduleWorkspaceSave();
+  });
+
+  row.append(toggle, main, run, remove);
+  return row;
+}
+
+function addSchedule() {
+  wsSchedules.push({
+    id: genId(),
+    prompt: "",
+    time: "09:00",
+    days: [],
+    enabled: true,
+    model: "haiku",
+    outputFile: "",
+    lastRun: null,
+  });
+  renderSchedules();
+  scheduleWorkspaceSave();
+}
+
+export function initSchedules() {
+  document.getElementById("ws-schedule-add").addEventListener("click", addSchedule);
+
+  const { listen } = window.__TAURI__.event;
+  listen("schedule-ran", ({ payload }) => {
+    if (!state.activeProject || payload.projectPath !== state.activeProject.path) return;
+    const task = wsSchedules.find((t) => t.id === payload.taskId);
+    if (task) {
+      task.lastRunAt = payload.lastRunAt;
+      task.lastRunOk = payload.ok;
+      renderSchedules();
+    }
+  });
 }
 
 // --- Memory usage display (header, top right) -------------------------------
@@ -469,6 +657,7 @@ function initMemoryModal() {
 export function initWorkspaceForm() {
   startMemoryPolling();
   initMemoryModal();
+  initSchedules();
 
   document
     .querySelectorAll("[data-add-list]")
@@ -496,4 +685,14 @@ export function initWorkspaceForm() {
       ta.style.height = ta.scrollHeight + "px";
     });
   }).observe(cards);
+
+  // Same for schedule prompts: their height can't be measured while the
+  // Workspace tab is hidden (scrollHeight is 0), so recompute once visible.
+  const schedules = document.getElementById("ws-schedules");
+  new ResizeObserver(() => {
+    schedules.querySelectorAll(".ws-schedule__prompt").forEach((ta) => {
+      ta.style.height = "auto";
+      ta.style.height = ta.scrollHeight + "px";
+    });
+  }).observe(schedules);
 }
