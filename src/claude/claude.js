@@ -12,6 +12,7 @@ const historyToggle = document.getElementById("history-toggle");
 const sessionsPanel = document.getElementById("sessions-panel");
 const sessionsToggle = document.getElementById("sessions-toggle");
 const sessionNameEl = document.getElementById("session-name");
+const tabsEl = document.getElementById("tabs");
 const transcriptEl = document.getElementById("transcript");
 const form = document.getElementById("input-form");
 const promptInput = document.getElementById("prompt-input");
@@ -117,12 +118,38 @@ function modelLabel(model) {
     return m.charAt(0).toUpperCase() + m.slice(1);
 }
 
-function renderSessionsList() {
-    sessionsListEl.innerHTML = "";
-    // Only show sessions for the current project.
-    const visible = currentProjectPath
+// Sessions visible in this window (scoped to the current project).
+function visibleSessions() {
+    return currentProjectPath
         ? sessions.filter((s) => s.projectPath === currentProjectPath)
         : sessions;
+}
+
+// A tab per session for the current project; click to switch, × to close.
+function renderTabs() {
+    tabsEl.innerHTML = "";
+    const visible = visibleSessions();
+    if (visible.length < 2) return; // tabs only earn their space with 2+
+    for (const s of visible) {
+        const tab = document.createElement("div");
+        tab.className = "claude-tab" + (s.key === activeKey ? " is-active" : "");
+        tab.title = s.name;
+        tab.innerHTML = `<span class="claude-tab__name"></span><button class="claude-tab__close" title="Close session"><span class="mi">close</span></button>`;
+        tab.querySelector(".claude-tab__name").textContent = s.name;
+        tab.addEventListener("click", () => switchTo(s.key));
+        tab.querySelector(".claude-tab__close").addEventListener("click", (e) => {
+            e.stopPropagation();
+            deleteSession(s.key);
+        });
+        tabsEl.appendChild(tab);
+    }
+}
+
+function renderSessionsList() {
+    renderTabs();
+    sessionsListEl.innerHTML = "";
+    // Only show sessions for the current project.
+    const visible = visibleSessions();
     if (!visible.length) {
         const empty = document.createElement("div");
         empty.className = "claude-sessions__empty";
@@ -268,7 +295,7 @@ async function switchTo(key) {
     currentProjectPath = session.projectPath;
     // Remember the last active session so reopening the window returns to it.
     localStorage.setItem("claude.activeKey", key);
-    sessionNameEl.textContent = `${session.name} · ${session.projectName}`;
+    sessionNameEl.textContent = session.name;
     setWindowTitle(session.projectName);
     modelSelect.value = session.model || "sonnet";
     permissionSelect.value = session.permissionMode || "default";
@@ -301,9 +328,7 @@ function beginRename(key, item) {
             if (next && next !== session.name) {
                 session.name = next;
                 persistSessions();
-                if (key === activeKey) {
-                    sessionNameEl.textContent = `${session.name} · ${session.projectName}`;
-                }
+                if (key === activeKey) sessionNameEl.textContent = session.name;
             }
         }
         renderSessionsList();
@@ -321,6 +346,48 @@ function beginRename(key, item) {
     });
     input.addEventListener("blur", () => commit(true));
 }
+
+// Rename the active session by clicking its title in the header bar.
+function beginRenameTitle() {
+    const session = sessions.find((s) => s.key === activeKey);
+    if (!session) return;
+
+    const input = document.createElement("input");
+    input.className = "claude-session-name__input";
+    input.value = session.name;
+    sessionNameEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const finish = (save) => {
+        if (done) return;
+        done = true;
+        if (save) {
+            const next = input.value.trim();
+            if (next && next !== session.name) {
+                session.name = next;
+                persistSessions();
+            }
+        }
+        sessionNameEl.textContent = session.name;
+        input.replaceWith(sessionNameEl);
+        renderSessionsList();
+    };
+
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            finish(true);
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            finish(false);
+        }
+    });
+    input.addEventListener("blur", () => finish(true));
+}
+
+sessionNameEl.addEventListener("click", beginRenameTitle);
 
 async function deleteSession(key) {
     const idx = sessions.findIndex((s) => s.key === key);
@@ -741,6 +808,7 @@ permissionSelect.addEventListener("change", () => {
 
 sessionsToggle.addEventListener("click", () => {
     sessionsPanel.hidden = !sessionsPanel.hidden;
+    sessionsToggle.classList.toggle("is-active", !sessionsPanel.hidden);
 });
 
 historyToggle.checked = includeOutside;

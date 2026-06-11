@@ -56,9 +56,30 @@
 .claude-model {
     width: auto;
     flex: 0 0 auto;
-    padding: 6px 28px 6px 30px;
+    padding: 6px 26px 6px 30px;
     font-size: 12px;
     font-weight: 600;
+    color: var(--text);
+    background-color: var(--elevated, var(--bg));
+    border: 1px solid var(--hairline-strong, var(--hairline));
+    border-radius: 7px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    /* custom chevron */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%23888' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 9px center;
+    transition: border-color 0.12s, background-color 0.12s;
+}
+
+.claude-model:hover {
+    border-color: var(--text-soft);
+}
+
+.claude-model:focus {
+    outline: none;
+    border-color: var(--accent);
 }
 
 .claude-permission {
@@ -67,12 +88,163 @@
 
 .claude-session-name {
     flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: text;
+    -webkit-app-region: no-drag;
+}
+
+.claude-session-name:hover {
+    background: var(--bg);
+}
+
+.claude-session-name__input {
+    flex: 1;
+    min-width: 0;
+    font: inherit;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--elevated, var(--bg));
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 3px 7px;
+    -webkit-app-region: no-drag;
+}
+
+/* --- Top row: sidebar toggle + session tabs --- */
+.claude-topbar {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    padding: 4px 8px 0 8px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--hairline);
+    -webkit-app-region: drag;
+}
+
+.claude-topbar #sessions-toggle,
+.claude-topbar .claude-newtab {
+    align-self: center;
+    flex: 0 0 auto;
+}
+
+/* Square toggle button that inverts when the sidebar is open */
+.claude-toggle-btn {
+    -webkit-app-region: no-drag;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--hairline-strong, var(--hairline));
+    border-radius: 7px;
+    background: var(--elevated, var(--bg));
     color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.claude-toggle-btn:hover {
+    color: var(--text);
+    border-color: var(--text-soft);
+}
+
+.claude-toggle-btn.is-active {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--elevated, var(--bg));
+}
+
+.claude-tabs {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-app-region: no-drag;
+}
+
+.claude-tabs:empty {
+    display: none;
+}
+
+.claude-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.claude-tab {
+    flex: 0 1 160px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 8px 7px 12px;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
     font-size: 12px;
-    text-align: right;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.claude-tab:hover {
+    color: var(--text);
+}
+
+.claude-tab.is-active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+}
+
+.claude-tab__name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.claude-tab__close {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--text-soft);
+    cursor: pointer;
+    opacity: 0;
+}
+
+.claude-tab:hover .claude-tab__close,
+.claude-tab.is-active .claude-tab__close {
+    opacity: 1;
+}
+
+.claude-tab__close .mi {
+    font-size: 13px;
+}
+
+.claude-tab__close:hover {
+    background: var(--rose-soft, var(--bg));
+    color: var(--rose, var(--text));
 }
 
 /* --- Usage meters --- */
