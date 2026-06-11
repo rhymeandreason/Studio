@@ -1034,6 +1034,10 @@ select.field__input {
     overflow: hidden;
 }
 
+.notes-list--days .notecard--image .notecard__head {
+    display: none;
+}
+
 .notes-list--days .notecard textarea {
     resize: none;
 }
@@ -1074,7 +1078,7 @@ select.field__input {
 
 .notes-list .notecard,
 .notes-list .notecard input:not(.notecard__title),
-.notes-list .notecard textarea,
+.notes-list .notecard textarea:not(.notecard__title),
 .notes-list .notecard td,
 .notes-list .notecard th {
     font-family: var(--notes-font);
@@ -1133,6 +1137,7 @@ select.field__input {
 textarea.notecard__title {
     flex: 1 1 auto;
     min-width: 0;
+    width: 100%;
     background: transparent;
     border: none;
     color: var(--note-title-color, var(--text));

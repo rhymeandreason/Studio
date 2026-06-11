@@ -1533,6 +1533,7 @@ export function renderNotes() {
       card = buildTable(note);
     } else if (note.kind === "image") {
       card = buildImageNote(note);
+      card.classList.add("notecard--image");
     } else {
       continue;
     }
