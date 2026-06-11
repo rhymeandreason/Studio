@@ -1,5 +1,10 @@
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
+const { getCurrentWindow } = window.__TAURI__.window;
+
+function setWindowTitle(projectName) {
+    getCurrentWindow().setTitle(projectName ? `Claude · ${projectName}` : "Claude");
+}
 
 const sessionsListEl = document.getElementById("sessions-list");
 const historyListEl = document.getElementById("history-list");
@@ -13,6 +18,8 @@ const promptInput = document.getElementById("prompt-input");
 const modelSelect = document.getElementById("model-select");
 const permissionSelect = document.getElementById("permission-select");
 const newSessionBtn = document.getElementById("new-session");
+const sendBtn = document.getElementById("send-btn");
+const stopBtn = document.getElementById("stop-btn");
 const contextFill = document.getElementById("context-fill");
 const contextPct = document.getElementById("context-pct");
 const planFill = document.getElementById("plan-fill");
@@ -31,6 +38,21 @@ let currentProjectPath = null;
 let includeOutside = localStorage.getItem("claude.includeOutside") !== "false";
 const listeners = new Map(); // key -> unlisten fn
 const liveBubbles = new Map(); // key -> { assistantEl, toolKeys: Set }
+const busyKeys = new Set(); // sessions with a turn in progress
+
+// Show the stop button (instead of send) while the given session has a turn
+// running; only reflects the UI when it's the active session.
+function setBusy(key, busy) {
+    if (busy) busyKeys.add(key);
+    else busyKeys.delete(key);
+    if (key === activeKey) reflectBusy(key);
+}
+
+function reflectBusy(key) {
+    const busy = busyKeys.has(key);
+    stopBtn.hidden = !busy;
+    sendBtn.hidden = busy;
+}
 
 /**
  * @typedef {Object} Session
@@ -231,12 +253,14 @@ async function switchTo(key) {
     // Remember the last active session so reopening the window returns to it.
     localStorage.setItem("claude.activeKey", key);
     sessionNameEl.textContent = `${session.name} · ${session.projectName}`;
+    setWindowTitle(session.projectName);
     modelSelect.value = session.model || "sonnet";
     permissionSelect.value = session.permissionMode || "default";
     renderTranscript(session);
     renderUsageBars(session);
     renderSessionsList();
     ensureListener(session.key);
+    reflectBusy(key);
     renderHistoryList(session.projectPath, session.projectName);
 }
 
@@ -299,6 +323,7 @@ async function deleteSession(key) {
         listeners.delete(key);
     }
     liveBubbles.delete(key);
+    busyKeys.delete(key);
 
     await persistSessions();
 
@@ -313,6 +338,7 @@ async function deleteSession(key) {
             renderTranscript({ transcript: [] });
             resetUsageBars();
             renderSessionsList();
+            reflectBusy(null);
             if (removed) renderHistoryList(removed.projectPath, removed.projectName);
         }
     } else {
@@ -445,6 +471,7 @@ function handleStreamLine(key, line) {
 
             updateUsage(session, live.lastUsage, msg.modelUsage);
             live.lastUsage = null;
+            setBusy(key, false);
             persistSessions();
             renderSessionsList();
             // A turn just completed — refresh account quota usage.
@@ -462,6 +489,7 @@ function handleStreamLine(key, line) {
         }
         case "__closed__": {
             session._dead = true;
+            setBusy(key, false);
             break;
         }
         default:
@@ -564,6 +592,7 @@ async function sendMessage(text) {
     }
 
     ensureListener(session.key);
+    setBusy(session.key, true);
     console.log("[claude] sending", {
         key: session.key,
         projectPath: session.projectPath,
@@ -583,8 +612,37 @@ async function sendMessage(text) {
     } catch (err) {
         console.error("[claude] claude_send error", err);
         appendBubble("system", `Error: ${err}`);
+        setBusy(session.key, false);
     }
 }
+
+// Interrupt a session's in-progress turn: finalize any streamed text, kill the
+// subprocess (the next message respawns it with --resume, keeping context).
+async function stopSession(key) {
+    if (!busyKeys.has(key)) return;
+    const session = sessions.find((s) => s.key === key);
+    const live = getLiveBubbles(key);
+    if (session && live.assistantText) {
+        session.transcript.push({ role: "assistant", text: live.assistantText });
+        persistSessions();
+    }
+    live.assistantEl = null;
+    live.assistantText = "";
+    live.toolKeys = new Set();
+
+    try {
+        await invoke("claude_stop", { key });
+    } catch {
+        // ignore
+    }
+    if (session) session._dead = true;
+    setBusy(key, false);
+    if (key === activeKey) appendBubble("system", "Stopped.");
+}
+
+stopBtn.addEventListener("click", () => {
+    if (activeKey) stopSession(activeKey);
+});
 
 form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -697,6 +755,9 @@ listen("claude-jump", async (event) => {
     } else {
         resetUsageBars();
         const proj = await defaultProject();
-        if (proj) renderHistoryList(proj.path, proj.name);
+        if (proj) {
+            renderHistoryList(proj.path, proj.name);
+            setWindowTitle(proj.name);
+        }
     }
 })();

@@ -481,6 +481,18 @@
     opacity: 0.4;
     cursor: default;
 }
+
+.claude-stop {
+    background: var(--rose, var(--text));
+    color: var(--elevated);
+    border-color: var(--rose, var(--text));
+}
+
+.claude-stop:hover {
+    background: var(--text);
+    color: var(--elevated);
+    border-color: var(--text);
+}
 .claude-input {
     padding-left:10px;
 }
