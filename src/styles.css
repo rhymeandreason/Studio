@@ -1265,7 +1265,7 @@ textarea.notecard__title::placeholder {
     position: absolute;
     left: 0;
     font-size: 11px;
-    color: var(--note-body-color, var(--text-soft));
+    color: var(--note-body-color, var(--note-title-color, var(--text-soft)));
     opacity: var(--note-meta-opacity, 0.6);
     user-select: none;
     padding: 0 4px;
