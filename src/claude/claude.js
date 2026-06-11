@@ -659,6 +659,20 @@ promptInput.addEventListener("keydown", (e) => {
     }
 });
 
+// Double-click a message to copy its full text to the clipboard.
+transcriptEl.addEventListener("dblclick", async (e) => {
+    const body = e.target.closest(".claude-msg__body");
+    if (!body) return;
+    try {
+        await navigator.clipboard.writeText(body.textContent);
+        window.getSelection()?.removeAllRanges();
+        body.classList.add("is-copied");
+        setTimeout(() => body.classList.remove("is-copied"), 600);
+    } catch {
+        // ignore clipboard failures
+    }
+});
+
 modelSelect.addEventListener("change", () => {
     const session = sessions.find((s) => s.key === activeKey);
     if (session) {

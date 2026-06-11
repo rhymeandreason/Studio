@@ -424,6 +424,16 @@
     line-height: 1.5;
     white-space: pre-wrap;
     word-wrap: break-word;
+    /* styles.css disables selection app-wide; allow it for chat text to copy. */
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: text;
+    transition: box-shadow 0.15s;
+}
+
+/* Brief flash after double-click-to-copy. */
+.claude-msg__body.is-copied {
+    box-shadow: 0 0 0 2px var(--accent);
 }
 
 .claude-msg--user .claude-msg__body {
