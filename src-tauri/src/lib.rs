@@ -2117,6 +2117,30 @@ struct ClaudeState {
     procs: Mutex<HashMap<String, ClaudeProc>>,
 }
 
+/// Open (or focus) the standalone Scheduled Tasks window, listing scheduled
+/// tasks across every project under ~/Projects.
+#[tauri::command]
+fn open_schedules_window(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("schedules") {
+        let _ = win.show();
+        let _ = win.set_focus();
+    } else {
+        use tauri_plugin_window_state::{StateFlags, WindowExt};
+        let win = WebviewWindowBuilder::new(
+            &app,
+            "schedules",
+            WebviewUrl::App("schedules/index.html".into()),
+        )
+        .title("Scheduled Tasks")
+        .inner_size(640.0, 760.0)
+        .min_inner_size(420.0, 360.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+        let _ = win.restore_state(StateFlags::SIZE | StateFlags::POSITION);
+    }
+    Ok(())
+}
+
 /// Open (or focus) the Claude companion window, then tell it which session
 /// (and project) to show. The frontend listens for "claude-jump".
 #[tauri::command]
@@ -2496,6 +2520,7 @@ pub fn run() {
         .manage(ClaudeState::default())
         .invoke_handler(tauri::generate_handler![
             open_claude_window,
+            open_schedules_window,
             claude_send,
             claude_stop,
             run_schedule_now,

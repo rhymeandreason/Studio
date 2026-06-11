@@ -533,6 +533,12 @@ function initTabs() {
   });
 }
 
+function initSchedulesButton() {
+  const open = () => invoke("open_schedules_window");
+  document.getElementById("schedules-btn").addEventListener("click", open);
+  document.getElementById("overview-schedules-btn").addEventListener("click", open);
+}
+
 function initAllProjectsButton() {
   document.getElementById("all-projects-btn").addEventListener("click", showOverview);
 }
@@ -1985,6 +1991,7 @@ function initNotes() {
 window.addEventListener("DOMContentLoaded", async () => {
   initTabs();
   initAllProjectsButton();
+  initSchedulesButton();
   initLaunch();
   initClaudeButton();
   initSpriteBadge();

@@ -87,11 +87,18 @@ The pin button (`#tab-pin`) toggles `wsPinnedTab` via `togglePinnedTab()` /
 
 ## Scheduled tasks
 
-Below the cards grid, the Workspace tab has a "Scheduled tasks" section
-(`#ws-schedules` in `index.html`, built by `workspace.js`'s
-`renderSchedules`/`buildSlotGroup`/`buildScheduleRow`/`initSchedules`).
+Scheduled tasks have their own standalone window (`src/schedules/`:
+`index.html` + `schedules.css` + `schedules.js`), opened via the "Schedules"
+button in the project header or the all-projects overview
+(`#schedules-btn`/`#overview-schedules-btn` in the main `index.html`,
+`open_schedules_window` in `lib.rs`). It's a separate Tauri window — like the
+Claude companion window — so it stays open and reachable while you work in
+any project/tab. On open it calls `list_projects` + `read_workspace` for
+every project under `~/Projects` and renders one section per project
+(`buildProjectSection`/`buildSlotGroup`/`buildScheduleRow` in
+`schedules.js`).
 
-Tasks are grouped into **3 time slots**. Each slot has one shared `"HH:MM"`
+Tasks are grouped into **3 time slots** per project. Each slot has one shared `"HH:MM"`
 time (editable via a `<input type="time">` in the slot's header) and a "+
 Task" button that adds a task to that slot. `workspace.json` stores:
 
@@ -118,15 +125,16 @@ Task" button that adds a task to that slot. `workspace.json` stores:
 
 ### Saving the wake schedule
 
-Editing a task (time slot, days, enabled, add/remove, etc.) just updates
-`workspace.json` via the usual debounced save — it does **not** touch the
-system wake schedule or prompt for the admin password. The section header
-has a "Saved" / "Save schedule" button (`#ws-schedule-save`,
-`setScheduleDirty()`): it goes from a disabled "Saved" state to a black
-"Save schedule" button as soon as anything in the section changes. Clicking
-it calls `update_wake_schedule` once (see below) and returns the button to
-"Saved" — so the single admin prompt happens after you're done editing, not
-per-keystroke.
+Editing a task (time slot, days, enabled, add/remove, etc.) just updates the
+in-memory `Workspace` for that project and debounce-saves it to
+`workspace.json` via `save_workspace` — it does **not** touch the system
+wake schedule or prompt for the admin password. The window header has a
+"Saved" / "Save schedule" button (`#schedules-save`, `setDirty()`): it goes
+from a disabled "Saved" state to a black "Save schedule" button as soon as
+anything changes, across any project's section. Clicking it flushes all
+pending per-project saves and calls `update_wake_schedule` once (see below),
+then returns to "Saved" — so the single admin prompt happens after you're
+done editing, not per-keystroke.
 
 ### Execution
 

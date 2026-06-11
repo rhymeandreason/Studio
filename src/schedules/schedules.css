@@ -1,0 +1,265 @@
+/* Scheduled Tasks window */
+
+.schedules-body {
+    height: 100%;
+    overflow: auto;
+}
+
+.schedules-app {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 20px 24px 60px;
+}
+
+.schedules-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    padding-bottom: 4px;
+    z-index: 1;
+}
+
+.schedules-title {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    flex: 1 1 auto;
+}
+
+.schedules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.schedules-project {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.schedules-project__head {
+    font-family: var(--serif);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 6px;
+}
+
+.ws-schedule-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ws-schedule-slot__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ws-schedule-slot__time {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 6px;
+}
+
+.ws-schedule-slot__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ws-schedule-slot__list:empty {
+    display: none;
+}
+
+.ws-schedule {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--elevated);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 10px 12px;
+}
+
+.ws-schedule__main {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.ws-schedule__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ws-schedule__prompt {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+    min-height: 19px;
+    outline: none;
+    resize: none;
+    width: 100%;
+    padding: 0;
+}
+
+.ws-schedule__prompt::placeholder {
+    color: var(--text-soft);
+}
+
+.ws-schedule__model {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 12px;
+    padding: 4px 6px;
+}
+
+.ws-schedule__days {
+    display: flex;
+    gap: 4px;
+}
+
+.ws-schedule__day {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 11px;
+    line-height: 1;
+    padding: 5px 6px;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.ws-schedule__day.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--surface);
+}
+
+.ws-schedule__output {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 4px 6px;
+    width: 150px;
+}
+
+.ws-schedule__output::placeholder {
+    color: var(--text-soft);
+}
+
+.ws-schedule__last {
+    font-size: 11px;
+    color: var(--text-soft);
+    flex: 1 1 auto;
+}
+
+.ws-schedule__last.is-error {
+    color: var(--rose);
+}
+
+.ws-schedule__run {
+    flex: 0 0 auto;
+    background: var(--surface);
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+    transition:
+        color 0.15s,
+        background 0.15s;
+}
+
+.ws-schedule__run:hover {
+    color: var(--accent);
+    background: var(--accent-ring);
+}
+
+.ws-schedule__run:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* Pill switch, matching the Claude session sidebar's "include outside
+   sessions" toggle (.claude-toggle in claude/claude.css). */
+.ws-schedule__toggle {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    margin-top: 4px;
+}
+
+.ws-schedule__toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.ws-schedule__toggle .claude-toggle__track {
+    display: inline-block;
+    width: 26px;
+    height: 15px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    transition: background 0.15s, border-color 0.15s;
+    position: relative;
+}
+
+.ws-schedule__toggle .claude-toggle__thumb {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--text-soft);
+    transition: transform 0.15s, background 0.15s;
+}
+
+.ws-schedule__toggle input:checked + .claude-toggle__track {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.ws-schedule__toggle input:checked + .claude-toggle__track .claude-toggle__thumb {
+    transform: translateX(11px);
+    background: var(--surface);
+}

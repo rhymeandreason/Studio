@@ -28,6 +28,9 @@
                 <div class="projhead__memory" id="projhead-memory">
                     <div id="mem-system"></div>
                 </div>
+                <button class="btn-ghost" id="schedules-btn" type="button" title="Scheduled tasks">
+                    <span class="mi mi-sm">schedule</span>Schedules
+                </button>
             </div>
             <nav class="tabs" id="tabs">
                 <button class="tab" data-tab="media">
@@ -50,6 +53,9 @@
             <div class="overview" id="overview" hidden>
                 <div class="overview__header">
                     <h1 class="overview__title">Projects</h1>
+                    <button class="btn-ghost" id="overview-schedules-btn" type="button" title="Scheduled tasks">
+                        <span class="mi mi-sm">schedule</span>Schedules
+                    </button>
                     <button class="btn-save" id="overview-new-btn" type="button">
                         <span class="mi mi-sm">add</span>New Project
                     </button>
@@ -223,16 +229,6 @@
                         </div>
 
                         <div class="listfield__rows" id="ws-cards"></div>
-
-                        <div class="ws-schedules">
-                            <div class="ws-schedules__head">
-                                <span class="ws-schedules__title">Scheduled tasks</span>
-                                <button type="button" class="btn-add" id="ws-schedule-save" disabled>
-                                    <span class="mi mi-sm">check</span>Saved
-                                </button>
-                            </div>
-                            <div class="ws-schedules__list" id="ws-schedules"></div>
-                        </div>
                     </form>
                 </section>
             </div>
