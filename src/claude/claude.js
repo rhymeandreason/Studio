@@ -493,8 +493,8 @@ function handleStreamLine(key, line) {
             break;
         }
         case "rate_limit_event": {
-            // Quota changed; pull fresh account usage for the 5-hour bar.
-            refreshUsage();
+            // Note: don't fetch /api/oauth/usage here — it fires repeatedly and
+            // would 429 the endpoint. The throttled post-result refresh covers it.
             break;
         }
         case "__stderr__": {
@@ -539,11 +539,27 @@ function updateUsage(session, usage, modelUsage) {
 // session. Shape: { five_hour:{utilization,resets_at}, seven_day:{...} }.
 let accountUsage = null;
 
-async function refreshUsage() {
+// The /api/oauth/usage endpoint rate-limits (429) if hit too often, which
+// would blank the bar — so throttle to at most once per minute and coalesce
+// concurrent calls. Pass force=true to bypass (e.g. initial load).
+let lastUsageFetch = 0;
+let usageFetching = false;
+const USAGE_MIN_INTERVAL_MS = 60000;
+async function refreshUsage(force) {
+    const now = Date.now();
+    if (usageFetching) return;
+    if (!force && now - lastUsageFetch < USAGE_MIN_INTERVAL_MS) return;
+    usageFetching = true;
+    lastUsageFetch = now;
     try {
-        accountUsage = await invoke("get_claude_usage");
+        const next = await invoke("get_claude_usage");
+        // Only adopt a well-formed payload; keep the last good value otherwise
+        // so a transient fetch/auth/keychain failure doesn't blank the bar.
+        if (next && next.five_hour) accountUsage = next;
     } catch {
-        accountUsage = null;
+        // keep last known accountUsage
+    } finally {
+        usageFetching = false;
     }
     renderUsageBars(sessions.find((s) => s.key === activeKey));
 }
@@ -774,7 +790,7 @@ listen("claude-jump", async (event) => {
 (async function init() {
     await loadSessions();
     renderSessionsList();
-    refreshUsage();
+    refreshUsage(true);
     if (sessions.length) {
         // Return to the last active session if it still exists, else the newest.
         const lastKey = localStorage.getItem("claude.activeKey");

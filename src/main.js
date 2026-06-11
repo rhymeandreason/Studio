@@ -1186,20 +1186,24 @@ function buildImageNote(note) {
   });
   requestAnimationFrame(resizeCap);
   card.append(cap);
+
+  if (!Array.isArray(note.links)) note.links = [];
+  const links = buildNoteLinks(note, cap, {
+    getText: () => note.caption,
+    setText: (v) => {
+      note.caption = v;
+      cap.value = v;
+      resizeCap();
+    },
+  });
+  card.append(links);
   return card;
 }
 
-function buildTextNote(note) {
-  const card = el("div", "notecard");
-  card.append(noteHeader(note));
-
-  if (!Array.isArray(note.links)) note.links = [];
-
-  const textarea = el("textarea", "notecard__textarea", {
-    placeholder: "Write something…",
-  });
-  textarea.value = note.body || "";
-
+// Builds the link-pill list for a note, harvesting any URLs out of its text
+// field (via opts.getText/setText) into note.links (de-duped). Shared by
+// text notes (body) and image notes (caption).
+function buildNoteLinks(note, field, { getText, setText }) {
   const links = el("div", "notecard__links");
   const renderLinks = () => {
     links.innerHTML = "";
@@ -1225,20 +1229,46 @@ function buildTextNote(note) {
     });
   };
 
-  // Pull any URLs out of the body into note.links (de-duped) and strip their
-  // text from the body. Returns true if anything changed.
+  // Pull any URLs out of the text into note.links (de-duped) and strip their
+  // text. Returns true if anything changed.
   const harvestLinks = () => {
-    const urls = extractUrls(note.body);
+    const urls = extractUrls(getText());
     if (!urls.length) return false;
-    let body = note.body;
+    let text = getText();
     for (const url of urls) {
       if (!note.links.includes(url)) note.links.push(url);
-      body = body.split(url).join("");
+      text = text.split(url).join("");
     }
     // Tidy whitespace left behind by removed URLs.
-    note.body = body.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    text = text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    setText(text);
     return true;
   };
+
+  field.addEventListener("blur", () => {
+    if (harvestLinks()) {
+      renderLinks();
+      scheduleBentoLayout();
+      scheduleNotesSave();
+    }
+  });
+
+  // Migrate any links already sitting inline in saved notes.
+  if (harvestLinks()) scheduleNotesSave();
+  renderLinks();
+  return links;
+}
+
+function buildTextNote(note) {
+  const card = el("div", "notecard");
+  card.append(noteHeader(note));
+
+  if (!Array.isArray(note.links)) note.links = [];
+
+  const textarea = el("textarea", "notecard__textarea", {
+    placeholder: "Write something…",
+  });
+  textarea.value = note.body || "";
 
   const resizeTextarea = () => {
     textarea.style.height = "auto";
@@ -1250,26 +1280,18 @@ function buildTextNote(note) {
     scheduleBentoLayout();
     scheduleNotesSave();
   });
-  textarea.addEventListener("blur", () => {
-    if (harvestLinks()) {
-      textarea.value = note.body;
-      resizeTextarea();
-      renderLinks();
-      scheduleBentoLayout();
-      scheduleNotesSave();
-    }
-  });
   requestAnimationFrame(resizeTextarea);
 
   card.append(textarea);
+  const links = buildNoteLinks(note, textarea, {
+    getText: () => note.body,
+    setText: (v) => {
+      note.body = v;
+      textarea.value = v;
+      resizeTextarea();
+    },
+  });
   card.append(links);
-
-  // Migrate any links already sitting inline in saved notes.
-  if (harvestLinks()) {
-    textarea.value = note.body;
-    scheduleNotesSave();
-  }
-  renderLinks();
   return card;
 }
 
@@ -1335,6 +1357,14 @@ function buildChecklist(note) {
   });
 
   card.append(list);
+
+  const addItem = el("button", "btn-add", {
+    type: "button",
+    innerHTML: `${mi("add")}Item`,
+  });
+  addItem.addEventListener("click", () => addChecklistItem(note));
+  card.append(addItem);
+
   return card;
 }
 
