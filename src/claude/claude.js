@@ -17,8 +17,96 @@ const transcriptEl = document.getElementById("transcript");
 const statusEl = document.getElementById("status");
 const form = document.getElementById("input-form");
 const promptInput = document.getElementById("prompt-input");
-const modelSelect = document.getElementById("model-select");
-const permissionSelect = document.getElementById("permission-select");
+// A small custom dropdown matching the Notes page's .notedrop styling: a
+// trigger button showing the current choice, and a menu of options with a
+// checkmark on the selected item. Exposes a `.value` property and a
+// `change` event so it's a drop-in replacement for a <select>.
+function createDropdown(container, items, { icon } = {}) {
+    const target = new EventTarget();
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "notedrop__btn";
+    if (icon) {
+        const img = document.createElement("img");
+        img.className = "notedrop__icon";
+        img.src = icon;
+        img.alt = "";
+        btn.append(img);
+    }
+    const label = document.createElement("span");
+    label.className = "notedrop__label";
+    const chev = document.createElement("span");
+    chev.className = "mi mi-sm notedrop__chev";
+    chev.textContent = "expand_more";
+    btn.append(label, chev);
+
+    const menu = document.createElement("div");
+    menu.className = "menu notedrop__menu";
+    menu.hidden = true;
+
+    let value = items[0]?.value;
+    items.forEach((item) => {
+        const opt = document.createElement("button");
+        opt.type = "button";
+        opt.className = "menu__item notedrop__item";
+        opt.textContent = item.label;
+        opt.dataset.value = item.value;
+        opt.addEventListener("click", () => {
+            menu.hidden = true;
+            if (target.value !== item.value) {
+                target.value = item.value;
+                sync();
+                target.dispatchEvent(new Event("change"));
+            }
+        });
+        menu.append(opt);
+    });
+
+    btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menu.hidden = !menu.hidden;
+    });
+    document.addEventListener("click", (e) => {
+        if (!container.contains(e.target)) menu.hidden = true;
+    });
+
+    function sync() {
+        const item = items.find((i) => i.value === target.value) || items[0];
+        label.textContent = item?.label || "";
+        menu.querySelectorAll(".notedrop__item").forEach((opt) => {
+            opt.classList.toggle("is-active", opt.dataset.value === target.value);
+        });
+    }
+
+    Object.defineProperty(target, "value", {
+        get: () => value,
+        set: (v) => {
+            value = v;
+            sync();
+        },
+    });
+
+    container.append(btn, menu);
+    sync();
+    return target;
+}
+
+const modelSelect = createDropdown(
+    document.getElementById("model-select"),
+    [
+        { value: "sonnet", label: "Sonnet" },
+        { value: "opus", label: "Opus" },
+        { value: "fable", label: "Fable" },
+        { value: "haiku", label: "Haiku" },
+    ],
+    { icon: "claude-icon.svg" },
+);
+const permissionSelect = createDropdown(document.getElementById("permission-select"), [
+    { value: "default", label: "Ask" },
+    { value: "acceptEdits", label: "Accept edits" },
+    { value: "plan", label: "Plan" },
+    { value: "bypassPermissions", label: "Bypass" },
+]);
 const newSessionBtn = document.getElementById("new-session");
 const sendBtn = document.getElementById("send-btn");
 const stopBtn = document.getElementById("stop-btn");

@@ -46,24 +46,9 @@
                 <header class="claude-bar">
                     <span class="claude-session-name" id="session-name" title="Click to rename">New session</span>
                     <div class="claude-model-wrap">
-                        <img class="claude-model__icon" src="claude-icon.svg" alt="" />
-                        <select class="field__input claude-model" id="model-select">
-                            <option value="sonnet">Sonnet</option>
-                            <option value="opus">Opus</option>
-                            <option value="fable">Fable</option>
-                            <option value="haiku">Haiku</option>
-                        </select>
+                        <div class="notedrop claude-model" id="model-select"></div>
                     </div>
-                    <select
-                        class="field__input claude-model claude-permission"
-                        id="permission-select"
-                        title="Permission mode"
-                    >
-                        <option value="default">Ask</option>
-                        <option value="acceptEdits">Accept edits</option>
-                        <option value="plan">Plan</option>
-                        <option value="bypassPermissions">Bypass</option>
-                    </select>
+                    <div class="notedrop claude-model claude-permission" id="permission-select" title="Permission mode"></div>
                 </header>
 
                 <div class="claude-usage" id="usage-bars">
