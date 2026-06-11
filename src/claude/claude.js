@@ -823,15 +823,22 @@ function renderUsageBars(session) {
         contextPct.textContent = "0%";
     }
 
+    const fiveHourEl = document.getElementById("five-hour");
     const fiveHour = accountUsage?.five_hour;
     if (fiveHour && typeof fiveHour.utilization === "number") {
         const pct = Math.round(fiveHour.utilization);
         planStatus.textContent = `${pct}%`;
         planFill.style.width = `${pct}%`;
         planFill.style.background = fillColor(pct);
+        if (fiveHourEl) {
+            fiveHourEl.title = `5-hour usage: ${pct}%${
+                fiveHour.resets_at ? ` · resets ${fmtReset(fiveHour.resets_at)}` : ""
+            }`;
+        }
     } else {
         planFill.style.width = "0%";
         planStatus.textContent = "—";
+        if (fiveHourEl) fiveHourEl.title = "5-hour usage";
     }
 
     renderSevenDayPie();
@@ -857,6 +864,16 @@ function renderSevenDayPie() {
         if (labelEl) labelEl.textContent = "7d";
         sevenDayWrap.title = "7-day usage";
     }
+}
+
+// Friendly reset time, e.g. "at 8:10 PM (in 2h 35m)".
+function fmtReset(iso) {
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t)) return "";
+    const time = new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const mins = Math.max(0, Math.round((t - Date.now()) / 60000));
+    const rel = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+    return `at ${time} (in ${rel})`;
 }
 
 // Whole days from now until an ISO timestamp (rounded up, min 0).
