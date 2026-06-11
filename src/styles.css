@@ -909,26 +909,52 @@ select.field__input {
     cursor: default;
 }
 
+/* Pill switch, matching the Claude session sidebar's "include outside
+   sessions" toggle (.claude-toggle in claude/claude.css). */
 .ws-schedule__toggle {
     flex: 0 0 auto;
-    background: var(--surface);
-    border: 1px solid var(--hairline-strong);
-    border-radius: 50%;
-    color: var(--text-soft);
+    display: inline-flex;
+    align-items: center;
     cursor: pointer;
-    width: 26px;
-    height: 26px;
-    padding: 5px;
-    transition:
-        color 0.15s,
-        background 0.15s,
-        border-color 0.15s;
+    margin-top: 4px;
 }
 
-.ws-schedule__toggle.is-active {
+.ws-schedule__toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.ws-schedule__toggle .claude-toggle__track {
+    display: inline-block;
+    width: 26px;
+    height: 15px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    transition: background 0.15s, border-color 0.15s;
+    position: relative;
+}
+
+.ws-schedule__toggle .claude-toggle__thumb {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--text-soft);
+    transition: transform 0.15s, background 0.15s;
+}
+
+.ws-schedule__toggle input:checked + .claude-toggle__track {
     background: var(--accent);
     border-color: var(--accent);
-    color: var(--surface);
+}
+
+.ws-schedule__toggle input:checked + .claude-toggle__track .claude-toggle__thumb {
+    transform: translateX(11px);
+    background: var(--surface);
 }
 
 /* Workspace item card */

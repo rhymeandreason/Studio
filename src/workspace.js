@@ -507,17 +507,18 @@ function buildScheduleRow(task) {
   controls.append(time, days, model, output, last);
   main.append(prompt, controls);
 
-  const toggle = el("button", "ws-schedule__toggle", {
-    type: "button",
-    title: "Enabled",
+  const toggleInput = el("input", null, {
+    type: "checkbox",
+    checked: task.enabled !== false,
   });
-  toggle.innerHTML = mi("history_toggle_off");
-  toggle.classList.toggle("is-active", task.enabled !== false);
-  toggle.addEventListener("click", () => {
-    task.enabled = task.enabled === false;
-    toggle.classList.toggle("is-active", task.enabled !== false);
+  toggleInput.addEventListener("change", () => {
+    task.enabled = toggleInput.checked;
     scheduleWorkspaceSave();
   });
+  const toggleTrack = el("span", "claude-toggle__track");
+  toggleTrack.append(el("span", "claude-toggle__thumb"));
+  const toggle = el("label", "ws-schedule__toggle claude-toggle", { title: "Enabled" });
+  toggle.append(toggleInput, toggleTrack);
 
   const run = el("button", "ws-schedule__run", { type: "button", title: "Run now" });
   run.innerHTML = mi("play_arrow");
