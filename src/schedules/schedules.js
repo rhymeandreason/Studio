@@ -1,7 +1,7 @@
-// Scheduled Tasks window: lists every project's recurring `claude -p` tasks,
-// grouped into each project's 3 time slots. Mirrors the editor that used to
-// live in the Workspace tab (see docs/workspace.md), but spans all projects
-// under ~/Projects so it's reachable from anywhere.
+// Scheduled Tasks window: 3 shared global time slots, each holding any number
+// of recurring `claude -p` tasks. Each task picks which project folder it runs
+// in via a dropdown (default "Global" = the ~/Projects root). Backed by a
+// single global store (read_schedules / save_schedules); see docs/workspace.md.
 
 import { el, mi, genId } from "../dom.js";
 
@@ -17,31 +17,35 @@ const SCHEDULE_MODELS = [
   { value: "fable", label: "Fable" },
 ];
 
-// One entry per project: { project: {name, path, ...}, ws: Workspace, saveTimer }
-let entries = [];
+const DEFAULT_SLOTS = ["09:00", "13:00", "17:00"];
+
+// { slots: ["HH:MM" ×3], tasks: [task…] } — the whole global schedules store.
+let store = { slots: [...DEFAULT_SLOTS], tasks: [] };
+// Projects offered in each task's dropdown ("" = Global / ~/Projects root).
+let projects = [];
+let saveTimer = null;
 
 async function load() {
-  const projects = await invoke("list_projects");
-  entries = await Promise.all(
-    projects.map(async (project) => ({
-      project,
-      ws: await invoke("read_workspace", { path: project.path }),
-      saveTimer: null,
-    })),
-  );
+  const raw = await invoke("read_schedules");
+  const parsed = raw ? JSON.parse(raw) : null;
+  store = {
+    slots: parsed?.slots?.length === 3 ? parsed.slots : [...DEFAULT_SLOTS],
+    tasks: parsed?.tasks || [],
+  };
+  projects = await invoke("list_projects");
   render();
 }
 
 function render() {
   const list = document.getElementById("schedules-list");
   list.innerHTML = "";
-  entries.forEach((entry) => list.append(buildProjectSection(entry)));
+  store.slots.forEach((_, slot) => list.append(buildSlotGroup(slot)));
 }
 
-function scheduleSave(entry) {
-  clearTimeout(entry.saveTimer);
-  entry.saveTimer = setTimeout(async () => {
-    await invoke("save_workspace", { path: entry.project.path, workspace: entry.ws });
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    invoke("save_schedules", { data: JSON.stringify(store) });
   }, 400);
 }
 
@@ -53,65 +57,44 @@ function setDirty(dirty) {
 }
 
 async function saveAll() {
-  const btn = document.getElementById("schedules-save");
-  btn.disabled = true;
-  for (const entry of entries) {
-    clearTimeout(entry.saveTimer);
-    await invoke("save_workspace", { path: entry.project.path, workspace: entry.ws });
-  }
+  clearTimeout(saveTimer);
+  document.getElementById("schedules-save").disabled = true;
+  await invoke("save_schedules", { data: JSON.stringify(store) });
   await invoke("update_wake_schedule").catch((err) => console.error("update_wake_schedule:", err));
   setDirty(false);
 }
 
-function buildProjectSection(entry) {
-  const { ws } = entry;
-  ws.schedules = ws.schedules || [];
-  ws.scheduleSlots = ws.scheduleSlots && ws.scheduleSlots.length === 3
-    ? ws.scheduleSlots
-    : ["09:00", "13:00", "17:00"];
-
-  const section = el("div", "schedules-project");
-  section.append(el("div", "schedules-project__head", { textContent: entry.project.name }));
-
-  const slots = el("div", "schedules-project__slots");
-  ws.scheduleSlots.forEach((_, slot) => slots.append(buildSlotGroup(entry, slot)));
-  section.append(slots);
-
-  return section;
-}
-
-function buildSlotGroup(entry, slot) {
-  const { ws } = entry;
+function buildSlotGroup(slot) {
   const group = el("div", "ws-schedule-slot");
 
   const head = el("div", "ws-schedule-slot__head");
   const time = el("input", "ws-schedule-slot__time", {
     type: "time",
-    value: ws.scheduleSlots[slot] || "09:00",
+    value: store.slots[slot] || "09:00",
   });
   time.addEventListener("change", () => {
-    const oldTime = ws.scheduleSlots[slot];
-    ws.scheduleSlots[slot] = time.value;
-    ws.schedules.forEach((task) => {
+    const oldTime = store.slots[slot];
+    store.slots[slot] = time.value;
+    store.tasks.forEach((task) => {
       if ((task.slot || 0) === slot && (task.time || oldTime) === oldTime) {
         task.time = time.value;
       }
     });
     setDirty(true);
-    scheduleSave(entry);
+    scheduleSave();
   });
 
   const add = el("button", "btn-add", { type: "button" });
   add.innerHTML = `${mi("add")}Task`;
-  add.addEventListener("click", () => addSchedule(entry, slot));
+  add.addEventListener("click", () => addSchedule(slot));
 
   head.append(time, add);
   group.append(head);
 
   const list = el("div", "ws-schedule-slot__list");
-  ws.schedules
+  store.tasks
     .filter((task) => (task.slot || 0) === slot)
-    .forEach((task) => list.append(buildScheduleRow(entry, task)));
+    .forEach((task) => list.append(buildScheduleRow(task)));
   group.append(list);
 
   return group;
@@ -127,8 +110,7 @@ function setLastRunText(span, task) {
   span.classList.toggle("is-error", task.lastRunOk === false);
 }
 
-function buildScheduleRow(entry, task) {
-  const { ws } = entry;
+function buildScheduleRow(task) {
   const row = el("div", "ws-schedule");
 
   const main = el("div", "ws-schedule__main");
@@ -146,11 +128,25 @@ function buildScheduleRow(entry, task) {
     task.prompt = prompt.value;
     resizePrompt();
     setDirty(true);
-    scheduleSave(entry);
+    scheduleSave();
   });
   requestAnimationFrame(resizePrompt);
 
   const controls = el("div", "ws-schedule__row");
+
+  const project = el("select", "ws-schedule__project", {
+    title: "Project folder this task runs in",
+  });
+  project.append(el("option", null, { value: "", textContent: "Global" }));
+  projects.forEach((p) => {
+    project.append(el("option", null, { value: p.path, textContent: p.name }));
+  });
+  project.value = task.projectPath || "";
+  project.addEventListener("change", () => {
+    task.projectPath = project.value;
+    setDirty(true);
+    scheduleSave();
+  });
 
   const days = el("div", "ws-schedule__days");
   DAY_LABELS.forEach((label, idx) => {
@@ -164,7 +160,7 @@ function buildScheduleRow(entry, task) {
       else task.days.splice(at, 1);
       day.classList.toggle("is-active", task.days.includes(idx));
       setDirty(true);
-      scheduleSave(entry);
+      scheduleSave();
     });
     days.append(day);
   });
@@ -177,7 +173,7 @@ function buildScheduleRow(entry, task) {
   model.addEventListener("change", () => {
     task.model = model.value;
     setDirty(true);
-    scheduleSave(entry);
+    scheduleSave();
   });
 
   const output = el("input", "ws-schedule__output", {
@@ -189,13 +185,13 @@ function buildScheduleRow(entry, task) {
   output.addEventListener("change", () => {
     task.outputFile = output.value.trim();
     setDirty(true);
-    scheduleSave(entry);
+    scheduleSave();
   });
 
   const last = el("span", "ws-schedule__last", {});
   setLastRunText(last, task);
 
-  controls.append(days, model, output, last);
+  controls.append(project, days, model, output, last);
   main.append(prompt, controls);
 
   const toggleInput = el("input", null, {
@@ -205,7 +201,7 @@ function buildScheduleRow(entry, task) {
   toggleInput.addEventListener("change", () => {
     task.enabled = toggleInput.checked;
     setDirty(true);
-    scheduleSave(entry);
+    scheduleSave();
   });
   const toggleTrack = el("span", "claude-toggle__track");
   toggleTrack.append(el("span", "claude-toggle__thumb"));
@@ -219,7 +215,7 @@ function buildScheduleRow(entry, task) {
     run.innerHTML = mi("hourglass_top");
     try {
       await invoke("run_schedule_now", {
-        projectPath: entry.project.path,
+        projectPath: task.projectPath || "",
         prompt: task.prompt,
         model: task.model || "haiku",
         outputFile: task.outputFile || "",
@@ -234,31 +230,32 @@ function buildScheduleRow(entry, task) {
   const remove = el("button", "btn-remove", { type: "button", title: "Remove" });
   remove.innerHTML = mi("close");
   remove.addEventListener("click", () => {
-    ws.schedules = ws.schedules.filter((t) => t !== task);
+    store.tasks = store.tasks.filter((t) => t !== task);
     render();
     setDirty(true);
-    scheduleSave(entry);
+    scheduleSave();
   });
 
   row.append(toggle, main, run, remove);
   return row;
 }
 
-function addSchedule(entry, slot) {
-  entry.ws.schedules.push({
+function addSchedule(slot) {
+  store.tasks.push({
     id: genId(),
     prompt: "",
-    time: entry.ws.scheduleSlots[slot] || "09:00",
+    time: store.slots[slot] || "09:00",
     slot,
     days: [],
     enabled: true,
     model: "haiku",
     outputFile: "",
+    projectPath: "",
     lastRun: null,
   });
   render();
   setDirty(true);
-  scheduleSave(entry);
+  scheduleSave();
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
@@ -267,8 +264,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   await load();
 
   listen("schedule-ran", ({ payload }) => {
-    const entry = entries.find((e) => e.project.path === payload.projectPath);
-    const task = entry?.ws.schedules.find((t) => t.id === payload.taskId);
+    const task = store.tasks.find((t) => t.id === payload.taskId);
     if (task) {
       task.lastRunAt = payload.lastRunAt;
       task.lastRunOk = payload.ok;

@@ -110,14 +110,29 @@ struct ScheduledTask {
     /// Whether the last run's `claude` process exited successfully.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "lastRunOk")]
     last_run_ok: Option<bool>,
-    /// Index (0-2) into `Workspace::schedule_slots`, grouping this task
-    /// under one of the 3 shared time slots shown in the UI.
+    /// Index (0-2) into `SchedulesFile::slots`, grouping this task under one
+    /// of the 3 shared time slots shown in the UI.
     #[serde(default)]
     slot: u8,
+    /// Folder the `claude -p` run uses as its working dir, and where the
+    /// output file is written. Blank = the ~/Projects root ("Global").
+    #[serde(default, rename = "projectPath")]
+    project_path: String,
 }
 
 fn default_schedule_slots() -> Vec<String> {
     vec!["09:00".to_string(), "13:00".to_string(), "17:00".to_string()]
+}
+
+/// The single global schedules store (app config dir / schedules.json): the 3
+/// shared time slots plus every scheduled task across all projects. Replaces
+/// the old per-project `Workspace::schedules`.
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct SchedulesFile {
+    #[serde(default = "default_schedule_slots")]
+    slots: Vec<String>,
+    #[serde(default)]
+    tasks: Vec<ScheduledTask>,
 }
 
 /// App-wide state: which project is currently active (if any).
@@ -1146,6 +1161,63 @@ fn save_project_order(app: AppHandle, data: String) -> Result<(), String> {
     std::fs::write(dir.join("project-order.json"), data).map_err(|e| e.to_string())
 }
 
+/// Path to the global schedules store (app config dir / schedules.json).
+fn schedules_file_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|dir| dir.join("schedules.json"))
+}
+
+/// Read the global schedules store. If it doesn't exist yet, migrate from the
+/// old per-project `Workspace::schedules` (each task tagged with its project
+/// path) and persist the result, so existing schedules carry over once.
+fn read_schedules_file(app: &AppHandle) -> SchedulesFile {
+    if let Some(path) = schedules_file_path(app) {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            return serde_json::from_str(&text).unwrap_or_default();
+        }
+    }
+    // First run after the move to a global store: gather per-project tasks.
+    let mut file = SchedulesFile {
+        slots: default_schedule_slots(),
+        tasks: Vec::new(),
+    };
+    for project in scan_projects(app) {
+        if let Ok(ws) = read_workspace(project.path.clone()) {
+            if ws.schedule_slots.len() == 3 && file.tasks.is_empty() {
+                file.slots = ws.schedule_slots.clone();
+            }
+            for mut task in ws.schedules {
+                task.project_path = project.path.clone();
+                file.tasks.push(task);
+            }
+        }
+    }
+    let _ = write_schedules_file(app, &file);
+    file
+}
+
+fn write_schedules_file(app: &AppHandle, file: &SchedulesFile) -> Result<(), String> {
+    let path = schedules_file_path(app).ok_or("no app config dir")?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let json = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
+    std::fs::write(path, json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn read_schedules(app: AppHandle) -> Result<String, String> {
+    serde_json::to_string(&read_schedules_file(&app)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_schedules(app: AppHandle, data: String) -> Result<(), String> {
+    let file: SchedulesFile = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    write_schedules_file(&app, &file)
+}
+
 /// Per-project media view metadata (sort mode + manual order). Stored hidden so
 /// it's skipped by walk_media and doesn't show in the Media grid.
 #[tauri::command]
@@ -1882,35 +1954,31 @@ fn run_due_schedules(app: &AppHandle) {
     let hm = now.format("%H:%M").to_string();
     let weekday = now.weekday().num_days_from_sunday() as u8;
 
-    for project in scan_projects(app) {
-        let Ok(mut ws) = read_workspace(project.path.clone()) else {
+    let mut file = read_schedules_file(app);
+    let mut changed = false;
+    for task in file.tasks.iter_mut() {
+        if !task.enabled || task.time != hm {
             continue;
-        };
-        let mut changed = false;
-        for task in ws.schedules.iter_mut() {
-            if !task.enabled || task.time != hm {
-                continue;
-            }
-            if !task.days.is_empty() && !task.days.contains(&weekday) {
-                continue;
-            }
-            if task.last_run.as_deref() == Some(today.as_str()) {
-                continue;
-            }
-            task.last_run = Some(today.clone());
-            changed = true;
-            run_scheduled_task(
-                app,
-                project.path.clone(),
-                task.prompt.clone(),
-                task.model.clone(),
-                task.output_file.clone(),
-                task.id.clone(),
-            );
         }
-        if changed {
-            let _ = save_workspace(project.path.clone(), ws);
+        if !task.days.is_empty() && !task.days.contains(&weekday) {
+            continue;
         }
+        if task.last_run.as_deref() == Some(today.as_str()) {
+            continue;
+        }
+        task.last_run = Some(today.clone());
+        changed = true;
+        run_scheduled_task(
+            app,
+            task.project_path.clone(),
+            task.prompt.clone(),
+            task.model.clone(),
+            task.output_file.clone(),
+            task.id.clone(),
+        );
+    }
+    if changed {
+        let _ = write_schedules_file(app, &file);
     }
 }
 
@@ -1935,33 +2003,28 @@ fn compute_wake_times(app: &AppHandle) -> Vec<chrono::DateTime<chrono::Local>> {
 
     let now = Local::now();
     let mut times = Vec::new();
-    for project in scan_projects(app) {
-        let Ok(ws) = read_workspace(project.path.clone()) else {
+    for task in &read_schedules_file(app).tasks {
+        if !task.enabled {
+            continue;
+        }
+        let Ok(time_of_day) = NaiveTime::parse_from_str(&task.time, "%H:%M") else {
             continue;
         };
-        for task in &ws.schedules {
-            if !task.enabled {
+        // Find the next day (today..+7) whose weekday matches `days`
+        // (empty = every day) and whose time hasn't passed yet.
+        for offset in 0..8 {
+            let day = (now + Duration::days(offset)).date_naive();
+            let weekday = day.weekday().num_days_from_sunday() as u8;
+            if !task.days.is_empty() && !task.days.contains(&weekday) {
                 continue;
             }
-            let Ok(time_of_day) = NaiveTime::parse_from_str(&task.time, "%H:%M") else {
+            let Some(candidate) = Local.from_local_datetime(&day.and_time(time_of_day)).single()
+            else {
                 continue;
             };
-            // Find the next day (today..+7) whose weekday matches `days`
-            // (empty = every day) and whose time hasn't passed yet.
-            for offset in 0..8 {
-                let day = (now + Duration::days(offset)).date_naive();
-                let weekday = day.weekday().num_days_from_sunday() as u8;
-                if !task.days.is_empty() && !task.days.contains(&weekday) {
-                    continue;
-                }
-                let Some(candidate) = Local.from_local_datetime(&day.and_time(time_of_day)).single()
-                else {
-                    continue;
-                };
-                if candidate > now {
-                    times.push(candidate);
-                    break;
-                }
+            if candidate > now {
+                times.push(candidate);
+                break;
             }
         }
     }
@@ -2046,6 +2109,15 @@ fn run_scheduled_task(
     task_id: String,
 ) {
     let app = app.clone();
+    // Blank project = the "Global" default: run in (and write output to) the
+    // ~/Projects root.
+    let project_path = if project_path.trim().is_empty() {
+        projects_root(&app)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or(project_path)
+    } else {
+        project_path
+    };
     let cwd = claude_cwd(&app, &project_path);
     std::thread::spawn(move || {
         let mut cmd = Command::new("claude");
@@ -2081,13 +2153,12 @@ fn run_scheduled_task(
         let _ = std::fs::write(PathBuf::from(&project_path).join(&file_name), contents);
 
         // Record when (and how) this task last ran, for both scheduled and
-        // manual runs.
-        if let Ok(mut ws) = read_workspace(project_path.clone()) {
-            if let Some(task) = ws.schedules.iter_mut().find(|t| t.id == task_id) {
-                task.last_run_at = Some(timestamp.clone());
-                task.last_run_ok = Some(ok);
-                let _ = save_workspace(project_path.clone(), ws);
-            }
+        // manual runs, in the global schedules store.
+        let mut file = read_schedules_file(&app);
+        if let Some(task) = file.tasks.iter_mut().find(|t| t.id == task_id) {
+            task.last_run_at = Some(timestamp.clone());
+            task.last_run_ok = Some(ok);
+            let _ = write_schedules_file(&app, &file);
         }
 
         let _ = app.emit(
@@ -2558,6 +2629,8 @@ pub fn run() {
             save_media_meta,
             read_project_order,
             save_project_order,
+            read_schedules,
+            save_schedules,
             paste_image,
             paste_note_image,
             copy_note_asset,

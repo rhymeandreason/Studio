@@ -93,31 +93,40 @@ button in the project header or the all-projects overview
 (`#schedules-btn`/`#overview-schedules-btn` in the main `index.html`,
 `open_schedules_window` in `lib.rs`). It's a separate Tauri window — like the
 Claude companion window — so it stays open and reachable while you work in
-any project/tab. On open it calls `list_projects` + `read_workspace` for
-every project under `~/Projects` and renders one section per project
-(`buildProjectSection`/`buildSlotGroup`/`buildScheduleRow` in
+any project/tab. On open it calls `read_schedules` (the global store) +
+`list_projects` (to populate each task's project dropdown) and renders the
+**3 shared time slots** (`buildSlotGroup`/`buildScheduleRow` in
 `schedules.js`).
 
-Tasks are grouped into **3 time slots** per project. Each slot has one shared `"HH:MM"`
-time (editable via a `<input type="time">` in the slot's header) and a "+
-Task" button that adds a task to that slot. `workspace.json` stores:
+Schedules are **global**, not per-project: a single store
+(`SchedulesFile` in `lib.rs`, `schedules.json` in the app config dir) holds
+the 3 slot times plus every task, read/written via `read_schedules` /
+`save_schedules`. On first read the store is migrated from the old
+per-project `Workspace::schedules` (each task tagged with its project path),
+then `workspace.json`'s `schedules`/`scheduleSlots` are no longer used.
 
-- `scheduleSlots` — array of 3 `"HH:MM"` strings (`schedule_slots` in
-  `lib.rs`, `Workspace::schedule_slots`), default `["09:00", "13:00",
-  "17:00"]`. Editing a slot's time updates it and every task whose `time`
-  still matches the slot's old time.
-- `schedules` — array of tasks (`ScheduledTask` in `lib.rs`):
+Each of the 3 slots has one shared `"HH:MM"` time (editable via a
+`<input type="time">` in the slot's header) and a "+ Task" button that adds a
+task to that slot. The store holds:
+
+- `slots` — array of 3 `"HH:MM"` strings (`SchedulesFile::slots`), default
+  `["09:00", "13:00", "17:00"]`. Editing a slot's time updates it and every
+  task whose `time` still matches the slot's old time.
+- `tasks` — array of tasks (`ScheduledTask` in `lib.rs`):
   - `prompt` — text passed to `claude -p`.
-  - `slot` — `0`–`2`, index into `scheduleSlots`; determines which group the
-    task is rendered under.
-  - `time` — 24-hour `"HH:MM"`, local time; kept in sync with
-    `scheduleSlots[slot]` and is what the scheduler/wake logic actually use.
+  - `projectPath` — folder the run uses as its working dir and output
+    location, picked via a per-task dropdown; blank = **"Global"**, the
+    `~/Projects` root.
+  - `slot` — `0`–`2`, index into `slots`; determines which group the task is
+    rendered under.
+  - `time` — 24-hour `"HH:MM"`, local time; kept in sync with `slots[slot]`
+    and is what the scheduler/wake logic actually use.
   - `days` — `0`(Sun)–`6`(Sat); empty = every day.
   - `enabled` — toggled via the pill switch.
   - `model` — passed as `claude --model`; defaults to `"haiku"`.
-  - `outputFile` — markdown file (relative to the project folder) the result
-    is written to, overwritten each run; blank = `"Scheduled Output.md"`,
-    `.md` appended if missing.
+  - `outputFile` — markdown file (relative to the task's project folder) the
+    result is written to, overwritten each run; blank = `"Scheduled
+    Output.md"`, `.md` appended if missing.
   - `lastRun` — `"YYYY-MM-DD"`, used by the scheduler to avoid firing twice in
     one day.
   - `lastRunAt` / `lastRunOk` — timestamp and success flag of the last run
@@ -125,16 +134,15 @@ Task" button that adds a task to that slot. `workspace.json` stores:
 
 ### Saving the wake schedule
 
-Editing a task (time slot, days, enabled, add/remove, etc.) just updates the
-in-memory `Workspace` for that project and debounce-saves it to
-`workspace.json` via `save_workspace` — it does **not** touch the system
-wake schedule or prompt for the admin password. The window header has a
-"Saved" / "Save schedule" button (`#schedules-save`, `setDirty()`): it goes
-from a disabled "Saved" state to a black "Save schedule" button as soon as
-anything changes, across any project's section. Clicking it flushes all
-pending per-project saves and calls `update_wake_schedule` once (see below),
-then returns to "Saved" — so the single admin prompt happens after you're
-done editing, not per-keystroke.
+Editing a task (time slot, days, enabled, project, add/remove, etc.) just
+updates the in-memory store and debounce-saves it via `save_schedules` — it
+does **not** touch the system wake schedule or prompt for the admin password.
+The window header has a "Saved" / "Save schedule" button (`#schedules-save`,
+`setDirty()`): it goes from a disabled "Saved" state to a black "Save
+schedule" button as soon as anything changes. Clicking it flushes the pending
+save and calls `update_wake_schedule` once (see below), then returns to
+"Saved" — so the single admin prompt happens after you're done editing, not
+per-keystroke.
 
 ### Execution
 
@@ -149,7 +157,7 @@ missed runs are skipped, not backfilled.
 If the Mac is fully asleep, `caffeinate` can't help. Clicking "Save schedule"
 (see above) calls `update_wake_schedule`, which:
 
-1. Scans every project's enabled schedules and finds each one's next
+1. Scans every enabled task in the global store and finds each one's next
    occurrence (today..+7 days, respecting `days`).
 2. Runs `pmset schedule cancelall && pmset schedule wake "MM/dd/yy HH:MM:SS"`
    (one `wake` per distinct upcoming time, deduped and capped at **3 slots**
@@ -174,7 +182,7 @@ passwordless sudo for `pmset` (e.g. an `/etc/sudoers.d/` entry scoped to
 `/usr/bin/pmset schedule *`).
 
 A background loop (`start_scheduler`, started in `setup`) wakes every 30s,
-scans every project under `~/Projects/`, and fires any enabled task whose
+scans the global schedules store, and fires any enabled task whose
 `time`/`days` match now and that hasn't run today. Firing runs (in
 `run_scheduled_task`):
 
@@ -182,8 +190,9 @@ scans every project under `~/Projects/`, and fires any enabled task whose
 claude -p <prompt> --permission-mode bypassPermissions [--model <model>]
 ```
 
-in the project's repo dir (`claude_cwd`, same resolution as the Claude
-companion window), with `PATH` resolved via `claude_path()` (login-shell
+in the task's `projectPath` (`claude_cwd`, same resolution as the Claude
+companion window; blank `projectPath` runs in the `~/Projects` root), with
+`PATH` resolved via `claude_path()` (login-shell
 PATH, since GUI apps don't inherit nvm/homebrew). `bypassPermissions` is used
 because headless runs have no one to approve tool prompts — keep scheduled
 prompts to things you're comfortable running unattended.
@@ -191,7 +200,7 @@ prompts to things you're comfortable running unattended.
 The result (stdout on success, stderr on failure) is written to
 `<project>/<outputFile>` as `# Scheduled task — <timestamp>` +
 `**Output:**`/`**Error:**` + the text (no prompt echoed). `lastRunAt`/
-`lastRunOk` are persisted back to `workspace.json`, and a `"schedule-ran"`
+`lastRunOk` are persisted back to the global store, and a `"schedule-ran"`
 event (`{ projectPath, taskId, ok, output, outputFile, lastRunAt }`) is
 emitted so an open project's UI updates live.
 
