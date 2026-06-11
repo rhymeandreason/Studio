@@ -24,6 +24,8 @@ const contextFill = document.getElementById("context-fill");
 const contextPct = document.getElementById("context-pct");
 const planFill = document.getElementById("plan-fill");
 const planStatus = document.getElementById("plan-status");
+const sevenDayPie = document.getElementById("sevenday-pie");
+const sevenDayWrap = document.getElementById("sevenday");
 
 const CONTEXT_WINDOW_DEFAULT = 200000;
 
@@ -570,8 +572,8 @@ function fillColor(pct) {
     return "var(--sage)";
 }
 
-// Paint both bars: context from the active session, 5-hour quota from the
-// account usage (with the 7-day figure appended).
+// Paint usage: context bar from the active session, 5-hour quota bar and the
+// 7-day pie from the account usage.
 function renderUsageBars(session) {
     const usage = session?.usage;
     if (usage) {
@@ -586,17 +588,29 @@ function renderUsageBars(session) {
     const fiveHour = accountUsage?.five_hour;
     if (fiveHour && typeof fiveHour.utilization === "number") {
         const pct = Math.round(fiveHour.utilization);
-        const sevenDay = accountUsage?.seven_day;
-        const sevenPct =
-            sevenDay && typeof sevenDay.utilization === "number"
-                ? ` · 7d ${Math.round(sevenDay.utilization)}%`
-                : "";
-        planStatus.textContent = `${pct}%${sevenPct}`;
+        planStatus.textContent = `${pct}%`;
         planFill.style.width = `${pct}%`;
         planFill.style.background = fillColor(pct);
     } else {
         planFill.style.width = "0%";
         planStatus.textContent = "—";
+    }
+
+    renderSevenDayPie();
+}
+
+// 7-day usage as a conic-gradient pie wedge.
+function renderSevenDayPie() {
+    const sevenDay = accountUsage?.seven_day;
+    if (sevenDay && typeof sevenDay.utilization === "number") {
+        const pct = Math.round(sevenDay.utilization);
+        const deg = (pct / 100) * 360;
+        const color = fillColor(pct);
+        sevenDayPie.style.background = `conic-gradient(${color} ${deg}deg, var(--hairline-strong) ${deg}deg)`;
+        sevenDayWrap.title = `7-day usage: ${pct}%`;
+    } else {
+        sevenDayPie.style.background = "var(--hairline-strong)";
+        sevenDayWrap.title = "7-day usage";
     }
 }
 

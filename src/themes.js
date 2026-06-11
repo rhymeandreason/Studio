@@ -12,6 +12,11 @@ export const NOTE_THEMES = [
   { id: "sage", name: "Sage", bg: "#e6ebe3", titleColor: "#566150" },
   { id: "rose", name: "Rose", bg: "#f3e0db", titleColor: "#a85a4a" },
   { id: "ink", name: "Ink", bg: "#2a2a28", titleColor: "#f7f5f0", bodyColor: "#d8d4ca" },
+  { id: "lemon", name: "Lemon", bg: "#fdf0a8", titleColor: "#7a6a1e" },
+  { id: "mint", name: "Mint", bg: "#bdf0d6", titleColor: "#1f6e4a" },
+  { id: "sky", name: "Sky", bg: "#bfe3fb", titleColor: "#1f5f8b" },
+  { id: "coral", name: "Coral", bg: "#ffd0c2", titleColor: "#a8412a" },
+  { id: "violet", name: "Violet", bg: "#e3d3fb", titleColor: "#6a3fa0" },
 ];
 
 export const NOTE_FONTS = [
