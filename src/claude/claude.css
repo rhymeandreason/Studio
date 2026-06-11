@@ -530,7 +530,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 14px;
+    padding: 4px 16px;
     min-height: 48px;
     border-top: 1px solid var(--hairline);
     background: var(--surface);
@@ -540,20 +540,22 @@
 
 .claude-status__panda {
     flex: 0 0 auto;
-    width: 64px;
-    height: 64px;
+    width: 60px;
+    height: 48px;
+    transform: scale(.8);
     background-image: url("red-panda.png");
     background-repeat: no-repeat;
-    /* Movement row (3rd of 7), scaled 2x: frame 32px -> 64px, sheet 256px -> 512px. */
-    background-position: 0 -128px;
-    background-size: 512px 448px;
+    /* Movement row (3rd of 7), cropped to its 20x16 content box, scaled 3x:
+       sheet 256x224 -> 768x672, frame pitch 32px -> 96px. */
+    background-position: -15px -240px;
+    background-size: 768px 672px;
     image-rendering: pixelated;
     animation: claude-panda-walk 0.8s steps(8) infinite;
 }
 
 @keyframes claude-panda-walk {
     to {
-        background-position: -512px -128px;
+        background-position: -783px -240px;
     }
 }
 
@@ -565,7 +567,7 @@
 .claude-status__meta {
     margin-left: auto;
     font-variant-numeric: tabular-nums;
-    color: var(--text-soft);
+    color: var(--text-muted);
 }
 
 .claude-transcript {
