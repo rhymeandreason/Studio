@@ -407,7 +407,7 @@ function appendBubble(role, text) {
         icon.src = "claude-icon.svg";
         icon.alt = "";
         el.appendChild(icon);
-    } else if (role !== "system") {
+    } else if (role !== "system" && role !== "user") {
         const icon = document.createElement("span");
         icon.className = "mi claude-msg__icon";
         icon.textContent = ROLE_ICONS[role] || "circle";
