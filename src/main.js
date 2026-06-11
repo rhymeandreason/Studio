@@ -1034,6 +1034,10 @@ function applyNoteStyle(card, note) {
   setCardVar(card, "--note-bg", theme.bg);
   setCardVar(card, "--note-title-color", theme.titleColor);
   setCardVar(card, "--note-body-color", theme.bodyColor);
+  // Themed cards set their own title/body colors, so placeholders need a
+  // dimmed version of that color rather than the default --text-soft.
+  setCardVar(card, "--note-placeholder-opacity", theme.titleColor || theme.bodyColor ? "0.45" : "");
+  setCardVar(card, "--note-meta-opacity", theme.titleColor || theme.bodyColor ? "0.7" : "");
   setCardVar(card, "--note-title-font", note.titleFont);
   // Overrides the list-level --notes-font for this card only.
   setCardVar(card, "--notes-font", note.bodyFont);

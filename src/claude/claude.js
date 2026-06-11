@@ -640,6 +640,17 @@ function handleStreamLine(key, line) {
     if (!session) return;
     const live = getLiveBubbles(key);
 
+    // The CLI can emit a "result" mid-task (e.g. around a compaction/continuation
+    // boundary) and then keep working. Any further activity after that means
+    // the turn isn't actually over — flip busy back on so the status bar (and
+    // stop button) reflect reality.
+    if (
+        !busyKeys.has(key) &&
+        (msg.type === "system" || msg.type === "stream_event" || msg.type === "assistant")
+    ) {
+        setBusy(key, true);
+    }
+
     switch (msg.type) {
         case "system": {
             if (msg.subtype === "init" && msg.session_id) {
