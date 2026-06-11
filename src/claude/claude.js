@@ -257,6 +257,26 @@ function renderTranscript(session) {
 
 function appendBubble(role, text) {
     transcriptEl.querySelector(".claude-empty")?.remove();
+
+    // Tool calls render collapsed: a clickable header (the tool name) that
+    // expands to show the full input. Stored/streamed text is "name {input}".
+    if (role === "tool") {
+        const el = document.createElement("div");
+        el.className = "claude-msg claude-msg--tool is-collapsed";
+        const sp = text.indexOf(" ");
+        const name = sp === -1 ? text : text.slice(0, sp);
+        const detail = sp === -1 ? "" : text.slice(sp + 1);
+        el.innerHTML = `<button class="claude-tool"><span class="mi claude-tool__chevron">chevron_right</span><span class="mi claude-tool__icon">build</span><span class="claude-tool__name"></span></button><pre class="claude-tool__detail"></pre>`;
+        el.querySelector(".claude-tool__name").textContent = name;
+        el.querySelector(".claude-tool__detail").textContent = detail;
+        el.querySelector(".claude-tool").addEventListener("click", () => {
+            el.classList.toggle("is-collapsed");
+        });
+        transcriptEl.appendChild(el);
+        scrollToBottom(false);
+        return el;
+    }
+
     const el = document.createElement("div");
     el.className = `claude-msg claude-msg--${role}`;
     if (role === "assistant") {

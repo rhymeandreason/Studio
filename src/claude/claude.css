@@ -550,6 +550,34 @@
     /* We manage scroll position manually (stick-to-bottom); stop the browser
        from also nudging scrollTop as content streams in. */
     overflow-anchor: none;
+    scrollbar-width: thin;
+    scrollbar-color: var(--hairline-strong) transparent;
+}
+
+/* Minimal scrollbar for the chat */
+.claude-transcript::-webkit-scrollbar {
+    width: 8px;
+}
+
+.claude-transcript::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.claude-transcript::-webkit-scrollbar-thumb {
+    background: transparent;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 8px;
+}
+
+.claude-transcript:hover::-webkit-scrollbar-thumb {
+    background: var(--hairline-strong);
+    background-clip: padding-box;
+}
+
+.claude-transcript::-webkit-scrollbar-thumb:hover {
+    background: var(--text-soft);
+    background-clip: padding-box;
 }
 
 .claude-empty {
@@ -582,6 +610,70 @@
 .claude-msg--assistant,
 .claude-msg--tool {
     align-self: flex-start;
+    max-width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+}
+
+/* Collapsible tool call */
+.claude-tool {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    text-align: left;
+    border-radius: 6px;
+}
+
+.claude-tool:hover {
+    background: var(--surface);
+    color: var(--text);
+}
+
+.claude-tool__chevron {
+    font-size: 14px;
+    transition: transform 0.12s;
+}
+
+.claude-msg--tool:not(.is-collapsed) .claude-tool__chevron {
+    transform: rotate(90deg);
+}
+
+.claude-tool__icon {
+    font-size: 13px;
+    color: var(--text-soft);
+}
+
+.claude-tool__name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.claude-tool__detail {
+    margin: 2px 0 0 0;
+    padding: 8px 10px;
+    border: 1px dashed var(--hairline-strong);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-family: Menlo, monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.claude-msg--tool.is-collapsed .claude-tool__detail {
+    display: none;
 }
 
 .claude-msg--system {
