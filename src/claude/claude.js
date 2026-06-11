@@ -282,13 +282,13 @@ function renderSessionsList() {
     for (const s of visible) {
         const item = document.createElement("div");
         item.className = "claude-session-item" + (s.key === activeKey ? " is-active" : "");
-        item.innerHTML = `<span class="claude-session-item__name"></span><span class="claude-session-item__project"><span class="mi mi-sm">folder</span><span></span></span><span class="claude-session-item__model"></span><button class="claude-session-item__rename" title="Rename session"><span class="mi">edit</span></button><button class="claude-session-item__delete" title="Delete session"><span class="mi">delete</span></button>`;
+        item.innerHTML = `<span class="claude-session-item__name" title="Click to rename"></span><span class="claude-session-item__project"><span class="mi mi-sm">folder</span><span></span></span><span class="claude-session-item__model"></span><button class="claude-session-item__delete" title="Delete session"><span class="mi">delete</span></button>`;
         item.querySelector(".claude-session-item__name").textContent = s.name;
         item.querySelector(".claude-session-item__project span:last-child").textContent =
             s.projectName;
         item.querySelector(".claude-session-item__model").textContent = modelLabel(s.model);
         item.addEventListener("click", () => switchTo(s.key));
-        item.querySelector(".claude-session-item__rename").addEventListener("click", (e) => {
+        item.querySelector(".claude-session-item__name").addEventListener("click", (e) => {
             e.stopPropagation();
             beginRename(s.key, item);
         });

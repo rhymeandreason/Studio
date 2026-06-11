@@ -410,10 +410,10 @@
     transition: background 0.1s;
 }
 
-.claude-session-item__rename,
 .claude-session-item__delete {
     position: absolute;
     top: 6px;
+    right: 6px;
     width: 20px;
     height: 20px;
     padding: 0;
@@ -427,27 +427,12 @@
     justify-content: center;
 }
 
-.claude-session-item__rename {
-    right: 28px;
-}
-
-.claude-session-item__delete {
-    right: 6px;
-}
-
-.claude-session-item__rename .mi,
 .claude-session-item__delete .mi {
     font-size: 14px;
 }
 
-.claude-session-item:hover .claude-session-item__rename,
 .claude-session-item:hover .claude-session-item__delete {
     display: inline-flex;
-}
-
-.claude-session-item__rename:hover {
-    background: var(--surface);
-    color: var(--text);
 }
 
 .claude-session-item__delete:hover {
@@ -460,11 +445,11 @@
     font: inherit;
     font-weight: 600;
     color: var(--text);
-    background: var(--elevated, var(--surface));
-    border: 1px solid var(--accent);
-    border-radius: 4px;
-    padding: 1px 4px;
-    margin: -2px 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    outline: none;
 }
 
 .claude-session-item:hover {
@@ -482,6 +467,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     width: 100%;
+    cursor: text;
+}
+
+.claude-session-item__name:hover {
+    text-decoration: underline;
+    text-decoration-color: var(--text-soft);
 }
 
 .claude-session-item__project {
