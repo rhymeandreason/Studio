@@ -68,6 +68,11 @@ const ROLE_ICONS = {
     system: "info",
 };
 
+function modelLabel(model) {
+    const m = (model || "sonnet").trim();
+    return m.charAt(0).toUpperCase() + m.slice(1);
+}
+
 function renderSessionsList() {
     sessionsListEl.innerHTML = "";
     if (!sessions.length) {
@@ -80,10 +85,11 @@ function renderSessionsList() {
     for (const s of sessions) {
         const item = document.createElement("div");
         item.className = "claude-session-item" + (s.key === activeKey ? " is-active" : "");
-        item.innerHTML = `<span class="claude-session-item__name"></span><span class="claude-session-item__project"><span class="mi mi-sm">folder</span><span></span></span><button class="claude-session-item__rename" title="Rename session"><span class="mi">edit</span></button><button class="claude-session-item__delete" title="Delete session"><span class="mi">delete</span></button>`;
+        item.innerHTML = `<span class="claude-session-item__name"></span><span class="claude-session-item__project"><span class="mi mi-sm">folder</span><span></span></span><span class="claude-session-item__model"></span><button class="claude-session-item__rename" title="Rename session"><span class="mi">edit</span></button><button class="claude-session-item__delete" title="Delete session"><span class="mi">delete</span></button>`;
         item.querySelector(".claude-session-item__name").textContent = s.name;
         item.querySelector(".claude-session-item__project span:last-child").textContent =
             s.projectName;
+        item.querySelector(".claude-session-item__model").textContent = modelLabel(s.model);
         item.addEventListener("click", () => switchTo(s.key));
         item.querySelector(".claude-session-item__rename").addEventListener("click", (e) => {
             e.stopPropagation();
@@ -204,7 +210,7 @@ async function switchTo(key) {
     sessionNameEl.textContent = `${session.name} · ${session.projectName}`;
     modelSelect.value = session.model || "sonnet";
     renderTranscript(session);
-    resetUsageBars();
+    renderUsageBars(session);
     renderSessionsList();
     ensureListener(session.key);
     renderHistoryList(session.projectPath, session.projectName);
@@ -404,13 +410,13 @@ function handleStreamLine(key, line) {
                 if (firstUser) session.name = firstUser.text.slice(0, 40);
             }
 
-            if (isActive) updateUsage(msg.usage, msg.modelUsage);
+            updateUsage(session, msg.usage, msg.modelUsage);
             persistSessions();
             renderSessionsList();
             break;
         }
         case "rate_limit_event": {
-            if (isActive) updatePlanStatus(msg.rate_limit_info);
+            updatePlanStatus(session, msg.rate_limit_info);
             break;
         }
         case "__stderr__": {
@@ -426,7 +432,9 @@ function handleStreamLine(key, line) {
     }
 }
 
-function updateUsage(usage, modelUsage) {
+// Record the latest usage/plan numbers on the session so the bars can be
+// restored when the session is reopened, then refresh the bars if it's active.
+function updateUsage(session, usage, modelUsage) {
     if (!usage) return;
     const contextWindow =
         Object.values(modelUsage || {})[0]?.contextWindow || CONTEXT_WINDOW_DEFAULT;
@@ -434,17 +442,37 @@ function updateUsage(usage, modelUsage) {
         (usage.input_tokens || 0) +
         (usage.cache_read_input_tokens || 0) +
         (usage.cache_creation_input_tokens || 0);
-    const pct = Math.min(100, Math.round((used / contextWindow) * 100));
-    contextFill.style.width = `${pct}%`;
-    contextPct.textContent = `${pct}% · ${used.toLocaleString()} / ${contextWindow.toLocaleString()}`;
+    session.usage = { used, contextWindow };
+    if (session.key === activeKey) renderUsageBars(session);
 }
 
-function updatePlanStatus(info) {
+function updatePlanStatus(session, info) {
     if (!info) return;
-    planStatus.textContent = info.status === "allowed" ? "OK" : info.status;
-    planFill.style.width = info.status === "allowed" ? "10%" : "100%";
-    planFill.style.background =
-        info.status === "allowed" ? "var(--sage)" : "var(--rose)";
+    session.plan = { status: info.status };
+    if (session.key === activeKey) renderUsageBars(session);
+}
+
+// Paint both bars from whatever is stored on the session (empty if nothing yet).
+function renderUsageBars(session) {
+    const usage = session?.usage;
+    if (usage) {
+        const pct = Math.min(100, Math.round((usage.used / usage.contextWindow) * 100));
+        contextFill.style.width = `${pct}%`;
+        contextPct.textContent = `${pct}% · ${usage.used.toLocaleString()} / ${usage.contextWindow.toLocaleString()}`;
+    } else {
+        contextFill.style.width = "0%";
+        contextPct.textContent = "0%";
+    }
+
+    const plan = session?.plan;
+    if (plan) {
+        planStatus.textContent = plan.status === "allowed" ? "OK" : plan.status;
+        planFill.style.width = plan.status === "allowed" ? "10%" : "100%";
+        planFill.style.background = plan.status === "allowed" ? "var(--sage)" : "var(--rose)";
+    } else {
+        planFill.style.width = "0%";
+        planStatus.textContent = "—";
+    }
 }
 
 async function sendMessage(text) {
@@ -549,6 +577,13 @@ listen("claude-jump", async (event) => {
         return;
     }
     if (projectPath) {
+        // Reopen the most recent session for this project if one exists
+        // (sessions are kept newest-first), rather than starting fresh.
+        const existing = sessions.find((s) => s.projectPath === projectPath);
+        if (existing) {
+            await switchTo(existing.key);
+            return;
+        }
         let projectName = projectPath.split("/").filter(Boolean).pop();
         try {
             const list = await invoke("list_projects");
