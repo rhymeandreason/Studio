@@ -411,18 +411,23 @@ fn build_tray_menu(
         }
     }
 
-    let tools = scan_tools(app);
-    if !tools.is_empty() {
-        items.push(Box::new(PredefinedMenuItem::separator(app)?));
-        for t in &tools {
-            items.push(Box::new(MenuItem::with_id(
-                app,
-                format!("{TOOL_PREFIX}{}", t.path),
-                format!("🔧 {}", t.name),
-                true,
-                None::<&str>,
-            )?));
-        }
+    // Tools section: the built-in Scheduled Tasks window, then any user tools.
+    items.push(Box::new(PredefinedMenuItem::separator(app)?));
+    items.push(Box::new(MenuItem::with_id(
+        app,
+        "open_schedules",
+        "🗓 Scheduled Tasks",
+        true,
+        None::<&str>,
+    )?));
+    for t in &scan_tools(app) {
+        items.push(Box::new(MenuItem::with_id(
+            app,
+            format!("{TOOL_PREFIX}{}", t.path),
+            format!("🔧 {}", t.name),
+            true,
+            None::<&str>,
+        )?));
     }
 
     items.push(Box::new(PredefinedMenuItem::separator(app)?));
@@ -2861,6 +2866,9 @@ pub fn run() {
                         "new_project" => {
                             show_studio(app);
                             let _ = app.emit("new-project-request", ());
+                        }
+                        "open_schedules" => {
+                            let _ = open_schedules_window(app.clone());
                         }
                         "quit" => app.exit(0),
                         _ if id.starts_with(PROJECT_PREFIX) => {

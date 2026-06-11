@@ -90,8 +90,10 @@ The pin button (`#tab-pin`) toggles `wsPinnedTab` via `togglePinnedTab()` /
 Scheduled tasks have their own standalone window (`src/schedules/`:
 `index.html` + `schedules.css` + `schedules.js`), opened via the "Schedules"
 button in the project header or the all-projects overview
-(`#schedules-btn`/`#overview-schedules-btn` in the main `index.html`,
-`open_schedules_window` in `lib.rs`). It's a separate Tauri window — like the
+(`#schedules-btn`/`#overview-schedules-btn` in the main `index.html`), or the
+"🗓 Scheduled Tasks" entry in the tray menu's Tools section (`open_schedules`
+in `build_tray_menu`) — all calling `open_schedules_window` in `lib.rs`. It's
+a separate Tauri window — like the
 Claude companion window — so it stays open and reachable while you work in
 any project/tab. On open it calls `read_schedules` (the global store) +
 `list_projects` (to populate each task's project dropdown) and renders the
