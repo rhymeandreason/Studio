@@ -14,6 +14,7 @@ const sessionsToggle = document.getElementById("sessions-toggle");
 const sessionNameEl = document.getElementById("session-name");
 const tabsEl = document.getElementById("tabs");
 const transcriptEl = document.getElementById("transcript");
+const statusEl = document.getElementById("status");
 const form = document.getElementById("input-form");
 const promptInput = document.getElementById("prompt-input");
 const modelSelect = document.getElementById("model-select");
@@ -59,13 +60,46 @@ transcriptEl.addEventListener("scroll", () => {
 function setBusy(key, busy) {
     if (busy) busyKeys.add(key);
     else busyKeys.delete(key);
-    if (key === activeKey) reflectBusy(key);
+    if (key === activeKey) {
+        reflectBusy(key);
+        updateStatusTimer();
+    }
 }
 
 function reflectBusy(key) {
     const busy = busyKeys.has(key);
     stopBtn.hidden = !busy;
     sendBtn.hidden = busy;
+}
+
+// Live progress status (spinner + activity + token counts) for the running turn.
+let statusTimer = null;
+function updateStatusTimer() {
+    const running = activeKey && busyKeys.has(activeKey);
+    if (running && !statusTimer) statusTimer = setInterval(renderStatus, 500);
+    if (!running && statusTimer) {
+        clearInterval(statusTimer);
+        statusTimer = null;
+    }
+    renderStatus();
+}
+
+function fmtTokens(n) {
+    return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+}
+
+function renderStatus() {
+    const live = liveBubbles.get(activeKey);
+    if (!activeKey || !busyKeys.has(activeKey) || !live) {
+        statusEl.hidden = true;
+        return;
+    }
+    statusEl.hidden = false;
+    statusEl.querySelector(".claude-status__label").textContent = live.activity || "Working";
+    const secs = live.turnStart ? Math.floor((Date.now() - live.turnStart) / 1000) : 0;
+    const ctx = live.promptTokens ? ` · ↑ ${fmtTokens(live.promptTokens)} ctx` : "";
+    const out = ` · ↓ ${fmtTokens(live.outputTokens || 0)} tok`;
+    statusEl.querySelector(".claude-status__meta").textContent = `${secs}s${ctx}${out}`;
 }
 
 /**
@@ -324,6 +358,7 @@ async function switchTo(key) {
     renderSessionsList();
     ensureListener(session.key);
     reflectBusy(key);
+    updateStatusTimer();
     renderHistoryList(session.projectPath, session.projectName);
 }
 
@@ -523,9 +558,19 @@ function handleStreamLine(key, line) {
         case "stream_event": {
             const ev = msg.event;
             // message_start carries this turn's prompt usage (current context
-            // occupancy) — capture it for the context bar.
+            // occupancy) — capture it for the context bar and live status.
             if (ev?.type === "message_start" && ev.message?.usage) {
                 live.lastUsage = ev.message.usage;
+                const u = ev.message.usage;
+                live.promptTokens =
+                    (u.input_tokens || 0) +
+                    (u.cache_read_input_tokens || 0) +
+                    (u.cache_creation_input_tokens || 0);
+            }
+            // message_delta carries the growing output token count.
+            if (ev?.type === "message_delta" && ev.usage) {
+                live.outputTokens = ev.usage.output_tokens || live.outputTokens || 0;
+                if (isActive) renderStatus();
             }
             if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta") {
                 if (!live.assistantEl && isActive) {
@@ -536,6 +581,7 @@ function handleStreamLine(key, line) {
                     if (isActive) scrollToBottom();
                 }
                 live.assistantText = (live.assistantText || "") + ev.delta.text;
+                live.activity = "Writing";
             }
             break;
         }
@@ -550,6 +596,8 @@ function handleStreamLine(key, line) {
                     const summary = `${block.name} ${JSON.stringify(block.input || {})}`;
                     if (isActive) appendBubble("tool", summary);
                     session.transcript.push({ role: "tool", text: summary });
+                    live.activity = `Running ${block.name}`;
+                    if (isActive) renderStatus();
                 }
             }
             break;
@@ -723,6 +771,12 @@ async function sendMessage(text) {
     }
 
     ensureListener(session.key);
+    // Reset live progress state for this turn.
+    const live = getLiveBubbles(session.key);
+    live.turnStart = Date.now();
+    live.outputTokens = 0;
+    live.promptTokens = 0;
+    live.activity = "Working";
     setBusy(session.key, true);
     console.log("[claude] sending", {
         key: session.key,

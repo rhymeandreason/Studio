@@ -545,6 +545,45 @@
     min-height: 0;
 }
 
+/* Progress status pinned below the transcript while a turn runs. */
+.claude-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-top: 1px solid var(--hairline);
+    background: var(--surface);
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.claude-status__spinner {
+    flex: 0 0 auto;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 2px solid var(--hairline-strong);
+    border-top-color: var(--accent);
+    animation: claude-spin 0.7s linear infinite;
+}
+
+@keyframes claude-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.claude-status__label {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.claude-status__meta {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-soft);
+}
+
 .claude-transcript {
     flex: 1;
     overflow-y: auto;

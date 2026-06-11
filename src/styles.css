@@ -1176,7 +1176,7 @@ textarea.notecard__title {
     background: var(--bg);
     border: 1px solid var(--hairline);
     border-radius: 6px;
-    padding: 2px 6px;
+    padding: 6px 10px;
     max-width: 100px;
     cursor: pointer;
     outline: none;
