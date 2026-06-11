@@ -370,24 +370,12 @@ let memTimer = null;
 
 async function refreshMemory() {
   const sysEl = document.getElementById("mem-system");
-  const appEl = document.getElementById("mem-app");
-  const swapEl = document.getElementById("mem-swap");
-  const devEl = document.getElementById("mem-devserver");
-  if (!sysEl || !appEl || !swapEl || !devEl) return;
+  if (!sysEl) return;
   try {
     const stats = await invoke("get_memory_stats");
     sysEl.textContent = `Memory: ${stats.system_used_gb.toFixed(1)} / ${stats.system_total_gb.toFixed(0)} GB`;
-    swapEl.textContent = `Swap used: ${stats.swap_used_mb.toFixed(0)} MB`;
-
-    appEl.textContent = `Studio app: ${stats.app_mb.toFixed(0)} MB`;
-    devEl.textContent = stats.dev_server_mb
-      ? `Dev server: ${stats.dev_server_mb.toFixed(0)} MB`
-      : "";
   } catch (_) {
     sysEl.textContent = "";
-    appEl.textContent = "";
-    swapEl.textContent = "";
-    devEl.textContent = "";
   }
 }
 
