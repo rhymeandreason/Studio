@@ -537,6 +537,7 @@ function initSchedulesButton() {
   const open = () => invoke("open_schedules_window");
   document.getElementById("schedules-btn").addEventListener("click", open);
   document.getElementById("overview-schedules-btn").addEventListener("click", open);
+  document.getElementById("empty-schedules-btn").addEventListener("click", open);
 }
 
 function initAllProjectsButton() {
