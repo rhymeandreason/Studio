@@ -16,86 +16,85 @@
     </head>
     <body class="claude-body">
         <div class="claude-app">
-            <div class="claude-topbar">
-                <button class="claude-toggle-btn" id="sessions-toggle" title="Sessions">
-                    <span class="mi mi-sm">side_navigation</span>
-                </button>
+            <aside class="claude-sessions" id="sessions-panel" hidden>
+                <div class="claude-sessions__head">
+                    <span>Sessions</span>
+                    <button class="iconbtn-round" id="new-session-side" title="New session">
+                        <span class="mi mi-sm">add_circle</span>
+                    </button>
+                </div>
+                <div class="claude-sessions__list" id="sessions-list"></div>
+                <div class="claude-sessions__head">
+                    <span>Recent — <span id="history-project"></span></span>
+                    <label class="claude-toggle" title="Include sessions started outside Studio">
+                        <input type="checkbox" id="history-toggle" />
+                        <span class="claude-toggle__track"><span class="claude-toggle__thumb"></span></span>
+                    </label>
+                </div>
+                <div class="claude-sessions__list" id="history-list"></div>
+            </aside>
 
-                <button class="claude-toggle-btn claude-newtab" id="new-session" title="New session">
-                    <span class="mi mi-sm">add</span>
-                </button>
-                <div class="claude-tabs" id="tabs"></div>
-            </div>
+            <div class="claude-right">
+                <div class="claude-topbar">
+                    <button class="claude-toggle-btn" id="sessions-toggle" title="Sessions">
+                        <span class="mi mi-sm">side_navigation</span>
+                    </button>
 
-            <header class="claude-bar">
-                <span class="claude-session-name" id="session-name" title="Click to rename">New session</span>
-                <div class="claude-model-wrap">
-                    <img class="claude-model__icon" src="claude-icon.svg" alt="" />
-                    <select class="field__input claude-model" id="model-select">
-                        <option value="sonnet">Sonnet</option>
-                        <option value="opus">Opus</option>
-                        <option value="fable">Fable</option>
-                        <option value="haiku">Haiku</option>
+                    <button class="claude-toggle-btn claude-newtab" id="new-session" title="New session">
+                        <span class="mi mi-sm">add</span>
+                    </button>
+                    <div class="claude-tabs" id="tabs"></div>
+                </div>
+
+                <header class="claude-bar">
+                    <span class="claude-session-name" id="session-name" title="Click to rename">New session</span>
+                    <div class="claude-model-wrap">
+                        <img class="claude-model__icon" src="claude-icon.svg" alt="" />
+                        <select class="field__input claude-model" id="model-select">
+                            <option value="sonnet">Sonnet</option>
+                            <option value="opus">Opus</option>
+                            <option value="fable">Fable</option>
+                            <option value="haiku">Haiku</option>
+                        </select>
+                    </div>
+                    <select
+                        class="field__input claude-model claude-permission"
+                        id="permission-select"
+                        title="Permission mode"
+                    >
+                        <option value="default">Ask</option>
+                        <option value="acceptEdits">Accept edits</option>
+                        <option value="plan">Plan</option>
+                        <option value="bypassPermissions">Bypass</option>
                     </select>
-                </div>
-                <select
-                    class="field__input claude-model claude-permission"
-                    id="permission-select"
-                    title="Permission mode"
-                >
-                    <option value="default">Ask</option>
-                    <option value="acceptEdits">Accept edits</option>
-                    <option value="plan">Plan</option>
-                    <option value="bypassPermissions">Bypass</option>
-                </select>
+                </header>
 
-            </header>
-
-            <div class="claude-usage" id="usage-bars">
-                <div class="claude-meter">
-                    <div class="claude-meter__label">
-                        <span class="mi mi-sm">data_usage</span>
-                        <span class="claude-meter__label-text">Context</span>
-                        <span id="context-pct">0%</span>
+                <div class="claude-usage" id="usage-bars">
+                    <div class="claude-meter">
+                        <div class="claude-meter__label">
+                            <span class="mi mi-sm">data_usage</span>
+                            <span class="claude-meter__label-text">Context</span>
+                            <span id="context-pct">0%</span>
+                        </div>
+                        <div class="claude-meter__track">
+                            <div class="claude-meter__fill" id="context-fill"></div>
+                        </div>
                     </div>
-                    <div class="claude-meter__track">
-                        <div class="claude-meter__fill" id="context-fill"></div>
+                    <div class="claude-meter">
+                        <div class="claude-meter__label">
+                            <span class="mi mi-sm">schedule</span>
+                            <span class="claude-meter__label-text">5-hour usage</span>
+                            <span id="plan-status">—</span>
+                        </div>
+                        <div class="claude-meter__track">
+                            <div class="claude-meter__fill claude-meter__fill--plan" id="plan-fill"></div>
+                        </div>
+                    </div>
+                    <div class="claude-sevenday" id="sevenday" title="7-day usage">
+                        <div class="claude-pie" id="sevenday-pie"></div>
+                        <span class="claude-sevenday__label">7d</span>
                     </div>
                 </div>
-                <div class="claude-meter">
-                    <div class="claude-meter__label">
-                        <span class="mi mi-sm">schedule</span>
-                        <span class="claude-meter__label-text">5-hour usage</span>
-                        <span id="plan-status">—</span>
-                    </div>
-                    <div class="claude-meter__track">
-                        <div class="claude-meter__fill claude-meter__fill--plan" id="plan-fill"></div>
-                    </div>
-                </div>
-                <div class="claude-sevenday" id="sevenday" title="7-day usage">
-                    <div class="claude-pie" id="sevenday-pie"></div>
-                    <span class="claude-sevenday__label">7d</span>
-                </div>
-            </div>
-
-            <div class="claude-main">
-                <aside class="claude-sessions" id="sessions-panel" hidden>
-                    <div class="claude-sessions__head">
-                        <span>Sessions</span>
-                        <button class="iconbtn-round" id="new-session-side" title="New session">
-                            <span class="mi mi-sm">add_circle</span>
-                        </button>
-                    </div>
-                    <div class="claude-sessions__list" id="sessions-list"></div>
-                    <div class="claude-sessions__head">
-                        <span>Recent — <span id="history-project"></span></span>
-                        <label class="claude-toggle" title="Include sessions started outside Studio">
-                            <input type="checkbox" id="history-toggle" />
-                            <span class="claude-toggle__track"><span class="claude-toggle__thumb"></span></span>
-                        </label>
-                    </div>
-                    <div class="claude-sessions__list" id="history-list"></div>
-                </aside>
 
                 <div class="claude-chat">
                     <div class="claude-transcript" id="transcript"></div>

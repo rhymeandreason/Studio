@@ -10,10 +10,19 @@
 
 .claude-app {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     height: 100vh;
     width: 100%;
     box-sizing: border-box;
+}
+
+/* Everything besides the full-height sidebar lives in this column. */
+.claude-right {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 .claude-app *,
@@ -323,16 +332,11 @@
 }
 
 /* --- Main split --- */
-.claude-main {
-    flex: 1;
-    display: flex;
-    min-height: 0;
-}
-
-/* --- Sessions sidebar --- */
+/* --- Sessions sidebar (full height, left of everything else) --- */
 .claude-sessions {
     width: 200px;
     flex: 0 0 auto;
+    height: 100%;
     border-right: 1px solid var(--hairline);
     overflow-y: auto;
     display: flex;
@@ -538,6 +542,7 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    min-height: 0;
 }
 
 .claude-transcript {
