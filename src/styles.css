@@ -532,12 +532,18 @@ body {
     right: 10px;
     background-color: transparent;
     pointer-events: none;
+    transition: opacity 0.12s;
+}
+
+.card:hover .card__sprite {
+    opacity: 0;
 }
 
 .card__trash {
     position: absolute;
     bottom: 10px;
     right: 10px;
+    z-index: 1;
     width: 28px;
     height: 28px;
     display: inline-flex;
