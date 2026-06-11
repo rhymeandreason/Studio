@@ -270,6 +270,12 @@ body {
 }
 
 /* Pill buttons */
+.btn-add.btn-save {
+    background: #000;
+    color: #fff;
+    border-color: #000;
+}
+
 .btn-launch,
 .btn-save {
     flex: 0 0 auto;
@@ -767,7 +773,40 @@ select.field__input {
 .ws-schedules__list {
     display: flex;
     flex-direction: column;
+    gap: 16px;
+}
+
+.ws-schedule-slot {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
+}
+
+.ws-schedule-slot__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ws-schedule-slot__time {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 6px;
+}
+
+.ws-schedule-slot__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ws-schedule-slot__list:empty {
+    display: none;
 }
 
 .ws-schedule {
@@ -812,16 +851,6 @@ select.field__input {
 
 .ws-schedule__prompt::placeholder {
     color: var(--text-soft);
-}
-
-.ws-schedule__time {
-    background: var(--surface);
-    border: 1px solid var(--hairline-strong);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 12px;
-    padding: 4px 6px;
 }
 
 .ws-schedule__model {

@@ -89,21 +89,44 @@ The pin button (`#tab-pin`) toggles `wsPinnedTab` via `togglePinnedTab()` /
 
 Below the cards grid, the Workspace tab has a "Scheduled tasks" section
 (`#ws-schedules` in `index.html`, built by `workspace.js`'s
-`renderSchedules`/`buildScheduleRow`/`initSchedules`). Each task is stored in
-`workspace.json`'s `schedules` array (`ScheduledTask` in `lib.rs`):
+`renderSchedules`/`buildSlotGroup`/`buildScheduleRow`/`initSchedules`).
 
-- `prompt` — text passed to `claude -p`.
-- `time` — 24-hour `"HH:MM"`, local time.
-- `days` — `0`(Sun)–`6`(Sat); empty = every day.
-- `enabled` — toggled via the `history_toggle_off` icon button.
-- `model` — passed as `claude --model`; defaults to `"haiku"`.
-- `outputFile` — markdown file (relative to the project folder) the result
-  is written to, overwritten each run; blank = `"Scheduled Output.md"`,
-  `.md` appended if missing.
-- `lastRun` — `"YYYY-MM-DD"`, used by the scheduler to avoid firing twice in
-  one day.
-- `lastRunAt` / `lastRunOk` — timestamp and success flag of the last run
-  (scheduled or manual), shown as `✓ Last ran …` / `✗ Last ran …`.
+Tasks are grouped into **3 time slots**. Each slot has one shared `"HH:MM"`
+time (editable via a `<input type="time">` in the slot's header) and a "+
+Task" button that adds a task to that slot. `workspace.json` stores:
+
+- `scheduleSlots` — array of 3 `"HH:MM"` strings (`schedule_slots` in
+  `lib.rs`, `Workspace::schedule_slots`), default `["09:00", "13:00",
+  "17:00"]`. Editing a slot's time updates it and every task whose `time`
+  still matches the slot's old time.
+- `schedules` — array of tasks (`ScheduledTask` in `lib.rs`):
+  - `prompt` — text passed to `claude -p`.
+  - `slot` — `0`–`2`, index into `scheduleSlots`; determines which group the
+    task is rendered under.
+  - `time` — 24-hour `"HH:MM"`, local time; kept in sync with
+    `scheduleSlots[slot]` and is what the scheduler/wake logic actually use.
+  - `days` — `0`(Sun)–`6`(Sat); empty = every day.
+  - `enabled` — toggled via the pill switch.
+  - `model` — passed as `claude --model`; defaults to `"haiku"`.
+  - `outputFile` — markdown file (relative to the project folder) the result
+    is written to, overwritten each run; blank = `"Scheduled Output.md"`,
+    `.md` appended if missing.
+  - `lastRun` — `"YYYY-MM-DD"`, used by the scheduler to avoid firing twice in
+    one day.
+  - `lastRunAt` / `lastRunOk` — timestamp and success flag of the last run
+    (scheduled or manual), shown as `✓ Last ran …` / `✗ Last ran …`.
+
+### Saving the wake schedule
+
+Editing a task (time slot, days, enabled, add/remove, etc.) just updates
+`workspace.json` via the usual debounced save — it does **not** touch the
+system wake schedule or prompt for the admin password. The section header
+has a "Saved" / "Save schedule" button (`#ws-schedule-save`,
+`setScheduleDirty()`): it goes from a disabled "Saved" state to a black
+"Save schedule" button as soon as anything in the section changes. Clicking
+it calls `update_wake_schedule` once (see below) and returns the button to
+"Saved" — so the single admin prompt happens after you're done editing, not
+per-keystroke.
 
 ### Execution
 
@@ -115,9 +138,8 @@ missed runs are skipped, not backfilled.
 
 ### Waking the Mac (e.g. for an early-morning task)
 
-If the Mac is fully asleep, `caffeinate` can't help. Whenever a task's
-`time`/`days`/`enabled` changes (or it's removed), the frontend calls
-`update_wake_schedule`, which:
+If the Mac is fully asleep, `caffeinate` can't help. Clicking "Save schedule"
+(see above) calls `update_wake_schedule`, which:
 
 1. Scans every project's enabled schedules and finds each one's next
    occurrence (today..+7 days, respecting `days`).

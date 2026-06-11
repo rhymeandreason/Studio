@@ -63,6 +63,10 @@ struct Workspace {
     /// Recurring `claude -p` prompts run by the background scheduler.
     #[serde(default)]
     schedules: Vec<ScheduledTask>,
+    /// The 3 shared "HH:MM" times tasks can be grouped under, shown in the
+    /// Workspace UI as 3 slots.
+    #[serde(default = "default_schedule_slots", rename = "scheduleSlots")]
+    schedule_slots: Vec<String>,
 }
 
 fn default_schedule_model() -> String {
@@ -106,6 +110,14 @@ struct ScheduledTask {
     /// Whether the last run's `claude` process exited successfully.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "lastRunOk")]
     last_run_ok: Option<bool>,
+    /// Index (0-2) into `Workspace::schedule_slots`, grouping this task
+    /// under one of the 3 shared time slots shown in the UI.
+    #[serde(default)]
+    slot: u8,
+}
+
+fn default_schedule_slots() -> Vec<String> {
+    vec!["09:00".to_string(), "13:00".to_string(), "17:00".to_string()]
 }
 
 /// App-wide state: which project is currently active (if any).

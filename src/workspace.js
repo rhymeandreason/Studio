@@ -315,6 +315,9 @@ export async function loadWorkspace(path) {
   updatePinButton();
   renderSpriteBadge();
   wsSchedules = ws.schedules || [];
+  wsScheduleSlots = ws.scheduleSlots && ws.scheduleSlots.length === 3
+    ? ws.scheduleSlots
+    : ["09:00", "13:00", "17:00"];
   renderSchedules();
 }
 
@@ -349,6 +352,7 @@ let wsSaveTimer = null;
 let wsEditor = "";
 let wsPinnedTab = null;
 let wsSchedules = [];
+let wsScheduleSlots = ["09:00", "13:00", "17:00"];
 
 function readWorkspaceForm() {
   return {
@@ -363,6 +367,7 @@ function readWorkspaceForm() {
     pinnedTab: wsPinnedTab,
     sprite: wsSprite,
     schedules: wsSchedules,
+    scheduleSlots: wsScheduleSlots,
   };
 }
 
@@ -419,14 +424,58 @@ function schedulesContainer() {
 function renderSchedules() {
   const container = schedulesContainer();
   container.innerHTML = "";
-  wsSchedules.forEach((task) => container.append(buildScheduleRow(task)));
+  wsScheduleSlots.forEach((_, slot) => container.append(buildSlotGroup(slot)));
 }
 
-// Recompute the system wake schedule from all enabled tasks. Only called on
-// time/day/enabled/remove changes (not every keystroke) since it triggers an
-// admin-password prompt (`pmset schedule wake` via osascript).
+function buildSlotGroup(slot) {
+  const group = el("div", "ws-schedule-slot");
+
+  const head = el("div", "ws-schedule-slot__head");
+  const time = el("input", "ws-schedule-slot__time", {
+    type: "time",
+    value: wsScheduleSlots[slot] || "09:00",
+  });
+  time.addEventListener("change", () => {
+    const oldTime = wsScheduleSlots[slot];
+    wsScheduleSlots[slot] = time.value;
+    wsSchedules.forEach((task) => {
+      if ((task.slot || 0) === slot && (task.time || oldTime) === oldTime) {
+        task.time = time.value;
+      }
+    });
+    scheduleWorkspaceSave();
+    setScheduleDirty(true);
+  });
+
+  const add = el("button", "btn-add", { type: "button" });
+  add.innerHTML = `${mi("add")}Task`;
+  add.addEventListener("click", () => addSchedule(slot));
+
+  head.append(time, add);
+  group.append(head);
+
+  const list = el("div", "ws-schedule-slot__list");
+  wsSchedules
+    .filter((task) => (task.slot || 0) === slot)
+    .forEach((task) => list.append(buildScheduleRow(task)));
+  group.append(list);
+
+  return group;
+}
+
+// Recompute the system wake schedule from all enabled tasks. Triggers an
+// admin-password prompt (`pmset schedule wake` via osascript), so it's only
+// run when the user clicks "Save schedule" after editing.
 function updateWakeSchedule() {
   invoke("update_wake_schedule").catch((err) => console.error("update_wake_schedule:", err));
+  setScheduleDirty(false);
+}
+
+function setScheduleDirty(dirty) {
+  const btn = document.getElementById("ws-schedule-save");
+  btn.disabled = !dirty;
+  btn.classList.toggle("btn-save", dirty);
+  btn.innerHTML = dirty ? `${mi("check")}Save schedule` : `${mi("check")}Saved`;
 }
 
 function setLastRunText(span, task) {
@@ -456,21 +505,12 @@ function buildScheduleRow(task) {
   prompt.addEventListener("input", () => {
     task.prompt = prompt.value;
     resizePrompt();
+    setScheduleDirty(true);
     scheduleWorkspaceSave();
   });
   requestAnimationFrame(resizePrompt);
 
   const controls = el("div", "ws-schedule__row");
-
-  const time = el("input", "ws-schedule__time", {
-    type: "time",
-    value: task.time || "09:00",
-  });
-  time.addEventListener("change", () => {
-    task.time = time.value;
-    scheduleWorkspaceSave();
-    updateWakeSchedule();
-  });
 
   const days = el("div", "ws-schedule__days");
   DAY_LABELS.forEach((label, idx) => {
@@ -482,9 +522,9 @@ function buildScheduleRow(task) {
       const at = task.days.indexOf(idx);
       if (at === -1) task.days.push(idx);
       else task.days.splice(at, 1);
+      setScheduleDirty(true);
       day.classList.toggle("is-active", task.days.includes(idx));
       scheduleWorkspaceSave();
-      updateWakeSchedule();
     });
     days.append(day);
   });
@@ -496,6 +536,7 @@ function buildScheduleRow(task) {
   model.value = task.model || "haiku";
   model.addEventListener("change", () => {
     task.model = model.value;
+    setScheduleDirty(true);
     scheduleWorkspaceSave();
   });
 
@@ -507,13 +548,14 @@ function buildScheduleRow(task) {
   });
   output.addEventListener("change", () => {
     task.outputFile = output.value.trim();
+    setScheduleDirty(true);
     scheduleWorkspaceSave();
   });
 
   const last = el("span", "ws-schedule__last", {});
   setLastRunText(last, task);
 
-  controls.append(time, days, model, output, last);
+  controls.append(days, model, output, last);
   main.append(prompt, controls);
 
   const toggleInput = el("input", null, {
@@ -522,8 +564,8 @@ function buildScheduleRow(task) {
   });
   toggleInput.addEventListener("change", () => {
     task.enabled = toggleInput.checked;
+    setScheduleDirty(true);
     scheduleWorkspaceSave();
-    updateWakeSchedule();
   });
   const toggleTrack = el("span", "claude-toggle__track");
   toggleTrack.append(el("span", "claude-toggle__thumb"));
@@ -554,19 +596,20 @@ function buildScheduleRow(task) {
   remove.addEventListener("click", () => {
     wsSchedules = wsSchedules.filter((t) => t !== task);
     renderSchedules();
+    setScheduleDirty(true);
     scheduleWorkspaceSave();
-    updateWakeSchedule();
   });
 
   row.append(toggle, main, run, remove);
   return row;
 }
 
-function addSchedule() {
+function addSchedule(slot) {
   wsSchedules.push({
     id: genId(),
     prompt: "",
-    time: "09:00",
+    time: wsScheduleSlots[slot] || "09:00",
+    slot,
     days: [],
     enabled: true,
     model: "haiku",
@@ -574,11 +617,12 @@ function addSchedule() {
     lastRun: null,
   });
   renderSchedules();
+  setScheduleDirty(true);
   scheduleWorkspaceSave();
 }
 
 export function initSchedules() {
-  document.getElementById("ws-schedule-add").addEventListener("click", addSchedule);
+  document.getElementById("ws-schedule-save").addEventListener("click", updateWakeSchedule);
 
   const { listen } = window.__TAURI__.event;
   listen("schedule-ran", ({ payload }) => {
