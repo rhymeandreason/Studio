@@ -318,7 +318,6 @@ export async function loadWorkspace(path) {
   wsScheduleSlots = ws.scheduleSlots && ws.scheduleSlots.length === 3
     ? ws.scheduleSlots
     : ["09:00", "13:00", "17:00"];
-  renderSchedules();
 }
 
 function renderSpriteBadge() {
@@ -505,14 +504,4 @@ export function initWorkspaceForm() {
       ta.style.height = ta.scrollHeight + "px";
     });
   }).observe(cards);
-
-  // Same for schedule prompts: their height can't be measured while the
-  // Workspace tab is hidden (scrollHeight is 0), so recompute once visible.
-  const schedules = document.getElementById("ws-schedules");
-  new ResizeObserver(() => {
-    schedules.querySelectorAll(".ws-schedule__prompt").forEach((ta) => {
-      ta.style.height = "auto";
-      ta.style.height = ta.scrollHeight + "px";
-    });
-  }).observe(schedules);
 }
