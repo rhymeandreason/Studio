@@ -714,9 +714,8 @@
 
 .claude-msg__icon {
     flex: 0 0 auto;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
+    width: 48px;
+    height: 48px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -729,13 +728,36 @@
     padding: 5px;
 }
 
+.claude-msg--assistant .claude-msg__icon--panda {
+    width: 44px;
+    height: 28px;
+    background-color: transparent;
+    background-image: url("red-panda.png");
+    background-repeat: no-repeat;
+    /* Idle2 row (2nd of 7), cropped to its 19x12 content box, scaled ~2.3x:
+       sheet 256x224 -> 590x516, frame pitch 32px -> 74px. Frames 0-5 used. */
+    background-position: -12px -120px;
+    background-size: 590px 516px;
+    image-rendering: pixelated;
+}
+
+/* Only the most recent assistant message animates. */
+.claude-msg--assistant:last-of-type .claude-msg__icon--panda {
+    animation: claude-panda-idle 1s steps(6) infinite;
+}
+
+@keyframes claude-panda-idle {
+    to {
+        background-position: -456px -120px;
+    }
+}
+
 .claude-msg--user .claude-msg__icon {
     background: var(--accent-soft);
     color: var(--accent);
 }
 
 .claude-msg--assistant .claude-msg__icon {
-    background: var(--sage-soft);
     color: var(--sage);
 }
 

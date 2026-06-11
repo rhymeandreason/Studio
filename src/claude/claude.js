@@ -406,10 +406,8 @@ function appendBubble(role, text) {
     const el = document.createElement("div");
     el.className = `claude-msg claude-msg--${role}`;
     if (role === "assistant") {
-        const icon = document.createElement("img");
-        icon.className = "claude-msg__icon claude-msg__icon--svg";
-        icon.src = "claude-icon.svg";
-        icon.alt = "";
+        const icon = document.createElement("span");
+        icon.className = "claude-msg__icon claude-msg__icon--panda";
         el.appendChild(icon);
     } else if (role !== "system" && role !== "user") {
         const icon = document.createElement("span");
