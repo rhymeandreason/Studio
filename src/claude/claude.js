@@ -1045,6 +1045,9 @@ async function startNewSession() {
 newSessionBtn.addEventListener("click", startNewSession);
 
 listen("claude-jump", async (event) => {
+    // The window hides rather than closes, so opening it doesn't re-run init();
+    // refresh usage on each open (throttled, so rapid reopens don't 429).
+    refreshUsage();
     const { key, projectPath } = event.payload || {};
     if (key && sessions.some((s) => s.key === key)) {
         await switchTo(key);
