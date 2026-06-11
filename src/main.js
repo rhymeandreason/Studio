@@ -89,7 +89,6 @@ export function render(project) {
 
   if (project) {
     document.getElementById("project-name").textContent = project.name;
-    document.getElementById("project-path").textContent = project.path;
     header.hidden = false;
     empty.hidden = true;
     content.hidden = false;
@@ -401,11 +400,8 @@ async function showOverview() {
       const name = document.createElement("span");
       name.className = "card__name";
       name.textContent = p.name;
-      const path = document.createElement("span");
-      path.className = "card__path";
-      path.textContent = p.path;
 
-      card.append(name, path);
+      card.append(name);
       card.addEventListener("pointerdown", (e) =>
         onProjectCardPointerDown(e, p, card),
       );

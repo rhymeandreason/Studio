@@ -11,6 +11,9 @@ Per-note styling (theme/fonts/span) is applied as scoped CSS variables on the
 card; the project-wide font preference is `notesData.font`/`fontSize` via
 `--notes-font`/`--notes-font-size` on `#notes-list`.
 
+`notesData.viewMode` (`"bento"` or `"days"`) is also persisted per project —
+toggled via the `#notes-view-toggle` buttons.
+
 The grid is a **bento layout** — `layoutBento()` measures card heights and
 sets row-spans, so re-pack on any height change (and after a panel becomes
 visible — hidden elements measure as 0).

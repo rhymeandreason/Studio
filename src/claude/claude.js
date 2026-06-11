@@ -1020,9 +1020,17 @@ permissionSelect.addEventListener("change", () => {
     }
 });
 
-sessionsToggle.addEventListener("click", () => {
+sessionsToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
     sessionsPanel.hidden = !sessionsPanel.hidden;
     sessionsToggle.classList.toggle("is-active", !sessionsPanel.hidden);
+});
+
+document.querySelector(".claude-right").addEventListener("click", () => {
+    if (!sessionsPanel.hidden) {
+        sessionsPanel.hidden = true;
+        sessionsToggle.classList.remove("is-active");
+    }
 });
 
 historyToggle.checked = includeOutside;

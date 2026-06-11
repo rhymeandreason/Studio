@@ -182,14 +182,6 @@ body {
     letter-spacing: -0.01em;
 }
 
-.projhead__path {
-    margin-top: 3px;
-    font-size: 11px;
-    color: var(--text-muted);
-    font-family: var(--mono);
-    word-break: break-all;
-}
-
 .projhead__memory {
     margin-left: auto;
     text-align: right;
@@ -552,10 +544,6 @@ body {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 25%, transparent), var(--shadow-md);
 }
 
-.card.is-selected .card__path {
-    color: rgba(255, 255, 255, 0.55);
-}
-
 .card.is-selected .card__icon--letter {
     background: rgba(255, 255, 255, 0.1);
     color: var(--bg);
@@ -571,9 +559,9 @@ body {
 }
 
 .card__icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
     object-fit: cover;
     margin-bottom: 4px;
 }
@@ -585,7 +573,7 @@ body {
     background: var(--surface);
     color: var(--text-muted);
     font-family: var(--serif);
-    font-size: 20px;
+    font-size: 28px;
     font-weight: 600;
     user-select: none;
 }
@@ -594,17 +582,6 @@ body {
     font-family: var(--serif);
     font-size: 16px;
     font-weight: 600;
-}
-
-.card__path {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-family: var(--mono);
-    word-break: break-all;
-}
-
-.card.is-active .card__path {
-    color: rgba(255, 255, 255, 0.6);
 }
 
 /* Form fields */
