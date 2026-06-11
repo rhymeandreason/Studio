@@ -1,7 +1,8 @@
-// Scheduled Tasks window: 3 shared global time slots, each holding any number
-// of recurring `claude -p` tasks. Each task picks which project folder it runs
-// in via a dropdown (default "Global" = the ~/Projects root). Backed by a
-// single global store (read_schedules / save_schedules); see docs/workspace.md.
+// Scheduled Tasks window: 3 shared global time slots, each defined by a time +
+// days (in the slot header). Tasks are assigned to a slot and inherit its
+// timing; each task picks the project folder it runs in (default "Global" =
+// the ~/Projects root). Empty slots are hidden. Backed by a single global
+// store (read_schedules / save_schedules); see docs/workspace.md.
 
 import { el, mi, genId } from "../dom.js";
 
@@ -17,29 +18,65 @@ const SCHEDULE_MODELS = [
   { value: "fable", label: "Fable" },
 ];
 
-const DEFAULT_SLOTS = ["09:00", "13:00", "17:00"];
+const DEFAULT_SLOTS = [
+  { time: "09:00", days: [] },
+  { time: "17:00", days: [] },
+];
 
-// { slots: ["HH:MM" ×3], tasks: [task…] } — the whole global schedules store.
-let store = { slots: [...DEFAULT_SLOTS], tasks: [] };
+// { slots: [{time, days}…], tasks: [task…] } — the whole global store.
+let store = { slots: DEFAULT_SLOTS.map((s) => ({ ...s })), tasks: [] };
 // Projects offered in each task's dropdown ("" = Global / ~/Projects root).
 let projects = [];
 let saveTimer = null;
+// The wake-schedule signature currently applied to the system (matches the
+// backend's wake-signature.txt). The "Save schedule" button shows only when
+// the live signature differs from this. On load we assume they're in sync.
+let appliedSignature = "";
 
 async function load() {
   const raw = await invoke("read_schedules");
   const parsed = raw ? JSON.parse(raw) : null;
+  const slots = parsed?.slots?.length ? parsed.slots : DEFAULT_SLOTS;
   store = {
-    slots: parsed?.slots?.length === 3 ? parsed.slots : [...DEFAULT_SLOTS],
+    slots: slots.map((s) =>
+      typeof s === "string" ? { time: s, days: [] } : { time: s.time || "09:00", days: s.days || [] },
+    ),
     tasks: parsed?.tasks || [],
   };
   projects = await invoke("list_projects");
+  appliedSignature = wakeSignature();
   render();
+}
+
+// Mirror of the backend's `wake_signature`: the time + sorted days of each
+// slot that has at least one enabled task. Editing anything that doesn't
+// change this (prompt/model/output/project, or a slot nobody uses) leaves it
+// untouched — so it's exactly what decides whether the admin prompt is needed.
+function wakeSignature() {
+  return store.slots
+    .map((slot, idx) => {
+      const used = store.tasks.some((t) => (t.slot || 0) === idx && t.enabled !== false);
+      if (!used) return null;
+      const days = [...(slot.days || [])].sort((a, b) => a - b).join(",");
+      return `${slot.time}@${days}`;
+    })
+    .filter((s) => s !== null)
+    .sort()
+    .join(";");
+}
+
+// Light the "Save schedule" button only when the wake schedule truly changed.
+function refreshDirty() {
+  setDirty(wakeSignature() !== appliedSignature);
 }
 
 function render() {
   const list = document.getElementById("schedules-list");
   list.innerHTML = "";
-  store.slots.forEach((_, slot) => list.append(buildSlotGroup(slot)));
+  store.slots.forEach((_, slot) => {
+    const tasks = store.tasks.filter((t) => (t.slot || 0) === slot);
+    list.append(buildSlotGroup(slot, tasks));
+  });
 }
 
 function scheduleSave() {
@@ -49,6 +86,10 @@ function scheduleSave() {
   }, 400);
 }
 
+// All edits autosave to the global store via scheduleSave(). The "Save
+// schedule" button (and the admin-password pmset step behind it) is driven by
+// refreshDirty(): it appears only when the wake signature changes, so edits
+// that don't affect wake times never surface it.
 function setDirty(dirty) {
   const btn = document.getElementById("schedules-save");
   btn.disabled = !dirty;
@@ -61,40 +102,51 @@ async function saveAll() {
   document.getElementById("schedules-save").disabled = true;
   await invoke("save_schedules", { data: JSON.stringify(store) });
   await invoke("update_wake_schedule").catch((err) => console.error("update_wake_schedule:", err));
+  appliedSignature = wakeSignature();
   setDirty(false);
 }
 
-function buildSlotGroup(slot) {
+function buildSlotGroup(slot, tasks) {
+  const def = store.slots[slot];
   const group = el("div", "ws-schedule-slot");
 
   const head = el("div", "ws-schedule-slot__head");
   const time = el("input", "ws-schedule-slot__time", {
     type: "time",
-    value: store.slots[slot] || "09:00",
+    value: def.time || "09:00",
   });
   time.addEventListener("change", () => {
-    const oldTime = store.slots[slot];
-    store.slots[slot] = time.value;
-    store.tasks.forEach((task) => {
-      if ((task.slot || 0) === slot && (task.time || oldTime) === oldTime) {
-        task.time = time.value;
-      }
-    });
-    setDirty(true);
+    def.time = time.value;
+    refreshDirty();
     scheduleSave();
+  });
+
+  const days = el("div", "ws-schedule__days");
+  DAY_LABELS.forEach((label, idx) => {
+    const day = el("button", "ws-schedule__day", { type: "button", textContent: label });
+    day.title = "Toggle day (none selected = every day)";
+    day.classList.toggle("is-active", def.days?.includes(idx));
+    day.addEventListener("click", () => {
+      def.days = def.days || [];
+      const at = def.days.indexOf(idx);
+      if (at === -1) def.days.push(idx);
+      else def.days.splice(at, 1);
+      day.classList.toggle("is-active", def.days.includes(idx));
+      refreshDirty();
+      scheduleSave();
+    });
+    days.append(day);
   });
 
   const add = el("button", "btn-add", { type: "button" });
   add.innerHTML = `${mi("add")}Task`;
   add.addEventListener("click", () => addSchedule(slot));
 
-  head.append(time, add);
+  head.append(time, days, add);
   group.append(head);
 
   const list = el("div", "ws-schedule-slot__list");
-  store.tasks
-    .filter((task) => (task.slot || 0) === slot)
-    .forEach((task) => list.append(buildScheduleRow(task)));
+  tasks.forEach((task) => list.append(buildScheduleRow(task)));
   group.append(list);
 
   return group;
@@ -127,7 +179,6 @@ function buildScheduleRow(task) {
   prompt.addEventListener("input", () => {
     task.prompt = prompt.value;
     resizePrompt();
-    setDirty(true);
     scheduleSave();
   });
   requestAnimationFrame(resizePrompt);
@@ -144,25 +195,7 @@ function buildScheduleRow(task) {
   project.value = task.projectPath || "";
   project.addEventListener("change", () => {
     task.projectPath = project.value;
-    setDirty(true);
     scheduleSave();
-  });
-
-  const days = el("div", "ws-schedule__days");
-  DAY_LABELS.forEach((label, idx) => {
-    const day = el("button", "ws-schedule__day", { type: "button", textContent: label });
-    day.title = "Toggle day (none selected = every day)";
-    day.classList.toggle("is-active", task.days?.includes(idx));
-    day.addEventListener("click", () => {
-      task.days = task.days || [];
-      const at = task.days.indexOf(idx);
-      if (at === -1) task.days.push(idx);
-      else task.days.splice(at, 1);
-      day.classList.toggle("is-active", task.days.includes(idx));
-      setDirty(true);
-      scheduleSave();
-    });
-    days.append(day);
   });
 
   const model = el("select", "ws-schedule__model");
@@ -172,7 +205,6 @@ function buildScheduleRow(task) {
   model.value = task.model || "haiku";
   model.addEventListener("change", () => {
     task.model = model.value;
-    setDirty(true);
     scheduleSave();
   });
 
@@ -184,14 +216,13 @@ function buildScheduleRow(task) {
   });
   output.addEventListener("change", () => {
     task.outputFile = output.value.trim();
-    setDirty(true);
     scheduleSave();
   });
 
   const last = el("span", "ws-schedule__last", {});
   setLastRunText(last, task);
 
-  controls.append(project, days, model, output, last);
+  controls.append(project, model, output, last);
   main.append(prompt, controls);
 
   const toggleInput = el("input", null, {
@@ -200,7 +231,7 @@ function buildScheduleRow(task) {
   });
   toggleInput.addEventListener("change", () => {
     task.enabled = toggleInput.checked;
-    setDirty(true);
+    refreshDirty();
     scheduleSave();
   });
   const toggleTrack = el("span", "claude-toggle__track");
@@ -232,7 +263,7 @@ function buildScheduleRow(task) {
   remove.addEventListener("click", () => {
     store.tasks = store.tasks.filter((t) => t !== task);
     render();
-    setDirty(true);
+    refreshDirty();
     scheduleSave();
   });
 
@@ -244,9 +275,7 @@ function addSchedule(slot) {
   store.tasks.push({
     id: genId(),
     prompt: "",
-    time: store.slots[slot] || "09:00",
     slot,
-    days: [],
     enabled: true,
     model: "haiku",
     outputFile: "",
@@ -254,7 +283,7 @@ function addSchedule(slot) {
     lastRun: null,
   });
   render();
-  setDirty(true);
+  refreshDirty();
   scheduleSave();
 }
 

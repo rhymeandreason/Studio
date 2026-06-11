@@ -77,19 +77,19 @@ fn default_schedule_output_file() -> String {
     "Scheduled Output.md".to_string()
 }
 
-/// A recurring task: run `claude -p <prompt>` in the project's repo at a
-/// given local time on the given days (empty `days` = every day).
+/// A recurring task: run `claude -p <prompt>` in a project's repo. Its *when*
+/// (time + days) comes from the slot it's assigned to (`SlotDef`), not the
+/// task itself.
 #[derive(Clone, Serialize, Deserialize, Default)]
 struct ScheduledTask {
     #[serde(default)]
     id: String,
     #[serde(default)]
     prompt: String,
-    /// "HH:MM", 24-hour, local time.
-    #[serde(default)]
-    time: String,
-    /// 0 = Sunday .. 6 = Saturday. Empty = every day.
-    #[serde(default)]
+    /// Legacy: days used to live per-task; they now live on the slot. Kept
+    /// only so `read_schedules_file` can migrate old data into `SlotDef::days`
+    /// once, after which it's cleared and no longer serialized.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     days: Vec<u8>,
     #[serde(default)]
     enabled: bool,
@@ -124,13 +124,59 @@ fn default_schedule_slots() -> Vec<String> {
     vec!["09:00".to_string(), "13:00".to_string(), "17:00".to_string()]
 }
 
+fn default_slot_time() -> String {
+    "09:00".to_string()
+}
+
+/// One of the 3 shared time slots: a local time + the weekdays it fires on
+/// (empty `days` = every day). All tasks assigned to a slot share its timing.
+#[derive(Clone, Serialize, Default)]
+struct SlotDef {
+    /// "HH:MM", 24-hour, local time.
+    time: String,
+    /// 0 = Sunday .. 6 = Saturday. Empty = every day.
+    days: Vec<u8>,
+}
+
+// Accept both the old form (a bare "HH:MM" string) and the new object form, so
+// existing schedules.json files migrate without a separate pass.
+impl<'de> Deserialize<'de> for SlotDef {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Time(String),
+            Obj {
+                #[serde(default = "default_slot_time")]
+                time: String,
+                #[serde(default)]
+                days: Vec<u8>,
+            },
+        }
+        Ok(match Repr::deserialize(d)? {
+            Repr::Time(time) => SlotDef { time, days: Vec::new() },
+            Repr::Obj { time, days } => SlotDef { time, days },
+        })
+    }
+}
+
+/// How many shared time slots the UI exposes.
+const SLOT_COUNT: usize = 2;
+
+fn default_slots() -> Vec<SlotDef> {
+    vec![
+        SlotDef { time: "09:00".to_string(), days: Vec::new() },
+        SlotDef { time: "17:00".to_string(), days: Vec::new() },
+    ]
+}
+
 /// The single global schedules store (app config dir / schedules.json): the 3
 /// shared time slots plus every scheduled task across all projects. Replaces
 /// the old per-project `Workspace::schedules`.
 #[derive(Clone, Serialize, Deserialize, Default)]
 struct SchedulesFile {
-    #[serde(default = "default_schedule_slots")]
-    slots: Vec<String>,
+    #[serde(default = "default_slots")]
+    slots: Vec<SlotDef>,
     #[serde(default)]
     tasks: Vec<ScheduledTask>,
 }
@@ -1169,24 +1215,63 @@ fn schedules_file_path(app: &AppHandle) -> Option<PathBuf> {
         .map(|dir| dir.join("schedules.json"))
 }
 
+/// Fold legacy per-task `days` into their slot's `days` (slots now own the
+/// timing), then clear the per-task copies. Returns whether anything changed,
+/// so the caller can persist the migration. Idempotent: once slots carry days
+/// and tasks don't, it's a no-op.
+fn migrate_slot_days(file: &mut SchedulesFile) -> bool {
+    let mut changed = false;
+    for idx in 0..file.slots.len() {
+        if file.slots[idx].days.is_empty() {
+            if let Some(days) = file
+                .tasks
+                .iter()
+                .find(|t| t.slot as usize == idx && !t.days.is_empty())
+                .map(|t| t.days.clone())
+            {
+                file.slots[idx].days = days;
+                changed = true;
+            }
+        }
+    }
+    for task in file.tasks.iter_mut() {
+        if !task.days.is_empty() {
+            task.days.clear();
+            changed = true;
+        }
+    }
+    changed
+}
+
 /// Read the global schedules store. If it doesn't exist yet, migrate from the
 /// old per-project `Workspace::schedules` (each task tagged with its project
-/// path) and persist the result, so existing schedules carry over once.
+/// path) and persist the result, so existing schedules carry over once. Also
+/// folds any legacy per-task `days` into their slot.
 fn read_schedules_file(app: &AppHandle) -> SchedulesFile {
     if let Some(path) = schedules_file_path(app) {
         if let Ok(text) = std::fs::read_to_string(&path) {
-            return serde_json::from_str(&text).unwrap_or_default();
+            let mut file: SchedulesFile = serde_json::from_str(&text).unwrap_or_default();
+            let mut changed = migrate_slot_days(&mut file);
+            changed |= migrate_slot_count(&mut file);
+            if changed {
+                let _ = write_schedules_file(app, &file);
+            }
+            return file;
         }
     }
     // First run after the move to a global store: gather per-project tasks.
     let mut file = SchedulesFile {
-        slots: default_schedule_slots(),
+        slots: default_slots(),
         tasks: Vec::new(),
     };
     for project in scan_projects(app) {
         if let Ok(ws) = read_workspace(project.path.clone()) {
             if ws.schedule_slots.len() == 3 && file.tasks.is_empty() {
-                file.slots = ws.schedule_slots.clone();
+                file.slots = ws
+                    .schedule_slots
+                    .iter()
+                    .map(|time| SlotDef { time: time.clone(), days: Vec::new() })
+                    .collect();
             }
             for mut task in ws.schedules {
                 task.project_path = project.path.clone();
@@ -1194,8 +1279,47 @@ fn read_schedules_file(app: &AppHandle) -> SchedulesFile {
             }
         }
     }
+    migrate_slot_days(&mut file);
+    migrate_slot_count(&mut file);
     let _ = write_schedules_file(app, &file);
     file
+}
+
+/// Coerce the store to exactly `SLOT_COUNT` slots, reindexing tasks so none
+/// are orphaned. Slots with tasks are kept (in order) ahead of empty ones;
+/// any used slots beyond `SLOT_COUNT` are merged into the last kept slot, and
+/// the list is padded with defaults if short. Idempotent once at the target.
+fn migrate_slot_count(file: &mut SchedulesFile) -> bool {
+    if file.slots.len() == SLOT_COUNT {
+        return false;
+    }
+    let used: Vec<usize> = (0..file.slots.len())
+        .filter(|&i| file.tasks.iter().any(|t| t.slot as usize == i))
+        .collect();
+    // Used slots first, then empties — so when we truncate we never drop a
+    // slot that has tasks before an empty one.
+    let order: Vec<usize> = used
+        .iter()
+        .cloned()
+        .chain((0..file.slots.len()).filter(|i| !used.contains(i)))
+        .take(SLOT_COUNT)
+        .collect();
+
+    let mut new_slots: Vec<SlotDef> = order.iter().map(|&i| file.slots[i].clone()).collect();
+    let defaults = default_slots();
+    while new_slots.len() < SLOT_COUNT {
+        new_slots.push(defaults[new_slots.len()].clone());
+    }
+
+    for task in file.tasks.iter_mut() {
+        // Kept slot → its new position; dropped (merged) slot → last kept.
+        task.slot = order
+            .iter()
+            .position(|&i| i == task.slot as usize)
+            .unwrap_or(SLOT_COUNT - 1) as u8;
+    }
+    file.slots = new_slots;
+    true
 }
 
 fn write_schedules_file(app: &AppHandle, file: &SchedulesFile) -> Result<(), String> {
@@ -1955,12 +2079,16 @@ fn run_due_schedules(app: &AppHandle) {
     let weekday = now.weekday().num_days_from_sunday() as u8;
 
     let mut file = read_schedules_file(app);
+    let slots = file.slots.clone();
     let mut changed = false;
     for task in file.tasks.iter_mut() {
-        if !task.enabled || task.time != hm {
+        let Some(slot) = slots.get(task.slot as usize) else {
+            continue;
+        };
+        if !task.enabled || slot.time != hm {
             continue;
         }
-        if !task.days.is_empty() && !task.days.contains(&weekday) {
+        if !slot.days.is_empty() && !slot.days.contains(&weekday) {
             continue;
         }
         if task.last_run.as_deref() == Some(today.as_str()) {
@@ -2002,12 +2130,14 @@ fn compute_wake_times(app: &AppHandle) -> Vec<chrono::DateTime<chrono::Local>> {
     use chrono::{Datelike, Duration, Local, NaiveTime, TimeZone};
 
     let now = Local::now();
+    let file = read_schedules_file(app);
     let mut times = Vec::new();
-    for task in &read_schedules_file(app).tasks {
-        if !task.enabled {
+    for (idx, slot) in file.slots.iter().enumerate() {
+        // Skip slots with no enabled task — nothing to wake for.
+        if !file.tasks.iter().any(|t| t.enabled && t.slot as usize == idx) {
             continue;
         }
-        let Ok(time_of_day) = NaiveTime::parse_from_str(&task.time, "%H:%M") else {
+        let Ok(time_of_day) = NaiveTime::parse_from_str(&slot.time, "%H:%M") else {
             continue;
         };
         // Find the next day (today..+7) whose weekday matches `days`
@@ -2015,7 +2145,7 @@ fn compute_wake_times(app: &AppHandle) -> Vec<chrono::DateTime<chrono::Local>> {
         for offset in 0..8 {
             let day = (now + Duration::days(offset)).date_naive();
             let weekday = day.weekday().num_days_from_sunday() as u8;
-            if !task.days.is_empty() && !task.days.contains(&weekday) {
+            if !slot.days.is_empty() && !slot.days.contains(&weekday) {
                 continue;
             }
             let Some(candidate) = Local.from_local_datetime(&day.and_time(time_of_day)).single()
@@ -2094,15 +2224,17 @@ fn wake_signature_path(app: &AppHandle) -> Option<PathBuf> {
 /// times: each enabled task's time and days, sorted. Unchanged across edits
 /// that don't touch timing (prompt, model, output file, project).
 fn wake_signature(app: &AppHandle) -> String {
-    let mut entries: Vec<String> = read_schedules_file(app)
-        .tasks
+    let file = read_schedules_file(app);
+    let mut entries: Vec<String> = file
+        .slots
         .iter()
-        .filter(|t| t.enabled)
-        .map(|t| {
-            let mut days = t.days.clone();
+        .enumerate()
+        .filter(|(idx, _)| file.tasks.iter().any(|t| t.enabled && t.slot as usize == *idx))
+        .map(|(_, slot)| {
+            let mut days = slot.days.clone();
             days.sort_unstable();
             let days: Vec<String> = days.iter().map(|d| d.to_string()).collect();
-            format!("{}@{}", t.time, days.join(","))
+            format!("{}@{}", slot.time, days.join(","))
         })
         .collect();
     entries.sort();

@@ -49,6 +49,10 @@
     gap: 10px;
 }
 
+.ws-schedule-slot__head .btn-add {
+    margin-left: auto;
+}
+
 .ws-schedule-slot__time {
     background: var(--surface);
     border: 1px solid var(--hairline-strong);

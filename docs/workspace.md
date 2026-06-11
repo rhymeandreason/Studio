@@ -95,33 +95,37 @@ button in the project header or the all-projects overview
 Claude companion window — so it stays open and reachable while you work in
 any project/tab. On open it calls `read_schedules` (the global store) +
 `list_projects` (to populate each task's project dropdown) and renders the
-**3 shared time slots** (`buildSlotGroup`/`buildScheduleRow` in
-`schedules.js`).
+slots that have tasks (`buildSlotGroup`/`buildScheduleRow` in `schedules.js`).
 
 Schedules are **global**, not per-project: a single store
 (`SchedulesFile` in `lib.rs`, `schedules.json` in the app config dir) holds
-the 3 slot times plus every task, read/written via `read_schedules` /
+the slots plus every task, read/written via `read_schedules` /
 `save_schedules`. On first read the store is migrated from the old
 per-project `Workspace::schedules` (each task tagged with its project path),
 then `workspace.json`'s `schedules`/`scheduleSlots` are no longer used.
 
-Each of the 3 slots has one shared `"HH:MM"` time (editable via a
-`<input type="time">` in the slot's header) and a "+ Task" button that adds a
-task to that slot. The store holds:
+**Timing lives on the slot, not the task.** There are `SLOT_COUNT` (= 2)
+shared slots; each (`SlotDef`) is a `time` + `days` pair, both edited in the
+slot's header (an `<input type="time">` plus the 7 day toggles), and all
+tasks in that slot share them. Both slots always render, each with its own
+"+ Task" button that adds a task to that slot (a task's slot is fixed at
+creation — there's no per-task slot picker). An empty slot still shows its
+header (so you can add to it) but contributes nothing to the wake schedule.
+The store holds:
 
-- `slots` — array of 3 `"HH:MM"` strings (`SchedulesFile::slots`), default
-  `["09:00", "13:00", "17:00"]`. Editing a slot's time updates it and every
-  task whose `time` still matches the slot's old time.
+- `slots` — array of `SLOT_COUNT` `SlotDef`s, each `{ time, days }`. `time`
+  is `"HH:MM"` (default `["09:00", "17:00"]`); `days` is `0`(Sun)–`6`(Sat),
+  empty = every day. Both are read by the scheduler/wake logic. (Reads also
+  accept the old bare-`"HH:MM"`-string form, and `migrate_slot_count` coerces
+  an old 3-slot file down to `SLOT_COUNT`, reindexing tasks so none are
+  orphaned.)
 - `tasks` — array of tasks (`ScheduledTask` in `lib.rs`):
   - `prompt` — text passed to `claude -p`.
   - `projectPath` — folder the run uses as its working dir and output
     location, picked via a per-task dropdown; blank = **"Global"**, the
     `~/Projects` root.
-  - `slot` — `0`–`2`, index into `slots`; determines which group the task is
-    rendered under.
-  - `time` — 24-hour `"HH:MM"`, local time; kept in sync with `slots[slot]`
-    and is what the scheduler/wake logic actually use.
-  - `days` — `0`(Sun)–`6`(Sat); empty = every day.
+  - `slot` — `0`–`2`, index into `slots`; sets the task's timing and which
+    group it's rendered under.
   - `enabled` — toggled via the pill switch.
   - `model` — passed as `claude --model`; defaults to `"haiku"`.
   - `outputFile` — markdown file (relative to the task's project folder) the
@@ -134,25 +138,27 @@ task to that slot. The store holds:
 
 ### Saving the wake schedule
 
-Editing a task (time slot, days, enabled, project, add/remove, etc.) just
-updates the in-memory store and debounce-saves it via `save_schedules` — it
-does **not** touch the system wake schedule or prompt for the admin password.
-The window header has a "Saved" / "Save schedule" button (`#schedules-save`,
-`setDirty()`): it goes from a disabled "Saved" state to a black "Save
-schedule" button as soon as anything changes. Clicking it flushes the pending
-save and calls `update_wake_schedule` once (see below), then returns to
-"Saved" — so the single admin prompt happens after you're done editing, not
-per-keystroke.
+Every edit debounce-saves to the global store via `save_schedules` in the
+background — it does **not** touch the system wake schedule or prompt for the
+admin password. The window header has a "Saved" / "Save schedule" button
+(`#schedules-save`) that triggers that step. It appears (disabled "Saved" →
+black "Save schedule") only when the **wake signature** changes: after each
+edit `refreshDirty()` recomputes `wakeSignature()` (the JS mirror of the
+backend's `wake_signature` — the `time` + sorted `days` of each slot with at
+least one enabled task) and compares it to `appliedSignature` (what's
+currently applied; set on load and after each successful save). So changing a
+prompt/model/output/project, or editing a slot nobody uses, never lights the
+button; only a real change to the wake times does — and reverting back to the
+applied state clears it again. Clicking it flushes the pending save and calls
+`update_wake_schedule` once (see below), then returns to "Saved".
 
-`update_wake_schedule` only prompts when the wake schedule actually changes.
-It builds a signature of the schedule's timing definition (each enabled
-task's `time` + sorted `days`, via `wake_signature`) and compares it to the
-last applied one cached in `wake-signature.txt` (app config dir); if they
-match it returns early without running `pmset` or prompting. So saves that
-only touched a prompt, model, output file, or project produce no password
-prompt — only changing a slot time, days, enabled state, or adding/removing
-a task does. The signature is recorded only on a successful prompt, so a
-cancelled dialog is retried on the next save.
+`update_wake_schedule` re-checks the same way on the backend: it compares the
+signature to the last applied one cached in `wake-signature.txt` (app config
+dir) and returns early without running `pmset` or prompting if they match. So
+even if the button is clicked, the password prompt only fires when the wake
+times genuinely changed. The
+signature is recorded only on a successful prompt, so a cancelled dialog is
+retried on the next save.
 
 ### Execution
 
@@ -167,8 +173,8 @@ missed runs are skipped, not backfilled.
 If the Mac is fully asleep, `caffeinate` can't help. Clicking "Save schedule"
 (see above) calls `update_wake_schedule`, which:
 
-1. Scans every enabled task in the global store and finds each one's next
-   occurrence (today..+7 days, respecting `days`).
+1. Scans each slot that has an enabled task and finds its next occurrence
+   (today..+7 days, respecting the slot's `days`).
 2. Runs `pmset schedule cancelall && pmset schedule wake "MM/dd/yy HH:MM:SS"`
    (one `wake` per distinct upcoming time, deduped and capped at **3 slots**
    — `pmset` only holds a handful of events, and tasks sharing a time share
@@ -192,7 +198,7 @@ passwordless sudo for `pmset` (e.g. an `/etc/sudoers.d/` entry scoped to
 `/usr/bin/pmset schedule *`).
 
 A background loop (`start_scheduler`, started in `setup`) wakes every 30s,
-scans the global schedules store, and fires any enabled task whose
+scans the global schedules store, and fires any enabled task whose slot's
 `time`/`days` match now and that hasn't run today. Firing runs (in
 `run_scheduled_task`):
 
