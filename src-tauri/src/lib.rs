@@ -1912,13 +1912,15 @@ fn run_due_schedules(app: &AppHandle) {
 /// Note: `pmset schedule cancelall` clears *all* scheduled sleep/wake/poweron
 /// events system-wide, not just Studio's — fine for a single-user machine,
 /// but worth knowing if something else relies on `pmset schedule`.
-#[tauri::command]
-fn update_wake_schedule(app: AppHandle) -> Result<(), String> {
+/// The next wake time for each enabled scheduled task across every project
+/// (today..+7 days, respecting `days`), sorted and capped at 10 — `pmset`
+/// only holds a handful of scheduled events.
+fn compute_wake_times(app: &AppHandle) -> Vec<chrono::DateTime<chrono::Local>> {
     use chrono::{Datelike, Duration, Local, NaiveTime, TimeZone};
 
     let now = Local::now();
     let mut times = Vec::new();
-    for project in scan_projects(&app) {
+    for project in scan_projects(app) {
         let Ok(ws) = read_workspace(project.path.clone()) else {
             continue;
         };
@@ -1950,18 +1952,57 @@ fn update_wake_schedule(app: AppHandle) -> Result<(), String> {
     }
     times.sort();
     times.dedup();
-    times.truncate(10); // pmset only supports a handful of scheduled events
+    times.truncate(10);
+    times
+}
 
+/// `pmset schedule cancelall && pmset schedule wake "..." && ...` for each of
+/// `times`, as a single shell command string (no leading `sudo` — callers
+/// prefix that as needed).
+fn wake_schedule_script(times: &[chrono::DateTime<chrono::Local>]) -> String {
     let mut script = String::from("pmset schedule cancelall");
-    for t in &times {
+    for t in times {
         script.push_str(&format!(" && pmset schedule wake \"{}\"", t.format("%m/%d/%y %H:%M:%S")));
     }
+    script
+}
+
+/// Recompute and apply the system wake schedule, prompting for the admin
+/// password via `osascript ... with administrator privileges`. Called when
+/// the user adds/edits/toggles a scheduled task, so the prompt happens while
+/// they're present, not at 5am.
+///
+/// Note: `pmset schedule cancelall` clears *all* scheduled sleep/wake/poweron
+/// events system-wide, not just Studio's — fine for a single-user machine,
+/// but worth knowing if something else relies on `pmset schedule`.
+#[tauri::command]
+fn update_wake_schedule(app: AppHandle) -> Result<(), String> {
+    let script = wake_schedule_script(&compute_wake_times(&app));
     let osa = format!("do shell script \"{}\" with administrator privileges", script.replace('"', "\\\""));
     Command::new("osascript")
         .args(["-e", &osa])
         .output()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Best-effort roll-forward of the wake schedule after a scheduled task runs,
+/// so a recurring task keeps waking the Mac without the user reopening
+/// Studio every week. Uses `sudo -n` (non-interactive): if the admin-password
+/// timestamp from an earlier `update_wake_schedule` prompt has expired, this
+/// silently does nothing — the schedule just won't extend until the user
+/// next edits a task (or grants `pmset` passwordless sudo).
+fn roll_wake_schedule(app: &AppHandle) {
+    let times = compute_wake_times(app);
+    if times.is_empty() {
+        return;
+    }
+    let script = wake_schedule_script(&times)
+        .split(" && ")
+        .map(|cmd| format!("sudo -n {cmd}"))
+        .collect::<Vec<_>>()
+        .join(" && ");
+    let _ = Command::new("sh").args(["-c", &script]).output();
 }
 
 /// Manually fire a scheduled task immediately (the "Run now" button), without
@@ -2045,6 +2086,8 @@ fn run_scheduled_task(
                 "lastRunAt": timestamp,
             }),
         );
+
+        roll_wake_schedule(&app);
     });
 }
 

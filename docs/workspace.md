@@ -128,10 +128,17 @@ If the Mac is fully asleep, `caffeinate` can't help. Whenever a task's
 
 `pmset schedule cancelall` clears *all* scheduled sleep/wake/poweron events
 system-wide (not just Studio's), so this is single-user-only behavior.
-Because each task only schedules its *next* occurrence, a recurring task
-needs Studio open again afterward (the wake itself doesn't re-trigger
-`update_wake_schedule` — it only schedules ~7 days out from whenever you
-last edited the task).
+
+Because each task only schedules its *next* occurrence, after `update_wake_schedule`
+runs the system wake schedule covers up to ~7 days out. To keep a daily task
+self-renewing, `run_scheduled_task` calls `roll_wake_schedule` after each run,
+which recomputes the same schedule and applies it via `sudo -n` (non-interactive)
+— if the admin-password timestamp from the last `update_wake_schedule` prompt
+is still cached, this silently extends the schedule another day; if it's
+expired, it silently does nothing (the schedule just stops extending until you
+next edit a task). For truly indefinite, prompt-free operation, grant
+passwordless sudo for `pmset` (e.g. an `/etc/sudoers.d/` entry scoped to
+`/usr/bin/pmset schedule *`).
 
 A background loop (`start_scheduler`, started in `setup`) wakes every 30s,
 scans every project under `~/Projects/`, and fires any enabled task whose
