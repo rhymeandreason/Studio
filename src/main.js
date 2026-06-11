@@ -8,6 +8,7 @@ import { createSelection } from "./selection.js";
 import { installKeyDispatcher, panelKeymaps } from "./keymap.js";
 import { el, mi, genId } from "./dom.js";
 import { loadImage } from "./imageutil.js";
+import { spriteStyle } from "./sprites.js";
 import { state } from "./state.js";
 import {
   loadMedia,
@@ -19,6 +20,7 @@ import {
 import {
   initLaunch,
   initClaudeButton,
+  initSpriteBadge,
   initWorkspaceForm,
   loadWorkspace,
   scheduleWorkspaceSave,
@@ -396,6 +398,20 @@ async function showOverview() {
         icon.replaceWith(letter);
       });
       card.append(icon);
+
+      if (p.sprite) {
+        const sprite = document.createElement("span");
+        sprite.className = "card__sprite";
+        const { "--sprite-start": start, "--sprite-end": end, ...rest } = spriteStyle(
+          p.sprite,
+          "idle",
+          28,
+        );
+        Object.assign(sprite.style, rest);
+        sprite.style.setProperty("--sprite-start", start);
+        sprite.style.setProperty("--sprite-end", end);
+        card.append(sprite);
+      }
 
       const name = document.createElement("span");
       name.className = "card__name";
@@ -1971,6 +1987,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   initAllProjectsButton();
   initLaunch();
   initClaudeButton();
+  initSpriteBadge();
   initWorkspaceForm();
   initNotes();
   initMedia();

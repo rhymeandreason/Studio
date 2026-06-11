@@ -15,12 +15,15 @@ use tauri::{
 };
 
 /// A discovered project: a folder directly under ~/Projects/.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Default)]
 struct Project {
     name: String,
     path: String,
     /// Last-modified time of the project folder, as Unix epoch seconds.
     modified: u64,
+    /// Animal sprite from workspace.json, if any (see sprites.js registry).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    sprite: String,
 }
 
 /// The `claude` block of a workspace manifest.
@@ -51,6 +54,10 @@ struct Workspace {
     urls: Vec<String>,
     #[serde(default)]
     claude: ClaudeCfg,
+    /// Animal sprite shown on the Workspace tab and in the Claude window
+    /// status bar (a key into the frontend's sprite registry).
+    #[serde(default)]
+    sprite: String,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "pinnedTab")]
     pinned_tab: Option<String>,
 }
@@ -92,10 +99,14 @@ fn scan_projects(app: &AppHandle) -> Vec<Project> {
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs())
                     .unwrap_or(0);
+                let sprite = read_workspace(path.to_string_lossy().to_string())
+                    .map(|ws| ws.sprite)
+                    .unwrap_or_default();
                 projects.push(Project {
                     name: name.to_string(),
                     path: path.to_string_lossy().to_string(),
                     modified,
+                    sprite,
                 });
             }
         }
@@ -155,6 +166,7 @@ fn scan_tools(app: &AppHandle) -> Vec<Project> {
                     name,
                     path: path.to_string_lossy().to_string(),
                     modified: 0,
+                    ..Default::default()
                 })
             })
             .collect();
@@ -180,6 +192,7 @@ fn scan_tools(app: &AppHandle) -> Vec<Project> {
                 name: stem.to_string(),
                 path: path.to_string_lossy().to_string(),
                 modified: 0,
+                ..Default::default()
             });
         }
     }
@@ -511,6 +524,7 @@ fn create_project(app: AppHandle, name: String) -> Result<Project, String> {
         name: name.to_string(),
         path,
         modified: 0,
+        ..Default::default()
     })
 }
 

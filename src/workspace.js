@@ -7,6 +7,7 @@ import { createSelection } from "./selection.js";
 import { panelKeymaps } from "./keymap.js";
 import { state } from "./state.js";
 import { selectTab, installOffClickDeselect } from "./main.js";
+import { SPRITES, DEFAULT_SPRITE, spriteStyle } from "./sprites.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -295,11 +296,13 @@ function setList(list, values) {
 }
 
 let wsClaude = "terminal";
+let wsSprite = DEFAULT_SPRITE;
 
 export async function loadWorkspace(path) {
   const ws = await invoke("read_workspace", { path });
   wsEditor = ws.editor || "";
   wsClaude = ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
+  wsSprite = ws.sprite || DEFAULT_SPRITE;
   setList("repo", ws.repo ? [ws.repo] : []);
   setList("figma", ws.figma ? [ws.figma] : []);
   setList("apps", ws.apps);
@@ -310,6 +313,30 @@ export async function loadWorkspace(path) {
   wsPinnedTab = ws.pinnedTab || null;
   selectTab(wsPinnedTab || "workspace");
   updatePinButton();
+  renderSpriteBadge();
+}
+
+function renderSpriteBadge() {
+  const sprite = document.querySelector("#sprite-badge .sprite-badge__sprite");
+  const { "--sprite-start": start, "--sprite-end": end, ...rest } = spriteStyle(
+    wsSprite,
+    "idle",
+    24,
+  );
+  Object.assign(sprite.style, rest);
+  sprite.style.setProperty("--sprite-start", start);
+  sprite.style.setProperty("--sprite-end", end);
+}
+
+const SPRITE_NAMES = Object.keys(SPRITES);
+
+export function initSpriteBadge() {
+  document.getElementById("sprite-badge").addEventListener("click", () => {
+    const idx = SPRITE_NAMES.indexOf(wsSprite);
+    wsSprite = SPRITE_NAMES[(idx + 1) % SPRITE_NAMES.length];
+    renderSpriteBadge();
+    scheduleWorkspaceSave();
+  });
 }
 
 function setStatus(text) {
@@ -331,6 +358,7 @@ function readWorkspaceForm() {
     folders: readList("folders"),
     urls: readList("urls"),
     pinnedTab: wsPinnedTab,
+    sprite: wsSprite,
   };
 }
 
