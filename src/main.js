@@ -1357,14 +1357,6 @@ function buildChecklist(note) {
   });
 
   card.append(list);
-
-  const addItem = el("button", "btn-add", {
-    type: "button",
-    innerHTML: `${mi("add")}Item`,
-  });
-  addItem.addEventListener("click", () => addChecklistItem(note));
-  card.append(addItem);
-
   return card;
 }
 

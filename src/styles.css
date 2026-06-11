@@ -1076,6 +1076,7 @@ select.field__input {
     cursor: grabbing !important;
 }
 
+
 .notes-list .notecard,
 .notes-list .notecard input:not(.notecard__title),
 .notes-list .notecard textarea:not(.notecard__title),
@@ -1083,8 +1084,8 @@ select.field__input {
 .notes-list .notecard th {
     font-family: var(--notes-font);
     font-size: var(--notes-font-size, 14px);
-    width:100%;
 }
+
 
 .notecard {
     background: var(--note-bg, var(--elevated));
