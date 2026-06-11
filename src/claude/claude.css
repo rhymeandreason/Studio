@@ -531,25 +531,29 @@
     align-items: center;
     gap: 8px;
     padding: 6px 14px;
+    min-height: 48px;
     border-top: 1px solid var(--hairline);
     background: var(--surface);
     font-size: 11px;
     color: var(--text-muted);
 }
 
-.claude-status__spinner {
+.claude-status__panda {
     flex: 0 0 auto;
-    width: 11px;
-    height: 11px;
-    border-radius: 50%;
-    border: 2px solid var(--hairline-strong);
-    border-top-color: var(--accent);
-    animation: claude-spin 0.7s linear infinite;
+    width: 64px;
+    height: 64px;
+    background-image: url("red-panda.png");
+    background-repeat: no-repeat;
+    /* Movement row (3rd of 7), scaled 2x: frame 32px -> 64px, sheet 256px -> 512px. */
+    background-position: 0 -128px;
+    background-size: 512px 448px;
+    image-rendering: pixelated;
+    animation: claude-panda-walk 0.8s steps(8) infinite;
 }
 
-@keyframes claude-spin {
+@keyframes claude-panda-walk {
     to {
-        transform: rotate(360deg);
+        background-position: -512px -128px;
     }
 }
 

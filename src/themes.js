@@ -17,6 +17,11 @@ export const NOTE_THEMES = [
   { id: "sky", name: "Sky", bg: "#bfe3fb", titleColor: "#1f5f8b" },
   { id: "coral", name: "Coral", bg: "#ffd0c2", titleColor: "#a8412a" },
   { id: "violet", name: "Violet", bg: "#e3d3fb", titleColor: "#6a3fa0" },
+  { id: "emerald", name: "Emerald", bg: "#0fcf86", titleColor: "#f4fff9", bodyColor: "#f4fff9" },
+  { id: "sapphire", name: "Sapphire", bg: "#2f8cf4", titleColor: "#f2f7ff", bodyColor: "#f2f7ff" },
+  { id: "ruby", name: "Ruby", bg: "#fb2f5e", titleColor: "#fff1f4", bodyColor: "#fff1f4" },
+  { id: "amethyst", name: "Amethyst", bg: "#a85bf6", titleColor: "#f8f1ff", bodyColor: "#f8f1ff" },
+  { id: "amber", name: "Amber", bg: "#ffb01f", titleColor: "#fff6e9", bodyColor: "#fff6e9" },
 ];
 
 export const NOTE_FONTS = [
