@@ -62,33 +62,36 @@
     pointer-events: none;
 }
 
+/* Match the Notes page .notedrop dropdown styling */
 .claude-model {
     width: auto;
     flex: 0 0 auto;
-    padding: 6px 26px 6px 30px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text);
-    background-color: var(--elevated, var(--bg));
-    border: 1px solid var(--hairline-strong, var(--hairline));
-    border-radius: 7px;
+    padding: 6px 24px 6px 30px;
+    font-family: var(--sans);
+    font-size: 11px;
+    color: var(--text-muted);
+    background-color: var(--bg);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
     cursor: pointer;
+    outline: none;
     appearance: none;
     -webkit-appearance: none;
-    /* custom chevron */
+    /* chevron, matching .notedrop__chev */
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%23888' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
     background-repeat: no-repeat;
-    background-position: right 9px center;
-    transition: border-color 0.12s, background-color 0.12s;
+    background-position: right 8px center;
+    transition: border-color 0.15s, color 0.15s;
 }
 
 .claude-model:hover {
     border-color: var(--text-soft);
+    color: var(--text);
 }
 
 .claude-model:focus {
-    outline: none;
     border-color: var(--accent);
+    color: var(--text);
 }
 
 .claude-permission {
@@ -155,8 +158,9 @@
     height: 28px;
     padding: 0;
     border: 1px solid var(--hairline-strong, var(--hairline));
+    border:0px;
     border-radius: 7px;
-    background: var(--elevated, var(--bg));
+    background: var(--surface);
     color: var(--text-muted);
     cursor: pointer;
     transition: background 0.12s, color 0.12s, border-color 0.12s;
@@ -168,9 +172,9 @@
 }
 
 .claude-toggle-btn.is-active {
-    background: var(--text);
+    //background: var(--text);
     border-color: var(--text);
-    color: var(--elevated, var(--bg));
+    color: var(--text);
 }
 
 .claude-tabs {

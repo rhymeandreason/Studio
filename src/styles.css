@@ -899,6 +899,11 @@ select.field__input {
     align-items: center;
     gap: 8px;
     margin-bottom: 18px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    padding-bottom: 12px;
 }
 
 .notes-status {
@@ -1005,7 +1010,7 @@ select.field__input {
     font-weight: 700;
     font-size: 13px;
     color: var(--text-dim);
-    margin: 18px 0 4px;
+    margin: 36px 0 12px;
     padding-bottom: 6px;
     border-bottom: 1px solid var(--hairline);
 }

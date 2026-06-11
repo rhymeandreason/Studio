@@ -908,7 +908,6 @@ async function startNewSession() {
 }
 
 newSessionBtn.addEventListener("click", startNewSession);
-document.getElementById("new-session-side").addEventListener("click", startNewSession);
 
 listen("claude-jump", async (event) => {
     const { key, projectPath } = event.payload || {};
