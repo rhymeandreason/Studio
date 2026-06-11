@@ -16,6 +16,13 @@ drives `claude` as a subprocess, as an alternative to `claude.mode: "terminal"`
   **Required:** a Tauri v2 window not covered by a capability cannot use IPC
   (`invoke`/`listen`) — the new window label `claude` matched neither `main` nor
   `tool-*`, so without this file the window loads but every command is denied.
+  Any window-plugin call needs its own permission too: `setTitle()` needs
+  `core:window:allow-set-title` (already added). Same gotcha applies to future
+  `getCurrentWindow()` calls.
+
+Backend commands (`lib.rs`): `open_claude_window`, `claude_send`, `claude_stop`,
+`read_claude_sessions` / `save_claude_sessions`, `list_claude_project_sessions`,
+`read_claude_session_log`, `get_claude_usage`.
 
 ## Opening
 `workspace.js` → the Claude button calls `invoke("open_claude_window", { projectPath })`.
@@ -39,7 +46,8 @@ the user's shell PATH. The subprocess's stdout/stderr lines are emitted to the
 frontend as `claude-stream-<key>` events; the frontend parses the stream-json
 message types (`system`/`stream_event`/`assistant`/`result`/`rate_limit_event`).
 User messages are written to the subprocess stdin as a stream-json `user` frame.
-`claude_stop` kills a session's subprocess.
+`claude_stop` kills a session's subprocess (used by the **stop button**, which
+also finalizes streamed text; the next message respawns with `--resume`).
 
 ## Sessions
 - Persisted opaque JSON via `read_claude_sessions` / `save_claude_sessions`
@@ -61,15 +69,27 @@ jsonl into user/assistant text + tool-call summaries) and continues it with
 `localStorage["claude.includeOutside"]`.
 
 ## Usage bars
-- **Context** — per session, computed from the `result` event's token usage vs.
-  the model context window; stored on the session so it persists/restores.
-- **5-hour / 7-day** — *account-wide* quota, the same numbers behind Claude's
-  `/usage`. `get_claude_usage` reads the OAuth token from the macOS Keychain
-  (service `Claude Code-credentials`) and GETs
+- **Context** — per session, current context-window *occupancy*. Taken from the
+  **last turn's** prompt usage (`input + cache_read + cache_creation` off the
+  latest `message_start`/`assistant` message), divided by the largest
+  `modelUsage` context window. **Do not** use `result.usage`/`modelUsage` token
+  totals — those are cumulative over the process lifetime and grow past the
+  window. Stored on the session so it persists/restores; a load-time migration
+  drops any stored value where `used > contextWindow` (old buggy data).
+- **5-hour bar + 7-day pie** — *account-wide* quota, the same numbers behind
+  Claude's `/usage`. `get_claude_usage` reads the OAuth token from the macOS
+  Keychain (service `Claude Code-credentials`) and GETs
   `https://api.anthropic.com/api/oauth/usage` (header
-  `anthropic-beta: oauth-2025-04-20`). Refreshed on open, after each turn, and on
-  `rate_limit_event`. (First fetch after a rebuild may prompt for Keychain
+  `anthropic-beta: oauth-2025-04-20`), returning `five_hour`/`seven_day`
+  utilization. The endpoint **rate-limits (429)** if hit too often, so the
+  frontend: throttles to once/60s, fetches only on open + after each `result`
+  (not on `rate_limit_event`), caches the last value in
+  `localStorage["claude.accountUsage"]` (so the bar never blanks), and retries
+  ~30s after a failed fetch. (First fetch after a rebuild may prompt for Keychain
   access.)
+- **Live progress** — while a turn runs, a status bar under the transcript shows
+  activity (Working / Running `<tool>` / Writing), elapsed seconds, and live
+  token counts: context from `message_start`, growing output from `message_delta`.
 
 ## Permission mode
 Per-session dropdown (Ask=`default` / Accept edits=`acceptEdits` / Plan=`plan` /
@@ -83,3 +103,22 @@ protocol** (`can_use_tool` control_requests, requiring an `initialize`
 handshake) — which the raw stream-json pipe here does not speak. Adding real
 buttons would mean either driving that control protocol or switching to the
 Agent SDK's `canUseTool` callback. The permission-mode selector is the interim.
+
+## UI / layout
+- **Layout:** `.claude-app` is a row — the full-height sessions sidebar on the
+  left, everything else in a `.claude-right` column (top tab bar, header, usage
+  meters, transcript, input).
+- **Top tab bar:** square sidebar toggle (`side_navigation`, inverts when open),
+  new-session button, then one **tab per session** for the current project
+  (shown with 2+ sessions; click to switch, × to close).
+- **Header:** clickable **session title** (click to rename inline) + model and
+  permission pickers. The pickers are custom `.notedrop` dropdowns
+  (`createDropdown`) matching the Notes page, not native `<select>`s, but expose
+  a `.value` + `change` event.
+- **Transcript:** stick-to-bottom auto-scroll (only follows when already at the
+  bottom; forced on your own message and session switch). Text is selectable and
+  double-click copies a bubble. **Tool calls render collapsed** (name + chevron,
+  expand to see input). Minimal hover-reveal scrollbar.
+- **Window:** title shows `Claude · <project>` (`setTitle`); size and position
+  persist via `tauri_plugin_window_state` — the dynamically-created window is
+  restored with `restore_state` in `open_claude_window`.
