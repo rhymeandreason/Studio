@@ -961,6 +961,92 @@ select.field__input {
     flex-wrap: wrap;
 }
 
+.notes-view-toggle {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    background: var(--elevated);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+}
+
+.notes-view-toggle__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: calc(var(--radius) - 2px);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.notes-view-toggle__btn:hover {
+    color: var(--text);
+}
+
+.notes-view-toggle__btn.is-active {
+    background: var(--accent);
+    color: var(--accent-contrast, #fff);
+}
+
+/* Days view: a traditional flex grid of square cards, grouped under date headers. */
+.notes-list--days {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    align-content: flex-start;
+}
+
+.notes-day-header {
+    flex: 1 0 100%;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin: 18px 0 4px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--hairline);
+}
+
+.notes-day-header:first-child {
+    margin-top: 0;
+}
+
+.notes-list--days .notecard {
+    flex: 0 1 200px;
+    min-width: 200px;
+    aspect-ratio: 1 / 1;
+    height: auto;
+    overflow: hidden;
+}
+
+.notes-list--days .notecard__body,
+.notes-list--days .notecard textarea {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.notes-list--days .notecard__title {
+    flex-shrink: 0;
+    max-height: 3.9em;
+    overflow: hidden;
+}
+
+.notes-list--days .notecard textarea {
+    resize: none;
+}
+
+.notes-list--days .notelink {
+    border-color: var(--sage);
+    background: var(--sage-soft);
+}
+
+.notes-list--days .notelink__open {
+    color: var(--sage);
+}
+
 /* Drop-position indicator: a narrow rounded bar drawn in the gap between cards. */
 .note-drop-indicator {
     position: absolute;
@@ -993,6 +1079,7 @@ select.field__input {
 .notes-list .notecard th {
     font-family: var(--notes-font);
     font-size: var(--notes-font-size, 14px);
+    width:100%;
 }
 
 .notecard {
@@ -1043,7 +1130,7 @@ select.field__input {
     opacity: 1;
 }
 
-input.notecard__title {
+textarea.notecard__title {
     flex: 1 1 auto;
     min-width: 0;
     background: transparent;
@@ -1054,6 +1141,9 @@ input.notecard__title {
     font-weight: 600;
     padding: 2px 0;
     outline: none;
+    resize: none;
+    overflow: hidden;
+    line-height: 1.3;
 }
 
 /* Per-card style controls live in the notes toolbar, shown when a card is selected. */

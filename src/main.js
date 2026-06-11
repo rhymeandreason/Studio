@@ -1039,14 +1039,23 @@ function applyNoteStyle(card, note) {
 
 function noteHeader(note) {
   const head = el("div", "notecard__head");
-  const title = el("input", "notecard__title", {
-    value: note.title || "",
+  const title = el("textarea", "notecard__title", {
     placeholder: "^_^",
+    rows: 1,
   });
+  title.value = note.title || "";
+  const resizeTitle = () => {
+    title.style.height = "auto";
+    title.style.height = title.scrollHeight + "px";
+  };
   title.addEventListener("input", () => {
     note.title = title.value;
+    resizeTitle();
+    scheduleBentoLayout();
     scheduleNotesSave();
   });
+  // Plain Enter inserts a newline (textarea default); nothing to special-case.
+  requestAnimationFrame(resizeTitle);
 
   head.append(title);
   return head;
@@ -1487,7 +1496,31 @@ export function renderNotes() {
     return;
   }
 
+  const isDaysView = (state.notesData.viewMode || "bento") === "days";
+  listEl.classList.toggle("notes-list--days", isDaysView);
+  updateNotesViewToggle();
+
+  let lastDateKey = null;
   for (const note of state.notesData.notes) {
+    if (isDaysView) {
+      const d = note.createdAt ? new Date(note.createdAt) : null;
+      const dateKey = d ? d.toDateString() : "Undated";
+      if (dateKey !== lastDateKey) {
+        lastDateKey = dateKey;
+        listEl.append(
+          el("div", "notes-day-header", {
+            textContent: d
+              ? d.toLocaleDateString(undefined, {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : "Undated",
+          }),
+        );
+      }
+    }
     let card;
     if (note.kind === "text") {
       card = buildTextNote(note);
@@ -1505,7 +1538,8 @@ export function renderNotes() {
     }
     card.append(noteFooter(note));
     card.dataset.noteId = note.id;
-    card.style.gridColumn = `span ${note.span || 1}`;
+    card.style.gridColumn = isDaysView ? "" : `span ${note.span || 1}`;
+    card.style.gridRowEnd = "";
     applyNoteStyle(card, note);
     if (notesSelection.has(note.id)) card.classList.add("is-selected");
 
@@ -1541,10 +1575,19 @@ export function renderNotes() {
 
   updateNotesChrome();
 
+  if (isDaysView) return;
+
   // Bento packing: card heights aren't known until textareas auto-size, so
   // measure on the next frames and translate each card's height into a
   // grid-row span. `grid-auto-flow: dense` then tiles them into the gaps.
   requestAnimationFrame(() => requestAnimationFrame(layoutBento));
+}
+
+function updateNotesViewToggle() {
+  const view = state.notesData.viewMode || "bento";
+  document.querySelectorAll("#notes-view-toggle .notes-view-toggle__btn").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.view === view);
+  });
 }
 
 state.draggingNoteId = null;
@@ -1706,7 +1749,7 @@ function hideDropIndicator() {
 // can pack the cards into a bento mosaic.
 function layoutBento() {
   const listEl = document.getElementById("notes-list");
-  if (!listEl) return;
+  if (!listEl || listEl.classList.contains("notes-list--days")) return;
 
   const style = getComputedStyle(listEl);
   // Clamp card spans to the actual column count so wide cards don't overflow.
@@ -1735,6 +1778,19 @@ export function scheduleBentoLayout() {
 function initNotes() {
   document.querySelectorAll("[data-new-note]").forEach((btn) => {
     btn.addEventListener("click", () => newNote(btn.dataset.newNote));
+  });
+
+  const viewToggle = document.getElementById("notes-view-toggle");
+  updateNotesViewToggle();
+  viewToggle.addEventListener("click", (e) => {
+    const btn = e.target.closest(".notes-view-toggle__btn");
+    if (!btn) return;
+    const view = btn.dataset.view;
+    if (view === (state.notesData.viewMode || "bento")) return;
+    state.notesData.viewMode = view;
+    updateNotesViewToggle();
+    renderNotes();
+    scheduleNotesSave();
   });
 
   const fontBtn = document.getElementById("notes-font-btn");
