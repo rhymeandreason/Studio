@@ -840,16 +840,31 @@ function renderUsageBars(session) {
 // 7-day usage as a conic-gradient pie wedge.
 function renderSevenDayPie() {
     const sevenDay = accountUsage?.seven_day;
+    const labelEl = sevenDayWrap.querySelector(".claude-sevenday__label");
     if (sevenDay && typeof sevenDay.utilization === "number") {
         const pct = Math.round(sevenDay.utilization);
         const deg = (pct / 100) * 360;
         const color = fillColor(pct);
         sevenDayPie.style.background = `conic-gradient(${color} ${deg}deg, var(--hairline-strong) ${deg}deg)`;
-        sevenDayWrap.title = `7-day usage: ${pct}%`;
+        // Days until the weekly window resets.
+        const left = daysUntil(sevenDay.resets_at);
+        if (labelEl) labelEl.textContent = left != null ? `${left}d` : "7d";
+        sevenDayWrap.title = `7-day usage: ${pct}%${
+            left != null ? ` · resets in ${left} day${left === 1 ? "" : "s"}` : ""
+        }`;
     } else {
         sevenDayPie.style.background = "var(--hairline-strong)";
+        if (labelEl) labelEl.textContent = "7d";
         sevenDayWrap.title = "7-day usage";
     }
+}
+
+// Whole days from now until an ISO timestamp (rounded up, min 0).
+function daysUntil(iso) {
+    if (!iso) return null;
+    const ms = new Date(iso).getTime() - Date.now();
+    if (Number.isNaN(ms)) return null;
+    return Math.max(0, Math.ceil(ms / 86400000));
 }
 
 async function sendMessage(text) {
