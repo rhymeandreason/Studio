@@ -145,6 +145,52 @@
     overflow-y: auto;
 }
 
+/* Compact toggle (e.g. include outside sessions) */
+.claude-toggle {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+}
+
+.claude-toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.claude-toggle__track {
+    display: inline-block;
+    width: 26px;
+    height: 15px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong, var(--hairline));
+    transition: background 0.15s, border-color 0.15s;
+    position: relative;
+}
+
+.claude-toggle__thumb {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--text-soft);
+    transition: transform 0.15s, background 0.15s;
+}
+
+.claude-toggle input:checked + .claude-toggle__track {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.claude-toggle input:checked + .claude-toggle__track .claude-toggle__thumb {
+    transform: translateX(11px);
+    background: var(--elevated, #fff);
+}
+
 .claude-sessions__empty {
     padding: 14px 10px;
     font-size: 12px;
@@ -157,7 +203,7 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 2px;
-    padding: 9px 28px 9px 10px;
+    padding: 9px 50px 9px 10px;
     border: none;
     border-left: 2px solid transparent;
     background: none;
@@ -170,10 +216,10 @@
     transition: background 0.1s;
 }
 
+.claude-session-item__rename,
 .claude-session-item__delete {
     position: absolute;
     top: 6px;
-    right: 6px;
     width: 20px;
     height: 20px;
     padding: 0;
@@ -187,17 +233,44 @@
     justify-content: center;
 }
 
+.claude-session-item__rename {
+    right: 28px;
+}
+
+.claude-session-item__delete {
+    right: 6px;
+}
+
+.claude-session-item__rename .mi,
 .claude-session-item__delete .mi {
     font-size: 14px;
 }
 
+.claude-session-item:hover .claude-session-item__rename,
 .claude-session-item:hover .claude-session-item__delete {
     display: inline-flex;
+}
+
+.claude-session-item__rename:hover {
+    background: var(--surface);
+    color: var(--text);
 }
 
 .claude-session-item__delete:hover {
     background: var(--rose-soft, var(--surface));
     color: var(--rose, var(--text));
+}
+
+.claude-session-item__rename-input {
+    width: 100%;
+    font: inherit;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--elevated, var(--surface));
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 1px 4px;
+    margin: -2px 0;
 }
 
 .claude-session-item:hover {

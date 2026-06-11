@@ -2001,6 +2001,88 @@ fn list_claude_project_sessions(app: AppHandle, project_path: String) -> Vec<Cla
     sessions
 }
 
+/// One replayed message from a recorded session log.
+#[derive(Clone, Serialize)]
+struct ClaudeLogMessage {
+    role: String,
+    text: String,
+}
+
+/// Read the full transcript of a recorded Claude Code session
+/// (`~/.claude/projects/<encoded-cwd>/<session_id>.jsonl`) so the UI can show
+/// the past chat log when resuming a session started outside Studio. Returns
+/// user/assistant text and a compact summary of each tool call, in order.
+#[tauri::command]
+fn read_claude_session_log(
+    app: AppHandle,
+    project_path: String,
+    session_id: String,
+) -> Vec<ClaudeLogMessage> {
+    let Ok(home) = app.path().home_dir() else {
+        return Vec::new();
+    };
+    let cwd = claude_cwd(&app, &project_path);
+    let encoded = cwd.to_string_lossy().replace('/', "-");
+    let file = home
+        .join(".claude/projects")
+        .join(encoded)
+        .join(format!("{session_id}.jsonl"));
+
+    let Ok(text) = std::fs::read_to_string(&file) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        let kind = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
+        if kind != "user" && kind != "assistant" {
+            continue;
+        }
+        let content = &v["message"]["content"];
+        // Content is either a plain string or an array of typed blocks.
+        if let Some(s) = content.as_str() {
+            let s = s.trim();
+            if !s.is_empty() {
+                out.push(ClaudeLogMessage {
+                    role: kind.to_string(),
+                    text: s.to_string(),
+                });
+            }
+            continue;
+        }
+        let Some(blocks) = content.as_array() else {
+            continue;
+        };
+        for block in blocks {
+            match block.get("type").and_then(|t| t.as_str()) {
+                Some("text") => {
+                    if let Some(s) = block["text"].as_str() {
+                        if !s.trim().is_empty() {
+                            out.push(ClaudeLogMessage {
+                                role: kind.to_string(),
+                                text: s.trim().to_string(),
+                            });
+                        }
+                    }
+                }
+                Some("tool_use") => {
+                    let name = block.get("name").and_then(|n| n.as_str()).unwrap_or("tool");
+                    let input = block.get("input").cloned().unwrap_or(serde_json::json!({}));
+                    out.push(ClaudeLogMessage {
+                        role: "tool".to_string(),
+                        text: format!("{name} {input}"),
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
 /// Move an entire project folder to the Trash.
 #[tauri::command]
 fn trash_project(path: String) -> Result<(), String> {
@@ -2041,6 +2123,7 @@ pub fn run() {
             read_claude_sessions,
             save_claude_sessions,
             list_claude_project_sessions,
+            read_claude_session_log,
             get_active_project,
             clear_active_project,
             save_tool_export,

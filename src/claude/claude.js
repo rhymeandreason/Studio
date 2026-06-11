@@ -3,6 +3,7 @@ const { listen } = window.__TAURI__.event;
 
 const sessionsListEl = document.getElementById("sessions-list");
 const historyListEl = document.getElementById("history-list");
+const historyToggle = document.getElementById("history-toggle");
 const sessionsPanel = document.getElementById("sessions-panel");
 const sessionsToggle = document.getElementById("sessions-toggle");
 const sessionNameEl = document.getElementById("session-name");
@@ -21,6 +22,9 @@ const CONTEXT_WINDOW_DEFAULT = 200000;
 /** @type {Array<Session>} */
 let sessions = [];
 let activeKey = null;
+// Whether to surface Claude Code sessions started outside Studio (the "Recent"
+// list, read from ~/.claude/projects). Persisted across launches.
+let includeOutside = localStorage.getItem("claude.includeOutside") !== "false";
 const listeners = new Map(); // key -> unlisten fn
 const liveBubbles = new Map(); // key -> { assistantEl, toolKeys: Set }
 
@@ -76,11 +80,15 @@ function renderSessionsList() {
     for (const s of sessions) {
         const item = document.createElement("div");
         item.className = "claude-session-item" + (s.key === activeKey ? " is-active" : "");
-        item.innerHTML = `<span class="claude-session-item__name"></span><span class="claude-session-item__project"><span class="mi mi-sm">folder</span><span></span></span><button class="claude-session-item__delete" title="Delete session"><span class="mi">delete</span></button>`;
+        item.innerHTML = `<span class="claude-session-item__name"></span><span class="claude-session-item__project"><span class="mi mi-sm">folder</span><span></span></span><button class="claude-session-item__rename" title="Rename session"><span class="mi">edit</span></button><button class="claude-session-item__delete" title="Delete session"><span class="mi">delete</span></button>`;
         item.querySelector(".claude-session-item__name").textContent = s.name;
         item.querySelector(".claude-session-item__project span:last-child").textContent =
             s.projectName;
         item.addEventListener("click", () => switchTo(s.key));
+        item.querySelector(".claude-session-item__rename").addEventListener("click", (e) => {
+            e.stopPropagation();
+            beginRename(s.key, item);
+        });
         item.querySelector(".claude-session-item__delete").addEventListener("click", (e) => {
             e.stopPropagation();
             deleteSession(s.key);
@@ -92,6 +100,11 @@ function renderSessionsList() {
 async function renderHistoryList(projectPath, projectName) {
     document.getElementById("history-project").textContent = projectName;
     historyListEl.innerHTML = "";
+    if (!includeOutside) {
+        historyListEl.hidden = true;
+        return;
+    }
+    historyListEl.hidden = false;
     let history = [];
     try {
         history = await invoke("list_claude_project_sessions", { projectPath });
@@ -120,6 +133,15 @@ async function renderHistoryList(projectPath, projectName) {
 }
 
 async function resumeHistorySession(h, projectPath, projectName) {
+    let transcript = [];
+    try {
+        transcript = await invoke("read_claude_session_log", {
+            projectPath,
+            sessionId: h.session_id,
+        });
+    } catch {
+        transcript = [];
+    }
     const session = {
         key: uuid(),
         name: h.summary,
@@ -127,7 +149,7 @@ async function resumeHistorySession(h, projectPath, projectName) {
         projectName,
         model: modelSelect.value || "sonnet",
         resumeId: h.session_id,
-        transcript: [],
+        transcript,
     };
     sessions.unshift(session);
     await persistSessions();
@@ -186,6 +208,48 @@ async function switchTo(key) {
     renderSessionsList();
     ensureListener(session.key);
     renderHistoryList(session.projectPath, session.projectName);
+}
+
+function beginRename(key, item) {
+    const session = sessions.find((s) => s.key === key);
+    if (!session) return;
+    const nameEl = item.querySelector(".claude-session-item__name");
+
+    const input = document.createElement("input");
+    input.className = "claude-session-item__rename-input";
+    input.value = session.name;
+    nameEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const commit = (save) => {
+        if (done) return;
+        done = true;
+        if (save) {
+            const next = input.value.trim();
+            if (next && next !== session.name) {
+                session.name = next;
+                persistSessions();
+                if (key === activeKey) {
+                    sessionNameEl.textContent = `${session.name} · ${session.projectName}`;
+                }
+            }
+        }
+        renderSessionsList();
+    };
+
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            commit(true);
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            commit(false);
+        }
+    });
+    input.addEventListener("blur", () => commit(true));
 }
 
 async function deleteSession(key) {
@@ -451,6 +515,19 @@ modelSelect.addEventListener("change", () => {
 
 sessionsToggle.addEventListener("click", () => {
     sessionsPanel.hidden = !sessionsPanel.hidden;
+});
+
+historyToggle.checked = includeOutside;
+historyToggle.addEventListener("change", async () => {
+    includeOutside = historyToggle.checked;
+    localStorage.setItem("claude.includeOutside", includeOutside);
+    const session = sessions.find((s) => s.key === activeKey);
+    if (session) {
+        await renderHistoryList(session.projectPath, session.projectName);
+    } else {
+        const proj = await defaultProject();
+        if (proj) await renderHistoryList(proj.path, proj.name);
+    }
 });
 
 async function startNewSession() {
