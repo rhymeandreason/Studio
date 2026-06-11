@@ -176,18 +176,17 @@ If the Mac is fully asleep, `caffeinate` can't help. Clicking "Save schedule"
 1. Scans each slot that has an enabled task and finds its next occurrence
    (today..+7 days, respecting the slot's `days`).
 2. Runs `pmset schedule cancelall && pmset schedule wake "MM/dd/yy HH:MM:SS"`
-   (one `wake` per distinct upcoming time, deduped and capped at **3 slots**
-   — `pmset` only holds a handful of events, and tasks sharing a time share
-   a slot) via `osascript ... with administrator privileges` — macOS prompts
-   for the admin password at this point, while you're present making the
-   edit.
+   (one `wake` per distinct upcoming time, deduped and capped at **3 wake
+   events** in `compute_wake_times` — `pmset` only holds a handful) via
+   `osascript ... with administrator privileges` — macOS prompts for the
+   admin password at this point, while you're present making the edit.
 
 `pmset schedule cancelall` clears *all* scheduled sleep/wake/poweron events
 system-wide (not just Studio's), so this is single-user-only behavior.
 
-Because the schedule is capped at 3 slots, a single daily task covers the
-next 3 days; with several tasks at different times, fewer days are covered.
-To keep a daily task
+Because the wake list is capped at 3 events, a single daily slot covers the
+next 3 days; with both slots in use at different times, fewer days are
+covered. To keep a daily slot
 self-renewing, `run_scheduled_task` calls `roll_wake_schedule` after each run,
 which recomputes the same schedule and applies it via `sudo -n` (non-interactive)
 — if the admin-password timestamp from the last `update_wake_schedule` prompt
