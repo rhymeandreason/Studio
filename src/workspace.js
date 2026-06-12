@@ -34,9 +34,15 @@ const LAUNCH_LABEL = `${mi("rocket_launch")}Launch workspace`;
 
 export function initClaudeButton() {
   const btn = document.getElementById("claude-btn");
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", (e) => {
     if (!state.activeProject) return;
-    invoke("launch_claude_app", { projectPath: state.activeProject.path });
+    // Normal click → standalone Studio Claude app. Option-click → the in-Studio
+    // window (loads src/ live, for frontend iteration during `tauri dev`).
+    if (e.altKey) {
+      invoke("open_claude_window", { projectPath: state.activeProject.path });
+    } else {
+      invoke("launch_claude_app", { projectPath: state.activeProject.path });
+    }
   });
 }
 
