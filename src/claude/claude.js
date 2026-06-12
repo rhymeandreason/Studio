@@ -454,12 +454,18 @@ function appendBubble(role, text) {
     const el = document.createElement("div");
     el.className = `claude-msg claude-msg--${role}`;
     if (role === "assistant") {
+        const who = document.createElement("div");
+        who.className = "claude-msg__who";
         const icon = document.createElement("span");
         icon.className = "claude-msg__icon claude-msg__icon--panda";
         applySpriteStyle(icon, "idle", 24);
         if (lastAssistantIcon) lastAssistantIcon.style.animation = "none";
         lastAssistantIcon = icon;
-        el.appendChild(icon);
+        const author = document.createElement("span");
+        author.className = "claude-msg__author";
+        author.textContent = sessions.find((s) => s.key === activeKey)?.projectName || "";
+        who.append(icon, author);
+        el.appendChild(who);
     } else if (role !== "system" && role !== "user") {
         const icon = document.createElement("span");
         icon.className = "mi claude-msg__icon";

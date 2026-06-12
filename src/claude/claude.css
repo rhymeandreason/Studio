@@ -748,6 +748,25 @@
     image-rendering: pixelated;
 }
 
+/* Assistant avatar + project-name caption, side by side. */
+.claude-msg__who {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+}
+
+.claude-msg__author {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+}
+
 .claude-msg--user .claude-msg__icon {
     background: var(--accent-soft);
     color: var(--accent);
