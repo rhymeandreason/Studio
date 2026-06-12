@@ -347,6 +347,11 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
 
     if let Some(win) = app.get_webview_window(&label) {
         if let Some(rect) = near {
+            // Tray-icon click: toggle visibility instead of always showing.
+            if win.is_visible().unwrap_or(false) {
+                let _ = win.hide();
+                return;
+            }
             position_below_tray_icon(&win, &rect);
         }
         let _ = win.show();
@@ -3329,7 +3334,12 @@ pub fn run() {
                 .icon_as_template(true)
                 .tooltip("Daily Notes")
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { rect, .. } = event {
+                    if let TrayIconEvent::Click {
+                        rect,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
                         open_tool_window_near(tray.app_handle(), "daily-notes.html", Some(rect));
                     }
                 })
