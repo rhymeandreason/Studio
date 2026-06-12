@@ -9,8 +9,9 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{
+    image::Image,
     menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem},
-    tray::TrayIconBuilder,
+    tray::{TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Wry,
 };
 
@@ -351,13 +352,19 @@ fn open_tool_window(app: &AppHandle, path: &str) {
         .unwrap_or("Tool")
         .to_string();
 
+    let (width, height) = if filename == "daily-notes.html" {
+        (300.0, 560.0)
+    } else {
+        (900.0, 640.0)
+    };
+
     let _ = WebviewWindowBuilder::new(
         app,
         label,
         WebviewUrl::App(format!("tools/{filename}").into()),
     )
     .title(title)
-    .inner_size(900.0, 640.0)
+    .inner_size(width, height)
     .build();
 }
 
@@ -2926,6 +2933,21 @@ pub fn run() {
                             open_tool_window(app, &id[TOOL_PREFIX.len()..]);
                         }
                         _ => {}
+                    }
+                })
+                .build(app)?;
+
+            // Second tray icon: Daily Notes, one click away, no menu.
+            let daily_notes_icon = Image::from_bytes(include_bytes!(
+                "../icons/daily-notes-tray.png"
+            ))?;
+            TrayIconBuilder::with_id("daily-notes-tray")
+                .icon(daily_notes_icon)
+                .icon_as_template(true)
+                .tooltip("Daily Notes")
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { .. } = event {
+                        open_tool_window(tray.app_handle(), "daily-notes.html");
                     }
                 })
                 .build(app)?;

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Notes</title>
+<style>
+  :root {
+    --bg: #f7f5f0;
+    --surface: #efece5;
+    --elevated: #ffffff;
+    --border: #2a2a28;
+    --hairline: rgba(42, 42, 40, 0.1);
+    --hairline-strong: rgba(42, 42, 40, 0.18);
+    --text: #2a2a28;
+    --text-muted: #8a8678;
+    --text-soft: #b6b1a4;
+    --accent: #6e6154;
+    --accent-soft: #ead9c5;
+    --sans: "Futura", "Futura PT", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #header {
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--hairline);
+    flex-shrink: 0;
+  }
+
+  #header .date {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  #header .sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  #checklist {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 10px 14px;
+  }
+
+  .item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 4px;
+    border-radius: 6px;
+  }
+
+  .item:hover {
+    background: var(--surface);
+  }
+
+  .item:hover .delete {
+    opacity: 1;
+  }
+
+  .item input[type=checkbox] {
+    margin-top: 3px;
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .item .text {
+    flex: 1 1 auto;
+    font-size: 13px;
+    line-height: 1.5;
+    word-break: break-word;
+    cursor: text;
+  }
+
+  .item.done .text {
+    color: var(--text-soft);
+    text-decoration: line-through;
+  }
+
+  .item .delete {
+    opacity: 0;
+    transition: opacity 0.12s;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 4px;
+    flex-shrink: 0;
+  }
+
+  .item .delete:hover {
+    color: #a85a4a;
+  }
+
+  #add-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 4px 4px;
+  }
+
+  #add-row input {
+    flex: 1 1 auto;
+    border: none;
+    background: transparent;
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--text);
+    padding: 5px 4px;
+    outline: none;
+  }
+
+  #add-row input::placeholder {
+    color: var(--text-soft);
+  }
+
+  #add-row .plus {
+    color: var(--text-soft);
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+
+  #calendar {
+    flex-shrink: 0;
+    border-top: 1px solid var(--hairline);
+    padding: 12px 14px 14px;
+  }
+
+  #calendar .cal-header {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    letter-spacing: 0.04em;
+  }
+
+  #calendar .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+
+  #calendar .cal-grid .dow {
+    font-size: 10px;
+    color: var(--text-soft);
+    text-align: center;
+    padding-bottom: 4px;
+  }
+
+  #calendar .cal-grid .day {
+    font-size: 12px;
+    text-align: center;
+    padding: 4px 0;
+    border-radius: 50%;
+    color: var(--text-muted);
+  }
+
+  #calendar .cal-grid .day.muted {
+    color: var(--text-soft);
+    opacity: 0.4;
+  }
+
+  #calendar .cal-grid .day.today {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+  <div id="header">
+    <div class="date" id="date-label"></div>
+    <div class="sub" id="carry-label"></div>
+  </div>
+
+  <div id="checklist"></div>
+
+  <div id="add-row">
+    <span class="plus">+</span>
+    <input type="text" id="new-item" placeholder="Add a task and press Enter…">
+  </div>
+
+  <div id="calendar">
+    <div class="cal-header" id="cal-month"></div>
+    <div class="cal-grid" id="cal-grid"></div>
+  </div>
+
+<script>
+  const STORE_KEY = 'studio-daily-notes';
+
+  function todayKey(d = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function loadStore() {
+    try {
+      return JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveStore(store) {
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  }
+
+  // Migrate: if today's list doesn't exist yet, carry over unchecked
+  // items from the most recent earlier day. Only today's list is kept.
+  function loadTodayItems() {
+    const store = loadStore();
+    const today = todayKey();
+    let carried = 0;
+
+    if (!store[today]) {
+      const pastKeys = Object.keys(store).filter(k => k < today).sort();
+      const lastKey = pastKeys[pastKeys.length - 1];
+      let items = [];
+      if (lastKey) {
+        items = store[lastKey]
+          .filter(i => !i.done)
+          .map(i => ({ text: i.text, done: false }));
+        carried = items.length;
+      }
+      store[today] = items;
+      for (const k of Object.keys(store)) {
+        if (k !== today) delete store[k];
+      }
+      saveStore(store);
+    }
+
+    return { items: store[today], carried };
+  }
+
+  let items = [];
+
+  function persist() {
+    const store = loadStore();
+    store[todayKey()] = items;
+    saveStore(store);
+  }
+
+  function render() {
+    const list = document.getElementById('checklist');
+    list.innerHTML = '';
+    items.forEach((item, i) => {
+      const row = document.createElement('div');
+      row.className = 'item' + (item.done ? ' done' : '');
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = item.done;
+      cb.addEventListener('change', () => {
+        items[i].done = cb.checked;
+        persist();
+        render();
+      });
+
+      const text = document.createElement('div');
+      text.className = 'text';
+      text.textContent = item.text;
+      text.contentEditable = 'true';
+      text.addEventListener('blur', () => {
+        const val = text.textContent.trim();
+        if (!val) {
+          items.splice(i, 1);
+        } else {
+          items[i].text = val;
+        }
+        persist();
+        render();
+      });
+      text.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          text.blur();
+        }
+      });
+
+      const del = document.createElement('button');
+      del.className = 'delete';
+      del.textContent = '×';
+      del.title = 'Delete';
+      del.addEventListener('click', () => {
+        items.splice(i, 1);
+        persist();
+        render();
+      });
+
+      row.append(cb, text, del);
+      list.appendChild(row);
+    });
+  }
+
+  function renderHeader(carried) {
+    const now = new Date();
+    document.getElementById('date-label').textContent =
+      now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    document.getElementById('carry-label').textContent =
+      carried > 0 ? `${carried} carried over from yesterday` : '';
+  }
+
+  function renderCalendar() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const today = now.getDate();
+
+    document.getElementById('cal-month').textContent =
+      now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+    const grid = document.getElementById('cal-grid');
+    grid.innerHTML = '';
+
+    const dows = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    dows.forEach(d => {
+      const el = document.createElement('div');
+      el.className = 'dow';
+      el.textContent = d;
+      grid.appendChild(el);
+    });
+
+    const firstDow = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+    for (let i = 0; i < firstDow; i++) {
+      const el = document.createElement('div');
+      el.className = 'day muted';
+      el.textContent = daysInPrevMonth - firstDow + 1 + i;
+      grid.appendChild(el);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const el = document.createElement('div');
+      el.className = 'day' + (d === today ? ' today' : '');
+      el.textContent = d;
+      grid.appendChild(el);
+    }
+
+    const totalCells = firstDow + daysInMonth;
+    const trailing = (7 - (totalCells % 7)) % 7;
+    for (let d = 1; d <= trailing; d++) {
+      const el = document.createElement('div');
+      el.className = 'day muted';
+      el.textContent = d;
+      grid.appendChild(el);
+    }
+  }
+
+  const { items: initialItems, carried } = loadTodayItems();
+  items = initialItems;
+  renderHeader(carried);
+  render();
+  renderCalendar();
+
+  const newItemInput = document.getElementById('new-item');
+  newItemInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const val = newItemInput.value.trim();
+      if (val) {
+        items.push({ text: val, done: false });
+        persist();
+        render();
+        newItemInput.value = '';
+      }
+    }
+  });
+</script>
+</body>
+</html>

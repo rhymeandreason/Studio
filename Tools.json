@@ -1,3 +1,4 @@
 [
-  { "file": "bento-grid.html", "name": "Bento Grid" }
+  { "file": "bento-grid.html", "name": "Bento Grid" },
+  { "file": "daily-notes.html", "name": "Daily Notes" }
 ]
