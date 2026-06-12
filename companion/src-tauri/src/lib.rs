@@ -10,12 +10,14 @@ use tauri_plugin_deep_link::DeepLinkExt;
 
 // --- Workspace repo resolution -------------------------------------------
 
-/// Minimal view of a project's workspace.json — only the `repo` field, used to
-/// run Claude in the actual git repo rather than the project folder.
+/// Minimal view of a project's workspace.json — the `repo` field (to run Claude
+/// in the git repo) and the `sprite` (the project's animal, shown in the chat).
 #[derive(Deserialize, Default)]
 struct Workspace {
     #[serde(default)]
     repo: String,
+    #[serde(default)]
+    sprite: String,
 }
 
 fn read_workspace(project_path: &str) -> Workspace {
@@ -407,12 +409,13 @@ fn handle_open_url(app: &AppHandle, url: &Url) {
             _ => {}
         }
     }
-    if project.is_none() {
+    let Some(ref path) = project else {
         return;
-    }
+    };
+    let sprite = read_workspace(path).sprite;
     let _ = app.emit(
         "claude-jump",
-        serde_json::json!({ "key": null, "projectPath": project, "projectName": name }),
+        serde_json::json!({ "key": null, "projectPath": project, "projectName": name, "sprite": sprite }),
     );
 }
 

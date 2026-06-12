@@ -1,6 +1,48 @@
+import { spriteStyle, DEFAULT_SPRITE } from "../sprites.js";
+
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { getCurrentWindow } = window.__TAURI__.window;
+
+// The project's animal sprite (from workspace.json), used for the status-bar
+// walker and assistant avatars. Defaults to the red panda. Persisted so it's
+// right immediately on relaunch, then refreshed by each claude-jump.
+let currentSprite = localStorage.getItem("claude.sprite") || DEFAULT_SPRITE;
+let lastAssistantIcon = null;
+
+// Apply a sprite animation's inline style to an element. The sprite sheets live
+// in src/sprites/, a sibling of this window's src/claude/ dir, so the file URL
+// from spriteStyle() needs a "../" prefix.
+function applySpriteStyle(el, anim, height) {
+    const { "--sprite-start": start, "--sprite-end": end, backgroundImage, ...rest } =
+        spriteStyle(currentSprite, anim, height);
+    Object.assign(el.style, rest);
+    el.style.backgroundImage = backgroundImage.replace('url("', 'url("../');
+    el.style.setProperty("--sprite-start", start);
+    el.style.setProperty("--sprite-end", end);
+}
+
+function applyStatusSprite() {
+    const panda = document.querySelector(".claude-status__panda");
+    if (panda) applySpriteStyle(panda, "movement", 26);
+}
+
+// Re-apply the sprite to every assistant avatar; only the last one animates.
+function refreshAssistantSprites() {
+    const icons = [...transcriptEl.querySelectorAll(".claude-msg__icon--panda")];
+    icons.forEach((icon, i) => {
+        applySpriteStyle(icon, "idle", 24);
+        if (i !== icons.length - 1) icon.style.animation = "none";
+    });
+    lastAssistantIcon = icons[icons.length - 1] || null;
+}
+
+function setSprite(name) {
+    currentSprite = name || DEFAULT_SPRITE;
+    localStorage.setItem("claude.sprite", currentSprite);
+    applyStatusSprite();
+    refreshAssistantSprites();
+}
 
 function setWindowTitle(projectName) {
     getCurrentWindow().setTitle(projectName ? `Claude · ${projectName}` : "Claude");
@@ -371,6 +413,7 @@ async function resumeHistorySession(h, projectPath, projectName) {
 
 function renderTranscript(session) {
     transcriptEl.innerHTML = "";
+    lastAssistantIcon = null;
     if (!session.transcript.length) {
         const empty = document.createElement("div");
         empty.className = "claude-empty";
@@ -413,6 +456,9 @@ function appendBubble(role, text) {
     if (role === "assistant") {
         const icon = document.createElement("span");
         icon.className = "claude-msg__icon claude-msg__icon--panda";
+        applySpriteStyle(icon, "idle", 24);
+        if (lastAssistantIcon) lastAssistantIcon.style.animation = "none";
+        lastAssistantIcon = icon;
         el.appendChild(icon);
     } else if (role !== "system" && role !== "user") {
         const icon = document.createElement("span");
@@ -1083,7 +1129,8 @@ listen("claude-jump", async (event) => {
     // The window hides rather than closes, so opening it doesn't re-run init();
     // refresh usage on each open (throttled, so rapid reopens don't 429).
     refreshUsage();
-    const { key, projectPath, projectName } = event.payload || {};
+    const { key, projectPath, projectName, sprite } = event.payload || {};
+    if (sprite !== undefined) setSprite(sprite);
     if (key && sessions.some((s) => s.key === key)) {
         await switchTo(key);
         return;
@@ -1111,6 +1158,7 @@ listen("claude-jump", async (event) => {
 
 (async function init() {
     renderStatus(); // hidden unless a turn is already running
+    applyStatusSprite();
     await loadSessions();
     renderSessionsList();
     refreshUsage(true);

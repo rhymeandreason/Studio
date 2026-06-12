@@ -2419,9 +2419,14 @@ fn open_claude_window(
         // again on app exit by the plugin.
         let _ = win.restore_state(StateFlags::SIZE | StateFlags::POSITION);
     }
+    let sprite = project_path
+        .as_ref()
+        .and_then(|p| read_workspace(p.clone()).ok())
+        .map(|w| w.sprite)
+        .unwrap_or_default();
     let _ = app.emit(
         "claude-jump",
-        serde_json::json!({ "key": key, "projectPath": project_path }),
+        serde_json::json!({ "key": key, "projectPath": project_path, "sprite": sprite }),
     );
     Ok(())
 }

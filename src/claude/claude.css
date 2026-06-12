@@ -538,25 +538,11 @@
     color: var(--text-muted);
 }
 
+/* The sprite (sheet/size/position/animation) is applied inline by claude.js via
+   spriteStyle(), so it can be the per-project animal, not just the panda. */
 .claude-status__panda {
     flex: 0 0 auto;
-    width: 60px;
-    height: 48px;
-    transform: scale(.8);
-    background-image: url("red-panda.png");
-    background-repeat: no-repeat;
-    /* Movement row (3rd of 7), cropped to its 20x16 content box, scaled 3x:
-       sheet 256x224 -> 768x672, frame pitch 32px -> 96px. */
-    background-position: -15px -240px;
-    background-size: 768px 672px;
     image-rendering: pixelated;
-    animation: claude-panda-walk 0.8s steps(8) infinite;
-}
-
-@keyframes claude-panda-walk {
-    to {
-        background-position: -783px -240px;
-    }
 }
 
 .claude-status__text {
@@ -755,28 +741,11 @@
     padding: 5px;
 }
 
+/* Sprite applied inline by claude.js (spriteStyle); only the last assistant
+   avatar animates (also managed in JS). */
 .claude-msg--assistant .claude-msg__icon--panda {
-    width: 44px;
-    height: 28px;
     background-color: transparent;
-    background-image: url("red-panda.png");
-    background-repeat: no-repeat;
-    /* Idle2 row (2nd of 7), cropped to its 19x12 content box, scaled ~2.3x:
-       sheet 256x224 -> 590x516, frame pitch 32px -> 74px. Frames 0-5 used. */
-    background-position: -12px -120px;
-    background-size: 590px 516px;
     image-rendering: pixelated;
-}
-
-/* Only the most recent assistant message animates. */
-.claude-msg--assistant:last-of-type .claude-msg__icon--panda {
-    animation: claude-panda-idle 1s steps(6) infinite;
-}
-
-@keyframes claude-panda-idle {
-    to {
-        background-position: -456px -120px;
-    }
 }
 
 .claude-msg--user .claude-msg__icon {
