@@ -93,6 +93,18 @@
         font-size: 11px;
         color: var(--ink);
         opacity: 0.75;
+        text-align: center;
+      }
+      .file .code.is-new {
+        font-size: 13px;
+        opacity: 1;
+        /* Sticker look: a white outline hugging the emoji, plus a soft drop. */
+        filter:
+          drop-shadow(0.7px 0 0 #fff) drop-shadow(-0.7px 0 0 #fff)
+          drop-shadow(0 0.7px 0 #fff) drop-shadow(0 -0.7px 0 #fff)
+          drop-shadow(0.5px 0.5px 0 #fff) drop-shadow(-0.5px 0.5px 0 #fff)
+          drop-shadow(0.5px -0.5px 0 #fff) drop-shadow(-0.5px -0.5px 0 #fff)
+          drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
       }
       .file .name {
         flex: 1 1 auto;
@@ -266,7 +278,11 @@
             row.title = "Open in editor";
             const code = document.createElement("span");
             code.className = "code";
-            code.textContent = f.status.trim() || "•";
+            // Untracked (new) files report "??" — show a star instead. Otherwise
+            // show the meaningful status letter (M/A/D/R…).
+            const isNew = f.status.includes("?");
+            code.textContent = isNew ? "⭐" : f.status.trim().replace(/\?/g, "")[0] || "•";
+            if (isNew) code.classList.add("is-new");
             const name = document.createElement("span");
             name.className = "name";
             // bidi-isolate so rtl ellipsis keeps the path readable
