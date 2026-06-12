@@ -1,6 +1,7 @@
 mod patchmatch;
 
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -45,6 +46,11 @@ struct Workspace {
     /// Code editor to open the repo in. Blank = Zed (the default).
     #[serde(default)]
     editor: String,
+    /// Bright background color (hex, e.g. "#ffd23f") for this project's Git
+    /// companion window. Blank = a default bright. Set via the repo card's
+    /// swatch row in the Workspace tab.
+    #[serde(default, rename = "gitColor")]
+    git_color: String,
     #[serde(default)]
     figma: String,
     #[serde(default)]
@@ -2066,6 +2072,315 @@ fn launch_workspace(app: AppHandle, path: String) -> Result<(), String> {
     Ok(())
 }
 
+// --- Git companion windows ---------------------------------------------
+//
+// Small bright-colored windows, one per repo, showing branch + changed files +
+// a commit box. Because `tauri dev` rebuilds restart Studio (killing its
+// windows), the set of open Git windows is persisted to `git-windows.json` and
+// reopened on startup, with each window's unsent commit-message `draft` saved
+// too so it survives the rebuild blink.
+
+/// One persisted Git window: which repo, its bright color + editor (copied from
+/// the project's workspace so the window is self-contained), and the unsent
+/// commit-message draft.
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct GitWindow {
+    repo: String,
+    #[serde(default)]
+    color: String,
+    #[serde(default)]
+    editor: String,
+    #[serde(default)]
+    draft: String,
+}
+
+/// Stable window label for a repo path (so reopening the same repo focuses the
+/// existing window instead of duplicating it).
+fn git_label(repo: &str) -> String {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    repo.hash(&mut h);
+    format!("git-{:x}", h.finish())
+}
+
+fn git_windows_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|dir| dir.join("git-windows.json"))
+}
+
+fn read_git_windows(app: &AppHandle) -> Vec<GitWindow> {
+    git_windows_path(app)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+fn write_git_windows(app: &AppHandle, list: &[GitWindow]) {
+    if let Some(path) = git_windows_path(app) {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Ok(text) = serde_json::to_string_pretty(list) {
+            let _ = std::fs::write(path, text);
+        }
+    }
+}
+
+/// Insert or update a repo's entry in the store, preserving its existing draft.
+fn upsert_git_window(app: &AppHandle, win: &GitWindow) {
+    let mut list = read_git_windows(app);
+    if let Some(existing) = list.iter_mut().find(|w| w.repo == win.repo) {
+        existing.color = win.color.clone();
+        existing.editor = win.editor.clone();
+    } else {
+        list.push(win.clone());
+    }
+    write_git_windows(app, &list);
+}
+
+fn remove_git_window(app: &AppHandle, repo: &str) {
+    let mut list = read_git_windows(app);
+    list.retain(|w| w.repo != repo);
+    write_git_windows(app, &list);
+}
+
+/// Parse "#rrggbb" to (r, g, b); falls back to a bright amber on bad input.
+fn parse_hex(hex: &str) -> (u8, u8, u8) {
+    let h = hex.trim().trim_start_matches('#');
+    if h.len() == 6 {
+        if let (Ok(r), Ok(g), Ok(b)) = (
+            u8::from_str_radix(&h[0..2], 16),
+            u8::from_str_radix(&h[2..4], 16),
+            u8::from_str_radix(&h[4..6], 16),
+        ) {
+            return (r, g, b);
+        }
+    }
+    (0xff, 0xd2, 0x3f)
+}
+
+/// Build (or focus) a Git window for a stored entry. Runs on the main thread —
+/// `WebviewWindowBuilder::build()` must, on macOS.
+fn build_git_window(app: &AppHandle, win: &GitWindow) {
+    let label = git_label(&win.repo);
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.show();
+        let _ = w.set_focus();
+        return;
+    }
+    let color = if win.color.is_empty() {
+        "#ffd23f".to_string()
+    } else {
+        win.color.clone()
+    };
+    let (r, g, b) = parse_hex(&color);
+    let name = Path::new(&win.repo)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("repo");
+    let url = format!(
+        "git/index.html?repo={}&color={}",
+        url_encode(&win.repo),
+        url_encode(&color),
+    );
+    let _ = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
+        .title(name)
+        .inner_size(400.0, 400.0)
+        .min_inner_size(300.0, 280.0)
+        .title_bar_style(tauri::TitleBarStyle::Transparent)
+        .background_color(tauri::webview::Color(r, g, b, 0xff))
+        .build();
+}
+
+/// Open (or focus) a Git window for a repo, persisting it so it reopens after a
+/// Studio rebuild. `color`/`editor` come from the project's workspace.
+#[tauri::command]
+fn open_git_window(
+    app: AppHandle,
+    repo: String,
+    color: String,
+    editor: String,
+) -> Result<(), String> {
+    let win = GitWindow {
+        repo,
+        color,
+        editor,
+        draft: String::new(),
+    };
+    upsert_git_window(&app, &win);
+    build_git_window(&app, &win);
+    Ok(())
+}
+
+#[tauri::command]
+fn git_get_draft(app: AppHandle, repo: String) -> String {
+    read_git_windows(&app)
+        .into_iter()
+        .find(|w| w.repo == repo)
+        .map(|w| w.draft)
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+fn git_set_draft(app: AppHandle, repo: String, draft: String) {
+    let mut list = read_git_windows(&app);
+    if let Some(w) = list.iter_mut().find(|w| w.repo == repo) {
+        w.draft = draft;
+        write_git_windows(&app, &list);
+    }
+}
+
+/// One changed file in `git status`: the two-char XY code and its path.
+#[derive(Serialize)]
+struct GitFile {
+    status: String,
+    path: String,
+}
+
+#[derive(Serialize)]
+struct GitCommit {
+    hash: String,
+    subject: String,
+    rel: String,
+}
+
+#[derive(Serialize)]
+struct GitStatus {
+    branch: String,
+    files: Vec<GitFile>,
+    #[serde(rename = "lastCommit")]
+    last_commit: Option<GitCommit>,
+}
+
+/// Read branch, changed files, and the last commit for a repo.
+#[tauri::command]
+fn git_status(repo: String) -> Result<GitStatus, String> {
+    let out = Command::new("git")
+        .args(["-C", &repo, "status", "--porcelain=v1", "-b"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut branch = String::new();
+    let mut files = Vec::new();
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("## ") {
+            // e.g. "main...origin/main [ahead 1]" or "main" or "No commits yet on main"
+            branch = rest
+                .split("...")
+                .next()
+                .unwrap_or(rest)
+                .split(" [")
+                .next()
+                .unwrap_or(rest)
+                .trim()
+                .to_string();
+        } else if line.len() > 3 {
+            let status = line[..2].to_string();
+            // Renames show "old -> new"; keep the new path.
+            let path = line[3..]
+                .rsplit(" -> ")
+                .next()
+                .unwrap_or(&line[3..])
+                .trim()
+                .to_string();
+            files.push(GitFile { status, path });
+        }
+    }
+
+    let log = Command::new("git")
+        .args(["-C", &repo, "log", "-1", "--format=%h%x1f%s%x1f%cr"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    let last_commit = if log.status.success() {
+        let l = String::from_utf8_lossy(&log.stdout);
+        let mut parts = l.trim().split('\u{1f}');
+        match (parts.next(), parts.next(), parts.next()) {
+            (Some(h), Some(s), Some(r)) if !h.is_empty() => Some(GitCommit {
+                hash: h.to_string(),
+                subject: s.to_string(),
+                rel: r.to_string(),
+            }),
+            _ => None,
+        }
+    } else {
+        None
+    };
+
+    Ok(GitStatus {
+        branch,
+        files,
+        last_commit,
+    })
+}
+
+/// Stage everything and commit. Returns an error string on failure (e.g.
+/// nothing to commit), which the window surfaces.
+#[tauri::command]
+fn git_commit(app: AppHandle, repo: String, message: String) -> Result<(), String> {
+    if message.trim().is_empty() {
+        return Err("Empty commit message".to_string());
+    }
+    let add = Command::new("git")
+        .args(["-C", &repo, "add", "-A"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !add.status.success() {
+        return Err(String::from_utf8_lossy(&add.stderr).trim().to_string());
+    }
+    let out = Command::new("git")
+        .args(["-C", &repo, "commit", "-m", &message])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        let msg = if err.trim().is_empty() {
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        } else {
+            err.trim().to_string()
+        };
+        return Err(msg);
+    }
+    // Committed — clear the saved draft.
+    git_set_draft(app, repo, String::new());
+    Ok(())
+}
+
+/// Un-commit the last commit, keeping its changes staged (soft reset).
+#[tauri::command]
+fn git_undo(repo: String) -> Result<(), String> {
+    let out = Command::new("git")
+        .args(["-C", &repo, "reset", "--soft", "HEAD~1"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+/// Open one changed file in the project's configured editor (blank = Zed).
+#[tauri::command]
+fn git_open_file(app: AppHandle, repo: String, file: String) -> Result<(), String> {
+    let editor = read_git_windows(&app)
+        .into_iter()
+        .find(|w| w.repo == repo)
+        .map(|w| w.editor)
+        .unwrap_or_default();
+    let editor = if editor.is_empty() { "Zed" } else { &editor };
+    let full = Path::new(&repo).join(&file);
+    Command::new("open")
+        .arg("-a")
+        .arg(editor)
+        .arg(full)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // --- Claude companion window -------------------------------------------
 
 /// The directory Claude should run in for a project: the workspace's resolved
@@ -2932,12 +3247,31 @@ pub fn run() {
             write_image,
             rename_media,
             trash_project,
-            set_window_width
+            set_window_width,
+            open_git_window,
+            git_status,
+            git_commit,
+            git_undo,
+            git_open_file,
+            git_get_draft,
+            git_set_draft
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Git windows are real, dismissible windows: closing one means
+                // "I'm done with this repo" — drop it from the persisted set so
+                // it doesn't reopen on the next rebuild, and let it close.
+                if window.label().starts_with("git-") {
+                    let app = window.app_handle();
+                    let list = read_git_windows(app);
+                    if let Some(w) = list.iter().find(|w| git_label(&w.repo) == window.label()) {
+                        remove_git_window(app, &w.repo.clone());
+                    }
+                    return;
+                }
+                // Other windows live in the menu bar — hide, don't quit Studio.
                 let _ = window.hide();
                 api.prevent_close();
             }
@@ -3005,8 +3339,23 @@ pub fn run() {
             // Prevent system sleep so scheduled tasks fire while Studio runs.
             start_caffeinate();
 
+            // Reopen any Git companion windows that were open before the last
+            // rebuild/quit (drafts intact). Runs here on the main thread.
+            for win in read_git_windows(&handle) {
+                build_git_window(&handle, &win);
+            }
+
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Studio");
+        .build(tauri::generate_context!())
+        .expect("error while building Studio")
+        .run(|_app, event| {
+            // Menu-bar app: never quit just because the last window closed.
+            // Only the tray's "Quit Studio" (app.exit) should end the process.
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event {
+                if code.is_none() {
+                    api.prevent_exit();
+                }
+            }
+        });
 }

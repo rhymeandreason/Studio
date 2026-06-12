@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "git",
+  "description": "Capability for the per-repo Git companion windows",
+  "windows": ["git-*"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:window:allow-set-title"
+  ]
+}

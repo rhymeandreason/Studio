@@ -53,6 +53,8 @@ app — no Dock icon; click the tray icon. Test projects live in `~/Projects/`.
 - **Workspace:** per-project launchpad. See [docs/workspace.md](docs/workspace.md).
 - **Claude window:** in-app chat UI (`src/claude/`) driving the `claude` CLI.
   See [docs/claude-window.md](docs/claude-window.md).
+- **Git windows:** bright per-repo windows (`src/git/`) — branch, changed files,
+  commit. Launched from the Workspace repo card. See [docs/git.md](docs/git.md).
 - **Interaction model:** shared selection + keyboard model across all panels.
   See [docs/interaction-spec.md](docs/interaction-spec.md).
 - **Tools:** small built-in HTML utilities. See [docs/tools.md](docs/tools.md).

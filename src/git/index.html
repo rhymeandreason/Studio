@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Git</title>
+    <style>
+      :root {
+        --bg: #ffd23f;
+        --ink: #1a1a1a;
+        --ink-dim: rgba(26, 26, 26, 0.55);
+        --line: rgba(26, 26, 26, 0.16);
+        --card: rgba(255, 255, 255, 0.45);
+        --card-strong: rgba(255, 255, 255, 0.7);
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font: 13px/1.4 "Futura", "Avenir Next", system-ui, sans-serif;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        user-select: none;
+      }
+      /* Title-bar drag strip (window is transparent-titlebar + tinted). */
+      .titlebar {
+        height: 34px;
+        flex: 0 0 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .titlebar .branch {
+        font-weight: 600;
+        font-size: 13px;
+        letter-spacing: 0.02em;
+        max-width: 70%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .titlebar .branch::before {
+        content: "⎇ ";
+        opacity: 0.6;
+      }
+      main {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        padding: 4px 14px 12px;
+        gap: 10px;
+      }
+      .files {
+        flex: 1 1 auto;
+        min-height: 60px;
+        overflow-y: auto;
+        background: var(--card);
+        border-radius: 10px;
+        padding: 4px;
+      }
+      .file {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 8px;
+        border-radius: 7px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .file:hover { background: var(--card-strong); }
+      .file .code {
+        flex: 0 0 22px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        font-family: "SF Mono", ui-monospace, monospace;
+        font-size: 11px;
+        color: var(--ink);
+        opacity: 0.75;
+      }
+      .file .name {
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        direction: rtl;
+        text-align: left;
+      }
+      .empty {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        color: var(--ink-dim);
+        font-style: italic;
+      }
+      .commit { display: flex; flex-direction: column; gap: 7px; }
+      textarea {
+        resize: none;
+        border: none;
+        border-radius: 9px;
+        background: var(--card-strong);
+        color: var(--ink);
+        font: inherit;
+        padding: 8px 10px;
+        height: 48px;
+        outline: none;
+        user-select: text;
+      }
+      textarea::placeholder { color: var(--ink-dim); }
+      button {
+        border: none;
+        border-radius: 9px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 8px 12px;
+        color: var(--ink);
+        background: var(--ink);
+        color: var(--bg);
+      }
+      button:disabled { opacity: 0.35; cursor: default; }
+      .prev {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+        color: var(--ink-dim);
+        font-size: 12px;
+        min-height: 20px;
+      }
+      .prev .msg {
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .prev .hash {
+        font-family: "SF Mono", ui-monospace, monospace;
+        opacity: 0.8;
+      }
+      .prev .undo {
+        flex: 0 0 auto;
+        padding: 3px 9px;
+        font-size: 11px;
+        background: transparent;
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        background: var(--ink);
+        color: var(--bg);
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+        max-width: 90%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .toast.show { opacity: 1; }
+    </style>
+  </head>
+  <body>
+    <div class="titlebar" data-tauri-drag-region>
+      <span class="branch" id="branch" data-tauri-drag-region>…</span>
+    </div>
+    <main>
+      <div class="files" id="files"></div>
+      <div class="commit">
+        <textarea id="msg" placeholder="Commit message…"></textarea>
+        <button id="commit" disabled>Commit all changes</button>
+      </div>
+      <div class="prev" id="prev"></div>
+    </main>
+    <div class="toast" id="toast"></div>
+
+    <script>
+      const invoke = window.__TAURI__.core.invoke;
+      const params = new URLSearchParams(location.search);
+      const repo = params.get("repo") || "";
+      const color = params.get("color");
+      if (color) document.documentElement.style.setProperty("--bg", color);
+
+      const $branch = document.getElementById("branch");
+      const $files = document.getElementById("files");
+      const $msg = document.getElementById("msg");
+      const $commit = document.getElementById("commit");
+      const $prev = document.getElementById("prev");
+      const $toast = document.getElementById("toast");
+
+      let toastTimer;
+      function toast(text) {
+        $toast.textContent = text;
+        $toast.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => $toast.classList.remove("show"), 2200);
+      }
+
+      let changedCount = 0;
+      function syncCommitEnabled() {
+        $commit.disabled = !$msg.value.trim() || changedCount === 0;
+      }
+
+      async function refresh() {
+        let st;
+        try {
+          st = await invoke("git_status", { repo });
+        } catch (e) {
+          $branch.textContent = "not a git repo";
+          $files.innerHTML = `<div class="empty">${String(e)}</div>`;
+          return;
+        }
+        $branch.textContent = st.branch || "(detached)";
+
+        changedCount = st.files.length;
+        $files.innerHTML = "";
+        if (st.files.length === 0) {
+          const e = document.createElement("div");
+          e.className = "empty";
+          e.textContent = "Working tree clean";
+          $files.append(e);
+        } else {
+          for (const f of st.files) {
+            const row = document.createElement("div");
+            row.className = "file";
+            row.title = "Open in editor";
+            const code = document.createElement("span");
+            code.className = "code";
+            code.textContent = f.status.trim() || "•";
+            const name = document.createElement("span");
+            name.className = "name";
+            // bidi-isolate so rtl ellipsis keeps the path readable
+            name.textContent = "⁦" + f.path + "⁩";
+            row.append(code, name);
+            row.addEventListener("click", () => openFile(f.path));
+            $files.append(row);
+          }
+        }
+        syncCommitEnabled();
+
+        $prev.innerHTML = "";
+        if (st.lastCommit) {
+          const msg = document.createElement("span");
+          msg.className = "msg";
+          msg.textContent = st.lastCommit.subject;
+          const hash = document.createElement("span");
+          hash.className = "hash";
+          hash.textContent = st.lastCommit.hash;
+          const rel = document.createElement("span");
+          rel.textContent = "· " + st.lastCommit.rel;
+          const undo = document.createElement("button");
+          undo.className = "undo";
+          undo.textContent = "Undo";
+          undo.title = "Un-commit (soft reset), keeping changes";
+          undo.addEventListener("click", undoCommit);
+          $prev.append(msg, hash, rel, undo);
+        }
+      }
+
+      async function openFile(file) {
+        try {
+          await invoke("git_open_file", { repo, file });
+        } catch (e) {
+          toast(String(e));
+        }
+      }
+
+      async function doCommit() {
+        const message = $msg.value.trim();
+        if (!message) return;
+        $commit.disabled = true;
+        try {
+          await invoke("git_commit", { repo, message });
+          $msg.value = "";
+          toast("Committed");
+          await refresh();
+        } catch (e) {
+          toast(String(e));
+          syncCommitEnabled();
+        }
+      }
+
+      async function undoCommit() {
+        try {
+          await invoke("git_undo", { repo });
+          toast("Un-committed");
+          await refresh();
+        } catch (e) {
+          toast(String(e));
+        }
+      }
+
+      let draftTimer;
+      $msg.addEventListener("input", () => {
+        syncCommitEnabled();
+        clearTimeout(draftTimer);
+        draftTimer = setTimeout(() => {
+          invoke("git_set_draft", { repo, draft: $msg.value }).catch(() => {});
+        }, 400);
+      });
+      $msg.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          e.preventDefault();
+          doCommit();
+        }
+      });
+      $commit.addEventListener("click", doCommit);
+
+      // Re-poll when the window regains focus (cheap, keeps it live).
+      window.addEventListener("focus", refresh);
+
+      async function init() {
+        try {
+          const draft = await invoke("git_get_draft", { repo });
+          if (draft) $msg.value = draft;
+        } catch {}
+        await refresh();
+      }
+      init();
+    </script>
+  </body>
+</html>

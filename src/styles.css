@@ -853,6 +853,54 @@ select.field__input {
     color: var(--text);
 }
 
+/* Repo card: Git companion color swatches + launch button. */
+.ws-item__swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: auto;
+}
+
+.ws-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--hairline-strong);
+    padding: 0;
+    cursor: pointer;
+    box-shadow: none;
+    transition: transform 0.1s;
+}
+
+.ws-swatch:hover {
+    transform: scale(1.15);
+}
+
+.ws-swatch.is-active {
+    box-shadow: 0 0 0 2px var(--bg, var(--surface)), 0 0 0 4px var(--text);
+}
+
+.ws-item__git {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 12px;
+    padding: 5px 10px;
+}
+
+.ws-item__git:hover {
+    background: var(--elevated);
+    border-color: var(--text);
+    color: var(--text);
+}
+
 .btn-remove {
     // flex: 0 0 auto;
     background: var(--surface);

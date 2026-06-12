@@ -111,6 +111,19 @@ const EDITOR_OPTIONS = [
   { value: "Xcode", label: "Xcode" },
 ];
 
+// Curated bright backgrounds for a project's Git companion window. The first
+// is the default when `gitColor` is blank (mirrors the Rust-side fallback).
+const GIT_COLORS = [
+  "#ffd23f", // amber
+  "#ff7a5c", // coral
+  "#ff5d8f", // pink
+  "#c77dff", // violet
+  "#4cc9f0", // sky
+  "#43e8a0", // mint
+  "#ffe066", // lemon
+  "#a0e548", // lime
+];
+
 // Workspace item selection (interaction-spec §3). Multi-select over the form's
 // item cards; ids are per-render (rows have no persistent id).
 let wsRowCounter = 0;
@@ -250,6 +263,44 @@ export function addRow(list, value = "") {
       scheduleWorkspaceSave();
     });
     card.append(editorSel);
+
+    // Git companion: a swatch row to choose this repo's window color, plus a
+    // button that opens (or focuses) the Git window for the repo.
+    const swatches = document.createElement("div");
+    swatches.className = "ws-item__swatches";
+    const paintSwatches = () => {
+      swatches.querySelectorAll(".ws-swatch").forEach((s) => {
+        s.classList.toggle("is-active", s.dataset.color === wsGitColor);
+      });
+    };
+    GIT_COLORS.forEach((color) => {
+      const sw = document.createElement("button");
+      sw.type = "button";
+      sw.className = "ws-swatch";
+      sw.dataset.color = color;
+      sw.style.background = color;
+      sw.title = "Git window color";
+      sw.addEventListener("click", () => {
+        wsGitColor = color;
+        paintSwatches();
+        scheduleWorkspaceSave();
+      });
+      swatches.append(sw);
+    });
+    paintSwatches();
+    card.append(swatches);
+
+    const gitBtn = document.createElement("button");
+    gitBtn.type = "button";
+    gitBtn.className = "ws-item__git";
+    gitBtn.innerHTML = `${mi("commit")}Git`;
+    gitBtn.title = "Open Git window for this repo";
+    gitBtn.addEventListener("click", () => {
+      const repo = input.value.trim();
+      if (!repo) return;
+      invoke("open_git_window", { repo, color: wsGitColor, editor: wsEditor });
+    });
+    card.append(gitBtn);
   }
 
   // Browse button for repo, apps, and files
@@ -307,6 +358,7 @@ let wsSprite = DEFAULT_SPRITE;
 export async function loadWorkspace(path) {
   const ws = await invoke("read_workspace", { path });
   wsEditor = ws.editor || "";
+  wsGitColor = ws.gitColor || GIT_COLORS[0];
   wsClaude = ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
   wsSprite = ws.sprite || DEFAULT_SPRITE;
   setList("repo", ws.repo ? [ws.repo] : []);
@@ -355,6 +407,7 @@ function setStatus(text) {
 
 let wsSaveTimer = null;
 let wsEditor = "";
+let wsGitColor = GIT_COLORS[0];
 let wsPinnedTab = null;
 let wsSchedules = [];
 let wsScheduleSlots = ["09:00", "13:00", "17:00"];
@@ -363,6 +416,7 @@ function readWorkspaceForm() {
   return {
     repo: readList("repo")[0] || "",
     editor: wsEditor,
+    gitColor: wsGitColor,
     figma: readList("figma")[0] || "",
     claude: { mode: wsClaude },
     apps: readList("apps"),
