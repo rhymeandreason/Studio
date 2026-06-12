@@ -88,6 +88,37 @@ instead; if the user cancels that dialog, the command rejects with
 Falls back to `showSaveFilePicker` / browser download when not running
 inside Studio (e.g. opened directly in a browser for testing).
 
+## Title bar conventions
+
+By default tool windows get a normal title bar showing the file's stem (e.g.
+`bento-grid.html` → "bento-grid"). A tool can opt into a custom look by
+special-casing its filename in `open_tool_window_near`
+(`src-tauri/src/lib.rs`):
+
+- **Untitled / blank title bar** — pass an empty string to `.title(...)`.
+  Used by `daily-notes.html` since "daily-notes" adds nothing for a small
+  utility window.
+- **Title bar tinted to match the tool's background** — set
+  `.title_bar_style(TitleBarStyle::Transparent)` and
+  `.background_color(Color(r, g, b, 255))` to the tool's own `--bg`. This
+  makes the traffic-light area blend into the page instead of showing the
+  default black/white bar; pair it with extra top padding (~34px) on the
+  tool's first visible element so content doesn't sit under the traffic
+  lights, and `data-tauri-drag-region` on that element so the window is still
+  draggable.
+
+## Dedicated tray icon + positioning
+
+A tool can get its own tray icon (next to Studio's) instead of living only in
+the Tools submenu — see the `"daily-notes-tray"` `TrayIconBuilder` in
+`src-tauri/src/lib.rs`. Clicking it calls `open_tool_window_near(app, path,
+Some(rect))`, where `rect` is the tray icon's rect from
+`TrayIconEvent::Click`. `position_below_tray_icon` then places the window's
+top-right corner at the icon's bottom-right, so the window opens directly
+under the icon that was clicked (matching the usual macOS menu-bar-app
+pattern). Reuses/refocuses the existing window (and re-positions it) if
+already open, rather than opening a duplicate.
+
 ## Other options considered
 
 For future tools that outgrow a single HTML file, options in increasing

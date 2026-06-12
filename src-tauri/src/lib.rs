@@ -322,6 +322,12 @@ fn scan_tools(app: &AppHandle) -> Vec<Project> {
 
 /// Open (or focus) a tool's HTML file in its own native window.
 fn open_tool_window(app: &AppHandle, path: &str) {
+    open_tool_window_near(app, path, None);
+}
+
+/// Open a tool window, optionally positioned just below a tray icon's rect
+/// (as reported by `TrayIconEvent::Click`).
+fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>) {
     let label = format!(
         "tool-{}",
         Path::new(path)
@@ -334,6 +340,9 @@ fn open_tool_window(app: &AppHandle, path: &str) {
     );
 
     if let Some(win) = app.get_webview_window(&label) {
+        if let Some(rect) = near {
+            position_below_tray_icon(&win, &rect);
+        }
         let _ = win.show();
         let _ = win.set_focus();
         return;
@@ -346,11 +355,15 @@ fn open_tool_window(app: &AppHandle, path: &str) {
     let Some(filename) = Path::new(path).file_name().and_then(|n| n.to_str()) else {
         return;
     };
-    let title = Path::new(path)
-        .file_stem()
-        .and_then(|n| n.to_str())
-        .unwrap_or("Tool")
-        .to_string();
+    let title = if filename == "daily-notes.html" {
+        String::new()
+    } else {
+        Path::new(path)
+            .file_stem()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Tool")
+            .to_string()
+    };
 
     let (width, height) = if filename == "daily-notes.html" {
         (300.0, 560.0)
@@ -358,14 +371,45 @@ fn open_tool_window(app: &AppHandle, path: &str) {
         (900.0, 640.0)
     };
 
-    let _ = WebviewWindowBuilder::new(
+    let mut builder = WebviewWindowBuilder::new(
         app,
         label,
         WebviewUrl::App(format!("tools/{filename}").into()),
     )
     .title(title)
-    .inner_size(width, height)
-    .build();
+    .inner_size(width, height);
+
+    if filename == "daily-notes.html" {
+        // Match the title bar to the tool's paper background (--bg: #f7f5f0)
+        // instead of the default black/white bar.
+        builder = builder
+            .title_bar_style(tauri::TitleBarStyle::Transparent)
+            .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff));
+    }
+
+    if let Ok(win) = builder.build() {
+        if let Some(rect) = near {
+            position_below_tray_icon(&win, &rect);
+        }
+    }
+}
+
+/// Position a window's top-left just below and left-aligned with a tray
+/// icon's rect, clamped so it doesn't go off the right edge of the screen.
+fn position_below_tray_icon(win: &tauri::WebviewWindow, rect: &tauri::Rect) {
+    let scale = win.scale_factor().unwrap_or(1.0);
+    let icon_pos = rect.position.to_physical::<f64>(scale);
+    let icon_size = rect.size.to_physical::<f64>(scale);
+    let win_size = win.outer_size().unwrap_or_default();
+
+    let mut x = icon_pos.x + icon_size.width - win_size.width as f64;
+    let y = icon_pos.y + icon_size.height;
+
+    if x < 0.0 {
+        x = 0.0;
+    }
+
+    let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
 }
 
 /// Build the tray menu: optional active-project header, Open Studio, New Project,
@@ -2946,8 +2990,8 @@ pub fn run() {
                 .icon_as_template(true)
                 .tooltip("Daily Notes")
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { .. } = event {
-                        open_tool_window(tray.app_handle(), "daily-notes.html");
+                    if let TrayIconEvent::Click { rect, .. } = event {
+                        open_tool_window_near(tray.app_handle(), "daily-notes.html", Some(rect));
                     }
                 })
                 .build(app)?;
