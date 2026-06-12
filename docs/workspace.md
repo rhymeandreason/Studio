@@ -170,6 +170,13 @@ own when Studio quits. Studio still needs to be running (even just in the
 menu bar); if the Mac sleeps anyway (e.g. on battery) or Studio is quit,
 missed runs are skipped, not backfilled.
 
+`caffeinate -s` only blocks *idle/automatic* sleep — it does **not** block a
+manual sleep (Apple menu → Sleep, or closing the lid). When the Mac is slept
+deliberately, the scheduler loop freezes and tasks fire only via the `pmset`
+wake schedule (below); with no wake set (never saved, or expired), they're
+skipped. So `caffeinate` keeps tasks reliable while the Mac is left awake;
+deliberate sleep falls back entirely on the wake schedule.
+
 ### Waking the Mac (e.g. for an early-morning task)
 
 If the Mac is fully asleep, `caffeinate` can't help. Clicking "Save schedule"
