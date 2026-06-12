@@ -131,6 +131,20 @@ under the icon that was clicked (matching the usual macOS menu-bar-app
 pattern). Reuses/refocuses the existing window (and re-positions it) if
 already open, rather than opening a duplicate.
 
+### Text-label tray icon (RAM overview)
+
+A tray icon can also show a live **text label** in the menu bar instead of
+(or alongside) an icon — see the `"ram-tray"` `TrayIconBuilder` in
+`src-tauri/src/lib.rs`, used by `src/tools/ram-overview.html`. It's built
+with `.title("X.X GB")` (macOS renders this as text next to the icon) and
+`icon_as_template(true)` so the icon blends with light/dark menu bars. A
+background thread (`start_ram_label_refresh`) calls `tray.set_title(...)`
+every 5s with the current `get_memory_stats().system_used_gb`. Clicking the
+icon opens `ram-overview.html` via `open_tool_window_near`, same
+positioning as above — the small window shows the fuller breakdown (Studio
+app RAM, dev server RAM, swap, top processes by RSS) and refreshes itself
+every 5s while open.
+
 ## Other options considered
 
 For future tools that outgrow a single HTML file, options in increasing

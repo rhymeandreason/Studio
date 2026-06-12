@@ -366,7 +366,7 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
     let Some(filename) = Path::new(path).file_name().and_then(|n| n.to_str()) else {
         return;
     };
-    let title = if filename == "daily-notes.html" {
+    let title = if filename == "daily-notes.html" || filename == "ram-overview.html" {
         String::new()
     } else {
         Path::new(path)
@@ -378,6 +378,8 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
 
     let (width, height) = if filename == "daily-notes.html" {
         (300.0, 560.0)
+    } else if filename == "ram-overview.html" {
+        (380.0, 440.0)
     } else {
         (900.0, 640.0)
     };
@@ -393,6 +395,11 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
     if filename == "daily-notes.html" {
         // Match the title bar to the tool's paper background (--bg: #f7f5f0)
         // instead of the default black/white bar.
+        builder = builder
+            .title_bar_style(tauri::TitleBarStyle::Transparent)
+            .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff));
+    }
+    if filename == "ram-overview.html" {
         builder = builder
             .title_bar_style(tauri::TitleBarStyle::Transparent)
             .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff));
@@ -2444,6 +2451,21 @@ fn start_caffeinate() {
 /// Checks every 30s; a task fires when its `time` matches the current
 /// HH:MM, today's weekday is in `days` (or `days` is empty), and it hasn't
 /// already run today.
+/// Keep the "ram-tray" menu-bar label ("X.X GB") current.
+fn start_ram_label_refresh(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || loop {
+        if let Some(tray) = app.tray_by_id("ram-tray") {
+            let title = match get_memory_stats() {
+                Ok(stats) => format!("{:.1} GB", stats.system_used_gb),
+                Err(_) => "RAM".to_string(),
+            };
+            let _ = tray.set_title(Some(title));
+        }
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    });
+}
+
 fn start_scheduler(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || loop {
@@ -3325,6 +3347,29 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // Third tray icon: RAM overview, shown as a text label in the
+            // menu bar; click opens the details window below it.
+            let ram_title = match get_memory_stats() {
+                Ok(stats) => format!("{:.1} GB", stats.system_used_gb),
+                Err(_) => "RAM".to_string(),
+            };
+            TrayIconBuilder::with_id("ram-tray")
+                .icon(app.default_window_icon().unwrap().clone())
+                .icon_as_template(true)
+                .title(ram_title)
+                .tooltip("RAM overview")
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        rect,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        open_tool_window_near(tray.app_handle(), "ram-overview.html", Some(rect));
+                    }
+                })
+                .build(app)?;
+
             // Second tray icon: Daily Notes, one click away, no menu.
             let daily_notes_icon = Image::from_bytes(include_bytes!(
                 "../icons/daily-notes-tray.png"
@@ -3350,6 +3395,9 @@ pub fn run() {
 
             // Periodically run any due scheduled `claude -p` tasks.
             start_scheduler(&handle);
+
+            // Periodically refresh the tray's RAM-usage label.
+            start_ram_label_refresh(&handle);
 
             // Prevent system sleep so scheduled tasks fire while Studio runs.
             start_caffeinate();

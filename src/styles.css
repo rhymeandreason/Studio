@@ -182,64 +182,6 @@ body {
     letter-spacing: -0.01em;
 }
 
-.projhead__memory {
-    margin-left: auto;
-    text-align: right;
-    font-family: var(--mono);
-    font-size: 11px;
-    line-height: 1.6;
-    color: var(--text-muted);
-    white-space: nowrap;
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    padding: 4px 8px;
-    transition: background 0.15s;
-}
-
-.projhead__memory:hover {
-    background: var(--surface);
-}
-
-.mem-modal__card {
-    width: min(360px, 92vw);
-}
-
-.mem-modal__current {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--text);
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--hairline);
-}
-
-.mem-modal__table {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: var(--mono);
-    font-size: 12px;
-}
-
-.mem-modal__table th {
-    text-align: left;
-    color: var(--text-muted);
-    font-weight: 500;
-    padding: 4px 0;
-    border-bottom: 1px solid var(--hairline);
-}
-
-.mem-modal__table td {
-    padding: 3px 0;
-    border-bottom: 1px solid var(--hairline);
-}
-
-.mem-modal__table th:last-child,
-.mem-modal__table td:last-child {
-    text-align: right;
-}
-
 /* Animated animal sprite badge (Workspace toolbar, see sprites.js) */
 .sprite-badge {
     flex: 0 0 auto;
