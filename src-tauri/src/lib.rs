@@ -2182,13 +2182,20 @@ fn build_git_window(app: &AppHandle, win: &GitWindow) {
     );
     // Empty native title — the project name + branch show in the page's own
     // title strip instead (like the Daily Notes window).
-    let _ = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
+    let built = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
         .title("")
         .inner_size(400.0, 400.0)
         .min_inner_size(300.0, 280.0)
         .title_bar_style(tauri::TitleBarStyle::Transparent)
         .background_color(tauri::webview::Color(r, g, b, 0xff))
         .build();
+    // Restore this window's saved size/position. Labels are stable per repo
+    // (`git-<hash>`), so the window-state plugin keys state correctly; dynamic
+    // windows aren't auto-restored, so apply it explicitly (saved again on exit).
+    if let Ok(w) = built {
+        use tauri_plugin_window_state::{StateFlags, WindowExt};
+        let _ = w.restore_state(StateFlags::SIZE | StateFlags::POSITION);
+    }
 }
 
 /// Open (or focus) a Git window for a repo, persisting it so it reopens after a
