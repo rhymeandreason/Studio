@@ -2426,6 +2426,43 @@ fn open_claude_window(
     Ok(())
 }
 
+/// Percent-encode a string for use in a URL query value (RFC 3986 unreserved
+/// kept; everything else encoded). Used to build the deep-link URL below.
+fn url_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// Launch (or focus) the standalone Claude companion app for a project, via its
+/// `studio-claude://` URL scheme. The companion is a separate process, so it
+/// survives Studio rebuilds. (The in-Studio `open_claude_window` above is kept
+/// for reference / possible reuse but no longer wired to the UI.)
+#[tauri::command]
+fn launch_claude_app(project_path: String) -> Result<(), String> {
+    let name = Path::new(&project_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    let url = format!(
+        "studio-claude://open?project={}&name={}",
+        url_encode(&project_path),
+        url_encode(name),
+    );
+    Command::new("open")
+        .arg(url)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Send a message to a companion-window chat session, spawning the `claude`
 /// subprocess for it on first use. `key` is a UI-side session id used to
 /// route streamed output back via the "claude-stream-<key>" event; `resume`
@@ -2773,6 +2810,7 @@ pub fn run() {
         .manage(ClaudeState::default())
         .invoke_handler(tauri::generate_handler![
             open_claude_window,
+            launch_claude_app,
             open_schedules_window,
             claude_send,
             claude_stop,

@@ -1,8 +1,33 @@
-# Claude companion window
+# Claude companion app
 
-An in-app chat UI built on top of the Claude Code CLI — a custom front end that
-drives `claude` as a subprocess, as an alternative to `claude.mode: "terminal"`
-(which just opens Terminal). One window, scoped to one project at a time.
+A chat UI built on top of the Claude Code CLI — a custom front end that drives
+`claude` as a subprocess, as an alternative to `claude.mode: "terminal"` (which
+just opens Terminal). One window, scoped to one project at a time.
+
+## Architecture: standalone app (separate process)
+The companion runs as its **own Tauri app** (`companion/`), separate from
+Studio, so it survives Studio rebuilds and keeps its `claude` subprocesses
+alive. Studio only *launches* it.
+
+- **Studio side:** the Workspace "Claude" button calls `launch_claude_app`
+  (`lib.rs`), which runs `open "studio-claude://open?project=<path>&name=<name>"`.
+  Studio's in-process `open_claude_window` + the other `claude_*` commands are
+  **kept but unused** (reserved for possible future in-Studio use).
+- **Companion side:** `companion/src-tauri` registers the `studio-claude://` URL
+  scheme (`tauri-plugin-deep-link` + `tauri-plugin-single-instance`). On a deep
+  link it shows/focuses its window and emits `claude-jump` with the project —
+  the same flow the in-Studio window used. It reuses the shared frontend in
+  `src/claude/*` (its `frontendDist` is `../../src`, window URL `claude/index.html`).
+- **Frontend** (`src/claude/claude.js`) is now companion-only. It has no access
+  to Studio's `list_projects`/`get_active_project`; it remembers the project
+  from the deep link in `localStorage["claude.lastProject"]` and uses that for
+  new sessions.
+
+**Dev/run:** `cd companion && npm install && npm run tauri dev` (separate from
+Studio's `npm run tauri dev`). Build a real app with `npm run tauri build` in
+`companion/` and run it once so macOS registers the `studio-claude://` scheme;
+after that Studio's button launches it. The companion has its **own** sessions
+store and config dir (`com.studio.claude`), separate from Studio's.
 
 ## Files
 - `src/claude/index.html` — the window markup (top bar, usage meters, sessions

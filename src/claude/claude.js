@@ -595,20 +595,25 @@ async function createSession(projectPath, projectName) {
     await switchTo(session.key);
 }
 
+// The last project the window was pointed at (via a studio-claude:// deep link),
+// used as the target for new sessions. Persisted so it survives relaunches.
+let lastProject = null;
+try {
+    lastProject = JSON.parse(localStorage.getItem("claude.lastProject") || "null");
+} catch {
+    lastProject = null;
+}
+function setLastProject(path, name) {
+    if (!path) return;
+    lastProject = { path, name: name || path.split("/").filter(Boolean).pop() };
+    localStorage.setItem("claude.lastProject", JSON.stringify(lastProject));
+}
+
 async function defaultProject() {
-    try {
-        const active = await invoke("get_active_project");
-        if (active) return active;
-    } catch {
-        // ignore
-    }
-    try {
-        const list = await invoke("list_projects");
-        if (list && list.length) return list[0];
-    } catch {
-        // ignore
-    }
-    return null;
+    // The active session's project, else the last project we were launched with.
+    const active = sessions.find((s) => s.key === activeKey);
+    if (active) return { path: active.projectPath, name: active.projectName };
+    return lastProject;
 }
 
 function ensureListener(key) {
@@ -1078,12 +1083,14 @@ listen("claude-jump", async (event) => {
     // The window hides rather than closes, so opening it doesn't re-run init();
     // refresh usage on each open (throttled, so rapid reopens don't 429).
     refreshUsage();
-    const { key, projectPath } = event.payload || {};
+    const { key, projectPath, projectName } = event.payload || {};
     if (key && sessions.some((s) => s.key === key)) {
         await switchTo(key);
         return;
     }
     if (projectPath) {
+        const name = projectName || projectPath.split("/").filter(Boolean).pop();
+        setLastProject(projectPath, name);
         // Scope the sidebar to this project from here on.
         currentProjectPath = projectPath;
         // Return to the last active session for this project if it still
@@ -1098,19 +1105,12 @@ listen("claude-jump", async (event) => {
             await switchTo(lastActive ? lastActive.key : recent.key);
             return;
         }
-        let projectName = projectPath.split("/").filter(Boolean).pop();
-        try {
-            const list = await invoke("list_projects");
-            const match = list.find((p) => p.path === projectPath);
-            if (match) projectName = match.name;
-        } catch {
-            // ignore
-        }
-        await createSession(projectPath, projectName);
+        await createSession(projectPath, name);
     }
 });
 
 (async function init() {
+    renderStatus(); // hidden unless a turn is already running
     await loadSessions();
     renderSessionsList();
     refreshUsage(true);

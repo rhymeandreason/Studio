@@ -36,7 +36,7 @@ export function initClaudeButton() {
   const btn = document.getElementById("claude-btn");
   btn.addEventListener("click", () => {
     if (!state.activeProject) return;
-    invoke("open_claude_window", { projectPath: state.activeProject.path });
+    invoke("launch_claude_app", { projectPath: state.activeProject.path });
   });
 }
 
