@@ -2446,10 +2446,14 @@ fn url_encode(s: &str) -> String {
     out
 }
 
-/// Launch (or focus) the standalone Claude companion app for a project, via its
-/// `studio-claude://` URL scheme. The companion is a separate process, so it
-/// survives Studio rebuilds. (The in-Studio `open_claude_window` above is kept
-/// for reference / possible reuse but no longer wired to the UI.)
+/// Launch (or focus) the standalone Claude companion app for a project. The
+/// companion is a separate process (it survives Studio rebuilds) that runs as a
+/// single owner with one window per project. We launch with `open -n … --args
+/// <url>`: `-n` forces a fresh instance whose argv the companion's single-instance
+/// plugin forwards to the running owner (then the new instance exits), which opens
+/// or focuses that project's window. This avoids deep links, whose warm
+/// Apple-Event delivery to a running macOS app is unreliable. (The in-Studio
+/// `open_claude_window` above is kept for live frontend dev.)
 #[tauri::command]
 fn launch_claude_app(project_path: String) -> Result<(), String> {
     let name = Path::new(&project_path)
@@ -2462,6 +2466,7 @@ fn launch_claude_app(project_path: String) -> Result<(), String> {
         url_encode(name),
     );
     Command::new("open")
+        .args(["-n", "-b", "com.studio.claude", "--args"])
         .arg(url)
         .spawn()
         .map_err(|e| e.to_string())?;

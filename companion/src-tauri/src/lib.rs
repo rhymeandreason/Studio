@@ -6,7 +6,6 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, Url};
-use tauri_plugin_deep_link::DeepLinkExt;
 
 // --- Workspace repo resolution -------------------------------------------
 
@@ -186,20 +185,72 @@ fn claude_stop(state: tauri::State<ClaudeState>, key: String) {
 
 // --- Session persistence --------------------------------------------------
 
-#[tauri::command]
-fn read_claude_sessions(app: AppHandle) -> String {
-    let dir = match app.path().app_config_dir() {
-        Ok(d) => d,
-        Err(_) => return String::new(),
-    };
-    std::fs::read_to_string(dir.join("claude-sessions.json")).unwrap_or_default()
+/// A short stable hex hash of a string (for per-project filenames + window labels).
+fn short_hash(s: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut h);
+    format!("{:x}", h.finish())
+}
+
+/// Session-store path. With a project, each project gets its own file under
+/// `sessions/` so separate per-project windows never clobber each other's saves.
+fn sessions_file(app: &AppHandle, project: &Option<String>) -> Option<PathBuf> {
+    let dir = app.path().app_config_dir().ok()?;
+    match project {
+        Some(p) if !p.is_empty() => {
+            let d = dir.join("sessions");
+            let _ = std::fs::create_dir_all(&d);
+            Some(d.join(format!("{}.json", short_hash(p))))
+        }
+        _ => Some(dir.join("claude-sessions.json")),
+    }
 }
 
 #[tauri::command]
-fn save_claude_sessions(app: AppHandle, data: String) -> Result<(), String> {
+fn read_claude_sessions(app: AppHandle, project: Option<String>) -> String {
+    if let Some(f) = sessions_file(&app, &project) {
+        if let Ok(text) = std::fs::read_to_string(&f) {
+            return text;
+        }
+    }
+    // Migration: a per-project file doesn't exist yet — seed it from the legacy
+    // single file by pulling out the sessions for this project. (Written to the
+    // per-project file on the next save; the legacy file is left as a backup.)
+    if let Some(p) = project.filter(|p| !p.is_empty()) {
+        if let Ok(dir) = app.path().app_config_dir() {
+            if let Ok(text) = std::fs::read_to_string(dir.join("claude-sessions.json")) {
+                if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&text) {
+                    let mine: Vec<_> = arr
+                        .into_iter()
+                        .filter(|s| {
+                            s.get("projectPath").and_then(|v| v.as_str()) == Some(p.as_str())
+                        })
+                        .collect();
+                    if !mine.is_empty() {
+                        return serde_json::to_string(&mine).unwrap_or_default();
+                    }
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+#[tauri::command]
+fn save_claude_sessions(app: AppHandle, project: Option<String>, data: String) -> Result<(), String> {
+    let file = sessions_file(&app, &project).ok_or("no config dir")?;
+    std::fs::write(file, data).map_err(|e| e.to_string())
+}
+
+/// Remember the most recent project so a cold launch (no deep link, e.g. Dock)
+/// can reopen something useful.
+#[tauri::command]
+fn save_last_project(app: AppHandle, path: String, name: String, sprite: String) -> Result<(), String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("claude-sessions.json"), data).map_err(|e| e.to_string())
+    let v = serde_json::json!({ "path": path, "name": name, "sprite": sprite });
+    std::fs::write(dir.join("last-project.json"), v.to_string()).map_err(|e| e.to_string())
 }
 
 // --- Recorded session history (~/.claude/projects) -----------------------
@@ -359,8 +410,7 @@ fn read_claude_session_log(
 
 // --- Account usage (/api/oauth/usage) ------------------------------------
 
-#[tauri::command]
-fn get_claude_usage() -> Result<serde_json::Value, String> {
+fn fetch_usage() -> Result<serde_json::Value, String> {
     let out = Command::new("security")
         .args(["find-generic-password", "-s", "Claude Code-credentials", "-w"])
         .output()
@@ -385,21 +435,87 @@ fn get_claude_usage() -> Result<serde_json::Value, String> {
     resp.into_json().map_err(|e| e.to_string())
 }
 
-// --- Deep links -----------------------------------------------------------
+/// Async so the blocking Keychain read + network call run OFF the main thread.
+/// (A synchronous command blocks the main thread; the Keychain access prompt
+/// also needs the main thread, which deadlocks the app on first use.)
+#[tauri::command]
+async fn get_claude_usage() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(fetch_usage)
+        .await
+        .map_err(|e| e.to_string())?
+}
 
-/// Show & focus the window.
-fn show_window(app: &AppHandle) {
-    if let Some(win) = app.get_webview_window("main") {
+// --- Deep links & per-project windows ------------------------------------
+
+/// Percent-encode a query value (RFC 3986 unreserved kept).
+fn url_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// Show & focus any window (fallback for Dock/single-instance with no project).
+fn show_any_window(app: &AppHandle) {
+    if let Some(win) = app.webview_windows().values().next() {
         let _ = win.show();
         let _ = win.unminimize();
         let _ = win.set_focus();
     }
 }
 
-/// Handle `studio-claude://open?project=<path>&name=<name>`: surface the window
-/// and tell the frontend which project to start a session in (`claude-jump`).
+/// Open (or focus) a dedicated window for `project`. Each project gets its own
+/// window — labelled `proj-<hash>` — so different projects can sit side by side.
+/// The project is passed in the window URL so the frontend knows it immediately.
+fn open_project_window(app: &AppHandle, project: &str, name: &str) {
+    use tauri_plugin_window_state::{StateFlags, WindowExt};
+
+    // MUST run on the main thread: `WebviewWindowBuilder::build()` builds inline
+    // when called on the main thread, but blocks waiting on the main thread when
+    // called from any other thread — and a second such off-thread build deadlocks
+    // on macOS. All callers route here via `run_on_main_thread`, which also
+    // serializes requests (so two opens for the same project can't both build).
+    let label = format!("proj-{}", short_hash(project));
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        let _ = win.unminimize();
+        let _ = win.set_focus();
+        return;
+    }
+
+    let sprite = read_workspace(project).sprite;
+    let url = format!(
+        "claude/index.html?project={}&name={}&sprite={}",
+        url_encode(project),
+        url_encode(name),
+        url_encode(&sprite),
+    );
+    let title = if name.is_empty() {
+        "Studio Claude".to_string()
+    } else {
+        format!("Claude · {name}")
+    };
+    match tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
+        .title(title)
+        .inner_size(600.0, 800.0)
+        .min_inner_size(420.0, 360.0)
+        .build()
+    {
+        Ok(win) => {
+            let _ = win.restore_state(StateFlags::SIZE | StateFlags::POSITION);
+        }
+        Err(e) => eprintln!("[companion] failed to build window {label}: {e}"),
+    }
+}
+
+/// Handle `studio-claude://open?project=<path>&name=<name>`.
 fn handle_open_url(app: &AppHandle, url: &Url) {
-    show_window(app);
     let mut project: Option<String> = None;
     let mut name: Option<String> = None;
     for (k, v) in url.query_pairs() {
@@ -409,25 +525,75 @@ fn handle_open_url(app: &AppHandle, url: &Url) {
             _ => {}
         }
     }
-    let Some(ref path) = project else {
+    let Some(path) = project else {
+        show_any_window(app);
         return;
     };
-    let sprite = read_workspace(path).sprite;
-    let _ = app.emit(
-        "claude-jump",
-        serde_json::json!({ "key": null, "projectPath": project, "projectName": name, "sprite": sprite }),
-    );
+    let name = name.unwrap_or_else(|| {
+        std::path::Path::new(&path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string()
+    });
+    open_project_window(app, &path, &name);
+}
+
+/// Open whatever project a `studio-claude://open?…` URL in `argv` names. Studio
+/// launches the companion with `open -n … --args <url>`, so the request rides in
+/// as a plain process argument — both for the cold launch (our own argv) and for
+/// warm opens (the single-instance callback's argv). Returns whether a URL was
+/// found and handled.
+fn handle_open_args(app: &AppHandle, argv: &[String]) -> bool {
+    let Some(raw) = argv.iter().find(|a| a.starts_with("studio-claude://")) else {
+        return false;
+    };
+    match Url::parse(raw) {
+        Ok(url) => {
+            // Window creation must happen on the main thread; queue it there.
+            let h = app.clone();
+            let _ = app.run_on_main_thread(move || handle_open_url(&h, &url));
+            true
+        }
+        Err(e) => {
+            eprintln!("[companion] bad url arg {raw:?}: {e}");
+            false
+        }
+    }
+}
+
+/// On a cold launch with no deep link, reopen the most recent project (if any).
+fn open_last_project(app: &AppHandle) {
+    let Ok(dir) = app.path().app_config_dir() else {
+        return;
+    };
+    let Ok(text) = std::fs::read_to_string(dir.join("last-project.json")) else {
+        return;
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return;
+    };
+    if let Some(path) = v.get("path").and_then(|p| p.as_str()) {
+        let name = v.get("name").and_then(|n| n.as_str()).unwrap_or("");
+        open_project_window(app, path, name);
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        // single-instance must be registered first.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            show_window(app);
+        // One owner process; Studio launches each project with `open -n … --args
+        // <url>`, forcing a fresh instance whose argv is forwarded here by the
+        // single-instance plugin (then it exits). This replaces deep links, whose
+        // warm Apple-Event delivery to a running app is unreliable on macOS.
+        // (Must be the FIRST plugin registered.)
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if !handle_open_args(app, &argv) {
+                let h = app.clone();
+                let _ = app.run_on_main_thread(move || show_any_window(&h));
+            }
         }))
         .plugin(tauri_plugin_window_state::Builder::default().build())
-        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(ClaudeState::default())
         .invoke_handler(tauri::generate_handler![
@@ -435,33 +601,42 @@ pub fn run() {
             claude_stop,
             read_claude_sessions,
             save_claude_sessions,
+            save_last_project,
             list_claude_project_sessions,
             read_claude_session_log,
             get_claude_usage,
         ])
         .setup(|app| {
-            #[cfg(desktop)]
-            {
-                // Register the URL scheme at runtime so `open studio-claude://…`
-                // reaches this app even from a dev build.
-                let _ = app.deep_link().register_all();
-            }
-            let handle = app.handle().clone();
-            app.deep_link().on_open_url(move |event| {
-                for url in event.urls() {
-                    handle_open_url(&handle, &url);
-                }
+            // Cold launch: the project URL rides in on our own argv.
+            let opened = handle_open_args(app.handle(), &std::env::args().collect::<Vec<_>>());
+            // Fall back to the last project / an empty window only if no URL was
+            // passed. The queued open above runs on the main thread once the event
+            // loop starts, so wait a beat before deciding nothing opened — and do
+            // the fallback's own window work back on the main thread.
+            let h = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(1200));
+                let _ = h.clone().run_on_main_thread(move || {
+                    if !opened && h.webview_windows().is_empty() {
+                        open_last_project(&h);
+                    }
+                    if h.webview_windows().is_empty() {
+                        let _ = tauri::WebviewWindowBuilder::new(
+                            &h,
+                            "main",
+                            tauri::WebviewUrl::App("claude/index.html".into()),
+                        )
+                        .title("Studio Claude")
+                        .inner_size(600.0, 800.0)
+                        .min_inner_size(420.0, 360.0)
+                        .build();
+                    }
+                });
             });
-            // A cold start launched via the scheme.
-            if let Ok(Some(urls)) = app.deep_link().get_current() {
-                for url in urls {
-                    handle_open_url(app.handle(), &url);
-                }
-            }
             Ok(())
         })
-        // Closing the window hides it (keeps Claude sessions alive); the Dock
-        // icon or a new deep link brings it back.
+        // Closing a window hides it (keeps Claude sessions alive); the Dock icon
+        // or opening the project again from Studio brings it back.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let _ = window.hide();
@@ -471,9 +646,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running Claude companion")
         .run(|app, event| {
-            // macOS: clicking the Dock icon reopens the hidden window.
+            // macOS: clicking the Dock icon reopens a hidden window.
             if let tauri::RunEvent::Reopen { .. } = event {
-                show_window(app);
+                show_any_window(app);
             }
         });
 }

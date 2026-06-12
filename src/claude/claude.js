@@ -254,7 +254,9 @@ function uuid() {
 
 async function loadSessions() {
     try {
-        const raw = await invoke("read_claude_sessions");
+        // Per-project window: its own session file (companion). The in-Studio
+        // window passes null and the backend uses the shared file.
+        const raw = await invoke("read_claude_sessions", { project: currentProjectPath });
         sessions = raw ? JSON.parse(raw) : [];
     } catch {
         sessions = [];
@@ -272,7 +274,10 @@ async function persistSessions() {
         // Don't persist huge transcripts indefinitely — keep last 50 turns.
         transcript: s.transcript.slice(-50),
     }));
-    await invoke("save_claude_sessions", { data: JSON.stringify(slim) });
+    await invoke("save_claude_sessions", {
+        project: currentProjectPath,
+        data: JSON.stringify(slim),
+    });
 }
 
 const ROLE_ICONS = {
@@ -495,7 +500,7 @@ async function switchTo(key) {
     if (!session) return;
     currentProjectPath = session.projectPath;
     // Remember the last active session so reopening the window returns to it.
-    localStorage.setItem("claude.activeKey", key);
+    localStorage.setItem(activeKeyName(), key);
     sessionNameEl.textContent = session.name;
     setWindowTitle(session.projectName);
     modelSelect.value = session.model || "sonnet";
@@ -662,9 +667,18 @@ function setLastProject(path, name) {
 }
 
 async function defaultProject() {
-    // The active session's project, else the last project we were launched with.
+    // The active session's project, else this window's project, else the last
+    // project we were launched with. (Prefer the window's own project over the
+    // cross-window-shared lastProject so new sessions land in the right place.)
     const active = sessions.find((s) => s.key === activeKey);
     if (active) return { path: active.projectPath, name: active.projectName };
+    if (currentProjectPath) {
+        const name =
+            lastProject && lastProject.path === currentProjectPath
+                ? lastProject.name
+                : currentProjectPath.split("/").filter(Boolean).pop();
+        return { path: currentProjectPath, name };
+    }
     return lastProject;
 }
 
@@ -1151,7 +1165,7 @@ listen("claude-jump", async (event) => {
         // rather than starting fresh.
         const recent = sessions.find((s) => s.projectPath === projectPath);
         if (recent) {
-            const lastKey = localStorage.getItem("claude.activeKey");
+            const lastKey = localStorage.getItem(activeKeyName());
             const lastActive = sessions.find(
                 (s) => s.key === lastKey && s.projectPath === projectPath,
             );
@@ -1162,15 +1176,37 @@ listen("claude-jump", async (event) => {
     }
 });
 
+// localStorage is shared across the companion's per-project windows, so the
+// "last active session" must be keyed per project.
+function activeKeyName() {
+    return "claude.activeKey:" + (currentProjectPath || "");
+}
+
 (async function init() {
     renderStatus(); // hidden unless a turn is already running
+    // A per-project window carries its project in the URL; adopt it before
+    // loading that project's sessions.
+    const params = new URLSearchParams(location.search);
+    const urlProject = params.get("project");
+    if (urlProject) {
+        currentProjectPath = urlProject;
+        const name = params.get("name") || urlProject.split("/").filter(Boolean).pop();
+        setLastProject(urlProject, name);
+        setSprite(params.get("sprite") || "");
+        setWindowTitle(name);
+        invoke("save_last_project", {
+            path: urlProject,
+            name,
+            sprite: params.get("sprite") || "",
+        }).catch(() => {});
+    }
     applyStatusSprite();
     await loadSessions();
     renderSessionsList();
     refreshUsage(true);
     if (sessions.length) {
         // Return to the last active session if it still exists, else the newest.
-        const lastKey = localStorage.getItem("claude.activeKey");
+        const lastKey = localStorage.getItem(activeKeyName());
         const restore = sessions.some((s) => s.key === lastKey) ? lastKey : sessions[0].key;
         await switchTo(restore);
     } else {

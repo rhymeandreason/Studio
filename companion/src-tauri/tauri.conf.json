@@ -8,31 +8,15 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "windows": [
-      {
-        "label": "main",
-        "url": "claude/index.html",
-        "title": "Claude",
-        "width": 600,
-        "height": 800,
-        "minWidth": 420,
-        "minHeight": 360
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }
   },
-  "plugins": {
-    "deep-link": {
-      "desktop": {
-        "schemes": ["studio-claude"]
-      }
-    }
-  },
+  "plugins": {},
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["app"],
     "icon": [
       "../../src-tauri/icons/32x32.png",
       "../../src-tauri/icons/128x128.png",

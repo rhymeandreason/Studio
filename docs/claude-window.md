@@ -2,30 +2,63 @@
 
 A chat UI built on top of the Claude Code CLI — a custom front end that drives
 `claude` as a subprocess, as an alternative to `claude.mode: "terminal"` (which
-just opens Terminal). One window, scoped to one project at a time.
+just opens Terminal). **One window per project**, opened side by side — each
+window is scoped to its project and owns its own sessions.
 
 ## Architecture: standalone app (separate process)
 The companion runs as its **own Tauri app** (`companion/`), separate from
 Studio, so it survives Studio rebuilds and keeps its `claude` subprocesses
 alive. Studio only *launches* it.
 
-- **Studio side:** the Workspace "Claude" button calls `launch_claude_app`
-  (`lib.rs`), which runs `open "studio-claude://open?project=<path>&name=<name>"`.
-  Studio's in-process `open_claude_window` + the other `claude_*` commands are
-  **kept but unused** (reserved for possible future in-Studio use).
-- **Companion side:** `companion/src-tauri` registers the `studio-claude://` URL
-  scheme (`tauri-plugin-deep-link` + `tauri-plugin-single-instance`). On a deep
-  link it shows/focuses its window and emits `claude-jump` with the project —
-  the same flow the in-Studio window used. It reuses the shared frontend in
-  `src/claude/*` (its `frontendDist` is `../../src`, window URL `claude/index.html`).
-- **Frontend** (`src/claude/claude.js`) is now companion-only. It has no access
-  to Studio's `list_projects`/`get_active_project`; it remembers the project
-  from the deep link in `localStorage["claude.lastProject"]` and uses that for
-  new sessions.
+### How a project window opens (single-instance, not deep links)
+Studio launches the companion with `open -n -b com.studio.claude --args
+"studio-claude://open?project=<path>&name=<name>"` (`launch_claude_app` in
+Studio's `lib.rs`). The `studio-claude://…` string is **just a process argument**,
+not a URL routed by macOS — `open -n` forces a fresh instance every time.
+
+- **First (cold) launch:** the companion reads the URL from its own `argv` in
+  `setup()` and opens that project's window.
+- **Warm launch (companion already running):** the fresh instance's `argv` is
+  forwarded to the running owner by `tauri-plugin-single-instance`; that owner
+  opens/focuses the project window, and the new instance exits. Process count
+  stays at 1.
+
+We deliberately do **not** use `tauri-plugin-deep-link` / the `studio-claude://`
+URL *scheme*: warm Apple-Event delivery (`application:openURLs:`) to an
+already-running, ad-hoc-signed app is unreliable on macOS and was the source of
+the "second window hangs / windows vanish" bugs.
+
+**Two hard-won invariants** (don't regress these):
+- **Build windows on the main thread.** `WebviewWindowBuilder::build()` builds
+  inline on the main thread, but *blocks* waiting on it when called from another
+  thread — and a second off-thread build **deadlocks** on macOS (app goes "not
+  responding"). All window creation routes through `app.run_on_main_thread(…)`,
+  which also serializes requests so two opens for the same project can't both
+  build. (The earlier "must build off the main thread" note was backwards.)
+- **Keep the LaunchServices registration clean.** Old DMG builds register more
+  `com.studio.claude` bundles claiming the same id; a stale one can hijack
+  launches. The bundle target is `app` only (no DMG) to avoid creating new
+  ones. To purge: unmount stray `/Volumes/dmg.*` + `/Volumes/Studio Claude`,
+  then `lsregister -kill -r -domain local -domain user` and `lsregister -f
+  "<the real .app>"`.
+
+Per-project windows are labelled `proj-<hash(projectPath)>` (idempotent: opening
+the same project again just focuses the existing window). Each project also gets
+its own sessions file under `sessions/<hash>.json` in the config dir.
+
+Studio's in-process `open_claude_window` + the other `claude_*` commands are
+**kept** for live frontend dev (⌥-click the Workspace Claude button), not wired
+to the normal button. The companion reuses the shared frontend in `src/claude/*`
+(its `frontendDist` is `../../src`, window URL
+`claude/index.html?project=…&name=…&sprite=…`).
+
+- **Frontend** (`src/claude/claude.js`) is companion-only. It has no access to
+  Studio's `list_projects`/`get_active_project`; it reads its project from the
+  window URL at init and namespaces `localStorage` per project.
 
 **Dev/run:** `cd companion && npm install && npm run tauri dev` (separate from
 Studio's `npm run tauri dev`). Build a real app with `npm run tauri build` in
-`companion/` and run it once so macOS registers the `studio-claude://` scheme;
+`companion/` (app-only bundle) and run it once so macOS registers the bundle id;
 after that Studio's button launches it. The companion has its **own** sessions
 store and config dir (`com.studio.claude`), separate from Studio's.
 
