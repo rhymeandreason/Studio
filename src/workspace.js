@@ -244,13 +244,46 @@ export function addRow(list, value = "") {
   input.addEventListener("input", resizeInput);
   // Resize after the card is in the DOM so scrollHeight is correct
   requestAnimationFrame(resizeInput);
-  card.append(input);
+  // For the repo card the input lives inside a dedicated path row (below);
+  // every other card appends it straight to the body.
+  if (list !== "repo") card.append(input);
 
-  // Repo card: "Open in" editor picker.
+  // The repo card is the launchpad's anchor: it gets a richer, wider layout
+  // with a clear action hierarchy — path (+ Browse) on top, then a footer
+  // grouping "Open in editor" and the Git window controls.
   if (list === "repo") {
+    card.classList.add("ws-item--repo");
+
+    // Primary: the repo path, with an inline Browse button.
+    const pathRow = document.createElement("div");
+    pathRow.className = "ws-repo__path";
+    const browse = document.createElement("button");
+    browse.type = "button";
+    browse.className = "ws-repo__browse";
+    browse.innerHTML = `${mi("folder_open")}Browse`;
+    browse.title = "Choose repo folder";
+    browse.addEventListener("click", async () => {
+      const picked = await pickPath({ directory: true });
+      if (picked) {
+        input.value = picked;
+        requestAnimationFrame(resizeInput);
+        scheduleWorkspaceSave();
+      }
+    });
+    pathRow.append(input, browse);
+    card.append(pathRow);
+
+    // Footer: two labeled action groups.
+    const footer = document.createElement("div");
+    footer.className = "ws-repo__actions";
+
+    // Group 1 — open the repo in an editor.
+    const editorGroup = document.createElement("label");
+    editorGroup.className = "ws-repo__group";
+    editorGroup.innerHTML = `<span class="ws-repo__glabel">Open in</span>`;
     const editorSel = document.createElement("select");
-    editorSel.className = "ws-item__editor";
-    editorSel.title = "Open in";
+    editorSel.className = "ws-repo__editor";
+    editorSel.title = "Editor the repo opens in";
     EDITOR_OPTIONS.forEach((opt) => {
       const o = document.createElement("option");
       o.value = opt.value;
@@ -262,12 +295,16 @@ export function addRow(list, value = "") {
       wsEditor = editorSel.value;
       scheduleWorkspaceSave();
     });
-    card.append(editorSel);
+    editorGroup.append(editorSel);
 
-    // Git companion: a swatch row to choose this repo's window color, plus a
-    // button that opens (or focuses) the Git window for the repo.
+    // Group 2 — the Git companion window: color swatches + an Open button.
+    const gitGroup = document.createElement("div");
+    gitGroup.className = "ws-repo__group ws-repo__group--git";
+    const gitLabel = document.createElement("span");
+    gitLabel.className = "ws-repo__glabel";
+    gitLabel.textContent = "Git window";
     const swatches = document.createElement("div");
-    swatches.className = "ws-item__swatches";
+    swatches.className = "ws-repo__swatches";
     const paintSwatches = () => {
       swatches.querySelectorAll(".ws-swatch").forEach((s) => {
         s.classList.toggle("is-active", s.dataset.color === wsGitColor);
@@ -288,23 +325,24 @@ export function addRow(list, value = "") {
       swatches.append(sw);
     });
     paintSwatches();
-    card.append(swatches);
-
     const gitBtn = document.createElement("button");
     gitBtn.type = "button";
-    gitBtn.className = "ws-item__git";
-    gitBtn.innerHTML = `${mi("commit")}Git`;
+    gitBtn.className = "ws-repo__git";
+    gitBtn.innerHTML = `${mi("commit")}Open`;
     gitBtn.title = "Open Git window for this repo";
     gitBtn.addEventListener("click", () => {
       const repo = input.value.trim();
       if (!repo) return;
       invoke("open_git_window", { repo, color: wsGitColor, editor: wsEditor });
     });
-    card.append(gitBtn);
+    gitGroup.append(gitLabel, swatches, gitBtn);
+
+    footer.append(editorGroup, gitGroup);
+    card.append(footer);
   }
 
-  // Browse button for repo, apps, and files
-  if (meta.browse) {
+  // Browse button for apps and files (the repo card has its own, above).
+  if (meta.browse && list !== "repo") {
     const browse = document.createElement("button");
     browse.type = "button";
     browse.className = "ws-item__browse";

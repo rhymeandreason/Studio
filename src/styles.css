@@ -803,23 +803,6 @@ select.field__input {
     color: var(--text-soft);
 }
 
-.ws-item__editor {
-    align-self: flex-start;
-    margin-top: auto;
-    background: var(--surface);
-    border: 1px solid var(--hairline-strong);
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    cursor: pointer;
-    font-family: var(--sans);
-    font-size: 12px;
-    padding: 5px 8px;
-}
-
-.ws-item__editor:hover {
-    color: var(--text);
-}
-
 .ws-item__browse {
     align-self: flex-end;
     margin-top: auto;
@@ -853,35 +836,30 @@ select.field__input {
     color: var(--text);
 }
 
-/* Repo card: Git companion color swatches + launch button. */
-.ws-item__swatches {
+/* ── Repo card: the launchpad's anchor — wider, richer, clear hierarchy ── */
+.ws-item--repo {
+    /* Span the full row and grow as tall as its contents need. */
+    grid-column: 1 / -1;
+    aspect-ratio: auto;
+}
+
+/* Primary action: the path, with an inline Browse button. */
+.ws-repo__path {
     display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: auto;
+    align-items: center;
+    gap: 8px;
 }
 
-.ws-swatch {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    border: 1px solid var(--hairline-strong);
-    padding: 0;
-    cursor: pointer;
-    box-shadow: none;
-    transition: transform 0.1s;
+.ws-repo__path .ws-item__input {
+    flex: 1 1 auto;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
 }
 
-.ws-swatch:hover {
-    transform: scale(1.15);
-}
-
-.ws-swatch.is-active {
-    box-shadow: 0 0 0 2px var(--bg, var(--surface)), 0 0 0 4px var(--text);
-}
-
-.ws-item__git {
-    align-self: flex-start;
+.ws-repo__browse {
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -892,13 +870,105 @@ select.field__input {
     cursor: pointer;
     font-family: var(--sans);
     font-size: 12px;
-    padding: 5px 10px;
+    padding: 8px 12px;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
-.ws-item__git:hover {
-    background: var(--elevated);
-    border-color: var(--text);
+.ws-repo__browse:hover {
     color: var(--text);
+    border-color: var(--text);
+    background: var(--elevated);
+}
+
+/* Secondary actions: two labeled groups on a divided footer. */
+.ws-repo__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 24px;
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--hairline);
+}
+
+.ws-repo__group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ws-repo__group--git {
+    margin-left: auto;
+}
+
+.ws-repo__glabel {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-soft);
+}
+
+.ws-repo__editor {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 12px;
+    padding: 5px 8px;
+}
+
+.ws-repo__editor:hover {
+    border-color: var(--text);
+}
+
+.ws-repo__swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.ws-swatch {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 1px solid var(--hairline-strong);
+    padding: 0;
+    cursor: pointer;
+    box-shadow: none;
+    transition: transform 0.1s;
+}
+
+.ws-swatch:hover {
+    transform: scale(1.2);
+}
+
+.ws-swatch.is-active {
+    box-shadow: 0 0 0 2px var(--elevated), 0 0 0 4px var(--text);
+}
+
+/* Git is the repo card's primary call-to-action: filled, not ghosted. */
+.ws-repo__git {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    color: var(--on-accent, #fff);
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 12px;
+    transition: filter 0.15s;
+}
+
+.ws-repo__git:hover {
+    filter: brightness(1.08);
 }
 
 .btn-remove {
