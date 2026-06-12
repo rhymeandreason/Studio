@@ -107,6 +107,18 @@ special-casing its filename in `open_tool_window_near`
   lights, and `data-tauri-drag-region` on that element so the window is still
   draggable.
 
+### Minimal window style
+
+The combination of the two options above is the **minimal window style**: an
+**empty native title** (`.title("")`) plus a transparent, `--bg`-tinted title
+bar, so the OS chrome disappears entirely and the page owns the whole window.
+The window's own content provides whatever "title" it needs in an in-page
+**title strip** — a ~34px-tall `data-tauri-drag-region` element at the top
+(which keeps the window draggable). Used by the Daily Notes and Git companion
+windows; the Git window's strip shows `ProjectName ⎇ branch`. Reach for this
+for small, single-purpose windows where the folder/file stem in a normal title
+bar adds nothing.
+
 ## Dedicated tray icon + positioning
 
 A tool can get its own tray icon (next to Studio's) instead of living only in

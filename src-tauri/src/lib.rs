@@ -2175,17 +2175,15 @@ fn build_git_window(app: &AppHandle, win: &GitWindow) {
         win.color.clone()
     };
     let (r, g, b) = parse_hex(&color);
-    let name = Path::new(&win.repo)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("repo");
     let url = format!(
         "git/index.html?repo={}&color={}",
         url_encode(&win.repo),
         url_encode(&color),
     );
+    // Empty native title — the project name + branch show in the page's own
+    // title strip instead (like the Daily Notes window).
     let _ = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
-        .title(name)
+        .title("")
         .inner_size(400.0, 400.0)
         .min_inner_size(300.0, 280.0)
         .title_bar_style(tauri::TitleBarStyle::Transparent)

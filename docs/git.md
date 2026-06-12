@@ -7,9 +7,14 @@ HTML+CSS+JS like a tool) backed by git Tauri commands in
 [`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs) (the "Git companion windows"
 section).
 
+The window uses the **minimal window style** (empty native title + transparent
+`--bg`-tinted title bar + in-page title strip — see
+[docs/tools.md](tools.md#minimal-window-style)).
+
 ## What a window shows
 
-- **Branch** in the (transparent, tinted) title bar.
+- **Project name + branch** (`ProjectName ⎇ branch`) in the in-page title strip
+  at the top.
 - **Changed files** — `git status --porcelain=v1 -b`. Click a file to open it in
   the project's configured editor (`open -a <editor>`, blank = Zed).
 - **Commit message** box + **Commit all changes** button — stages everything
