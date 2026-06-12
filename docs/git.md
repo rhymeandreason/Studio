@@ -47,10 +47,13 @@ commit-message `draft` (debounce-saved as you type via `git_set_draft`, cleared
 on a successful commit). Closing a Git window removes it from the store (the
 `git-` branch in `on_window_event`'s `CloseRequested`), so it stays closed.
 
-Each window's **size and position** persist separately, via
-`tauri-plugin-window-state` (keyed by the stable `git-<hash>` label).
-`build_git_window` calls `restore_state(SIZE | POSITION)` after building, since
-dynamically-created windows aren't auto-restored; the plugin re-saves on exit.
+Each window's **size and position** are stored in the same `git-windows.json`
+entry (`x`/`y`/`w`/`h`, physical px). They can't rely on
+`tauri-plugin-window-state`: that plugin only flushes on a clean exit, and a
+`tauri dev` rebuild SIGKILLs the process first. Instead `save_git_geometry`
+writes the geometry **live** — on the window's `Moved`/`Resized`/`Focused(false)`
+events (the `git-` branch in `on_window_event`) — and `build_git_window`
+re-applies it with `set_position`/`set_size` after building.
 
 This is the lighter of the two persistence options considered — the windows
 blink closed/reopen during the rebuild (the whole app is down then anyway). The

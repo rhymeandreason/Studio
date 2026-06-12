@@ -2104,6 +2104,18 @@ struct GitWindow {
     editor: String,
     #[serde(default)]
     draft: String,
+    /// Last known window geometry (physical pixels), saved during the session so
+    /// it survives a `tauri dev` rebuild — which SIGKILLs the process before the
+    /// window-state plugin can flush on exit. `None` until the window first
+    /// moves/resizes or loses focus.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    x: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    y: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    w: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    h: Option<u32>,
 }
 
 /// Stable window label for a repo path (so reopening the same repo focuses the
@@ -2157,6 +2169,39 @@ fn remove_git_window(app: &AppHandle, repo: &str) {
     write_git_windows(app, &list);
 }
 
+/// Persist a Git window's current geometry (physical px) to the store, so it
+/// reopens in place after a rebuild. Called from window move/resize/blur events.
+/// No-op if the window or its store entry is gone.
+fn save_git_geometry(app: &AppHandle, label: &str) {
+    let Some(win) = app.get_webview_window(label) else {
+        return;
+    };
+    let pos = win.outer_position().ok();
+    let size = win.inner_size().ok();
+    let mut list = read_git_windows(app);
+    let Some(entry) = list.iter_mut().find(|w| git_label(&w.repo) == label) else {
+        return;
+    };
+    let mut changed = false;
+    if let Some(p) = pos {
+        if entry.x != Some(p.x) || entry.y != Some(p.y) {
+            entry.x = Some(p.x);
+            entry.y = Some(p.y);
+            changed = true;
+        }
+    }
+    if let Some(s) = size {
+        if entry.w != Some(s.width) || entry.h != Some(s.height) {
+            entry.w = Some(s.width);
+            entry.h = Some(s.height);
+            changed = true;
+        }
+    }
+    if changed {
+        write_git_windows(app, &list);
+    }
+}
+
 /// Parse "#rrggbb" to (r, g, b); falls back to a bright amber on bad input.
 fn parse_hex(hex: &str) -> (u8, u8, u8) {
     let h = hex.trim().trim_start_matches('#');
@@ -2201,12 +2246,17 @@ fn build_git_window(app: &AppHandle, win: &GitWindow) {
         .title_bar_style(tauri::TitleBarStyle::Transparent)
         .background_color(tauri::webview::Color(r, g, b, 0xff))
         .build();
-    // Restore this window's saved size/position. Labels are stable per repo
-    // (`git-<hash>`), so the window-state plugin keys state correctly; dynamic
-    // windows aren't auto-restored, so apply it explicitly (saved again on exit).
+    // Restore saved geometry from our own store. We can't use the window-state
+    // plugin here: a `tauri dev` rebuild SIGKILLs the process, so the plugin
+    // never flushes on exit. We instead save geometry live (see
+    // `save_git_geometry`) and re-apply it after building.
     if let Ok(w) = built {
-        use tauri_plugin_window_state::{StateFlags, WindowExt};
-        let _ = w.restore_state(StateFlags::SIZE | StateFlags::POSITION);
+        if let (Some(x), Some(y)) = (win.x, win.y) {
+            let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
+        }
+        if let (Some(width), Some(height)) = (win.w, win.h) {
+            let _ = w.set_size(tauri::PhysicalSize::new(width, height));
+        }
     }
 }
 
@@ -2220,13 +2270,19 @@ fn open_git_window(
     editor: String,
 ) -> Result<(), String> {
     let win = GitWindow {
-        repo,
+        repo: repo.clone(),
         color,
         editor,
-        draft: String::new(),
+        ..Default::default()
     };
     upsert_git_window(&app, &win);
-    build_git_window(&app, &win);
+    // Build from the merged store entry so a previously-saved position/size (and
+    // draft) is honored, not the fresh values just passed in.
+    let merged = read_git_windows(&app)
+        .into_iter()
+        .find(|w| w.repo == repo)
+        .unwrap_or(win);
+    build_git_window(&app, &merged);
     Ok(())
 }
 
@@ -3291,6 +3347,18 @@ pub fn run() {
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.
         .on_window_event(|window, event| {
+            // Git windows: persist geometry live (a dev rebuild SIGKILLs us
+            // before any exit-time save), so they reopen where you left them.
+            if window.label().starts_with("git-") {
+                match event {
+                    tauri::WindowEvent::Moved(_)
+                    | tauri::WindowEvent::Resized(_)
+                    | tauri::WindowEvent::Focused(false) => {
+                        save_git_geometry(window.app_handle(), window.label());
+                    }
+                    _ => {}
+                }
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Git windows are real, dismissible windows: closing one means
                 // "I'm done with this repo" — drop it from the persisted set so
