@@ -170,7 +170,16 @@ overview), and `"daily-notes"` — can be reordered and given custom icons via
 
 Implementation: `tray_item_order` / `tray_item_icon` in
 [`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs). Like `Tools.json`,
-changes require a rebuild/restart of Studio.
+changes require a rebuild/restart of Studio — they're read once at startup
+from the bundled resource copy, and tray icons are created during app
+setup. Quitting and relaunching `npm run tauri dev` re-copies resources, so
+that's usually enough without a full rebuild; if not, touch any `.rs` file
+to force one.
+
+**Future idea — hot reload**: watch `TrayItems.json` and `tray-icons/` (like
+`start_watching` does for `~/Projects`) and, on change, destroy and rebuild
+the affected tray icon(s) via `tray_by_id` + a fresh `build_*_tray` call,
+instead of requiring a restart.
 
 ## Other options considered
 
