@@ -1297,6 +1297,19 @@ function buildNoteLinks(note, field, { getText, setText }) {
     }
   });
 
+  field.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    // Only harvest when the URL is on its own completed line, so we don't
+    // interrupt mid-paste/mid-typing.
+    requestAnimationFrame(() => {
+      if (harvestLinks()) {
+        renderLinks();
+        scheduleBentoLayout();
+        scheduleNotesSave();
+      }
+    });
+  });
+
   // Migrate any links already sitting inline in saved notes.
   if (harvestLinks()) scheduleNotesSave();
   renderLinks();
