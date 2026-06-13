@@ -1,5 +1,5 @@
 [
   { "id": "studio" },
-  { "id": "ram" },
-  { "id": "daily-notes" }
+  { "id": "ram" , "icon": "planner_review.png"},
+  { "id": "daily-notes", "icon": "format_list_bulleted.png" }
 ]
