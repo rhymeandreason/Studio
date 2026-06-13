@@ -2526,6 +2526,38 @@ fn git_status(repo: String) -> Result<GitStatus, String> {
     })
 }
 
+/// List the files changed in a single commit (status + path), for expanding the
+/// previous-commit row in the Git window.
+#[tauri::command]
+fn git_commit_files(repo: String, hash: String) -> Result<Vec<GitFile>, String> {
+    let out = Command::new("git")
+        .args(["-C", &repo, "show", "--name-status", "--format=", &hash])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut files = Vec::new();
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        // "M\tpath", "A\tpath", or "R100\told\tnew" (keep the new path).
+        let mut parts = line.split('\t');
+        let Some(code) = parts.next() else { continue };
+        let path = parts.last().unwrap_or("").trim();
+        if path.is_empty() {
+            continue;
+        }
+        files.push(GitFile {
+            status: code.chars().take(1).collect(),
+            path: path.to_string(),
+        });
+    }
+    Ok(files)
+}
+
 /// Stage everything and commit. Returns an error string on failure (e.g.
 /// nothing to commit), which the window surfaces.
 #[tauri::command]
@@ -3474,6 +3506,7 @@ pub fn run() {
             set_window_width,
             open_git_window,
             git_status,
+            git_commit_files,
             git_commit,
             git_undo,
             git_open_file,

@@ -160,6 +160,7 @@
         display: flex;
         align-items: center;
         gap: 8px;
+        color:var(--ink);
       }
       .prev .msg {
         flex: 1 1 auto;
@@ -176,6 +177,20 @@
       .prev .hash {
         font-family: "SF Mono", ui-monospace, monospace;
         opacity: 0.8;
+      }
+      .prev__caret {
+        font-size: 9px;
+        line-height: 1;
+        opacity: 0.7;
+        user-select: none;
+      }
+      .prev__files {
+        margin-top: 2px;
+        max-height: 130px;
+        overflow-y: auto;
+      }
+      .prev__files .file {
+        padding: 3px 6px;
       }
       .prev .undo {
         flex: 0 0 auto;
@@ -272,25 +287,7 @@
           e.textContent = "Working tree clean";
           $files.append(e);
         } else {
-          for (const f of st.files) {
-            const row = document.createElement("div");
-            row.className = "file";
-            row.title = "Open in editor";
-            const code = document.createElement("span");
-            code.className = "code";
-            // Untracked (new) files report "??" — show a star instead. Otherwise
-            // show the meaningful status letter (M/A/D/R…).
-            const isNew = f.status.includes("?");
-            code.textContent = isNew ? "⭐" : f.status.trim().replace(/\?/g, "")[0] || "•";
-            if (isNew) code.classList.add("is-new");
-            const name = document.createElement("span");
-            name.className = "name";
-            // bidi-isolate so rtl ellipsis keeps the path readable
-            name.textContent = "⁦" + f.path + "⁩";
-            row.append(code, name);
-            row.addEventListener("click", () => openFile(f.path));
-            $files.append(row);
-          }
+          for (const f of st.files) $files.append(buildFileRow(f));
         }
         syncCommitEnabled();
 
@@ -301,24 +298,81 @@
           const msg = document.createElement("span");
           msg.className = "msg";
           msg.textContent = st.lastCommit.subject;
+          msg.title = "Show files in this commit";
           const undo = document.createElement("button");
           undo.className = "undo";
           undo.textContent = "Undo";
           undo.title = "Un-commit (soft reset), keeping changes";
-          undo.addEventListener("click", undoCommit);
+          undo.addEventListener("click", (e) => {
+            e.stopPropagation();
+            undoCommit();
+          });
           top.append(msg, undo);
 
           const meta = document.createElement("div");
           meta.className = "prev__meta";
+          const caret = document.createElement("span");
+          caret.className = "prev__caret";
+          caret.textContent = "▸";
           const hash = document.createElement("span");
           hash.className = "hash";
           hash.textContent = st.lastCommit.hash;
           const rel = document.createElement("span");
           rel.textContent = "· " + st.lastCommit.rel;
-          meta.append(hash, rel);
+          meta.append(caret, hash, rel);
 
-          $prev.append(top, meta);
+          // Expandable list of the commit's files (lazy-loaded on first open).
+          const filesBox = document.createElement("div");
+          filesBox.className = "prev__files";
+          filesBox.hidden = true;
+          let loaded = false;
+          const toggle = async () => {
+            filesBox.hidden = !filesBox.hidden;
+            caret.textContent = filesBox.hidden ? "▸" : "▾";
+            if (filesBox.hidden || loaded) return;
+            loaded = true;
+            try {
+              const files = await invoke("git_commit_files", {
+                repo,
+                hash: st.lastCommit.hash,
+              });
+              filesBox.innerHTML = "";
+              for (const f of files) filesBox.append(buildFileRow(f));
+            } catch (e) {
+              loaded = false;
+              toast(String(e));
+            }
+          };
+          // Click anywhere in the commit header (subject row or meta row) to
+          // expand — except the Undo button, which stops propagation below.
+          top.style.cursor = "pointer";
+          meta.style.cursor = "pointer";
+          top.addEventListener("click", toggle);
+          meta.addEventListener("click", toggle);
+
+          $prev.append(top, meta, filesBox);
         }
+      }
+
+      // One row in a file list: status glyph + path, click to open in editor.
+      // New/untracked files ("??") get a sticker star; otherwise the status
+      // letter (M/A/D/R…).
+      function buildFileRow(f) {
+        const row = document.createElement("div");
+        row.className = "file";
+        row.title = "Open in editor";
+        const code = document.createElement("span");
+        code.className = "code";
+        const isNew = f.status.includes("?");
+        code.textContent = isNew ? "⭐" : f.status.trim().replace(/\?/g, "")[0] || "•";
+        if (isNew) code.classList.add("is-new");
+        const name = document.createElement("span");
+        name.className = "name";
+        // bidi-isolate so rtl ellipsis keeps the path readable
+        name.textContent = "⁦" + f.path + "⁩";
+        row.append(code, name);
+        row.addEventListener("click", () => openFile(f.path));
+        return row;
       }
 
       async function openFile(file) {
