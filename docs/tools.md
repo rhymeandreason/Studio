@@ -145,6 +145,33 @@ positioning as above — the small window shows the fuller breakdown (Studio
 app RAM, dev server RAM, swap, top processes by RSS) and refreshes itself
 every 5s while open.
 
+### Configuring icon + order (`TrayItems.json`)
+
+Studio's three menu-bar items — `"studio"` (main menu), `"ram"` (RAM
+overview), and `"daily-notes"` — can be reordered and given custom icons via
+[`TrayItems.json`](../TrayItems.json) at the root of the Studio project:
+
+```json
+[
+  { "id": "studio" },
+  { "id": "ram", "icon": "my-ram-icon.png" },
+  { "id": "daily-notes" }
+]
+```
+
+- Array order is left-to-right in the menu bar. macOS adds new items to the
+  *left* of existing ones, so `build_studio_tray`/`build_ram_tray`/
+  `build_daily_notes_tray` are called in **reverse** of this list at startup.
+- `icon` is optional — a filename resolved against `src-tauri/icons/`
+  (bundled as the `"tray-icons"` resource). Omit it to use each item's
+  default icon.
+- If `TrayItems.json` is missing/invalid, falls back to the default order
+  `["studio", "ram", "daily-notes"]` with default icons.
+
+Implementation: `tray_item_order` / `tray_item_icon` in
+[`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs). Like `Tools.json`,
+changes require a rebuild/restart of Studio.
+
 ## Other options considered
 
 For future tools that outgrow a single HTML file, options in increasing

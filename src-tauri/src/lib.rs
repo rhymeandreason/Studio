@@ -512,6 +512,142 @@ fn build_tray_menu(
     Menu::with_items(app, &refs)
 }
 
+/// One entry in `TrayItems.json` — controls the order and icon of Studio's
+/// menu-bar items.
+#[derive(Deserialize)]
+struct TrayItemEntry {
+    id: String,
+    #[serde(default)]
+    icon: Option<String>,
+}
+
+/// `TrayItems.json`, bundled with Studio (see `tauri.conf.json` →
+/// `bundle.resources`) — order and optional icon overrides for Studio's
+/// three menu-bar items: "studio" (main menu), "ram" (RAM overview), and
+/// "daily-notes". Missing/unreadable file falls back to the default order
+/// with no overrides.
+fn read_tray_items_manifest(app: &AppHandle) -> Option<Vec<TrayItemEntry>> {
+    let dir = app.path().resource_dir().ok()?;
+    let text = std::fs::read_to_string(dir.join("TrayItems.json")).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// Left-to-right order of Studio's menu-bar items, from `TrayItems.json` if
+/// present, otherwise the default `["studio", "ram", "daily-notes"]`.
+fn tray_item_order(app: &AppHandle) -> Vec<String> {
+    match read_tray_items_manifest(app) {
+        Some(entries) if !entries.is_empty() => {
+            entries.into_iter().map(|e| e.id).collect()
+        }
+        _ => vec![
+            "studio".to_string(),
+            "ram".to_string(),
+            "daily-notes".to_string(),
+        ],
+    }
+}
+
+/// Icon override for a given tray item id, loaded from `icons/<file>` (see
+/// `bundle.resources` → `"tray-icons"`). Returns `None` if `TrayItems.json`
+/// doesn't specify an `icon` for this id, or the file can't be loaded.
+fn tray_item_icon(app: &AppHandle, id: &str) -> Option<Image<'static>> {
+    let entries = read_tray_items_manifest(app)?;
+    let file = entries.into_iter().find(|e| e.id == id)?.icon?;
+    let dir = app.path().resource_dir().ok()?;
+    Image::from_path(dir.join("tray-icons").join(file)).ok()
+}
+
+/// Build Studio's main tray icon: project list menu, "New Project", tools, etc.
+fn build_studio_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Result<()> {
+    let projects = scan_projects(app);
+    let menu = build_tray_menu(app, &projects, None)?;
+    let icon = icon.unwrap_or_else(|| app.default_window_icon().unwrap().clone());
+
+    TrayIconBuilder::with_id(TRAY_ID)
+        .icon(icon)
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| {
+            let id = event.id.as_ref();
+            match id {
+                "open_studio" => {
+                    show_studio(app);
+                    let _ = app.emit("show-overview", ());
+                }
+                "new_project" => {
+                    show_studio(app);
+                    let _ = app.emit("new-project-request", ());
+                }
+                "open_schedules" => {
+                    let _ = open_schedules_window(app.clone());
+                }
+                "quit" => app.exit(0),
+                _ if id.starts_with(PROJECT_PREFIX) => {
+                    activate_project(app, &id[PROJECT_PREFIX.len()..]);
+                }
+                _ if id.starts_with(TOOL_PREFIX) => {
+                    open_tool_window(app, &id[TOOL_PREFIX.len()..]);
+                }
+                _ => {}
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
+/// Build the RAM-overview tray icon: a live "X.X GB" text label; click opens
+/// the details window below it.
+fn build_ram_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Result<()> {
+    let ram_title = match get_memory_stats() {
+        Ok(stats) => format!("{:.1} GB", stats.system_used_gb),
+        Err(_) => "RAM".to_string(),
+    };
+    let icon = icon.unwrap_or_else(|| app.default_window_icon().unwrap().clone());
+
+    TrayIconBuilder::with_id("ram-tray")
+        .icon(icon)
+        .icon_as_template(true)
+        .title(ram_title)
+        .tooltip("RAM overview")
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                rect,
+                button_state: tauri::tray::MouseButtonState::Up,
+                ..
+            } = event
+            {
+                open_tool_window_near(tray.app_handle(), "ram-overview.html", Some(rect));
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
+/// Build the Daily Notes tray icon: one click away, no menu.
+fn build_daily_notes_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Result<()> {
+    let icon = match icon {
+        Some(icon) => icon,
+        None => Image::from_bytes(include_bytes!("../icons/daily-notes-tray.png"))?,
+    };
+
+    TrayIconBuilder::with_id("daily-notes-tray")
+        .icon(icon)
+        .icon_as_template(true)
+        .tooltip("Daily Notes")
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                rect,
+                button_state: tauri::tray::MouseButtonState::Up,
+                ..
+            } = event
+            {
+                open_tool_window_near(tray.app_handle(), "daily-notes.html", Some(rect));
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
 /// Refresh the tray menu to reflect the current project list and active project.
 fn refresh_tray(app: &AppHandle, active: Option<&str>) {
     let projects = scan_projects(app);
@@ -3382,81 +3518,20 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let handle = app.handle().clone();
-            let projects = scan_projects(&handle);
-            let menu = build_tray_menu(&handle, &projects, None)?;
 
-            TrayIconBuilder::with_id(TRAY_ID)
-                .icon(app.default_window_icon().unwrap().clone())
-                .menu(&menu)
-                .show_menu_on_left_click(true)
-                .on_menu_event(|app, event| {
-                    let id = event.id.as_ref();
-                    match id {
-                        "open_studio" => {
-                            show_studio(app);
-                            let _ = app.emit("show-overview", ());
-                        }
-                        "new_project" => {
-                            show_studio(app);
-                            let _ = app.emit("new-project-request", ());
-                        }
-                        "open_schedules" => {
-                            let _ = open_schedules_window(app.clone());
-                        }
-                        "quit" => app.exit(0),
-                        _ if id.starts_with(PROJECT_PREFIX) => {
-                            activate_project(app, &id[PROJECT_PREFIX.len()..]);
-                        }
-                        _ if id.starts_with(TOOL_PREFIX) => {
-                            open_tool_window(app, &id[TOOL_PREFIX.len()..]);
-                        }
-                        _ => {}
-                    }
-                })
-                .build(app)?;
-
-            // Third tray icon: RAM overview, shown as a text label in the
-            // menu bar; click opens the details window below it.
-            let ram_title = match get_memory_stats() {
-                Ok(stats) => format!("{:.1} GB", stats.system_used_gb),
-                Err(_) => "RAM".to_string(),
-            };
-            TrayIconBuilder::with_id("ram-tray")
-                .icon(app.default_window_icon().unwrap().clone())
-                .icon_as_template(true)
-                .title(ram_title)
-                .tooltip("RAM overview")
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        rect,
-                        button_state: tauri::tray::MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        open_tool_window_near(tray.app_handle(), "ram-overview.html", Some(rect));
-                    }
-                })
-                .build(app)?;
-
-            // Second tray icon: Daily Notes, one click away, no menu.
-            let daily_notes_icon = Image::from_bytes(include_bytes!(
-                "../icons/daily-notes-tray.png"
-            ))?;
-            TrayIconBuilder::with_id("daily-notes-tray")
-                .icon(daily_notes_icon)
-                .icon_as_template(true)
-                .tooltip("Daily Notes")
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        rect,
-                        button_state: tauri::tray::MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        open_tool_window_near(tray.app_handle(), "daily-notes.html", Some(rect));
-                    }
-                })
-                .build(app)?;
+            // Build Studio's tray icons in the order given by TrayItems.json
+            // (default: studio, ram, daily-notes), reversed — macOS adds new
+            // menu-bar items to the *left* of existing ones, so building in
+            // reverse makes the manifest order read left-to-right.
+            for id in tray_item_order(&handle).into_iter().rev() {
+                let icon_override = tray_item_icon(&handle, &id);
+                match id.as_str() {
+                    "studio" => build_studio_tray(&handle, icon_override)?,
+                    "ram" => build_ram_tray(&handle, icon_override)?,
+                    "daily-notes" => build_daily_notes_tray(&handle, icon_override)?,
+                    _ => {}
+                }
+            }
 
             // Live-refresh when files change in ~/Projects (Finder, other apps).
             start_watching(&handle);
