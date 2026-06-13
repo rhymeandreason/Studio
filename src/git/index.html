@@ -236,6 +236,10 @@
     </main>
     <div class="toast" id="toast"></div>
 
+    <script type="module">
+      import { initDevInspect } from "../devinspect.js";
+      initDevInspect();
+    </script>
     <script>
       const invoke = window.__TAURI__.core.invoke;
       const params = new URLSearchParams(location.search);

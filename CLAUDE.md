@@ -67,6 +67,8 @@ app — no Dock icon; click the tray icon. Test projects live in `~/Projects/`.
   before it; pass async work as a Promise inside the item). **Reads** go
   through Rust (`pbpaste`/`PBIMAGE_BIN`), never `navigator.clipboard.read()`
   (it prompts per paste in WKWebView).
+- **Dev inspector:** Cmd+Option+Click any element to jump to its CSS rule in
+  Zed. See [docs/devinspect.md](docs/devinspect.md).
 - Internal drag-reorder uses **pointer events** (Tauri's native file-drop
   swallows HTML5 dragover/drop); set `state.draggingNoteId`/`state.mediaDragActive`
   during an internal drag so the OS file-drop overlay stays suppressed.

@@ -1,4 +1,5 @@
 import { spriteStyle, DEFAULT_SPRITE } from "../sprites.js";
+import { initDevInspect } from "../devinspect.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -1183,6 +1184,7 @@ function activeKeyName() {
 }
 
 (async function init() {
+    initDevInspect();
     renderStatus(); // hidden unless a turn is already running
     // A per-project window carries its project in the URL; adopt it before
     // loading that project's sessions.

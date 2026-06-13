@@ -5,6 +5,7 @@
 // store (read_schedules / save_schedules); see docs/workspace.md.
 
 import { el, mi, genId } from "../dom.js";
+import { initDevInspect } from "../devinspect.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -288,6 +289,7 @@ function addSchedule(slot) {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
+  initDevInspect();
   document.getElementById("schedules-save").addEventListener("click", saveAll);
 
   await load();

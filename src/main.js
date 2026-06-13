@@ -10,6 +10,7 @@ import { el, mi, genId } from "./dom.js";
 import { loadImage } from "./imageutil.js";
 import { spriteStyle } from "./sprites.js";
 import { state } from "./state.js";
+import { initDevInspect } from "./devinspect.js";
 import {
   loadMedia,
   initMedia,
@@ -1989,6 +1990,7 @@ function initNotes() {
 // --- Boot ------------------------------------------------------------------
 
 window.addEventListener("DOMContentLoaded", async () => {
+  initDevInspect();
   initTabs();
   initAllProjectsButton();
   initSchedulesButton();
