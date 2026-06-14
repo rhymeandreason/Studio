@@ -26,6 +26,13 @@ fn main() {
     println!("cargo:rustc-env=PBIMAGE_BIN={}", pb_bin.display());
     println!("cargo:rerun-if-changed={pb_src}");
 
+    // Video exporter (AVFoundation composition + baked Core Animation text).
+    let vid_src = "swift/vidExport.swift";
+    let vid_bin = Path::new(&out_dir).join("vidExport");
+    swiftc(vid_src, &vid_bin, "macosx14.0");
+    println!("cargo:rustc-env=VIDEXPORT_BIN={}", vid_bin.display());
+    println!("cargo:rerun-if-changed={vid_src}");
+
     // App-icon helper (NSWorkspace icon → PNG), for Workspace app cards.
     let icon_src = "swift/appicon.swift";
     let icon_bin = Path::new(&out_dir).join("appicon");

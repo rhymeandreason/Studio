@@ -89,14 +89,19 @@
         align-items: center;
         justify-content: center;
       }
+      /* The export-aspect frame, letterboxed within the (window-sized) stage. */
+      .frame {
+        position: relative;
+        background: #000;
+        overflow: hidden;
+      }
+      /* Videos are centered and sized/rotated by JS (per clip rotation + fit). */
       .stage .vid {
         position: absolute;
-        inset: 0;
-        margin: auto;
-        max-width: 100%;
-        max-height: 100%;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
         opacity: 0;
-        transition: none;
       }
       .stage .vid.active { opacity: 1; }
       .stage .placeholder {
@@ -297,12 +302,16 @@
     <main>
       <div class="stage" id="stage">
         <div class="placeholder" id="placeholder">No clips yet — add one below.</div>
-        <!-- Two stacked elements for double-buffered playback: one shows the
-             current clip while the other preloads the next, so clip boundaries
-             don't flash black. -->
-        <video class="vid" id="vidA" playsinline></video>
-        <video class="vid" id="vidB" playsinline></video>
-        <div class="overlay" id="overlay"></div>
+        <!-- The frame is the export aspect ratio; clips fit/rotate inside it and
+             captions are positioned within it, so the editor is WYSIWYG. -->
+        <div class="frame" id="frame">
+          <!-- Two stacked elements for double-buffered playback: one shows the
+               current clip while the other preloads the next, so clip
+               boundaries don't flash black. -->
+          <video class="vid" id="vidA" playsinline></video>
+          <video class="vid" id="vidB" playsinline></video>
+          <canvas class="overlay" id="overlay"></canvas>
+        </div>
       </div>
       <div class="controls">
         <button id="play" disabled>▶︎ Play</button>
@@ -310,6 +319,13 @@
         <span class="spacer" style="flex:1 1 auto"></span>
         <button id="addtext">＋ Text</button>
         <select id="addsel"><option value="">+ Add clip…</option></select>
+        <select id="preset" title="Export format">
+          <option value="youtube">YouTube 16:9</option>
+          <option value="reels">Reels 9:16</option>
+          <option value="square">Square 1:1</option>
+          <option value="web">Web (source)</option>
+        </select>
+        <button id="export" class="primary">Export</button>
       </div>
       <div class="timeline" id="timeline">
         <div class="lane" id="clipLane"></div>

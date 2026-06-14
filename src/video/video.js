@@ -17,6 +17,7 @@ const $docsel = document.getElementById("docsel");
 const $newdoc = document.getElementById("newdoc");
 const $deldoc = document.getElementById("deldoc");
 const $stage = document.getElementById("stage");
+const $frame = document.getElementById("frame");
 const $placeholder = document.getElementById("placeholder");
 // Double-buffered playback: two <video> elements, one visible ("active") and
 // one preloading the next clip ("standby"). They swap at clip boundaries so no
@@ -29,10 +30,46 @@ function showActive() {
   els[curEl].classList.add("active");
   els[curEl ^ 1].classList.remove("active");
 }
+
+// Size the preview frame to the export aspect ratio, fit within the stage.
+// (Sized explicitly in px — a flex item with only aspect-ratio and absolutely
+// positioned children collapses to 0.)
+function setFrameAspect() {
+  const d = presetDims();
+  const SW = $stage.clientWidth || 1;
+  const SH = $stage.clientHeight || 1;
+  const scale = Math.min(SW / d.w, SH / d.h);
+  $frame.style.width = Math.max(1, Math.floor(d.w * scale)) + "px";
+  $frame.style.height = Math.max(1, Math.floor(d.h * scale)) + "px";
+}
+
+// Size + rotate a video element so its clip fits the frame (contain), matching
+// the exporter. Rotation swaps the fitted footprint for 90°/270°.
+function applyVidTransform(el) {
+  const idx = parseInt(el.dataset.clip);
+  const c = clips()[idx];
+  const r = (((c?.rotate || 0) % 360) + 360) % 360;
+  const FW = $frame.clientWidth || 1;
+  const FH = $frame.clientHeight || 1;
+  const vw = el.videoWidth || 16;
+  const vh = el.videoHeight || 9;
+  const aspect = vw / vh;
+  let w;
+  if (r === 90 || r === 270) {
+    w = Math.min(FH, FW * aspect); // footprint is rotated 90°
+  } else {
+    w = Math.min(FW, FH * aspect);
+  }
+  el.style.width = w + "px";
+  el.style.height = w / aspect + "px";
+  el.style.transform = `translate(-50%, -50%) rotate(${r}deg)`;
+}
 const $play = document.getElementById("play");
 const $time = document.getElementById("time");
 const $addsel = document.getElementById("addsel");
 const $addtext = document.getElementById("addtext");
+const $preset = document.getElementById("preset");
+const $export = document.getElementById("export");
 const $overlay = document.getElementById("overlay");
 const $timeline = document.getElementById("timeline");
 const $clipLane = document.getElementById("clipLane");
@@ -131,6 +168,11 @@ async function openEdit(file) {
   }
   if (!doc.clips) doc.clips = [];
   if (!doc.text) doc.text = [];
+  // Migrate legacy height-fraction sizes (≤ 1) to output pixels.
+  for (const l of doc.text) {
+    if ((l.size ?? 0) > 0 && l.size <= 1) l.size = Math.round(l.size * presetDims().h);
+  }
+  capCache.clear();
   renderDocSel();
   render();
 }
@@ -202,6 +244,7 @@ function render() {
   $play.disabled = !has;
   $placeholder.hidden = has;
   $addtext.disabled = !has;
+  $frame.style.display = has ? "" : "none";
   for (const el of els) el.style.display = has ? "" : "none";
   if (has) {
     if (activeIdx >= clips().length) activeIdx = 0;
@@ -213,6 +256,9 @@ function render() {
       el.dataset.clip = "";
     }
   }
+  $preset.value = doc.preset || "youtube";
+  setFrameAspect();
+  for (const el of els) if (el.readyState >= 1) applyVidTransform(el);
   renderTimeline();
   renderOverlay();
   updateTime();
@@ -305,56 +351,140 @@ function positionPlayhead() {
   $playhead.style.left = pad + (playhead / total) * w + "px";
 }
 
-// ── Caption/title overlay (preview of the baked look) ───────────────────────
+// ── Captions: a single rendering path shared by preview + export ─────────────
+// Each caption is drawn to a 2D canvas; the preview composites those canvases
+// and the export embeds the SAME images (rendered at output resolution) so the
+// baked result is pixel-identical. Animations are geometric (opacity / slide /
+// reveal-clip) and apply to the image in both places.
+const CAP = { weight: 700, padXEm: 0.4, padYEm: 0.26, radiusEm: 0.2, slideFrac: 0.03 };
+const capCache = new Map(); // layer id -> { sig, canvas, w, h, edges }
+
+// Font size in OUTPUT pixels. Values ≤ 1 are treated as legacy height-fractions.
+function fontPxOutput(l) {
+  const s = l.size ?? 72;
+  return s <= 1 ? s * presetDims().h : s;
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Render a caption to a canvas at the given font pixel size. Returns the canvas,
+// its size, and word-boundary x-fractions (for the word-by-word reveal).
+function makeCaptionCanvas(l, fontPx) {
+  const family = `"${l.font || "Futura"}", "Avenir Next", system-ui, sans-serif`;
+  const fontStr = `${CAP.weight} ${fontPx}px ${family}`;
+  const lines = String(l.text ?? "").split("\n");
+  const c = document.createElement("canvas");
+  const ctx = c.getContext("2d");
+  ctx.font = fontStr;
+  let textW = 0;
+  for (const ln of lines) textW = Math.max(textW, ctx.measureText(ln || " ").width);
+  const lineH = fontPx * 1.2;
+  const padX = fontPx * CAP.padXEm;
+  const padY = fontPx * CAP.padYEm;
+  const w = Math.max(1, Math.ceil(textW + padX * 2));
+  const h = Math.max(1, Math.ceil(lineH * lines.length + padY * 2));
+  c.width = w;
+  c.height = h;
+  ctx.font = fontStr; // reset after resize
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  if (l.bg) {
+    roundRectPath(ctx, 0, 0, w, h, fontPx * CAP.radiusEm);
+    ctx.fillStyle = l.bg;
+    ctx.fill();
+  }
+  ctx.fillStyle = l.color || "#ffffff";
+  lines.forEach((ln, i) => ctx.fillText(ln, w / 2, padY + lineH * (i + 0.5)));
+
+  // Word-boundary x-fractions (single-line layout, centered) for the reveal.
+  const words = String(l.text ?? "").split(/\s+/).filter(Boolean);
+  const textLeft = (w - textW) / 2;
+  const edges = words.map((_, i) => {
+    const prefix = words.slice(0, i + 1).join(" ");
+    return Math.min(1, (textLeft + ctx.measureText(prefix).width) / w);
+  });
+  edges.push(1);
+  return { canvas: c, w, h, edges };
+}
+
+function getCaption(l, fontPx) {
+  const sig = [l.text, Math.round(fontPx), l.color, l.bg, l.font].join("|");
+  const hit = capCache.get(l.id);
+  if (hit && hit.sig === sig) return hit;
+  const entry = { sig, ...makeCaptionCanvas(l, fontPx) };
+  capCache.set(l.id, entry);
+  return entry;
+}
+
+// Reveal fraction (of image width) at local time `lt` for words/typewriter.
+function revealFraction(l, lt, dur, edges) {
+  const anim = l.anim;
+  if (anim === "typewriter") return Math.min(1, lt / dur);
+  if (anim === "words") {
+    const n = Math.max(1, edges.length - 1);
+    const shown = Math.min(n, Math.floor((lt / dur) * n) + 1);
+    return edges[shown - 1];
+  }
+  return 1;
+}
+
 function renderOverlay() {
-  $overlay.innerHTML = "";
-  const fh = activeVid().clientHeight || $overlay.clientHeight || 1;
-  for (const tx of text()) {
-    const s = tx.start ?? 0;
-    const e = tx.end ?? 0;
+  const ctx = $overlay.getContext("2d");
+  const FW = Math.max(1, Math.round($frame.clientWidth));
+  const FH = Math.max(1, Math.round($frame.clientHeight));
+  if ($overlay.width !== FW) $overlay.width = FW;
+  if ($overlay.height !== FH) $overlay.height = FH;
+  ctx.clearRect(0, 0, FW, FH);
+  const scale = FH / presetDims().h; // output px → preview px
+  for (const l of text()) {
+    const s = l.start ?? 0;
+    const e = l.end ?? 0;
     if (playhead < s || playhead > e) continue;
-    const node = buildLayerNode(tx, playhead - s, e - s, fh);
-    if (node) $overlay.append(node);
+    drawCaption(ctx, l, playhead - s, e - s, FW, FH, scale);
   }
 }
 
-// One animated text node. `lt` = local time within the layer, `dur` its length.
-function buildLayerNode(tx, lt, dur, frameH) {
-  const node = document.createElement("div");
-  node.className = "lyr";
-  node.style.left = (tx.x ?? 0.5) * 100 + "%";
-  node.style.top = (tx.y ?? 0.85) * 100 + "%";
-  node.style.color = tx.color || "#fff";
-  node.style.background = tx.bg || "transparent";
-  if (tx.font) node.style.fontFamily = tx.font;
-  node.style.fontSize = Math.max(8, (tx.size ?? 0.06) * frameH) + "px";
-
-  const anim = tx.anim || "none";
-  const into = Math.min(0.4, dur / 3); // ease-in window
-  const full = tx.text || "";
-  if (anim === "words") {
-    const words = full.split(/\s+/).filter(Boolean);
-    const shown = Math.max(1, Math.ceil((lt / dur) * words.length));
-    node.textContent = words.slice(0, shown).join(" ");
-  } else if (anim === "typewriter") {
-    const n = Math.max(1, Math.ceil((lt / dur) * full.length));
-    node.textContent = full.slice(0, n);
-  } else {
-    node.textContent = full;
-  }
+function drawCaption(ctx, l, lt, dur, FW, FH, scale) {
+  const { canvas, w, h, edges } = getCaption(l, fontPxOutput(l) * scale);
+  const cx = (l.x ?? 0.5) * FW;
+  const cy = (l.y ?? 0.85) * FH;
+  let left = cx - w / 2;
+  let top = cy - h / 2;
+  const anim = l.anim || "none";
+  const into = Math.min(0.4, dur / 3);
+  const p = into > 0 ? Math.min(1, lt / into) : 1;
+  let alpha = 1;
+  let dx = 0;
+  let dy = 0;
   if (anim === "fade") {
     const out = dur - into;
-    node.style.opacity = lt < into ? lt / into : lt > out ? Math.max(0, (dur - lt) / into) : 1;
+    alpha = lt < into ? lt / into : lt > out ? Math.max(0, (dur - lt) / into) : 1;
   } else if (anim === "slide") {
-    const p = Math.min(1, lt / into);
-    const off = (1 - p) * 30; // px
-    const dir = tx.from || "bottom";
-    const dx = dir === "left" ? -off : dir === "right" ? off : 0;
-    const dy = dir === "top" ? -off : dir === "bottom" ? off : 0;
-    node.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-    node.style.opacity = p;
+    alpha = p;
+    const off = (1 - p) * FH * CAP.slideFrac;
+    const dir = l.from || "bottom";
+    dx = dir === "left" ? -off : dir === "right" ? off : 0;
+    dy = dir === "top" ? -off : dir === "bottom" ? off : 0;
   }
-  return node;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if (anim === "words" || anim === "typewriter") {
+    const f = revealFraction(l, lt, dur, edges);
+    ctx.beginPath();
+    ctx.rect(left + dx, top + dy, w * f, h);
+    ctx.clip();
+  }
+  ctx.drawImage(canvas, left + dx, top + dy, w, h);
+  ctx.restore();
 }
 
 // ── Playback (double-buffered, global-time driven) ──────────────────────────
@@ -457,6 +587,7 @@ for (const el of els) {
   el.addEventListener("timeupdate", (e) => {
     if (e.target === activeVid()) syncPlayhead();
   });
+  el.addEventListener("loadedmetadata", () => applyVidTransform(el));
 }
 
 function frame() {
@@ -656,7 +787,52 @@ function selectedText() {
   return sel?.type === "text" ? text().find((t) => t.id === sel.id) : null;
 }
 
+function selectedClip() {
+  return sel?.type === "clip" ? clips().find((c) => c.id === sel.id) : null;
+}
+
+function renderClipInspector(clip) {
+  $inspector.hidden = false;
+  $inspector.innerHTML = "";
+  const label = document.createElement("label");
+  label.textContent = clip.src.split("/").pop();
+  label.className = "full";
+  $inspector.append(label);
+
+  const rotLabel = document.createElement("label");
+  rotLabel.textContent = "Rotate";
+  const row = document.createElement("div");
+  row.style.display = "flex";
+  row.style.gap = "6px";
+  const setRotate = (deg) => {
+    clip.rotate = (((deg % 360) + 360) % 360);
+    scheduleVideoSave();
+    applyVidTransform(activeVid());
+    renderOverlay();
+    renderClipInspector(clip);
+  };
+  const ccw = document.createElement("button");
+  ccw.textContent = "⟲ 90°";
+  ccw.title = "Rotate counter-clockwise";
+  ccw.addEventListener("click", () => setRotate((clip.rotate || 0) - 90));
+  const cw = document.createElement("button");
+  cw.textContent = "⟳ 90°";
+  cw.title = "Rotate clockwise";
+  cw.addEventListener("click", () => setRotate((clip.rotate || 0) + 90));
+  const cur = document.createElement("span");
+  cur.style.alignSelf = "center";
+  cur.style.color = "var(--ink-dim)";
+  cur.textContent = `${clip.rotate || 0}°`;
+  row.append(ccw, cw, cur);
+  $inspector.append(rotLabel, row);
+}
+
 function renderInspector() {
+  const clip = selectedClip();
+  if (clip) {
+    renderClipInspector(clip);
+    return;
+  }
   const tx = selectedText();
   if (!tx) {
     $inspector.hidden = true;
@@ -721,7 +897,7 @@ function renderInspector() {
 
   field("X", input(tx.x ?? 0.5, (v) => (tx.x = v), "number"));
   field("Y", input(tx.y ?? 0.85, (v) => (tx.y = v), "number"));
-  field("Size", input(tx.size ?? 0.06, (v) => (tx.size = v), "number"));
+  field("Size (px)", input(Math.round(fontPxOutput(tx)), (v) => (tx.size = v), "number"));
   field("Color", input(tx.color || "#ffffff", (v) => (tx.color = v), "color"));
 
   const del = document.createElement("button");
@@ -747,7 +923,7 @@ $addtext.addEventListener("click", () => {
     end: Math.min(total, start + 2),
     x: 0.5,
     y: 0.85,
-    size: 0.06,
+    size: Math.round(presetDims().h * 0.06),
     color: "#ffffff",
     bg: "#00000055",
     font: "Futura",
@@ -762,7 +938,110 @@ $addtext.addEventListener("click", () => {
 
 window.addEventListener("resize", () => {
   positionPlayhead();
+  setFrameAspect();
+  for (const el of els) if (el.readyState >= 1) applyVidTransform(el);
   renderOverlay();
+});
+
+// ── Export ──────────────────────────────────────────────────────────────────
+$preset.addEventListener("change", () => {
+  doc.preset = $preset.value;
+  scheduleVideoSave();
+});
+
+// Render dimensions for each preset. "web" follows the first clip's source
+// size (even dimensions, H.264 needs them).
+function presetDims() {
+  switch (doc.preset) {
+    case "reels": return { w: 1080, h: 1920 };
+    case "square": return { w: 1080, h: 1080 };
+    case "web": {
+      const v = activeVid();
+      let w = v.videoWidth || 1920;
+      let h = v.videoHeight || 1080;
+      return { w: w - (w % 2), h: h - (h % 2) };
+    }
+    default: return { w: 1920, h: 1080 }; // youtube
+  }
+}
+
+function buildSpec() {
+  const d = presetDims();
+  return {
+    width: d.w,
+    height: d.h,
+    fit: doc.fit || "contain",
+    clips: clips().map((c) => ({
+      src: absSrc(c.src),
+      in: c.in ?? 0,
+      out: c.out ?? 0,
+      rotate: c.rotate || 0,
+    })),
+    // Render each caption at OUTPUT resolution and embed the PNG; the exporter
+    // composites these images directly so it matches the preview exactly.
+    text: text().map((l) => {
+      const { canvas, w, h, edges } = makeCaptionCanvas(l, fontPxOutput(l));
+      return {
+        image: canvas.toDataURL("image/png"),
+        w,
+        h,
+        x: l.x ?? 0.5,
+        y: l.y ?? 0.85,
+        start: l.start ?? 0,
+        end: l.end ?? 0,
+        anim: l.anim || "none",
+        from: l.from || "bottom",
+        edges,
+      };
+    }),
+  };
+}
+
+let exporting = false;
+listen("video-export-progress", (e) => {
+  if (!exporting) return;
+  const pct = Math.round((e.payload || 0) * 100);
+  $export.textContent = `Exporting ${pct}%`;
+});
+
+$export.addEventListener("click", async () => {
+  if (exporting) return;
+  if (clips().length === 0) {
+    toast("Add a clip first.");
+    return;
+  }
+  const cur = edits.find((e) => e.file === currentFile);
+  const base = (cur ? cur.name : "video").replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "");
+  let dst;
+  try {
+    dst = await dialog.save({
+      defaultPath: `${base || "video"}.mp4`,
+      filters: [{ name: "MP4", extensions: ["mp4"] }],
+    });
+  } catch (e) {
+    toast("Save dialog failed: " + e);
+    return;
+  }
+  if (!dst) return;
+
+  // Flush any pending edit so the export matches what's on screen.
+  try {
+    await invoke("write_video", { path: projectPath, file: currentFile, doc });
+  } catch {}
+
+  exporting = true;
+  $export.disabled = true;
+  $export.textContent = "Exporting…";
+  try {
+    await invoke("export_video", { spec: buildSpec(), dst });
+    toast("Exported ✓ — revealed in Finder");
+  } catch (e) {
+    toast("Export failed: " + e);
+  } finally {
+    exporting = false;
+    $export.disabled = false;
+    $export.textContent = "Export";
+  }
 });
 
 // ── Clip add / remove ───────────────────────────────────────────────────────

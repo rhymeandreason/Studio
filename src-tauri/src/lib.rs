@@ -999,6 +999,52 @@ fn delete_video(path: String, file: String) -> Result<(), String> {
     std::fs::remove_file(videos_dir(&path).join(&file)).map_err(|e| e.to_string())
 }
 
+/// Render an edit to an MP4 via the native AVFoundation helper. `spec` is the
+/// fully-resolved export spec (absolute clip paths, render width/height, text
+/// layers — built by the frontend); `dst` is the chosen output file. Streams
+/// `video-export-progress` events (0..1) and returns the output path on done.
+#[tauri::command]
+fn export_video(app: AppHandle, spec: serde_json::Value, dst: String) -> Result<String, String> {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
+    let mut spec = spec;
+    spec["output"] = serde_json::json!(dst);
+    let tmp = std::env::temp_dir().join(format!("studio-vidspec-{}.json", std::process::id()));
+    std::fs::write(&tmp, serde_json::to_string(&spec).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+
+    let mut child = Command::new(env!("VIDEXPORT_BIN"))
+        .arg(&tmp)
+        .stdout(Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let stdout = child.stdout.take().ok_or("no stdout")?;
+
+    let mut done_path = None;
+    let mut err = None;
+    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        if let Some(p) = line.strip_prefix("PROGRESS ") {
+            if let Ok(f) = p.trim().parse::<f64>() {
+                let _ = app.emit("video-export-progress", f);
+            }
+        } else if let Some(p) = line.strip_prefix("DONE ") {
+            done_path = Some(p.to_string());
+        } else if let Some(e) = line.strip_prefix("ERROR ") {
+            err = Some(e.to_string());
+        }
+    }
+    let _ = child.wait();
+    let _ = std::fs::remove_file(&tmp);
+
+    if let Some(e) = err {
+        return Err(e);
+    }
+    let path = done_path.ok_or("export produced no output")?;
+    let _ = Command::new("open").arg("-R").arg(&path).spawn();
+    Ok(path)
+}
+
 /// Media extensions surfaced in the grid, by kind.
 const IMAGE_EXTS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif", "heic", "heif", "svg",
@@ -3715,6 +3761,7 @@ pub fn run() {
             write_video,
             create_video,
             delete_video,
+            export_video,
             open_video_window,
             launch_workspace,
             get_memory_stats,
