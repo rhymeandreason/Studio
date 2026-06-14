@@ -244,6 +244,77 @@ export function addRow(list, value = "") {
   input.addEventListener("input", resizeInput);
   // Resize after the card is in the DOM so scrollHeight is correct
   requestAnimationFrame(resizeInput);
+
+  // Folder/file/repo cards show the name prominently above the path.
+  if (list === "folders" || list === "files" || list === "repo") {
+    const name = document.createElement("div");
+    name.className = "ws-item__name";
+    const updateName = () => {
+      const path = input.value.trim().replace(/\/+$/, "");
+      name.textContent = path.split("/").pop() || "";
+    };
+    input.addEventListener("input", updateName);
+    updateName();
+    card.append(name);
+    input.classList.add("ws-item__input--path");
+  }
+
+  // App cards show the app's icon + name prominently above the value.
+  if (list === "apps") {
+    const row = document.createElement("div");
+    row.className = "ws-item__app";
+    const icon = document.createElement("img");
+    icon.className = "ws-item__app-icon";
+    icon.hidden = true;
+    const name = document.createElement("div");
+    name.className = "ws-item__name";
+    row.append(icon, name);
+    card.append(row);
+
+    let iconTimer;
+    const update = () => {
+      const appName = input.value.trim();
+      name.textContent = appName;
+      icon.hidden = true;
+      if (!appName) return;
+      invoke("app_icon", { name: appName })
+        .then((p) => {
+          if (input.value.trim() !== appName) return;
+          icon.src = window.__TAURI__.core.convertFileSrc(p);
+          icon.hidden = false;
+        })
+        .catch(() => {});
+    };
+    input.addEventListener("input", () => {
+      name.textContent = input.value.trim();
+      icon.hidden = true;
+      clearTimeout(iconTimer);
+      iconTimer = setTimeout(update, 500);
+    });
+    update();
+    input.classList.add("ws-item__input--path");
+  }
+
+  // URL cards show the bare domain (e.g. "etsy.com") in large text above the URL.
+  if (list === "urls") {
+    const name = document.createElement("div");
+    name.className = "ws-item__name";
+    const updateName = () => {
+      const url = input.value.trim();
+      let host = "";
+      try {
+        host = new URL(url).hostname.replace(/^www\./, "");
+      } catch {
+        host = url;
+      }
+      name.textContent = host;
+    };
+    input.addEventListener("input", updateName);
+    updateName();
+    card.append(name);
+    input.classList.add("ws-item__input--path");
+  }
+
   // For the repo card the input lives inside a dedicated path row (below);
   // every other card appends it straight to the body.
   if (list !== "repo") card.append(input);

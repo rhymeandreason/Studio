@@ -682,8 +682,10 @@ select.field__input {
 
 .listfield__rows {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    align-items: start;
+    gap: 12px;
+    position: relative;
 }
 
 .ws-item {
@@ -726,6 +728,26 @@ select.field__input {
     opacity: 1;
 }
 
+.ws-item__app {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ws-item__app-icon {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+}
+
+.ws-item__name {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+    word-break: break-all;
+}
+
 .ws-item__input {
     background: transparent;
     border: none;
@@ -739,6 +761,11 @@ select.field__input {
     resize: none;
     width: 100%;
     word-break: break-all;
+}
+
+.ws-item__input--path {
+    font-size: 11px;
+    color: var(--text-muted);
 }
 
 .ws-item__input::placeholder {
@@ -783,6 +810,8 @@ select.field__input {
     /* Span the full row and grow as tall as its contents need. */
     grid-column: 1 / -1;
     aspect-ratio: auto;
+    /* Always render first, regardless of DOM order. */
+    order: -1;
 }
 
 /* Primary action: the path, with an inline Browse button. */

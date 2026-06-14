@@ -997,6 +997,63 @@ fn list_media(path: String) -> Vec<MediaItem> {
 /// the cached PNG path (asset-resolved by the frontend). Cached by path+mtime+size.
 #[tauri::command]
 fn quicklook_thumb(app: AppHandle, path: String, size: u32) -> Result<String, String> {
+    quicklook_thumb_impl(&app, &path, size)
+}
+
+/// Resolve a Workspace "app" entry (e.g. "Finder") to its `.app` bundle's icon
+/// (via NSWorkspace), cached as a PNG. Returns the cached PNG path.
+#[tauri::command]
+fn app_icon(app: AppHandle, name: String) -> Result<String, String> {
+    use std::hash::{Hash, Hasher};
+
+    // Resolve the app name to a `.app` bundle path without launching it
+    // (AppleScript's `path to application` launches the app as a side effect).
+    let app_path = ["/Applications", "/System/Applications", "/System/Applications/Utilities"]
+        .iter()
+        .map(|dir| format!("{dir}/{name}.app"))
+        .find(|p| std::path::Path::new(p).exists())
+        .or_else(|| {
+            let out = Command::new("mdfind")
+                .arg(format!(
+                    "kMDItemContentTypeTree == 'com.apple.application-bundle' && kMDItemFSName == '{}.app'",
+                    name.replace('\'', "")
+                ))
+                .output()
+                .ok()?;
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .next()
+                .map(|s| s.to_string())
+        })
+        .ok_or_else(|| format!("application \"{name}\" not found"))?;
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    app_path.hash(&mut hasher);
+    let key = hasher.finish();
+
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("appicons");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let out_path = dir.join(format!("{key:x}.png"));
+
+    if !out_path.exists() {
+        let status = Command::new(env!("APPICON_BIN"))
+            .arg(&app_path)
+            .arg("128")
+            .arg(&out_path)
+            .status()
+            .map_err(|e| e.to_string())?;
+        if !status.success() {
+            return Err("failed to render app icon".into());
+        }
+    }
+    Ok(out_path.to_string_lossy().to_string())
+}
+
+fn quicklook_thumb_impl(app: &AppHandle, path: &str, size: u32) -> Result<String, String> {
     use std::hash::{Hash, Hasher};
 
     let src = PathBuf::from(&path);
@@ -3486,6 +3543,7 @@ pub fn run() {
             edited_thumb,
             save_edited_thumb,
             open_path,
+            app_icon,
             open_in_zed,
             open_app,
             open_in_photos,

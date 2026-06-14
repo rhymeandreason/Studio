@@ -26,6 +26,13 @@ fn main() {
     println!("cargo:rustc-env=PBIMAGE_BIN={}", pb_bin.display());
     println!("cargo:rerun-if-changed={pb_src}");
 
+    // App-icon helper (NSWorkspace icon → PNG), for Workspace app cards.
+    let icon_src = "swift/appicon.swift";
+    let icon_bin = Path::new(&out_dir).join("appicon");
+    swiftc(icon_src, &icon_bin, "macosx11.0");
+    println!("cargo:rustc-env=APPICON_BIN={}", icon_bin.display());
+    println!("cargo:rerun-if-changed={icon_src}");
+
     tauri_build::build();
 }
 
