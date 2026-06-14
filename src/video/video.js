@@ -18,11 +18,27 @@ const $newdoc = document.getElementById("newdoc");
 const $deldoc = document.getElementById("deldoc");
 const $stage = document.getElementById("stage");
 const $placeholder = document.getElementById("placeholder");
-const $video = document.getElementById("video");
+// Double-buffered playback: two <video> elements, one visible ("active") and
+// one preloading the next clip ("standby"). They swap at clip boundaries so no
+// black frame shows during the src reload.
+const els = [document.getElementById("vidA"), document.getElementById("vidB")];
+let curEl = 0;
+const activeVid = () => els[curEl];
+const standbyVid = () => els[curEl ^ 1];
+function showActive() {
+  els[curEl].classList.add("active");
+  els[curEl ^ 1].classList.remove("active");
+}
 const $play = document.getElementById("play");
 const $time = document.getElementById("time");
 const $addsel = document.getElementById("addsel");
-const $clips = document.getElementById("clips");
+const $addtext = document.getElementById("addtext");
+const $overlay = document.getElementById("overlay");
+const $timeline = document.getElementById("timeline");
+const $clipLane = document.getElementById("clipLane");
+const $textLane = document.getElementById("textLane");
+const $playhead = document.getElementById("playhead");
+const $inspector = document.getElementById("inspector");
 const $toast = document.getElementById("toast");
 
 $project.textContent = projectName;
@@ -33,6 +49,9 @@ let doc = { version: 1, preset: "youtube", hdr: "sdr", clips: [], text: [] };
 let currentFile = null; // basename of the open edit under videos/
 let edits = []; // [{ file, name, modified }]
 let activeIdx = 0; // which clip is loaded into the <video> element
+let playhead = 0; // global timeline position, seconds
+let sel = null; // current selection: { type:"clip"|"text", id }
+let dragging = false; // suppress scrub during block drag/trim
 
 // ── Persistence ────────────────────────────────────────────────────────────
 let saveTimer;
@@ -102,6 +121,8 @@ $deldoc.addEventListener("click", async () => {
 async function openEdit(file) {
   currentFile = file;
   activeIdx = 0;
+  playhead = 0;
+  sel = null;
   try {
     doc = await invoke("read_video", { path: projectPath, file });
   } catch (e) {
@@ -152,107 +173,597 @@ function totalDur() {
   return clips().reduce((sum, c) => sum + clipDur(c), 0);
 }
 
-function renderClips() {
-  $clips.innerHTML = "";
-  if (clips().length === 0) {
-    const e = document.createElement("div");
-    e.className = "empty";
-    e.textContent = "No clips. Use “+ Add clip…” to start.";
-    $clips.append(e);
-    return;
-  }
-  clips().forEach((c, i) => {
-    const row = document.createElement("div");
-    row.className = "clip" + (i === activeIdx ? " active" : "");
-    const idx = document.createElement("span");
-    idx.className = "idx";
-    idx.textContent = i + 1;
-    const name = document.createElement("span");
-    name.className = "name";
-    name.textContent = c.src.split("/").pop();
-    name.title = c.src;
-    const dur = document.createElement("span");
-    dur.className = "dur";
-    dur.textContent = fmt(clipDur(c));
-    const x = document.createElement("span");
-    x.className = "x";
-    x.textContent = "✕";
-    x.title = "Remove clip";
-    x.addEventListener("click", (e) => {
-      e.stopPropagation();
-      removeClip(i);
-    });
-    row.append(idx, name, dur, x);
-    row.addEventListener("click", () => loadClip(i));
-    $clips.append(row);
+const text = () => doc.text || (doc.text = []);
+
+// Global timeline layout: each clip's [start,end] on the final timeline.
+function layout() {
+  let t = 0;
+  return clips().map((c) => {
+    const start = t;
+    const dur = clipDur(c);
+    t += dur;
+    return { c, start, end: start + dur, dur };
   });
 }
 
+// Map a global time → which clip + the source `currentTime` to seek to.
+function globalToClip(t) {
+  const segs = layout();
+  for (let i = 0; i < segs.length; i++) {
+    if (t < segs[i].end || i === segs.length - 1) {
+      return { idx: i, src: (clips()[i].in ?? 0) + (t - segs[i].start) };
+    }
+  }
+  return null;
+}
+
 function render() {
-  renderClips();
   const has = clips().length > 0;
   $play.disabled = !has;
   $placeholder.hidden = has;
-  $video.hidden = !has;
+  $addtext.disabled = !has;
+  for (const el of els) el.style.display = has ? "" : "none";
   if (has) {
     if (activeIdx >= clips().length) activeIdx = 0;
-    loadClip(activeIdx);
+    loadClip(activeIdx, false);
   } else {
-    $video.removeAttribute("src");
+    for (const el of els) {
+      el.removeAttribute("src");
+      el.dataset.src = "";
+      el.dataset.clip = "";
+    }
   }
+  renderTimeline();
+  renderOverlay();
   updateTime();
+  renderInspector();
 }
 
-// ── Playback (single <video>, swap src per clip) ────────────────────────────
-function loadClip(i) {
-  activeIdx = i;
-  const c = clips()[i];
-  if (!c) return;
-  const url = convertFileSrc(absSrc(c.src));
-  if ($video.dataset.src !== url) {
-    $video.dataset.src = url;
-    $video.src = url;
+// ── Timeline rendering ──────────────────────────────────────────────────────
+function renderTimeline() {
+  const total = totalDur() || 1;
+  const segs = layout();
+  $clipLane.innerHTML = "";
+  segs.forEach((s, i) => {
+    const b = document.createElement("div");
+    b.className = "block" + (sel?.type === "clip" && sel.id === clips()[i].id ? " sel" : "");
+    b.style.left = (s.start / total) * 100 + "%";
+    b.style.width = (s.dur / total) * 100 + "%";
+    const label = document.createElement("span");
+    label.className = "label";
+    label.textContent = clips()[i].src.split("/").pop();
+    const hl = document.createElement("div");
+    hl.className = "handle l";
+    const hr = document.createElement("div");
+    hr.className = "handle r";
+    b.append(hl, label, hr);
+    hl.addEventListener("pointerdown", (e) => startTrim(e, i, "in"));
+    hr.addEventListener("pointerdown", (e) => startTrim(e, i, "out"));
+    b.addEventListener("pointerdown", (e) => startClipDrag(e, i));
+    $clipLane.append(b);
+  });
+
+  // Stack text layers into separate tracks so overlapping captions don't
+  // collide — greedily pack each into the first row where it fits (by time).
+  $textLane.innerHTML = "";
+  const rows = assignTextRows();
+  if (rows.length === 0) {
+    const lane = document.createElement("div");
+    lane.className = "lane lane--text";
+    $textLane.append(lane); // an empty placeholder track
   }
-  const seekTo = () => {
-    $video.currentTime = c.in ?? 0;
-    $video.removeEventListener("loadedmetadata", seekTo);
+  rows.forEach((row) => {
+    const lane = document.createElement("div");
+    lane.className = "lane lane--text";
+    row.forEach((tx) => {
+      const b = document.createElement("div");
+      b.className = "block" + (sel?.type === "text" && sel.id === tx.id ? " sel" : "");
+      b.style.left = ((tx.start ?? 0) / total) * 100 + "%";
+      b.style.width = Math.max(0.02, ((tx.end ?? 0) - (tx.start ?? 0)) / total) * 100 + "%";
+      const label = document.createElement("span");
+      label.className = "label";
+      label.textContent = tx.text || "(text)";
+      const hl = document.createElement("div");
+      hl.className = "handle l";
+      const hr = document.createElement("div");
+      hr.className = "handle r";
+      b.append(hl, label, hr);
+      hl.addEventListener("pointerdown", (e) => startTextResize(e, tx, "start"));
+      hr.addEventListener("pointerdown", (e) => startTextResize(e, tx, "end"));
+      b.addEventListener("pointerdown", (e) => startTextDrag(e, tx));
+      lane.append(b);
+    });
+    $textLane.append(lane);
+  });
+
+  positionPlayhead();
+}
+
+// Greedy packing of text layers into rows with no time overlap within a row.
+function assignTextRows() {
+  const items = [...text()].sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+  const rows = [];
+  for (const tx of items) {
+    let placed = false;
+    for (const row of rows) {
+      const last = row[row.length - 1];
+      if ((tx.start ?? 0) >= (last.end ?? 0)) {
+        row.push(tx);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) rows.push([tx]);
+  }
+  return rows;
+}
+
+function positionPlayhead() {
+  const total = totalDur() || 1;
+  const pad = 6; // .timeline padding
+  const w = $timeline.clientWidth - pad * 2;
+  $playhead.style.left = pad + (playhead / total) * w + "px";
+}
+
+// ── Caption/title overlay (preview of the baked look) ───────────────────────
+function renderOverlay() {
+  $overlay.innerHTML = "";
+  const fh = activeVid().clientHeight || $overlay.clientHeight || 1;
+  for (const tx of text()) {
+    const s = tx.start ?? 0;
+    const e = tx.end ?? 0;
+    if (playhead < s || playhead > e) continue;
+    const node = buildLayerNode(tx, playhead - s, e - s, fh);
+    if (node) $overlay.append(node);
+  }
+}
+
+// One animated text node. `lt` = local time within the layer, `dur` its length.
+function buildLayerNode(tx, lt, dur, frameH) {
+  const node = document.createElement("div");
+  node.className = "lyr";
+  node.style.left = (tx.x ?? 0.5) * 100 + "%";
+  node.style.top = (tx.y ?? 0.85) * 100 + "%";
+  node.style.color = tx.color || "#fff";
+  node.style.background = tx.bg || "transparent";
+  if (tx.font) node.style.fontFamily = tx.font;
+  node.style.fontSize = Math.max(8, (tx.size ?? 0.06) * frameH) + "px";
+
+  const anim = tx.anim || "none";
+  const into = Math.min(0.4, dur / 3); // ease-in window
+  const full = tx.text || "";
+  if (anim === "words") {
+    const words = full.split(/\s+/).filter(Boolean);
+    const shown = Math.max(1, Math.ceil((lt / dur) * words.length));
+    node.textContent = words.slice(0, shown).join(" ");
+  } else if (anim === "typewriter") {
+    const n = Math.max(1, Math.ceil((lt / dur) * full.length));
+    node.textContent = full.slice(0, n);
+  } else {
+    node.textContent = full;
+  }
+  if (anim === "fade") {
+    const out = dur - into;
+    node.style.opacity = lt < into ? lt / into : lt > out ? Math.max(0, (dur - lt) / into) : 1;
+  } else if (anim === "slide") {
+    const p = Math.min(1, lt / into);
+    const off = (1 - p) * 30; // px
+    const dir = tx.from || "bottom";
+    const dx = dir === "left" ? -off : dir === "right" ? off : 0;
+    const dy = dir === "top" ? -off : dir === "bottom" ? off : 0;
+    node.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    node.style.opacity = p;
+  }
+  return node;
+}
+
+// ── Playback (double-buffered, global-time driven) ──────────────────────────
+// Load clip `idx` into a given element and (optionally) seek to its in-point.
+function loadInto(el, idx, { play = false } = {}) {
+  const c = clips()[idx];
+  if (!c) return;
+  el.dataset.clip = String(idx);
+  const url = convertFileSrc(absSrc(c.src));
+  if (el.dataset.src !== url) {
+    el.dataset.src = url;
+    el.src = url;
+  }
+  const target = c.in ?? 0;
+  const apply = () => {
+    try {
+      el.currentTime = target;
+    } catch {}
+    if (play) el.play();
   };
-  if ($video.readyState >= 1) $video.currentTime = c.in ?? 0;
-  else $video.addEventListener("loadedmetadata", seekTo);
-  renderClips();
+  if (el.readyState >= 1) apply();
+  else {
+    el.addEventListener("loadedmetadata", function h() {
+      el.removeEventListener("loadedmetadata", h);
+      apply();
+    });
+  }
+}
+
+// Preload the clip after `idx` into the standby element (paused, pre-seeked).
+function preloadNext(idx) {
+  const n = idx + 1;
+  if (n < clips().length) loadInto(standbyVid(), n, { play: false });
+}
+
+// Jump the active element to clip `i` (used for scrub/select/initial load).
+function loadClip(i, keepPlaying) {
+  activeIdx = i;
+  loadInto(activeVid(), i, { play: keepPlaying });
+  showActive();
+  preloadNext(i);
+}
+
+// Swap to the preloaded standby element at a clip boundary — no black frame.
+function advance() {
+  const next = activeIdx + 1;
+  if (next >= clips().length) {
+    activeVid().pause();
+    return;
+  }
+  const wasPlaying = !activeVid().paused;
+  const old = activeVid();
+  const sb = standbyVid();
+  if (parseInt(sb.dataset.clip) !== next) loadInto(sb, next, { play: false });
+  old.pause();
+  curEl ^= 1; // standby becomes active
+  activeIdx = next;
+  showActive();
+  if (wasPlaying) activeVid().play();
+  preloadNext(next); // preload next+1 into the now-standby (old active)
+}
+
+// Seek the whole timeline to a global time.
+function seekGlobal(t) {
+  const total = totalDur();
+  playhead = Math.max(0, Math.min(total, t));
+  const m = globalToClip(playhead);
+  if (!m) return;
+  const wasPlaying = !activeVid().paused;
+  if (m.idx !== activeIdx) loadClip(m.idx, wasPlaying);
+  const v = activeVid();
+  if (v.readyState >= 1) {
+    try {
+      v.currentTime = m.src;
+    } catch {}
+  }
+  positionPlayhead();
+  renderOverlay();
+  updateTime();
 }
 
 $play.addEventListener("click", () => {
-  if ($video.paused) $video.play();
-  else $video.pause();
+  const v = activeVid();
+  if (v.paused) v.play();
+  else v.pause();
 });
-$video.addEventListener("play", () => ($play.textContent = "❚❚ Pause"));
-$video.addEventListener("pause", () => ($play.textContent = "▶︎ Play"));
+let rafId = null;
+// Listeners on both elements; only the active one drives the UI.
+for (const el of els) {
+  el.addEventListener("play", (e) => {
+    if (e.target !== activeVid()) return;
+    $play.textContent = "❚❚ Pause";
+    if (!rafId) rafId = requestAnimationFrame(frame);
+  });
+  el.addEventListener("pause", (e) => {
+    if (e.target !== activeVid()) return;
+    $play.textContent = "▶︎ Play";
+  });
+  // `timeupdate` is a coarse (~4 Hz) backstop; the rAF loop does smooth work.
+  el.addEventListener("timeupdate", (e) => {
+    if (e.target === activeVid()) syncPlayhead();
+  });
+}
 
-// Advance to the next clip when the current clip reaches its out point.
-$video.addEventListener("timeupdate", () => {
-  const c = clips()[activeIdx];
+function frame() {
+  syncPlayhead();
+  rafId = activeVid().paused ? null : requestAnimationFrame(frame);
+}
+
+function syncPlayhead() {
+  let c = clips()[activeIdx];
   if (!c) return;
-  if ($video.currentTime >= (c.out ?? $video.duration)) {
-    if (activeIdx < clips().length - 1) {
-      const wasPlaying = !$video.paused;
-      loadClip(activeIdx + 1);
-      if (wasPlaying) $video.play();
-    } else {
-      $video.pause();
-    }
+  const v = activeVid();
+  if (v.currentTime >= (c.out ?? v.duration)) {
+    advance();
+    c = clips()[activeIdx];
+    if (!c) return;
   }
+  const seg = layout()[activeIdx];
+  if (seg) playhead = seg.start + Math.max(0, activeVid().currentTime - (c.in ?? 0));
+  positionPlayhead();
+  renderOverlay();
   updateTime();
-});
+}
 
 function updateTime() {
-  const c = clips()[activeIdx];
-  const within = c ? Math.max(0, ($video.currentTime || 0) - (c.in ?? 0)) : 0;
-  const elapsedBefore = clips()
-    .slice(0, activeIdx)
-    .reduce((s, x) => s + clipDur(x), 0);
-  $time.textContent = `${fmt(elapsedBefore + within)} / ${fmt(totalDur())}`;
+  $time.textContent = `${fmt(playhead)} / ${fmt(totalDur())}`;
 }
+
+// ── Timeline interactions: scrub, trim, reorder, text move/resize ───────────
+function timeAtX(clientX) {
+  const r = $timeline.getBoundingClientRect();
+  const pad = 6;
+  const w = r.width - pad * 2;
+  const frac = Math.max(0, Math.min(1, (clientX - r.left - pad) / w));
+  return frac * (totalDur() || 0);
+}
+
+// Scrub by pressing anywhere on the timeline background (or grabbing the
+// playhead) and dragging. Blocks/handles stopPropagation so they don't scrub.
+// Window-level move/up means the cursor can roam well outside the thin
+// playhead without dropping the drag.
+function startScrub(e) {
+  e.preventDefault();
+  dragging = true;
+  $timeline.classList.add("scrubbing");
+  seekGlobal(timeAtX(e.clientX));
+  const move = (ev) => seekGlobal(timeAtX(ev.clientX));
+  const up = () => {
+    dragging = false;
+    $timeline.classList.remove("scrubbing");
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+$timeline.addEventListener("pointerdown", startScrub);
+
+function pxPerSecond() {
+  const r = $timeline.getBoundingClientRect();
+  return (r.width - 12) / (totalDur() || 1);
+}
+
+function startTrim(e, i, edge) {
+  e.stopPropagation();
+  e.preventDefault();
+  const c = clips()[i];
+  const startX = e.clientX;
+  const orig = edge === "in" ? c.in ?? 0 : c.out ?? 0;
+  const pps = pxPerSecond();
+  selectClip(c);
+  const move = (ev) => {
+    let v = orig + (ev.clientX - startX) / pps;
+    if (edge === "in") c.in = Math.max(0, Math.min(v, (c.out ?? 0) - 0.1));
+    else c.out = Math.max((c.in ?? 0) + 0.1, v); // upper clamp on commit/probe
+    renderTimeline();
+    updateTime();
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    clampClipOut(c);
+    scheduleVideoSave();
+    seekGlobal(layout()[i]?.start ?? 0);
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+// Keep out within the source duration (probe if we don't know it yet).
+async function clampClipOut(c) {
+  if (!c.srcDur) c.srcDur = await probeDuration(absSrc(c.src));
+  if (c.srcDur && c.out > c.srcDur) {
+    c.out = c.srcDur;
+    renderTimeline();
+    scheduleVideoSave();
+  }
+}
+
+function startClipDrag(e, i) {
+  e.preventDefault();
+  e.stopPropagation();
+  selectClip(clips()[i]);
+  const startX = e.clientX;
+  let moved = false;
+  let targetIdx = i;
+  const move = (ev) => {
+    if (Math.abs(ev.clientX - startX) < 4 && !moved) return;
+    moved = true;
+    // Determine drop index from cursor position across the clip lane.
+    const segs = layout();
+    const total = totalDur() || 1;
+    const r = $clipLane.getBoundingClientRect();
+    const t = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * total;
+    targetIdx = segs.findIndex((s) => t < (s.start + s.end) / 2);
+    if (targetIdx === -1) targetIdx = segs.length - 1;
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    if (moved && targetIdx !== i) {
+      const [c] = clips().splice(i, 1);
+      clips().splice(targetIdx, 0, c);
+      activeIdx = targetIdx;
+      scheduleVideoSave();
+    } else if (!moved) {
+      seekGlobal(layout()[i]?.start ?? 0); // click → scrub to clip start
+    }
+    render();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+function startTextDrag(e, tx) {
+  e.preventDefault();
+  e.stopPropagation();
+  selectText(tx);
+  const startX = e.clientX;
+  const len = (tx.end ?? 0) - (tx.start ?? 0);
+  const origStart = tx.start ?? 0;
+  const pps = pxPerSecond();
+  let moved = false;
+  const move = (ev) => {
+    if (Math.abs(ev.clientX - startX) < 3 && !moved) return;
+    moved = true;
+    const total = totalDur();
+    tx.start = Math.max(0, Math.min(total - len, origStart + (ev.clientX - startX) / pps));
+    tx.end = tx.start + len;
+    renderTimeline();
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    if (moved) scheduleVideoSave();
+    renderOverlay();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+function startTextResize(e, tx, edge) {
+  e.stopPropagation();
+  e.preventDefault();
+  selectText(tx);
+  const startX = e.clientX;
+  const orig = edge === "start" ? tx.start ?? 0 : tx.end ?? 0;
+  const pps = pxPerSecond();
+  const move = (ev) => {
+    const v = orig + (ev.clientX - startX) / pps;
+    if (edge === "start") tx.start = Math.max(0, Math.min(v, (tx.end ?? 0) - 0.1));
+    else tx.end = Math.max((tx.start ?? 0) + 0.1, Math.min(v, totalDur()));
+    renderTimeline();
+    renderOverlay();
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    scheduleVideoSave();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+// ── Selection + inspector ───────────────────────────────────────────────────
+function selectClip(c) {
+  sel = { type: "clip", id: c.id };
+  renderTimeline();
+  renderInspector();
+}
+function selectText(tx) {
+  sel = { type: "text", id: tx.id };
+  renderTimeline();
+  renderInspector();
+}
+
+function selectedText() {
+  return sel?.type === "text" ? text().find((t) => t.id === sel.id) : null;
+}
+
+function renderInspector() {
+  const tx = selectedText();
+  if (!tx) {
+    $inspector.hidden = true;
+    return;
+  }
+  $inspector.hidden = false;
+  $inspector.innerHTML = "";
+  const field = (label, node, full) => {
+    const l = document.createElement("label");
+    l.textContent = label;
+    if (full) {
+      node.classList.add("full");
+      $inspector.append(node);
+    } else {
+      $inspector.append(l, node);
+    }
+  };
+  const input = (val, on, type = "text") => {
+    const el = document.createElement("input");
+    el.type = type;
+    el.value = val;
+    el.addEventListener("input", () => {
+      on(type === "number" ? parseFloat(el.value) : el.value);
+      scheduleVideoSave();
+      renderTimeline();
+      renderOverlay();
+    });
+    return el;
+  };
+  const txt = input(tx.text || "", (v) => (tx.text = v));
+  field("Text", txt, true);
+
+  const animSel = document.createElement("select");
+  for (const a of ["none", "fade", "slide", "words", "typewriter"]) {
+    const o = document.createElement("option");
+    o.value = a;
+    o.textContent = a;
+    if ((tx.anim || "none") === a) o.selected = true;
+    animSel.append(o);
+  }
+  animSel.addEventListener("change", () => {
+    tx.anim = animSel.value;
+    scheduleVideoSave();
+    renderOverlay();
+  });
+  field("Animation", animSel);
+
+  const fromSel = document.createElement("select");
+  for (const d of ["bottom", "top", "left", "right"]) {
+    const o = document.createElement("option");
+    o.value = d;
+    o.textContent = d;
+    if ((tx.from || "bottom") === d) o.selected = true;
+    fromSel.append(o);
+  }
+  fromSel.addEventListener("change", () => {
+    tx.from = fromSel.value;
+    scheduleVideoSave();
+    renderOverlay();
+  });
+  field("From", fromSel);
+
+  field("X", input(tx.x ?? 0.5, (v) => (tx.x = v), "number"));
+  field("Y", input(tx.y ?? 0.85, (v) => (tx.y = v), "number"));
+  field("Size", input(tx.size ?? 0.06, (v) => (tx.size = v), "number"));
+  field("Color", input(tx.color || "#ffffff", (v) => (tx.color = v), "color"));
+
+  const del = document.createElement("button");
+  del.className = "del";
+  del.textContent = "Delete text layer";
+  del.addEventListener("click", () => {
+    doc.text = text().filter((t) => t.id !== tx.id);
+    sel = null;
+    scheduleVideoSave();
+    render();
+  });
+  $inspector.append(del);
+}
+
+$addtext.addEventListener("click", () => {
+  const total = totalDur();
+  const start = Math.min(playhead, Math.max(0, total - 2));
+  const tx = {
+    id: "t" + Math.random().toString(36).slice(2, 8),
+    kind: "title",
+    text: "Text",
+    start,
+    end: Math.min(total, start + 2),
+    x: 0.5,
+    y: 0.85,
+    size: 0.06,
+    color: "#ffffff",
+    bg: "#00000055",
+    font: "Futura",
+    anim: "fade",
+    from: "bottom",
+  };
+  text().push(tx);
+  scheduleVideoSave();
+  selectText(tx);
+  renderOverlay();
+});
+
+window.addEventListener("resize", () => {
+  positionPlayhead();
+  renderOverlay();
+});
 
 // ── Clip add / remove ───────────────────────────────────────────────────────
 async function populateAddMenu() {
@@ -310,13 +821,15 @@ $addsel.addEventListener("change", async () => {
     abs = await browseForClip();
     if (!abs) return;
   }
-  // Probe duration so a new clip spans the whole file by default.
+  // Probe duration so a new clip spans the whole file by default. `srcDur` is
+  // kept so trim handles can clamp without re-probing.
   const dur = await probeDuration(abs);
   clips().push({
     id: "c" + Math.random().toString(36).slice(2, 8),
     src: relSrc(abs),
     in: 0,
     out: dur,
+    srcDur: dur,
     volume: 1,
   });
   activeIdx = clips().length - 1;
@@ -337,14 +850,33 @@ function probeDuration(abs) {
 function removeClip(i) {
   clips().splice(i, 1);
   if (activeIdx >= clips().length) activeIdx = Math.max(0, clips().length - 1);
+  if (sel?.type === "clip") sel = null;
   scheduleVideoSave();
   render();
 }
 
+// Delete/Backspace removes the selected clip or text layer (unless typing).
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Delete" && e.key !== "Backspace") return;
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+  if (!sel) return;
+  e.preventDefault();
+  if (sel.type === "clip") {
+    const i = clips().findIndex((c) => c.id === sel.id);
+    if (i >= 0) removeClip(i);
+  } else {
+    doc.text = text().filter((t) => t.id !== sel.id);
+    sel = null;
+    scheduleVideoSave();
+    render();
+  }
+});
+
 // ── Toast ───────────────────────────────────────────────────────────────────
 let toastTimer;
-function toast(text) {
-  $toast.textContent = text;
+function toast(msg) {
+  $toast.textContent = msg;
   $toast.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => $toast.classList.remove("show"), 2400);

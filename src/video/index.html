@@ -89,11 +89,16 @@
         align-items: center;
         justify-content: center;
       }
-      .stage video {
+      .stage .vid {
+        position: absolute;
+        inset: 0;
+        margin: auto;
         max-width: 100%;
         max-height: 100%;
-        display: block;
+        opacity: 0;
+        transition: none;
       }
+      .stage .vid.active { opacity: 1; }
       .stage .placeholder {
         color: var(--ink-dim);
         font-style: italic;
@@ -111,57 +116,144 @@
         font-size: 12px;
         color: var(--ink-dim);
       }
-      .clips {
+      /* Caption/title overlay over the preview (preview of the baked look). */
+      .overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .overlay .lyr {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        white-space: pre-wrap;
+        text-align: center;
+        font-family: "Futura", "Avenir Next", system-ui, sans-serif;
+        font-weight: 700;
+        line-height: 1.15;
+        padding: 0.15em 0.45em;
+        border-radius: 0.2em;
+        max-width: 92%;
+      }
+      /* Timeline: a clip lane + a text lane, with a draggable playhead. */
+      .timeline {
+        position: relative;
         flex: 0 0 auto;
-        max-height: 38%;
-        overflow-y: auto;
         background: var(--card);
         border-radius: 10px;
         padding: 6px;
         display: flex;
         flex-direction: column;
         gap: 5px;
+        user-select: none;
       }
-      .clip {
+      .lane {
+        position: relative;
+        height: 42px;
+        border-radius: 7px;
+        background: rgba(0, 0, 0, 0.25);
+      }
+      /* Text tracks: one stacked lane per row of non-overlapping layers. */
+      .texttracks {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .lane--text { height: 26px; }
+      .block {
+        position: absolute;
+        top: 3px;
+        bottom: 3px;
+        border-radius: 6px;
+        background: var(--card-strong);
+        overflow: hidden;
+        cursor: grab;
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 6px 8px;
-        border-radius: 7px;
-        background: var(--card-strong);
-        cursor: pointer;
+        font-size: 11px;
       }
-      .clip.active { outline: 1.5px solid var(--accent); }
-      .clip .idx {
-        flex: 0 0 18px;
-        text-align: center;
-        font-weight: 700;
-        color: var(--ink-dim);
-        font-variant-numeric: tabular-nums;
-      }
-      .clip .name {
-        flex: 1 1 auto;
+      .block.sel { outline: 2px solid var(--accent); z-index: 2; }
+      .block .label {
+        padding: 0 8px;
+        white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        white-space: nowrap;
+        pointer-events: none;
       }
-      .clip .dur {
+      .block .handle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 9px;
+        cursor: ew-resize;
+        background: rgba(255, 255, 255, 0.18);
+      }
+      .block .handle.l { left: 0; border-radius: 6px 0 0 6px; }
+      .block .handle.r { right: 0; border-radius: 0 6px 6px 0; }
+      .lane--text .block {
+        background: rgba(255, 210, 63, 0.35);
+      }
+      .lane--text .block.sel { background: rgba(255, 210, 63, 0.55); }
+      .playhead {
+        position: absolute;
+        top: 4px;
+        bottom: 4px;
+        width: 2px;
+        background: var(--accent);
+        pointer-events: none;
+        z-index: 3;
+        left: 6px;
+      }
+      .playhead::before {
+        content: "";
+        position: absolute;
+        top: -3px;
+        left: -4px;
+        border: 5px solid transparent;
+        border-top-color: var(--accent);
+      }
+      /* Wide invisible grab target so the thin playhead is easy to drag. */
+      .playhead .grab {
+        position: absolute;
+        top: -6px;
+        bottom: -6px;
+        left: -9px;
+        width: 20px;
+        pointer-events: auto;
+        cursor: ew-resize;
+      }
+      .timeline.scrubbing { cursor: ew-resize; }
+      /* Inspector for the selected text layer. */
+      .inspector {
         flex: 0 0 auto;
-        font-size: 11px;
-        color: var(--ink-dim);
-        font-variant-numeric: tabular-nums;
+        background: var(--card);
+        border-radius: 10px;
+        padding: 8px 10px;
+        display: grid;
+        grid-template-columns: auto 1fr auto 1fr;
+        gap: 6px 8px;
+        align-items: center;
+        font-size: 12px;
       }
-      .clip .x {
-        flex: 0 0 auto;
-        opacity: 0.5;
-        padding: 0 4px;
+      .inspector label { color: var(--ink-dim); }
+      .inspector .full { grid-column: 1 / -1; }
+      .inspector input, .inspector select {
+        width: 100%;
+        border: none;
+        border-radius: 6px;
+        background: var(--card-strong);
+        color: var(--ink);
+        font: inherit;
+        padding: 5px 7px;
+        outline: none;
       }
-      .clip .x:hover { opacity: 1; }
-      .empty {
+      .inspector input[type="color"] { padding: 2px; height: 26px; }
+      .inspector .del {
+        grid-column: 1 / -1;
+        justify-self: start;
+        background: transparent;
         color: var(--ink-dim);
-        font-style: italic;
-        padding: 14px;
-        text-align: center;
+        padding: 4px 0;
       }
       button, select {
         border: none;
@@ -205,15 +297,26 @@
     <main>
       <div class="stage" id="stage">
         <div class="placeholder" id="placeholder">No clips yet — add one below.</div>
-        <video id="video" playsinline hidden></video>
+        <!-- Two stacked elements for double-buffered playback: one shows the
+             current clip while the other preloads the next, so clip boundaries
+             don't flash black. -->
+        <video class="vid" id="vidA" playsinline></video>
+        <video class="vid" id="vidB" playsinline></video>
+        <div class="overlay" id="overlay"></div>
       </div>
       <div class="controls">
         <button id="play" disabled>▶︎ Play</button>
         <span class="time" id="time">0:00 / 0:00</span>
         <span class="spacer" style="flex:1 1 auto"></span>
+        <button id="addtext">＋ Text</button>
         <select id="addsel"><option value="">+ Add clip…</option></select>
       </div>
-      <div class="clips" id="clips"></div>
+      <div class="timeline" id="timeline">
+        <div class="lane" id="clipLane"></div>
+        <div class="texttracks" id="textLane"></div>
+        <div class="playhead" id="playhead"><div class="grab"></div></div>
+      </div>
+      <div class="inspector" id="inspector" hidden></div>
     </main>
     <div class="toast" id="toast"></div>
 
