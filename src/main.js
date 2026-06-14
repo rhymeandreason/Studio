@@ -541,6 +541,14 @@ function initSchedulesButton() {
   document.getElementById("empty-schedules-btn").addEventListener("click", open);
 }
 
+function initVideoButton() {
+  document.getElementById("video-btn").addEventListener("click", () => {
+    if (state.activeProject) {
+      invoke("open_video_window", { path: state.activeProject.path });
+    }
+  });
+}
+
 function initAllProjectsButton() {
   document.getElementById("all-projects-btn").addEventListener("click", showOverview);
 }
@@ -2007,6 +2015,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   initTabs();
   initAllProjectsButton();
   initSchedulesButton();
+  initVideoButton();
   initLaunch();
   initClaudeButton();
   initSpriteBadge();

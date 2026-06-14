@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Video</title>
+    <style>
+      :root {
+        --bg: #15171c;
+        --ink: #f3f1ea;
+        --ink-dim: rgba(243, 241, 234, 0.55);
+        --line: rgba(243, 241, 234, 0.14);
+        --card: rgba(255, 255, 255, 0.06);
+        --card-strong: rgba(255, 255, 255, 0.12);
+        --accent: #ffd23f;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font: 13px/1.4 "Futura", "Avenir Next", system-ui, sans-serif;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        user-select: none;
+      }
+      .titlebar {
+        height: 34px;
+        flex: 0 0 34px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 14px;
+      }
+      .titlebar .project {
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        flex: 0 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .titlebar .project::before { content: "🎬 "; }
+      .titlebar .spacer { flex: 1 1 auto; }
+      .docsel {
+        -webkit-appearance: none;
+        appearance: none;
+        border: none;
+        border-radius: 7px;
+        background: var(--card-strong);
+        color: var(--ink);
+        font: inherit;
+        font-weight: 600;
+        padding: 4px 8px;
+        max-width: 220px;
+        cursor: pointer;
+      }
+      .iconbtn {
+        border: none;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--ink);
+        font: inherit;
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 4px 7px;
+        opacity: 0.7;
+      }
+      .iconbtn:hover { opacity: 1; background: var(--card-strong); }
+      main {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        padding: 4px 14px 12px;
+        gap: 10px;
+      }
+      /* Preview keeps a 16:9 box; the video letterboxes inside. */
+      .stage {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 120px;
+        background: #000;
+        border-radius: 10px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .stage video {
+        max-width: 100%;
+        max-height: 100%;
+        display: block;
+      }
+      .stage .placeholder {
+        color: var(--ink-dim);
+        font-style: italic;
+        text-align: center;
+        padding: 20px;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .controls .time {
+        font-variant-numeric: tabular-nums;
+        font-family: "SF Mono", ui-monospace, monospace;
+        font-size: 12px;
+        color: var(--ink-dim);
+      }
+      .clips {
+        flex: 0 0 auto;
+        max-height: 38%;
+        overflow-y: auto;
+        background: var(--card);
+        border-radius: 10px;
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .clip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 7px;
+        background: var(--card-strong);
+        cursor: pointer;
+      }
+      .clip.active { outline: 1.5px solid var(--accent); }
+      .clip .idx {
+        flex: 0 0 18px;
+        text-align: center;
+        font-weight: 700;
+        color: var(--ink-dim);
+        font-variant-numeric: tabular-nums;
+      }
+      .clip .name {
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .clip .dur {
+        flex: 0 0 auto;
+        font-size: 11px;
+        color: var(--ink-dim);
+        font-variant-numeric: tabular-nums;
+      }
+      .clip .x {
+        flex: 0 0 auto;
+        opacity: 0.5;
+        padding: 0 4px;
+      }
+      .clip .x:hover { opacity: 1; }
+      .empty {
+        color: var(--ink-dim);
+        font-style: italic;
+        padding: 14px;
+        text-align: center;
+      }
+      button, select {
+        border: none;
+        border-radius: 9px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 7px 12px;
+        color: var(--ink);
+        background: var(--card-strong);
+      }
+      button.primary { background: var(--accent); color: #1a1a1a; }
+      button:disabled { opacity: 0.35; cursor: default; }
+      select { -webkit-appearance: none; appearance: none; }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        background: var(--ink);
+        color: var(--bg);
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+        max-width: 90%;
+      }
+      .toast.show { opacity: 1; }
+    </style>
+  </head>
+  <body>
+    <div class="titlebar" data-tauri-drag-region>
+      <span class="project" id="project" data-tauri-drag-region></span>
+      <select class="docsel" id="docsel" title="Switch edit"></select>
+      <button class="iconbtn" id="newdoc" title="New video">＋</button>
+      <span class="spacer" data-tauri-drag-region></span>
+      <button class="iconbtn" id="deldoc" title="Delete this edit">🗑</button>
+    </div>
+    <main>
+      <div class="stage" id="stage">
+        <div class="placeholder" id="placeholder">No clips yet — add one below.</div>
+        <video id="video" playsinline hidden></video>
+      </div>
+      <div class="controls">
+        <button id="play" disabled>▶︎ Play</button>
+        <span class="time" id="time">0:00 / 0:00</span>
+        <span class="spacer" style="flex:1 1 auto"></span>
+        <select id="addsel"><option value="">+ Add clip…</option></select>
+      </div>
+      <div class="clips" id="clips"></div>
+    </main>
+    <div class="toast" id="toast"></div>
+
+    <script type="module" src="./video.js"></script>
+  </body>
+</html>

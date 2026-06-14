@@ -875,6 +875,130 @@ fn save_workspace(path: String, workspace: Workspace) -> Result<(), String> {
     std::fs::write(&file, text).map_err(|e| e.to_string())
 }
 
+// ── Video edits ─────────────────────────────────────────────────────────────
+// A project can hold several edits, one JSON file each under `<project>/videos/`
+// (e.g. `videos/tutorial-intro.json`). Each doc is free-form Value (schema owned
+// by the frontend + Claude Code) and carries a `name` for display. See
+// docs/video-plan.md.
+
+/// The default empty video edit, written when a new edit is created.
+fn default_video_doc(name: &str) -> serde_json::Value {
+    serde_json::json!({
+        "version": 1,
+        "name": name,
+        "preset": "youtube",
+        "hdr": "sdr",
+        "clips": [],
+        "text": [],
+    })
+}
+
+fn videos_dir(path: &str) -> PathBuf {
+    PathBuf::from(path).join("videos")
+}
+
+/// Slugify a display name into a filesystem-safe basename (no extension).
+fn slugify(name: &str) -> String {
+    let mut s: String = name
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect();
+    while s.contains("--") {
+        s = s.replace("--", "-");
+    }
+    let s = s.trim_matches('-').to_string();
+    if s.is_empty() { "untitled".into() } else { s }
+}
+
+/// One video edit found in a project.
+#[derive(Clone, Serialize)]
+struct VideoEdit {
+    file: String, // basename, e.g. "tutorial-intro.json"
+    name: String, // display name from the doc
+    modified: u64,
+}
+
+/// List a project's video edits (newest first).
+#[tauri::command]
+fn list_videos(path: String) -> Vec<VideoEdit> {
+    let dir = videos_dir(&path);
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(file) = p.file_name().and_then(|s| s.to_str()).map(String::from) else {
+                continue;
+            };
+            let doc: serde_json::Value = std::fs::read_to_string(&p)
+                .ok()
+                .and_then(|t| serde_json::from_str(&t).ok())
+                .unwrap_or_default();
+            let name = doc
+                .get("name")
+                .and_then(|n| n.as_str())
+                .map(String::from)
+                .unwrap_or_else(|| file.trim_end_matches(".json").to_string());
+            let modified = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            out.push(VideoEdit { file, name, modified });
+        }
+    }
+    out.sort_by(|a, b| b.modified.cmp(&a.modified));
+    out
+}
+
+/// Read one edit's JSON (`file` is a basename under `videos/`). Errors if
+/// missing — callers list/create first.
+#[tauri::command]
+fn read_video(path: String, file: String) -> Result<serde_json::Value, String> {
+    let p = videos_dir(&path).join(&file);
+    let text = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
+    serde_json::from_str(&text).map_err(|e| e.to_string())
+}
+
+/// Write one edit (pretty-printed). The frontend debounces via
+/// scheduleVideoSave(); Claude Code writes the same file directly.
+#[tauri::command]
+fn write_video(path: String, file: String, doc: serde_json::Value) -> Result<(), String> {
+    let dir = videos_dir(&path);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let text = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(&file), text).map_err(|e| e.to_string())
+}
+
+/// Create a new empty edit with a display name, returning its basename.
+#[tauri::command]
+fn create_video(path: String, name: String) -> Result<String, String> {
+    let dir = videos_dir(&path);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let stem = slugify(&name);
+    let mut file = format!("{stem}.json");
+    let mut n = 1;
+    while dir.join(&file).exists() {
+        file = format!("{stem}-{n}.json");
+        n += 1;
+    }
+    let text = serde_json::to_string_pretty(&default_video_doc(&name)).unwrap();
+    std::fs::write(dir.join(&file), text).map_err(|e| e.to_string())?;
+    Ok(file)
+}
+
+/// Delete an edit.
+#[tauri::command]
+fn delete_video(path: String, file: String) -> Result<(), String> {
+    std::fs::remove_file(videos_dir(&path).join(&file)).map_err(|e| e.to_string())
+}
+
 /// Media extensions surfaced in the grid, by kind.
 const IMAGE_EXTS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif", "heic", "heif", "svg",
@@ -1391,6 +1515,28 @@ fn import_media(project_path: String, files: Vec<String>) -> Result<Vec<String>,
         imported.push(dest.to_string_lossy().to_string());
     }
     Ok(imported)
+}
+
+/// Copy a video file into a project's `media/` folder (keeping the original),
+/// de-duplicating the name. Used by the Video window's "Browse…" → Add clip so
+/// imported clips live under ~/Projects (and so stay within the asset-protocol
+/// scope for preview). Returns the new absolute path.
+#[tauri::command]
+fn import_clip(project_path: String, file: String) -> Result<String, String> {
+    let src = PathBuf::from(&file);
+    let is_video = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| VIDEO_EXTS.contains(&e.to_lowercase().as_str()))
+        .unwrap_or(false);
+    if !is_video {
+        return Err("Not a video file.".into());
+    }
+    let media_dir = PathBuf::from(&project_path).join("media");
+    std::fs::create_dir_all(&media_dir).map_err(|e| e.to_string())?;
+    let dest = unique_dest(&media_dir, &src).ok_or("Bad file name.")?;
+    std::fs::copy(&src, &dest).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().to_string())
 }
 
 /// A collision-free destination in `dir` for `src`'s filename (name-1.ext, …).
@@ -3088,6 +3234,37 @@ fn open_schedules_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Stable per-project label for a Video window (one window per project folder).
+fn video_label(path: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut h);
+    format!("video-{:x}", h.finish())
+}
+
+/// Open (or focus) the Video editor window for a project. The edit document is
+/// `<path>/video.json`, shared live with Claude Code. See docs/video-plan.md.
+#[tauri::command]
+fn open_video_window(app: AppHandle, path: String) -> Result<(), String> {
+    let label = video_label(&path);
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+    use tauri_plugin_window_state::{StateFlags, WindowExt};
+    let url = format!("video/index.html?path={}", url_encode(&path));
+    let win = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
+        .title("")
+        .inner_size(900.0, 640.0)
+        .min_inner_size(560.0, 420.0)
+        .title_bar_style(tauri::TitleBarStyle::Transparent)
+        .build()
+        .map_err(|e| e.to_string())?;
+    let _ = win.restore_state(StateFlags::SIZE | StateFlags::POSITION);
+    Ok(())
+}
+
 /// Open (or focus) the Claude companion window, then tell it which session
 /// (and project) to show. The frontend listens for "claude-jump".
 #[tauri::command]
@@ -3533,6 +3710,12 @@ pub fn run() {
             create_project,
             read_workspace,
             save_workspace,
+            list_videos,
+            read_video,
+            write_video,
+            create_video,
+            delete_video,
+            open_video_window,
             launch_workspace,
             get_memory_stats,
             get_top_processes,
@@ -3550,6 +3733,7 @@ pub fn run() {
             run_shortcut,
             heic_preview,
             import_media,
+            import_clip,
             handle_dropped_paths,
             read_media_meta,
             save_media_meta,
