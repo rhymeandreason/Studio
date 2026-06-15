@@ -141,16 +141,16 @@ Implemented; establishes the pattern every later tool follows:
   with its own window label per artifact). In `src-tauri/src/lib.rs`.
 - **Artifacts panel** — a project tab (`src/artifacts.js`, markup in `index.html`,
   styles in `styles.css`) that lists artifacts grouped by kind, renders a preview
-  per artifact, and opens them in their editor tool. Re-lists on tab open / a
-  Refresh button.
+  per artifact, and opens them in their editor tool. **Live**: the recursive
+  `~/Projects` watcher emits `fs-changed`, and the panel re-renders on it when
+  it's the active view — so artifacts Claude writes appear without a manual
+  Refresh (the Refresh button + tab-open re-list remain as fallbacks).
 - **Brand Explorer: open-on-artifact** — loads/edits an existing kit
   (`?artifact=…`) and saves as a `brand-kit` artifact (named) via `save_artifact`.
 - **Reusable brand-kit preview** — `brandKitPreview()` in `src/artifacts.js`
   (font names + color swatches).
 
 ### Still spec (next)
-- **Live folder watch** — FSEvents on `artifacts/` so Claude-written files appear
-  without a manual Refresh (currently you click Refresh / reswitch tabs).
 - **Variant-set gallery** — first-class "a set of N variants" comparison UI.
 - **Promote-to-canonical** — mark the project's active artifact of a kind in
   `workspace.json` for generation to read.

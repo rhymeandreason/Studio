@@ -2027,6 +2027,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   await listen("fs-changed", () => {
     if (state.activeProject && !document.getElementById("project-content").hidden) {
       loadMedia(state.activeProject.path);
+      // Live-refresh the Artifacts panel when it's the one in view (picks up
+      // files Claude writes into artifacts/). The ~/Projects watcher is
+      // recursive, so changes under artifacts/ already arrive here.
+      if (state.activePanel === "artifacts") renderArtifacts();
     }
     if (!document.getElementById("overview").hidden) {
       showOverview();
