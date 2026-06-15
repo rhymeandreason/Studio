@@ -6,7 +6,8 @@ window but are still useful to have one click away.
 
 > For the design discussion on adding tools **without a rebuild** and giving
 > tools explicit **categories**, see
-> [docs/tools-dynamic-loading.md](tools-dynamic-loading.md).
+> [docs/tools-dynamic-loading.md](tools-dynamic-loading.md). For a brainstorm of
+> tools to build next, see [docs/tool-ideas.md](tool-ideas.md).
 
 ## Using the design-system kit
 
