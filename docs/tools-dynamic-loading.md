@@ -178,6 +178,101 @@ a tool now depends on the kit being reachable. Keep the cost low: one small
 *additive* stylesheet, tools degrade to readable browser defaults if it's missing,
 and they stay single-file HTML (they just `<link>` one thing, or get it injected).
 
+### Shared interactive components (selects, color picker, sliders, …)
+
+CSS classes cover appearance; tools will also need shared *behavior* — selects,
+sliders, a color picker, custom buttons, motion. The enabling fact: everything
+renders in **WKWebView** (one engine). So custom elements, Shadow DOM, ES
+modules, and the Web Animations API are all available **with no build step** —
+and we only ever write `-webkit-` prefixes, no cross-browser matrix.
+
+**Recommended primitive: vanilla Web Components themed by CSS vars.**
+
+```html
+<script type="module" src="../kit/components.js"></script>
+<studio-slider min="0" max="100" value="50"></studio-slider>
+<studio-color value="#6e6154"></studio-color>
+```
+
+- No framework, no build — plain `customElements.define(...)`.
+- **Shadow DOM** encapsulates internals (a tool's CSS can't break a component and
+  vice-versa) — yet `tokens.css` still themes them, because CSS custom properties
+  *and* inherited properties (font, color) pierce the shadow boundary. Re-theming
+  = override a var.
+- **Native-like contract:** every component exposes `.value` (get/set) and emits
+  `input`/`change`, so a tool uses `<studio-slider>` exactly like an `<input>`.
+  One mental model across the kit.
+- The **tag name is a stable contract** — old (Claude-)generated tools keep
+  working as long as attributes stay additive.
+
+Use plain `kit.css` classes for the simple things (buttons, text fields,
+checkboxes) where native + a little CSS is already great; reach for a custom
+element only where native falls short.
+
+**Component-by-component calls:**
+
+- **Slider** — mostly native. `<input type=range>` styles well in WebKit
+  (`::-webkit-slider-thumb`/`-runnable-track`). Build `<studio-slider>` only for a
+  filled track, value bubble, tick marks, or dual handles.
+- **Color picker** — the one worth building custom. Native `<input type=color>`
+  opens the macOS panel (consistent, free, has a system eyedropper + alpha) but
+  gives no control over in-page UI/palettes/recent swatches. Note
+  `window.EyeDropper` is **Chromium-only — not in WKWebView**, so the native input
+  is the only screen-eyedropper path. A `<studio-color>` (swatch → popover with
+  SV square + hue/alpha + hex + project swatches) is high-reuse; build it first.
+- **Select** — hardest to do well. Style the *box* of a native `<select>` via
+  `kit.css`; default to that. Build `<studio-select>` only for rich options
+  (swatches, icons, two-line items) — a custom listbox means re-implementing
+  keyboard nav, typeahead, focus, scroll, and popup positioning (real a11y work).
+- **Custom buttons** — `kit.css` variants until a button carries *state/behavior*
+  (toggle, loading, async press, segmented). Appearance → class; behavior →
+  `<studio-button>`. Statefulness is the promotion line, not variant count.
+- **Motion** — raises consistency stakes (mismatched motion reads as *broken*).
+  Add **motion tokens** (`--dur-fast`, `--ease-standard`) to `tokens.css` and lean
+  on the **Web Animations API** (solid in WKWebView, no library). Promote to a
+  shared `motion.js` (FLIP/enter-exit/spring helpers) only when 2+ tools hand-roll
+  the same animation; vendor a motion library only if that gets repetitive.
+
+**Architecture decisions:** components live in `src/kit/` (`tokens.css`,
+`kit.css`, `components.js`); the same origin issue applies, so `tool://` tools
+need them at a stable `/_kit/…` URL — strong case for the **host injecting both
+the kit CSS and the components module** so every tool has `<studio-*>` without
+remembering to import. Keep components **uncontrolled** (self-managing state,
+read `.value`, listen for events).
+
+**Biggest risk:** not under-investing in machinery, but **API drift with no
+catalog** — Claude generating three subtly different ways to use a slider. Mitigate
+with a one-page **kit reference** (every tag, attributes, events, a snippet) that's
+cheap to drop into context, plus a **`kit-gallery.html`** tool that renders every
+component in every state (living styleguide + manual smoke test).
+
+## When does this become a "component library"?
+
+Separate two things: **library machinery** (build/bundle step, package boundary,
+semver, Storybook, CI tests) vs. **library discipline** (one source of truth,
+stable contracts, a catalog, regression safety). Machinery fights this app's core
+virtues (no build, drop a file, Claude-generated); discipline doesn't. So adopt
+disciplines as pressures arrive; adopt machinery only when a concrete trip-wire
+forces it. Staged:
+
+- **Stage 1 — "a kit" (now).** `tokens.css` + `kit.css` + a few `<studio-*>`. No
+  machinery. Adopt the near-free disciplines: a reference doc, the
+  `.value`+`input`/`change` contract, additive-only attributes.
+- **Stage 2 — "a structured kit."** Triggered by: ~10+ components or an unwieldy
+  flat `components.js` (→ split + index module); **components composing each
+  other** (color uses slider; select/color/menu share a popover) — the first real
+  tipping point, forcing a deliberate load order or single ordered index; shared
+  **motion**; and the first time changing a component **breaks an old generated
+  tool** (→ a version marker + deprecation habit). Add the **gallery** as a living
+  styleguide. Still **no build step** — likely the long-term home.
+- **Stage 3 — "an actual library."** One signal reliably forces this: **cross-app
+  reuse.** Studio, the Claude companion, and the git windows are separate
+  apps/windows; the day they need the same buttons/selects/color picker, ad-hoc
+  sharing breaks and the kit gets extracted to a shared location consumed by
+  multiple apps (possibly a minimal index/bundle + real versioning). External tool
+  authors would trigger it too. **The moment you "need a component library" is when
+  components must cross an app boundary — not merely when you have many of them.**
+
 ## Suggested implementation order
 
 Lowest-risk, highest-value first:
