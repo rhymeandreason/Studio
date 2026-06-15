@@ -1,8 +1,11 @@
 # Artifacts
 
-Status: **design spec — proposed, not yet built.** This defines the Artifacts
-model, the project **Artifacts panel**, and the human↔Claude design workflow it
-enables. It's also written to be the context Claude reads to play its part.
+Status: **MVP built; spec ahead of it.** The Artifacts panel, brand-kit previews,
+open-in-tool, and the Brand Explorer's open/edit/save-as-artifact are implemented
+(see "What's built" below). The variant gallery, live folder watch, and
+promote-to-canonical are still spec. This defines the Artifacts model, the project
+**Artifacts panel**, and the human↔Claude design workflow it enables. It's also
+written to be the context Claude reads to play its part.
 
 Related: [tools.md](tools.md), [tools-dynamic-loading.md](tools-dynamic-loading.md)
 (the kit/design-system), [tool-ideas.md](tool-ideas.md).
@@ -128,19 +131,30 @@ Going forward, every artifact-editing tool should:
 - Provide a **separable preview renderer** so galleries can show the artifact
   without the full editor.
 
-## What to build first (MVP slice)
+## What's built (MVP)
 
-The smallest slice that makes the "5 variants, open and tweak" loop real and
-establishes the pattern every later tool follows:
+Implemented; establishes the pattern every later tool follows:
 
-1. **Artifact conventions + schemas** — the `artifacts/` layout, the `brand-kit`
-   schema written down, the canonical reference in `workspace.json`.
-2. **Brand Explorer: open-on-artifact** — load/edit/save an existing kit, not
-   just create.
-3. **Artifacts panel** — a project tab that watches `artifacts/`, groups by kind,
-   renders previews, and supports open-in-tool + promote.
-4. **Reusable brand-kit preview** — extracted from the Brand Explorer so the
-   panel can render variants.
+- **Artifact storage + commands** — `<project>/artifacts/<kind>/<name>.json`;
+  Rust `list_artifacts` / `read_artifact` / `save_artifact`, and `open_tool`
+  (opens a tool window, optionally pinned to an artifact via `?artifact=<path>`,
+  with its own window label per artifact). In `src-tauri/src/lib.rs`.
+- **Artifacts panel** — a project tab (`src/artifacts.js`, markup in `index.html`,
+  styles in `styles.css`) that lists artifacts grouped by kind, renders a preview
+  per artifact, and opens them in their editor tool. Re-lists on tab open / a
+  Refresh button.
+- **Brand Explorer: open-on-artifact** — loads/edits an existing kit
+  (`?artifact=…`) and saves as a `brand-kit` artifact (named) via `save_artifact`.
+- **Reusable brand-kit preview** — `brandKitPreview()` in `src/artifacts.js`
+  (font names + color swatches).
+
+### Still spec (next)
+- **Live folder watch** — FSEvents on `artifacts/` so Claude-written files appear
+  without a manual Refresh (currently you click Refresh / reswitch tabs).
+- **Variant-set gallery** — first-class "a set of N variants" comparison UI.
+- **Promote-to-canonical** — mark the project's active artifact of a kind in
+  `workspace.json` for generation to read.
+- **`design-direction` kind** + more editors.
 
 ## Open decisions
 

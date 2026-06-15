@@ -807,6 +807,155 @@ async fn save_tool_export(
     Ok(path.to_string_lossy().to_string())
 }
 
+// --- Artifacts (designs/brand-kits/etc. as schema'd files) ----------------
+// See docs/artifacts.md. An artifact is a JSON file under <project>/artifacts/
+// carrying a `kind`; tools edit them, Claude authors them, the Artifacts panel
+// displays them.
+
+#[derive(Serialize)]
+struct ArtifactInfo {
+    path: String,
+    kind: String,
+    name: String,
+    /// Raw file contents, so the panel can render a preview without a 2nd call.
+    content: String,
+}
+
+fn collect_artifacts(dir: &Path, out: &mut Vec<ArtifactInfo>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_artifacts(&path, out);
+            continue;
+        }
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) else {
+            continue;
+        };
+        let kind = v.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+        if kind.is_empty() {
+            continue;
+        }
+        let name = v
+            .get("name")
+            .and_then(|n| n.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                path.file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("artifact")
+                    .to_string()
+            });
+        out.push(ArtifactInfo {
+            path: path.to_string_lossy().to_string(),
+            kind: kind.to_string(),
+            name,
+            content,
+        });
+    }
+}
+
+/// List artifacts under `<project>/artifacts/` (recursively), each a `*.json`
+/// file with a `kind` field. Sorted by name.
+#[tauri::command]
+fn list_artifacts(project_path: String) -> Vec<ArtifactInfo> {
+    let root = PathBuf::from(&project_path).join("artifacts");
+    let mut out = Vec::new();
+    collect_artifacts(&root, &mut out);
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out
+}
+
+/// Read a single artifact file (so a tool can open-on-artifact by path).
+#[tauri::command]
+fn read_artifact(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
+/// Save an artifact into the active project's `artifacts/<kind>/<name>.json`.
+/// Used by tools (e.g. the Brand Explorer) in place of `save_tool_export` when
+/// the output is a schema'd artifact rather than a raw export.
+#[tauri::command]
+fn save_artifact(
+    state: tauri::State<AppState>,
+    kind: String,
+    name: String,
+    content: String,
+) -> Result<String, String> {
+    if kind.is_empty() || kind.contains(['/', '\\']) || kind.contains("..") {
+        return Err("Invalid kind.".into());
+    }
+    if name.is_empty() || name.contains(['/', '\\']) || name.starts_with('.') {
+        return Err("Invalid name.".into());
+    }
+    let project = state
+        .active
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or("No active project.")?;
+    let dir = PathBuf::from(&project.path).join("artifacts").join(&kind);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let file = dir.join(format!("{name}.json"));
+    std::fs::write(&file, content).map_err(|e| e.to_string())?;
+    Ok(file.to_string_lossy().to_string())
+}
+
+/// A short stable hash, used to give an artifact-scoped tool window its own label
+/// (so opening a different artifact opens/focuses a distinct window).
+fn tool_hash(s: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut h);
+    format!("{:x}", h.finish())
+}
+
+/// Open a tool window from the frontend, optionally with a query string (e.g.
+/// `artifact=<encoded path>`). A non-empty query gets its own window label so
+/// different artifacts don't collide on one shared `tool-<stem>` window.
+#[tauri::command]
+fn open_tool(app: AppHandle, file: String, query: Option<String>) {
+    let stem: String = Path::new(&file)
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .unwrap_or("tool")
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect();
+    let q = query.filter(|q| !q.is_empty());
+    let label = match &q {
+        Some(q) => format!("tool-{stem}-{}", tool_hash(q)),
+        None => format!("tool-{stem}"),
+    };
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return;
+    }
+    let url = match &q {
+        Some(q) => format!("tools/{file}?{q}"),
+        None => format!("tools/{file}"),
+    };
+    let title = Path::new(&file)
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Tool")
+        .to_string();
+    let _ = WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url.into()))
+        .title(title)
+        .inner_size(900.0, 640.0)
+        .min_inner_size(420.0, 360.0)
+        .build();
+}
+
 /// All projects under ~/Projects — backs the overview screen.
 #[tauri::command]
 fn list_projects(app: AppHandle) -> Vec<Project> {
@@ -3755,6 +3904,10 @@ pub fn run() {
             get_active_project,
             clear_active_project,
             save_tool_export,
+            list_artifacts,
+            read_artifact,
+            save_artifact,
+            open_tool,
             list_projects,
             open_project,
             create_project,

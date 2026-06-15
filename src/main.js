@@ -29,6 +29,7 @@ import {
   updatePinButton,
   togglePinnedTab,
 } from "./workspace.js";
+import { renderArtifacts } from "./artifacts.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -98,6 +99,7 @@ export function render(project) {
     loadWorkspace(project.path);
     loadNotes(project.path);
     loadMedia(project.path);
+    renderArtifacts();
   } else {
     // No active project → show the all-projects overview, never a dead-end
     // "No project active" screen.
@@ -495,6 +497,9 @@ export function selectTab(name) {
       requestAnimationFrame(layoutBento);
     });
   }
+
+  // Re-list artifacts when the tab opens (picks up ones Claude wrote).
+  if (name === "artifacts") renderArtifacts();
 
   // Close the editor column when leaving the media tab.
   if (name !== "media") {

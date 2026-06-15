@@ -105,6 +105,10 @@
 
   <div class="kit">
     <div>
+      <label class="label" for="kit-name">Kit name</label>
+      <input id="kit-name" class="field" value="Brand kit" style="margin-top:6px;" />
+    </div>
+    <div>
       <h2>Fonts</h2>
       <div class="roles">
         <div class="role-preview">
@@ -323,43 +327,65 @@
 
     // ---- Save kit (JSON) ---------------------------------------------------
     const statusEl = document.getElementById("status");
+    const invoke = window.__TAURI__?.core?.invoke;
+
     document.getElementById("save").onclick = async () => {
+      const name = document.getElementById("kit-name").value.trim() || "Brand kit";
       const kit = {
-        kind: "studio-brand-kit",
+        kind: "brand-kit",
         version: 1,
-        fonts: {
-          heading: state.heading,
-          body: state.body,
-        },
+        name,
+        fonts: { heading: state.heading, body: state.body },
         colors: state.colors,
         savedAt: new Date().toISOString(),
       };
       const content = JSON.stringify(kit, null, 2);
-      const filename = "brand-kit.json";
 
-      const tauri = window.__TAURI__?.core?.invoke;
-      if (tauri) {
+      if (invoke) {
+        // Save into the active project's artifacts/brand-kit/<name>.json.
         try {
-          const path = await tauri("save_tool_export", { filename, content });
+          const path = await invoke("save_artifact", {
+            kind: "brand-kit",
+            name,
+            content,
+          });
           statusEl.textContent = "Saved → " + path;
         } catch (err) {
-          if (String(err) !== "__cancelled__")
-            statusEl.textContent = "Save failed: " + err;
+          statusEl.textContent = "Save failed: " + err;
         }
       } else {
-        // Standalone (opened in a browser): download fallback.
+        // Standalone (browser): download fallback.
         const a = document.createElement("a");
         a.href = URL.createObjectURL(new Blob([content], { type: "application/json" }));
-        a.download = filename;
+        a.download = name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".json";
         a.click();
-        statusEl.textContent = "Downloaded " + filename;
+        statusEl.textContent = "Downloaded " + a.download;
       }
     };
 
-    // ---- Boot --------------------------------------------------------------
-    renderList();
-    renderRoles();
-    renderPalette();
+    // ---- Boot (open-on-artifact via ?artifact=<path>) ----------------------
+    async function boot() {
+      const artifactPath = new URLSearchParams(location.search).get("artifact");
+      if (artifactPath && invoke) {
+        try {
+          const data = JSON.parse(await invoke("read_artifact", { path: artifactPath }));
+          if (data.fonts) {
+            state.heading = data.fonts.heading || null;
+            state.body = data.fonts.body || null;
+          }
+          if (Array.isArray(data.colors)) state.colors = data.colors;
+          if (data.name) document.getElementById("kit-name").value = data.name;
+          if (state.heading) loadFont(state.heading);
+          if (state.body) loadFont(state.body);
+        } catch (e) {
+          statusEl.textContent = "Couldn't load artifact: " + e;
+        }
+      }
+      renderList();
+      renderRoles();
+      renderPalette();
+    }
+    boot();
   </script>
 </body>
 </html>

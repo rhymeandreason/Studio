@@ -31,6 +31,9 @@
                 <button class="tab is-active" data-tab="workspace">
                     <span class="mi">tune</span>Workspace
                 </button>
+                <button class="tab" data-tab="artifacts">
+                    <span class="mi">palette</span>Artifacts
+                </button>
                 <button class="tab-pin" id="tab-pin" type="button" title="Pin tab">
                     <span class="mi mi-sm">push_pin</span>
                 </button>
@@ -216,6 +219,10 @@
 
                         <div class="listfield__rows" id="ws-cards"></div>
                     </form>
+                </section>
+
+                <section class="panel" data-panel="artifacts" hidden>
+                    <div class="artifacts" id="artifacts-panel"></div>
                 </section>
             </div>
         </main>
