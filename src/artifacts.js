@@ -103,6 +103,23 @@ function artifactCard(item) {
   return card;
 }
 
+// Lazy-load a Google Fonts family (mirrors brand-explorer.html's loader).
+const loadedFonts = new Set();
+function loadGoogleFont(family, weight) {
+  if (!family) return;
+  const key = weight ? `${family}@${weight}` : family;
+  if (loadedFonts.has(key)) return;
+  loadedFonts.add(key);
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href =
+    "https://fonts.googleapis.com/css2?family=" +
+    family.replace(/ /g, "+") +
+    (weight ? `:wght@${weight}` : "") +
+    "&display=swap";
+  document.head.appendChild(link);
+}
+
 // --- Reusable brand-kit preview (the "separable preview" from the spec) -----
 export function brandKitPreview(data) {
   const fonts = data.fonts || {};
@@ -114,12 +131,24 @@ export function brandKitPreview(data) {
     if (typeof f === "string") return f;
     return f.weight ? `${f.family} · ${f.weight}` : f.family || "—";
   };
+  const fontFamily = (f) => (typeof f === "string" ? f : f?.family);
+  const fontWeight = (f) => (f && typeof f === "object" ? f.weight : undefined);
 
   const wrap = el("div", "artifact__preview artifact__preview--brand");
 
   const type = el("div", "artifact__type");
-  type.appendChild(el("div", "artifact__type-h", { textContent: fontLabel(fonts.heading) }));
-  type.appendChild(el("div", "artifact__type-b", { textContent: fontLabel(fonts.body) }));
+  const h = el("div", "artifact__type-h", { textContent: fontLabel(fonts.heading) });
+  const b = el("div", "artifact__type-b", { textContent: fontLabel(fonts.body) });
+  for (const [node, f] of [[h, fonts.heading], [b, fonts.body]]) {
+    const family = fontFamily(f);
+    if (!family) continue;
+    const weight = fontWeight(f);
+    loadGoogleFont(family, weight);
+    node.style.fontFamily = `"${family}", sans-serif`;
+    if (weight) node.style.fontWeight = String(weight);
+  }
+  type.appendChild(h);
+  type.appendChild(b);
   wrap.appendChild(type);
 
   const sw = el("div", "artifact__swatches");

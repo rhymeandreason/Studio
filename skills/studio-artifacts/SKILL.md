@@ -43,9 +43,10 @@ Example (follow this shape):
 
 Rules:
 - `kind` must be exactly `brand-kit`.
-- Each font is `{ "family": <Google Fonts family>, "weight": <100–900> }` —
-  `family` must be a **real Google Fonts family name** (so previews render).
-  Pick weights that suit the pairing (e.g. heading 600–700, body 400).
+- Each font **must** be `{ "family": <string>, "weight": <number> }` — never a
+  bare string. `family` must be a real Google Fonts family name (so previews
+  render); `weight` is a number 100–900. Pick weights that suit the pairing
+  (e.g. heading 600–700, body 400).
 - 5–6 colors, each `{ "name": <role>, "value": <#rrggbb> }`.
 - `savedAt` = current ISO 8601 timestamp; `version` = 1.
 
