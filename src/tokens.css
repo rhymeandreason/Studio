@@ -34,7 +34,17 @@
     color-scheme: light;
 }
 
-/* Material Symbols */
+/* Material Symbols — vendored variable font (not the Google Fonts CDN), so
+ * icons work offline and any document that links tokens.css gets them. The url
+ * resolves relative to THIS stylesheet, so it's correct from any consumer
+ * (main app, tools in src/tools/, injected tool:// windows). */
+@font-face {
+    font-family: "Material Symbols Rounded";
+    font-style: normal;
+    font-weight: 100 700;
+    src: url("vendor/material-symbols-rounded.woff2") format("woff2");
+}
+
 .mi {
     font-family: "Material Symbols Rounded";
     font-weight: normal;
