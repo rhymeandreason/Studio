@@ -164,23 +164,18 @@ retried on the next save.
 
 ### Execution
 
-On startup, `start_caffeinate()` spawns `caffeinate -s -w <studio-pid>` so
-macOS won't sleep (on AC power) while Studio is running — it exits on its
-own when Studio quits. Studio still needs to be running (even just in the
-menu bar); if the Mac sleeps anyway (e.g. on battery) or Studio is quit,
-missed runs are skipped, not backfilled.
-
-`caffeinate -s` only blocks *idle/automatic* sleep — it does **not** block a
-manual sleep (Apple menu → Sleep, or closing the lid). When the Mac is slept
-deliberately, the scheduler loop freezes and tasks fire only via the `pmset`
-wake schedule (below); with no wake set (never saved, or expired), they're
-skipped. So `caffeinate` keeps tasks reliable while the Mac is left awake;
-deliberate sleep falls back entirely on the wake schedule.
+Studio relies entirely on the `pmset` wake schedule (below) to run tasks
+while asleep — it does not keep the Mac awake. Studio still needs to be
+running (even just in the menu bar) for the scheduler loop to fire a task:
+the `pmset` wake brings the Mac up at the task time, and the loop catches it
+within ~30s. If Studio is quit, or the Mac is asleep with no wake scheduled
+(never saved, or the wake list expired), missed runs are skipped, not
+backfilled.
 
 ### Waking the Mac (e.g. for an early-morning task)
 
-If the Mac is fully asleep, `caffeinate` can't help. Clicking "Save schedule"
-(see above) calls `update_wake_schedule`, which:
+For a task to run while the Mac is asleep, it has to be woken first. Clicking
+"Save schedule" (see above) calls `update_wake_schedule`, which:
 
 1. Scans each slot that has an enabled task and finds its next occurrence
    (today..+7 days, respecting the slot's `days`).

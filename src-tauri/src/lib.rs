@@ -2939,14 +2939,6 @@ fn claude_path() -> String {
     path
 }
 
-/// Keep the Mac from sleeping while Studio is running, so scheduled tasks
-/// fire on time. `caffeinate -s -w <pid>` prevents system sleep on AC power
-/// and exits on its own once Studio's process exits — no cleanup needed.
-fn start_caffeinate() {
-    let pid = std::process::id().to_string();
-    let _ = Command::new("caffeinate").args(["-s", "-w", &pid]).spawn();
-}
-
 /// Start the background loop that fires due `Workspace::schedules` entries.
 /// Checks every 30s; a task fires when its `time` matches the current
 /// HH:MM, today's weekday is in `days` (or `days` is empty), and it hasn't
@@ -3891,9 +3883,6 @@ pub fn run() {
 
             // Periodically refresh the tray's RAM-usage label.
             start_ram_label_refresh(&handle);
-
-            // Prevent system sleep so scheduled tasks fire while Studio runs.
-            start_caffeinate();
 
             // Reopen any Git companion windows that were open before the last
             // rebuild/quit (drafts intact). Runs here on the main thread.
