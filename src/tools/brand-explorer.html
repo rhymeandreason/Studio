@@ -27,7 +27,7 @@
     border-right: 1px solid var(--hairline);
   }
   .kit {
-    flex: 0 0 320px;
+    flex: 0 0 360px;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
@@ -89,9 +89,75 @@
   #heading-sample { font-size: 26px; line-height: 1.15; }
   #body-sample { font-size: 14px; line-height: 1.5; }
 
-  .swatch-row { display: flex; align-items: center; gap: 8px; }
-  .swatch-row .field { height: 28px; }
-  .swatch-row .btn-icon { height: 28px; width: 28px; }
+  /* Color swatch grid */
+  .swatch-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatch-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+  }
+  .swatch-chip__block {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(0,0,0,0.08);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .swatch-chip__name {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: center;
+    width: 56px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: text;
+    border: none;
+    background: transparent;
+    padding: 0;
+    font-family: var(--sans);
+    outline: none;
+  }
+  .swatch-chip__name:focus {
+    color: var(--text);
+    text-decoration: underline;
+  }
+  .swatch-chip__hex {
+    font-size: 9px;
+    color: var(--text-soft);
+    font-family: var(--mono);
+    text-align: center;
+    width: 56px;
+  }
+  .swatch-chip__del {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--elevated);
+    border: 1px solid var(--hairline-strong);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+    color: var(--text-muted);
+  }
+  .swatch-chip:hover .swatch-chip__del { display: flex; }
+  /* Hidden Coloris trigger input */
+  .swatch-chip__trigger {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    height: 0;
+  }
 
   .status { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-height: 14px; }
 </style>
@@ -132,7 +198,7 @@
 
     <div>
       <h2>Colors</h2>
-      <div id="palette" style="display:flex; flex-direction:column; gap:8px;"></div>
+      <div id="palette" class="swatch-grid"></div>
       <button class="btn btn-ghost" id="add-color" style="margin-top:8px;">
         <span class="mi mi-sm">add</span> Add color
       </button>
@@ -334,27 +400,55 @@
     function renderPalette() {
       paletteEl.innerHTML = "";
       state.colors.forEach((c, i) => {
-        const row = document.createElement("div");
-        row.className = "swatch-row";
+        const chip = document.createElement("div");
+        chip.className = "swatch-chip";
 
-        const name = document.createElement("input");
-        name.className = "field";
-        name.value = c.name;
-        name.oninput = () => (state.colors[i].name = name.value);
+        // Hidden input Coloris binds to.
+        const trigger = document.createElement("input");
+        trigger.type = "text";
+        trigger.className = "swatch-chip__trigger";
+        trigger.setAttribute("data-coloris", "");
+        trigger.value = c.value;
+        trigger.addEventListener("input", () => {
+          state.colors[i].value = trigger.value;
+          block.style.background = trigger.value;
+          hex.textContent = trigger.value;
+        });
 
-        const color = document.createElement("studio-color");
-        color.setAttribute("value", c.value);
-        color.style.flex = "0 0 auto";
-        color.addEventListener("input", () => (state.colors[i].value = color.value));
+        const block = document.createElement("div");
+        block.className = "swatch-chip__block";
+        block.style.background = c.value;
+        block.onclick = () => trigger.click();
+
+        const nameEl = document.createElement("input");
+        nameEl.className = "swatch-chip__name";
+        nameEl.value = c.name;
+        nameEl.title = c.name;
+        nameEl.oninput = () => (state.colors[i].name = nameEl.value);
+
+        const hex = document.createElement("div");
+        hex.className = "swatch-chip__hex";
+        hex.textContent = c.value;
 
         const del = document.createElement("button");
-        del.className = "btn btn-icon btn-ghost";
-        del.innerHTML = '<span class="mi mi-sm">close</span>';
+        del.className = "swatch-chip__del";
+        del.title = "Remove";
+        del.textContent = "×";
         del.onclick = () => { state.colors.splice(i, 1); renderPalette(); };
 
-        row.append(name, color, del);
-        paletteEl.appendChild(row);
+        chip.append(trigger, block, nameEl, hex, del);
+        paletteEl.appendChild(chip);
       });
+    }
+
+    // Ensure Coloris is initialized (delegated mode picks up [data-coloris] inputs).
+    // We no longer use <studio-color> in the palette, so boot it manually via a
+    // transient element whose connectedCallback fires ensureColoris() internally.
+    function initColoris() {
+      const sc = document.createElement("studio-color");
+      sc.style.display = "none";
+      document.body.appendChild(sc);
+      requestAnimationFrame(() => sc.remove());
     }
 
     document.getElementById("add-color").onclick = () => {
@@ -454,6 +548,7 @@
           statusEl.textContent = "Couldn't load artifact: " + e;
         }
       }
+      initColoris();
       initWeightSelects();
       renderList();
       renderRoles();
