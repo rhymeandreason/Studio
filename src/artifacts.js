@@ -5,8 +5,31 @@
 
 import { state } from "./state.js";
 import { el, mi } from "./dom.js";
+import { createSelection } from "./selection.js";
 
 const { invoke } = window.__TAURI__.core;
+
+// Selection — keyed by artifact path.
+export const artifactsSelection = createSelection({
+  mode: "multi",
+  onChange: (sel) => {
+    document.querySelectorAll(".artifact-card[data-path]").forEach((c) =>
+      c.classList.toggle("is-selected", sel.has(c.dataset.path)),
+    );
+  },
+});
+
+export async function deleteArtifactsSelection() {
+  const paths = artifactsSelection.get();
+  if (!paths.length) return;
+  artifactsSelection.clear();
+  await Promise.all(paths.map((p) => invoke("delete_artifact", { path: p })));
+  renderArtifacts();
+}
+
+export function clearArtifactsSelection() {
+  artifactsSelection.clear();
+}
 
 // Editor tool per artifact kind (open-on-artifact via ?artifact=<path>).
 const EDITOR = {
@@ -69,6 +92,10 @@ export async function renderArtifacts() {
     const grid = el("div", "artifacts__grid");
     for (const it of group) grid.appendChild(artifactCard(it));
     root.appendChild(grid);
+    // Click on empty grid space clears selection.
+    grid.addEventListener("click", (e) => {
+      if (e.target === grid) artifactsSelection.clear();
+    });
   }
 }
 
@@ -79,6 +106,10 @@ function artifactCard(item) {
   } catch {}
 
   const card = el("div", "artifact-card");
+  card.dataset.path = item.path;
+  card.addEventListener("click", (e) => {
+    artifactsSelection.toggle(item.path, e.metaKey || e.ctrlKey);
+  });
   card.appendChild(
     item.kind === "brand-kit"
       ? brandKitPreview(data)

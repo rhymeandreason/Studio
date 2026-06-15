@@ -893,6 +893,18 @@ fn overwrite_artifact(path: String, content: String) -> Result<(), String> {
     std::fs::write(p, content).map_err(|e| e.to_string())
 }
 
+/// Delete an artifact at an absolute path. Path must be under ~/Projects.
+#[tauri::command]
+fn delete_artifact(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    let home = std::env::var("HOME").map_err(|_| "No HOME env var.")?;
+    let projects = std::path::Path::new(&home).join("Projects");
+    if !p.starts_with(&projects) {
+        return Err("Path outside ~/Projects.".into());
+    }
+    std::fs::remove_file(p).map_err(|e| e.to_string())
+}
+
 /// Save an artifact into the active project's `artifacts/<kind>/<name>.json`.
 /// Used by tools (e.g. the Brand Explorer) in place of `save_tool_export` when
 /// the output is a schema'd artifact rather than a raw export.
@@ -3939,6 +3951,7 @@ pub fn run() {
             read_artifact,
             save_artifact,
             overwrite_artifact,
+            delete_artifact,
             open_tool,
             list_projects,
             open_project,

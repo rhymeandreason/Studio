@@ -29,7 +29,7 @@ import {
   updatePinButton,
   togglePinnedTab,
 } from "./workspace.js";
-import { renderArtifacts } from "./artifacts.js";
+import { renderArtifacts, artifactsSelection, deleteArtifactsSelection, clearArtifactsSelection } from "./artifacts.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -502,6 +502,7 @@ export function selectTab(name) {
   // learns the artifact formats from the `studio-artifacts` skill, not a
   // per-project CLAUDE.md block.
   if (name === "artifacts") renderArtifacts();
+  else clearArtifactsSelection();
 
   // Close the editor column when leaving the media tab.
   if (name !== "media") {
@@ -1989,6 +1990,11 @@ function initNotes() {
     "Mod+c": copyNotes,
     "Mod+v": pasteIntoNotes,
     Escape: clearNotesSelection,
+  };
+  panelKeymaps.artifacts = {
+    Delete: deleteArtifactsSelection,
+    Backspace: deleteArtifactsSelection,
+    Escape: clearArtifactsSelection,
   };
   installKeyDispatcher({
     getActivePanel: () => state.activePanel,

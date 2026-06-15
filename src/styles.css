@@ -2775,6 +2775,7 @@ td.ntable__total-cell {
     cursor: pointer;
 }
 .artifact-card:hover { border-color: var(--hairline-strong); }
+.artifact-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
 .artifact__preview {
     height: 120px;
     padding: 14px;
