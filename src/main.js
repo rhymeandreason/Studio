@@ -498,7 +498,9 @@ export function selectTab(name) {
     });
   }
 
-  // Re-list artifacts when the tab opens (picks up ones Claude wrote).
+  // Re-list artifacts when the tab opens (picks up ones Claude wrote). Claude
+  // learns the artifact formats from the `studio-artifacts` skill, not a
+  // per-project CLAUDE.md block.
   if (name === "artifacts") renderArtifacts();
 
   // Close the editor column when leaving the media tab.

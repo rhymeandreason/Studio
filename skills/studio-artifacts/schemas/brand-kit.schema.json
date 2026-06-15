@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "studio:brand-kit",
+  "title": "Studio brand-kit",
+  "description": "A brand kit: a heading/body font pairing (with weights) and a named color palette. Lives at artifacts/brand-kit/<slug>.json in a Studio project.",
+  "type": "object",
+  "required": ["kind", "name", "fonts", "colors"],
+  "additionalProperties": true,
+  "$defs": {
+    "font": {
+      "type": "object",
+      "required": ["family", "weight"],
+      "properties": {
+        "family": { "type": "string", "description": "Real Google Fonts family name, e.g. \"Fraunces\"." },
+        "weight": { "type": "integer", "minimum": 100, "maximum": 900, "description": "Font weight, e.g. 400 (regular), 600 (semibold), 700 (bold)." }
+      }
+    }
+  },
+  "properties": {
+    "kind": { "const": "brand-kit" },
+    "version": { "type": "integer", "default": 1 },
+    "name": { "type": "string", "description": "Short, descriptive kit name (also the display name in the Artifacts panel)." },
+    "fonts": {
+      "type": "object",
+      "required": ["heading", "body"],
+      "properties": {
+        "heading": { "$ref": "#/$defs/font" },
+        "body": { "$ref": "#/$defs/font" }
+      }
+    },
+    "colors": {
+      "type": "array",
+      "minItems": 3,
+      "description": "Palette entries, each a role name + hex value.",
+      "items": {
+        "type": "object",
+        "required": ["name", "value"],
+        "properties": {
+          "name": { "type": "string", "description": "Role, e.g. Primary, Accent, Background, Surface, Text." },
+          "value": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "Hex color, #rrggbb." }
+        }
+      }
+    },
+    "savedAt": { "type": "string", "format": "date-time", "description": "ISO 8601 timestamp." }
+  }
+}

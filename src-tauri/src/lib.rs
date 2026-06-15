@@ -956,6 +956,11 @@ fn open_tool(app: AppHandle, file: String, query: Option<String>) {
         .build();
 }
 
+// Note: the artifact formats Claude writes to are documented in the
+// `studio-artifacts` skill (repo `skills/studio-artifacts/`, symlinked into
+// ~/.claude/skills), with JSON Schemas as the source of truth — so the companion
+// Claude knows them without a per-project CLAUDE.md block.
+
 /// All projects under ~/Projects — backs the overview screen.
 #[tauri::command]
 fn list_projects(app: AppHandle) -> Vec<Project> {

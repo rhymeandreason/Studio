@@ -52,7 +52,7 @@ export async function renderArtifacts() {
   if (!items.length) {
     root.appendChild(
       emptyMsg(
-        "No artifacts yet. Make one with “New brand kit”, or ask Claude to generate some.",
+        "No artifacts yet. Make one with “New brand kit”, or ask Studio Claude to generate some — it knows the format.",
       ),
     );
     return;
@@ -108,11 +108,18 @@ export function brandKitPreview(data) {
   const fonts = data.fonts || {};
   const colors = Array.isArray(data.colors) ? data.colors : [];
 
+  // Tolerate both shapes: { family, weight } (current) and "Family" (legacy).
+  const fontLabel = (f) => {
+    if (!f) return "—";
+    if (typeof f === "string") return f;
+    return f.weight ? `${f.family} · ${f.weight}` : f.family || "—";
+  };
+
   const wrap = el("div", "artifact__preview artifact__preview--brand");
 
   const type = el("div", "artifact__type");
-  type.appendChild(el("div", "artifact__type-h", { textContent: fonts.heading || "—" }));
-  type.appendChild(el("div", "artifact__type-b", { textContent: fonts.body || "—" }));
+  type.appendChild(el("div", "artifact__type-h", { textContent: fontLabel(fonts.heading) }));
+  type.appendChild(el("div", "artifact__type-b", { textContent: fontLabel(fonts.body) }));
   wrap.appendChild(type);
 
   const sw = el("div", "artifact__swatches");

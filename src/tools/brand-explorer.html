@@ -83,7 +83,9 @@
     padding: 12px;
     min-height: 52px;
   }
+  .role-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
   .role-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-soft); }
+  .role-weight { height: 24px; font-size: 11px; padding: 0 22px 0 8px; width: auto; flex: 0 0 auto; }
   #heading-sample { font-size: 26px; line-height: 1.15; }
   #body-sample { font-size: 14px; line-height: 1.5; }
 
@@ -112,11 +114,17 @@
       <h2>Fonts</h2>
       <div class="roles">
         <div class="role-preview">
-          <div class="role-tag" id="heading-tag">Heading — none</div>
+          <div class="role-head">
+            <div class="role-tag" id="heading-tag">Heading — none</div>
+            <select class="field role-weight" id="heading-weight"></select>
+          </div>
           <div id="heading-sample">Almost before we knew it</div>
         </div>
         <div class="role-preview">
-          <div class="role-tag" id="body-tag">Body — none</div>
+          <div class="role-head">
+            <div class="role-tag" id="body-tag">Body — none</div>
+            <select class="field role-weight" id="body-weight"></select>
+          </div>
           <div id="body-sample">The quick brown fox jumps over the lazy dog. 0123456789</div>
         </div>
       </div>
@@ -170,17 +178,23 @@
     ].map(([family, category]) => ({ family, category }));
 
     const CATEGORIES = ["all","sans","serif","display","handwriting","mono"];
+    const WEIGHTS = [300, 400, 500, 600, 700];
 
     // ---- Lazy font loading (inject Google Fonts CSS per family on demand) --
+    // Pass a weight to load that specific weight (for the chosen heading/body);
+    // omit it to load the family's default (for browsing cards).
     const loaded = new Set();
-    function loadFont(family) {
-      if (loaded.has(family)) return;
-      loaded.add(family);
+    function loadFont(family, weight) {
+      if (!family) return;
+      const key = weight ? `${family}@${weight}` : family;
+      if (loaded.has(key)) return;
+      loaded.add(key);
       const link = document.createElement("link");
       link.rel = "stylesheet";
       link.href =
         "https://fonts.googleapis.com/css2?family=" +
         family.replace(/ /g, "+") +
+        (weight ? `:wght@${weight}` : "") +
         "&display=swap";
       document.head.appendChild(link);
     }
@@ -198,8 +212,8 @@
     const state = {
       filter: "all",
       query: "",
-      heading: null,
-      body: null,
+      heading: { family: null, weight: 600 },
+      body: { family: null, weight: 400 },
       colors: [
         { name: "Primary", value: "#6e6154" },
         { name: "Background", value: "#f7f5f0" },
@@ -262,9 +276,14 @@
 
     function assignBtn(label, family, role) {
       const b = document.createElement("button");
-      b.className = "btn assign" + (state[role] === family ? " on" : "");
+      b.className = "btn assign" + (state[role].family === family ? " on" : "");
       b.textContent = label;
-      b.onclick = () => { state[role] = family; loadFont(family); renderRoles(); renderList(); };
+      b.onclick = () => {
+        state[role].family = family;
+        loadFont(family, state[role].weight);
+        renderRoles();
+        renderList();
+      };
       return b;
     }
 
@@ -276,13 +295,35 @@
     }
 
     // ---- Kit panel: roles + colors ----------------------------------------
+    // Populate the weight <select>s once and wire their change handlers.
+    function initWeightSelects() {
+      for (const role of ["heading", "body"]) {
+        const sel = document.getElementById(`${role}-weight`);
+        sel.innerHTML = "";
+        for (const w of WEIGHTS) {
+          const opt = document.createElement("option");
+          opt.value = w;
+          opt.textContent = w;
+          sel.appendChild(opt);
+        }
+        sel.value = state[role].weight;
+        sel.addEventListener("change", () => {
+          state[role].weight = +sel.value;
+          loadFont(state[role].family, state[role].weight);
+          renderRoles();
+        });
+      }
+    }
+
     function renderRoles() {
       const set = (role, tagId, sampleId) => {
-        const fam = state[role];
+        const { family, weight } = state[role];
         document.getElementById(tagId).textContent =
-          `${role === "heading" ? "Heading" : "Body"} — ${fam || "none"}`;
+          `${role === "heading" ? "Heading" : "Body"} — ${family || "none"}`;
+        document.getElementById(`${role}-weight`).value = weight;
         const s = document.getElementById(sampleId);
-        s.style.fontFamily = fam ? `"${fam}", sans-serif` : "var(--sans)";
+        s.style.fontFamily = family ? `"${family}", sans-serif` : "var(--sans)";
+        s.style.fontWeight = weight;
       };
       set("heading", "heading-tag", "heading-sample");
       set("body", "body-tag", "body-sample");
@@ -363,6 +404,14 @@
       }
     };
 
+    // Normalize a font role to { family, weight }, tolerating the old
+    // string-only shape ("Family") from kits saved before weights existed.
+    function normFont(f, defWeight) {
+      if (!f) return { family: null, weight: defWeight };
+      if (typeof f === "string") return { family: f, weight: defWeight };
+      return { family: f.family || null, weight: f.weight || defWeight };
+    }
+
     // ---- Boot (open-on-artifact via ?artifact=<path>) ----------------------
     async function boot() {
       const artifactPath = new URLSearchParams(location.search).get("artifact");
@@ -370,17 +419,18 @@
         try {
           const data = JSON.parse(await invoke("read_artifact", { path: artifactPath }));
           if (data.fonts) {
-            state.heading = data.fonts.heading || null;
-            state.body = data.fonts.body || null;
+            state.heading = normFont(data.fonts.heading, 600);
+            state.body = normFont(data.fonts.body, 400);
           }
           if (Array.isArray(data.colors)) state.colors = data.colors;
           if (data.name) document.getElementById("kit-name").value = data.name;
-          if (state.heading) loadFont(state.heading);
-          if (state.body) loadFont(state.body);
+          loadFont(state.heading.family, state.heading.weight);
+          loadFont(state.body.family, state.body.weight);
         } catch (e) {
           statusEl.textContent = "Couldn't load artifact: " + e;
         }
       }
+      initWeightSelects();
       renderList();
       renderRoles();
       renderPalette();
