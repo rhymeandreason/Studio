@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Mutex;
 
@@ -9,10 +9,12 @@ use tauri::{AppHandle, Emitter, Manager, Url};
 
 // --- Workspace repo resolution -------------------------------------------
 
-/// Minimal view of a project's workspace.json — the `sprite` (the project's
-/// animal, shown in the chat).
+/// Minimal view of a project's workspace.json — the `repo` field (for "Code"
+/// mode) and the `sprite` (the project's animal, shown in the chat).
 #[derive(Deserialize, Default)]
 struct Workspace {
+    #[serde(default)]
+    repo: String,
     #[serde(default)]
     sprite: String,
 }
@@ -25,13 +27,40 @@ fn read_workspace(project_path: &str) -> Workspace {
         .unwrap_or_default()
 }
 
-/// The directory Claude runs in for a project: the **project folder** itself.
-/// Studio's media, notes, and `artifacts/` all live here, so design artifacts
-/// Claude writes (e.g. `artifacts/brand-kit/…`) land where the Artifacts panel
-/// reads them. The git repo, if it's a separate subfolder, is still reachable
-/// from here.
-fn claude_cwd(_app: &AppHandle, project_path: &str) -> PathBuf {
-    PathBuf::from(project_path)
+/// Resolve a manifest path entry: expand `~`, leave absolute paths, treat the
+/// rest as relative to the project folder.
+fn resolve_path(home: &Path, project_dir: &Path, raw: &str) -> PathBuf {
+    let raw = raw.trim();
+    if let Some(rest) = raw.strip_prefix("~/") {
+        home.join(rest)
+    } else if raw == "~" {
+        home.to_path_buf()
+    } else if Path::new(raw).is_absolute() {
+        PathBuf::from(raw)
+    } else {
+        project_dir.join(raw)
+    }
+}
+
+/// The directory Claude runs in for a project, by mode (the chat's cwd dropdown):
+/// - `"repo"` → the workspace's resolved `repo` path (for code work), falling
+///   back to the project folder if no repo is set.
+/// - anything else (`"project"`, default) → the **project folder**, where media,
+///   notes, and `artifacts/` live — so design artifacts land where the Artifacts
+///   panel reads them.
+fn claude_cwd(app: &AppHandle, project_path: &str, mode: &str) -> PathBuf {
+    let project_dir = PathBuf::from(project_path);
+    if mode != "repo" {
+        return project_dir;
+    }
+    let ws = read_workspace(project_path);
+    if ws.repo.trim().is_empty() {
+        return project_dir;
+    }
+    match app.path().home_dir() {
+        Ok(home) => resolve_path(&home, &project_dir, &ws.repo),
+        Err(_) => project_dir,
+    }
 }
 
 /// GUI apps don't inherit the user's shell PATH (nvm, homebrew, etc.). Resolve
@@ -78,12 +107,13 @@ fn claude_send(
     text: String,
     resume: Option<String>,
     permission_mode: Option<String>,
+    cwd: Option<String>,
 ) -> Result<(), String> {
     let mut procs = state.procs.lock().unwrap();
     if !procs.contains_key(&key) {
         let mut cmd = Command::new("claude");
         cmd.env("PATH", claude_path())
-            .current_dir(claude_cwd(&app, &project_path))
+            .current_dir(claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project")))
             .arg("-p")
             .args(["--input-format", "stream-json"])
             .args(["--output-format", "stream-json"])
@@ -241,12 +271,16 @@ struct ClaudeHistorySession {
 }
 
 #[tauri::command]
-fn list_claude_project_sessions(app: AppHandle, project_path: String) -> Vec<ClaudeHistorySession> {
+fn list_claude_project_sessions(
+    app: AppHandle,
+    project_path: String,
+    cwd: Option<String>,
+) -> Vec<ClaudeHistorySession> {
     let Ok(home) = app.path().home_dir() else {
         return Vec::new();
     };
-    let cwd = claude_cwd(&app, &project_path);
-    let encoded = cwd.to_string_lossy().replace('/', "-");
+    let cwd_path = claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project"));
+    let encoded = cwd_path.to_string_lossy().replace('/', "-");
     let dir = home.join(".claude/projects").join(encoded);
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return Vec::new();
@@ -321,12 +355,13 @@ fn read_claude_session_log(
     app: AppHandle,
     project_path: String,
     session_id: String,
+    cwd: Option<String>,
 ) -> Vec<ClaudeLogMessage> {
     let Ok(home) = app.path().home_dir() else {
         return Vec::new();
     };
-    let cwd = claude_cwd(&app, &project_path);
-    let encoded = cwd.to_string_lossy().replace('/', "-");
+    let cwd_path = claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project"));
+    let encoded = cwd_path.to_string_lossy().replace('/', "-");
     let file = home
         .join(".claude/projects")
         .join(encoded)

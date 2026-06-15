@@ -147,6 +147,12 @@ Implemented; establishes the pattern every later tool follows:
   Refresh (the Refresh button + tab-open re-list remain as fallbacks).
 - **Brand Explorer: open-on-artifact** — loads/edits an existing kit
   (`?artifact=…`) and saves as a `brand-kit` artifact (named) via `save_artifact`.
+- **Studio Claude working-directory toggle** — the chat bar has an
+  **Artifacts / Code** dropdown (left of the model select) that picks the cwd
+  Claude runs in: `project` (the project folder, where `artifacts/` lives —
+  default) or `repo` (the workspace's git repo, for code). Per-session;
+  threaded through `claude_send` + the session-history commands in both the
+  companion and the in-Studio backend. See [claude-window.md](claude-window.md).
 - **Reusable brand-kit preview** — `brandKitPreview()` in `src/artifacts.js`
   (font names + color swatches).
 

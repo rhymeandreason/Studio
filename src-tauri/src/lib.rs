@@ -3049,13 +3049,26 @@ fn git_open_file(app: AppHandle, repo: String, file: String) -> Result<(), Strin
 
 // --- Claude companion window -------------------------------------------
 
-/// The directory Claude runs in for a project: the **project folder** itself.
-/// Studio's media, notes, and `artifacts/` all live here, so design artifacts
-/// Claude writes (e.g. `artifacts/brand-kit/…`) land where the Artifacts panel
-/// reads them. The git repo, if a separate subfolder, stays reachable from here.
+/// The directory Claude runs in for a project, by mode (the chat's cwd dropdown):
+/// - `"repo"` → the workspace's resolved `repo` path (for code work), falling
+///   back to the project folder if no repo is set.
+/// - anything else (`"project"`, default) → the **project folder**, where media,
+///   notes, and `artifacts/` live — so design artifacts land where the Artifacts
+///   panel reads them.
 /// (Matches the standalone companion's `claude_cwd`.)
-fn claude_cwd(_app: &AppHandle, project_path: &str) -> PathBuf {
-    PathBuf::from(project_path)
+fn claude_cwd(app: &AppHandle, project_path: &str, mode: &str) -> PathBuf {
+    let project_dir = PathBuf::from(project_path);
+    if mode != "repo" {
+        return project_dir;
+    }
+    let ws = read_workspace(project_path.to_string()).unwrap_or_default();
+    if ws.repo.trim().is_empty() {
+        return project_dir;
+    }
+    match app.path().home_dir() {
+        Ok(home) => resolve_path(&home, &project_dir, &ws.repo),
+        Err(_) => project_dir,
+    }
 }
 
 /// GUI apps don't inherit the user's shell PATH (nvm, homebrew, etc.), so
@@ -3332,7 +3345,8 @@ fn run_scheduled_task(
     } else {
         project_path
     };
-    let cwd = claude_cwd(&app, &project_path);
+    // Scheduled/headless runs operate on the code repo (preserves prior behavior).
+    let cwd = claude_cwd(&app, &project_path, "repo");
     std::thread::spawn(move || {
         let mut cmd = Command::new("claude");
         cmd.env("PATH", claude_path())
@@ -3550,12 +3564,13 @@ fn claude_send(
     text: String,
     resume: Option<String>,
     permission_mode: Option<String>,
+    cwd: Option<String>,
 ) -> Result<(), String> {
     let mut procs = state.procs.lock().unwrap();
     if !procs.contains_key(&key) {
         let mut cmd = Command::new("claude");
         cmd.env("PATH", claude_path())
-            .current_dir(claude_cwd(&app, &project_path))
+            .current_dir(claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project")))
             .arg("-p")
             .args(["--input-format", "stream-json"])
             .args(["--output-format", "stream-json"])
@@ -3663,14 +3678,18 @@ struct ClaudeHistorySession {
 /// reading `~/.claude/projects/<encoded-path>/*.jsonl` (the format Claude
 /// Code itself uses for `--resume`). Newest first.
 #[tauri::command]
-fn list_claude_project_sessions(app: AppHandle, project_path: String) -> Vec<ClaudeHistorySession> {
+fn list_claude_project_sessions(
+    app: AppHandle,
+    project_path: String,
+    cwd: Option<String>,
+) -> Vec<ClaudeHistorySession> {
     let Ok(home) = app.path().home_dir() else {
         return Vec::new();
     };
-    // Claude records sessions under the cwd it ran in — the repo, not the
-    // project folder — so encode that path to find them.
-    let cwd = claude_cwd(&app, &project_path);
-    let encoded = cwd.to_string_lossy().replace('/', "-");
+    // Claude records sessions under the cwd it ran in, so encode the mode's
+    // resolved path (project folder or repo) to find them.
+    let cwd_path = claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project"));
+    let encoded = cwd_path.to_string_lossy().replace('/', "-");
     let dir = home.join(".claude/projects").join(encoded);
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return Vec::new();
@@ -3751,12 +3770,13 @@ fn read_claude_session_log(
     app: AppHandle,
     project_path: String,
     session_id: String,
+    cwd: Option<String>,
 ) -> Vec<ClaudeLogMessage> {
     let Ok(home) = app.path().home_dir() else {
         return Vec::new();
     };
-    let cwd = claude_cwd(&app, &project_path);
-    let encoded = cwd.to_string_lossy().replace('/', "-");
+    let cwd_path = claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project"));
+    let encoded = cwd_path.to_string_lossy().replace('/', "-");
     let file = home
         .join(".claude/projects")
         .join(encoded)

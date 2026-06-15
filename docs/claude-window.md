@@ -89,11 +89,21 @@ The backend creates (or focuses) the window with label `claude`, then emits
 sidebar to that project and opens its **last active** session (else its most
 recent, else a new one).
 
-## Working directory (the repo, not the project folder)
-`claude_cwd(project_path)` resolves the workspace's `repo` field (with `~` /
-relative expansion) and falls back to the project folder. Both `claude_send` and
-the history lookups use it, so the companion window runs `claude` in the actual
-git repo — consistent with terminal-mode launch.
+## Working directory (Artifacts vs Code, per session)
+The chat bar has a cwd dropdown (left of the model select): **Artifacts** runs
+`claude` in the **project folder** (where media, notes, and `artifacts/` live —
+the default, so design artifacts land where the Artifacts panel reads them);
+**Code** runs it in the workspace's **git repo**.
+
+`claude_cwd(app, project_path, mode)` resolves it: `mode == "repo"` →
+workspace `repo` field (with `~`/relative expansion, fallback to the project
+folder if unset); anything else → the project folder. The mode is per-session
+(persisted like model/permission) and threaded through `claude_send` plus the
+session-history lookups (`list_claude_project_sessions` /
+`read_claude_session_log`), so Artifacts and Code sessions each show their own
+"Recent" list (Claude records sessions under the cwd it ran in). The headless
+scheduled-task runner always uses `"repo"`. Same logic in the companion and the
+in-Studio backend.
 
 ## Process & streaming model
 Each UI session maps to one `claude -p` subprocess (`claude_send`), spawned on

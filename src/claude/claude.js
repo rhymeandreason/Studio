@@ -150,6 +150,13 @@ const permissionSelect = createDropdown(document.getElementById("permission-sele
     { value: "plan", label: "Plan" },
     { value: "bypassPermissions", label: "Bypass" },
 ]);
+// Working directory: "project" runs Claude in the project folder (where media,
+// notes, and artifacts/ live — for design/artifact work); "repo" runs it in the
+// workspace's git repo (for code). Backend resolves the actual path.
+const cwdSelect = createDropdown(document.getElementById("cwd-select"), [
+    { value: "project", label: "Artifacts" },
+    { value: "repo", label: "Code" },
+]);
 const newSessionBtn = document.getElementById("new-session");
 const sendBtn = document.getElementById("send-btn");
 const stopBtn = document.getElementById("stop-btn");
@@ -367,7 +374,10 @@ async function renderHistoryList(projectPath, projectName) {
     historyListEl.hidden = false;
     let history = [];
     try {
-        history = await invoke("list_claude_project_sessions", { projectPath });
+        history = await invoke("list_claude_project_sessions", {
+            projectPath,
+            cwd: cwdSelect.value || "project",
+        });
     } catch {
         history = [];
     }
@@ -398,6 +408,7 @@ async function resumeHistorySession(h, projectPath, projectName) {
         transcript = await invoke("read_claude_session_log", {
             projectPath,
             sessionId: h.session_id,
+            cwd: cwdSelect.value || "project",
         });
     } catch {
         transcript = [];
@@ -409,6 +420,7 @@ async function resumeHistorySession(h, projectPath, projectName) {
         projectName,
         model: modelSelect.value || "sonnet",
         permissionMode: permissionSelect.value || "default",
+        cwd: cwdSelect.value || "project",
         resumeId: h.session_id,
         transcript,
     };
@@ -506,6 +518,7 @@ async function switchTo(key) {
     setWindowTitle(session.projectName);
     modelSelect.value = session.model || "sonnet";
     permissionSelect.value = session.permissionMode || "default";
+    cwdSelect.value = session.cwd || "project";
     renderTranscript(session);
     renderUsageBars(session);
     renderSessionsList();
@@ -645,6 +658,7 @@ async function createSession(projectPath, projectName) {
         projectName,
         model: modelSelect.value || "sonnet",
         permissionMode: permissionSelect.value || "default",
+        cwd: cwdSelect.value || "project",
         resumeId: null,
         transcript: [],
     };
@@ -1021,6 +1035,7 @@ async function sendMessage(text) {
             text,
             resume: session.resumeId,
             permissionMode: session.permissionMode || "default",
+            cwd: session.cwd || "project",
         });
         console.log("[claude] claude_send returned");
     } catch (err) {
@@ -1106,6 +1121,28 @@ permissionSelect.addEventListener("change", () => {
     if (!session._dead && listeners.has(session.key)) {
         invoke("claude_stop", { key: session.key }).catch(() => {});
         session._dead = true;
+    }
+});
+
+cwdSelect.addEventListener("change", () => {
+    const session = sessions.find((s) => s.key === activeKey);
+    if (session) {
+        session.cwd = cwdSelect.value;
+        persistSessions();
+        // cwd is set when the claude process spawns; restart a running one so the
+        // next send runs in the newly-selected directory.
+        if (!session._dead && listeners.has(session.key)) {
+            invoke("claude_stop", { key: session.key }).catch(() => {});
+            session._dead = true;
+        }
+    }
+    // The "Recent" history list is per-directory — re-list for the new cwd.
+    const proj = sessions.find((s) => s.key === activeKey) || lastProject;
+    if (proj) {
+        renderHistoryList(
+            proj.projectPath || proj.path,
+            proj.projectName || proj.name,
+        );
     }
 });
 
