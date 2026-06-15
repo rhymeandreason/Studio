@@ -155,14 +155,15 @@ Implemented; establishes the pattern every later tool follows:
   companion and the in-Studio backend. See [claude-window.md](claude-window.md).
 - **Reusable brand-kit preview** — `brandKitPreview()` in `src/artifacts.js`
   (font names + color swatches).
-- **Schema discoverability via a skill** — the artifact formats live in the
-  `studio-artifacts` **Claude Code skill** (`skills/studio-artifacts/` in this
-  repo: `SKILL.md` + `schemas/<kind>.schema.json`), symlinked into
-  `~/.claude/skills/`. Because Studio Claude runs in the project folder and skills
-  load on demand by description, Claude knows the formats with nothing pasted —
-  one source of truth across all projects, instead of a per-project CLAUDE.md
-  block. The **JSON Schema** files are the canonical definition of each kind.
-  Edit the skill in-repo; the symlink keeps it live.
+- **Format discoverability via a skill** — the artifact formats live in the
+  `studio-artifacts` **Claude Code skill** (`skills/studio-artifacts/SKILL.md` in
+  this repo), symlinked into `~/.claude/skills/`. Because Studio Claude runs in
+  the project folder and skills load on demand by description, Claude knows the
+  formats with nothing pasted — one source of truth across all projects, instead
+  of a per-project CLAUDE.md block. The SKILL.md's example + rules are the spec;
+  there's no formal JSON Schema (artifacts are local design files — producers are
+  trusted and consumers read them leniently, so validation isn't worth it). Edit
+  the skill in-repo; the symlink keeps it live.
 
 ### Still spec (next)
 - **Variant-set gallery** — first-class "a set of N variants" comparison UI.

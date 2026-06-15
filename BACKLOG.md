@@ -40,10 +40,6 @@ see [docs/tools-dynamic-loading.md](docs/tools-dynamic-loading.md)). Follow-ups:
   A packaged `.app` has no repo path — bundle the skills as resources and
   install/sync them into `~/.claude/skills/` on launch (copy, or symlink to the
   bundle). See [docs/artifacts.md](docs/artifacts.md).
-- **Validate artifacts against the JSON Schema in Studio.** `save_artifact` (and
-  the Brand Explorer / panel) currently read fields leniently; the
-  `skills/studio-artifacts/schemas/*.schema.json` files are the source of truth.
-  Validate writes against them so malformed artifacts are caught.
 - **Stale CLAUDE.md blocks.** Early testing wrote a `studio:artifacts` managed
   block into some project CLAUDE.md files (since removed in favor of the skill).
   Harmless, but can be deleted from those projects.

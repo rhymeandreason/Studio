@@ -18,10 +18,8 @@ mode), so `artifacts/…` is relative to the current directory.
 
 ### brand-kit — font pairing + color palette
 - **Path:** `artifacts/brand-kit/<slug>.json`
-- **Schema:** [`schemas/brand-kit.schema.json`](schemas/brand-kit.schema.json) —
-  follow it exactly.
 
-Example:
+Example (follow this shape):
 
 ```json
 {
