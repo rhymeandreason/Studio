@@ -214,12 +214,11 @@ element only where native falls short.
 - **Slider** — mostly native. `<input type=range>` styles well in WebKit
   (`::-webkit-slider-thumb`/`-runnable-track`). Build `<studio-slider>` only for a
   filled track, value bubble, tick marks, or dual handles.
-- **Color picker** — the one worth building custom. Native `<input type=color>`
-  opens the macOS panel (consistent, free, has a system eyedropper + alpha) but
-  gives no control over in-page UI/palettes/recent swatches. Note
-  `window.EyeDropper` is **Chromium-only — not in WKWebView**, so the native input
-  is the only screen-eyedropper path. A `<studio-color>` (swatch → popover with
-  SV square + hue/alpha + hex + project swatches) is high-reuse; build it first.
+- **Color picker** — use **Coloris** (vendored; see below) rather than building
+  one. Native `<input type=color>` gives no control over in-page UI/palettes, and
+  `window.EyeDropper` is **Chromium-only — not in WKWebView**, so don't design
+  around an in-page eyedropper. Wrap Coloris in a thin `<studio-color>` so tools
+  use our element/contract, not Coloris directly (lets us re-theme or swap later).
 - **Select** — hardest to do well. Style the *box* of a native `<select>` via
   `kit.css`; default to that. Build `<studio-select>` only for rich options
   (swatches, icons, two-line items) — a custom listbox means re-implementing
@@ -228,10 +227,10 @@ element only where native falls short.
   (toggle, loading, async press, segmented). Appearance → class; behavior →
   `<studio-button>`. Statefulness is the promotion line, not variant count.
 - **Motion** — raises consistency stakes (mismatched motion reads as *broken*).
-  Add **motion tokens** (`--dur-fast`, `--ease-standard`) to `tokens.css` and lean
-  on the **Web Animations API** (solid in WKWebView, no library). Promote to a
-  shared `motion.js` (FLIP/enter-exit/spring helpers) only when 2+ tools hand-roll
-  the same animation; vendor a motion library only if that gets repetitive.
+  Add **motion tokens** (`--dur-fast`, `--ease-standard`) to `tokens.css`, and use
+  **Motion** (vendored; see below) via a thin `motion.js` wrapper so tools call our
+  helpers (enter/exit, stagger, spring), not Motion directly. It's a ~3.8 kB layer
+  over the Web Animations API, so we keep the native substrate and gain ergonomics.
 
 **Architecture decisions:** components live in `src/kit/` (`tokens.css`,
 `kit.css`, `components.js`); the same origin issue applies, so `tool://` tools
@@ -239,6 +238,30 @@ need them at a stable `/_kit/…` URL — strong case for the **host injecting b
 the kit CSS and the components module** so every tool has `<studio-*>` without
 remembering to import. Keep components **uncontrolled** (self-managing state,
 read `.value`, listen for events).
+
+### Vendored libraries
+
+Chosen set (kept deliberately small):
+
+| Lib | For | Why |
+|---|---|---|
+| **Motion** (motion.dev) | animation | ~3.8 kB ESM, vanilla `animate()`, thin layer over the Web Animations API |
+| **Coloris** (`@melloware/coloris`) | color picker | vanilla ES6, zero deps, accessible, ESM entry |
+
+Rules for adopting any library here:
+
+- **Vendor, don't CDN.** Copy the ESM build into `src/vendor/` (as `marked`
+  already is) and **pin the version** — Studio is a local app, so no runtime
+  network dependency, latency, or supply-chain surface. No bundler.
+- **Adopt at the kit layer, never per-tool.** One copy, wrapped by a kit module
+  (`motion.js`, `<studio-color>`); tools call *our* contract, not the library
+  directly — so we can re-theme or swap the lib without touching tools, and avoid
+  N tools pulling N versions (the API-drift risk).
+- **Serve to tools at `/_kit/…`** so `tool://`-origin tools can reach the same
+  vendored copy.
+- **Bar for new libs:** ESM with no build step · tiny, no transitive-dep
+  explosion · WKWebView-clean · solves something genuinely hard. Explicitly out:
+  anything imposing a build (React/Vue/Svelte) or a foreign look (full UI kits).
 
 **Biggest risk:** not under-investing in machinery, but **API drift with no
 catalog** — Claude generating three subtly different ways to use a slider. Mitigate
