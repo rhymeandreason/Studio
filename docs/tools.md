@@ -8,6 +8,31 @@ window but are still useful to have one click away.
 > tools explicit **categories**, see
 > [docs/tools-dynamic-loading.md](tools-dynamic-loading.md).
 
+## Using the design-system kit
+
+Tools should look like Studio without re-inventing primitives. The shared kit
+lives in [`src/kit/`](../src/kit) and is built on the tokens in `src/tokens.css`:
+
+```html
+<link rel="stylesheet" href="../tokens.css" />   <!-- Runes tokens + icon font -->
+<link rel="stylesheet" href="../kit/kit.css" />   <!-- .btn / .field / .card / … -->
+<script type="module" src="../kit/components.js"></script>  <!-- <studio-*> elements -->
+```
+
+- **`kit.css`** — component classes: `.btn` (`.btn-primary`/`.btn-ghost`/
+  `.btn-icon`), `.field` (text, number, styled-native `<select>`, textarea),
+  `.range`, `.card`, `.label`, `.title-strip`.
+- **`components.js`** — custom elements with a native-like contract (`.value` +
+  `input`/`change`). First one: `<studio-color>` (Coloris-backed color field).
+- **`motion.js`** — `import { enter, exit, enterStagger, pop } from
+  "../kit/motion.js"` for consistent animation (reads the `--dur-*`/`--ease-*`
+  tokens; wraps the vendored Motion One).
+
+[`kit-gallery.html`](../src/tools/kit-gallery.html) is the living styleguide —
+open it (Tools → Kit Gallery) to see every class/component in use. For the
+broader design-system plan (vendored libs, `<studio-*>` roadmap, host-injected
+kit), see [tools-dynamic-loading.md](tools-dynamic-loading.md).
+
 ## How it works
 
 - Drop a self-contained `.html` file into [`src/tools/`](../src/tools)

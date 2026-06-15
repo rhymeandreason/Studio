@@ -31,6 +31,15 @@
     --sans: "Futura", "Futura PT", system-ui, sans-serif;
     --serif: "Futura", "Futura PT", "Trebuchet MS", sans-serif;
     --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    /* Motion — shared durations/easings so animations feel consistent across
+     * the app and tools (kit/motion.js reads these). */
+    --dur-fast: 0.13s;
+    --dur-base: 0.22s;
+    --dur-slow: 0.4s;
+    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
+
     color-scheme: light;
 }
 

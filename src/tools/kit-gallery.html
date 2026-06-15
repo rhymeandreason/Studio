@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kit Gallery</title>
+<!-- Foundation + kit. Order matters: tokens, then kit, then page styles. -->
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<style>
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 500;
+  }
+  section { display: flex; flex-direction: column; gap: 12px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .stack { display: flex; flex-direction: column; gap: 8px; max-width: 280px; }
+  .demo-box {
+    width: 44px; height: 44px; border-radius: var(--radius-sm);
+    background: var(--accent); opacity: 0; /* animated in */
+  }
+  .out { font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <h1>Studio Kit — gallery</h1>
+
+  <section class="card">
+    <div class="label">Buttons</div>
+    <div class="row">
+      <button class="btn">Default</button>
+      <button class="btn btn-primary">Primary</button>
+      <button class="btn btn-ghost">Ghost</button>
+      <button class="btn btn-icon" title="Icon"><span class="mi">add</span></button>
+      <button class="btn" disabled>Disabled</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="label">Fields</div>
+    <div class="stack">
+      <input class="field" placeholder="Text field" />
+      <select class="field">
+        <option>Styled native select</option>
+        <option>Option two</option>
+        <option>Option three</option>
+      </select>
+      <textarea class="field" rows="3" placeholder="Textarea"></textarea>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="label">Range</div>
+    <input class="range" type="range" min="0" max="100" value="50"
+           oninput="document.getElementById('range-out').textContent = this.value" />
+    <div class="out" id="range-out">50</div>
+  </section>
+
+  <section class="card">
+    <div class="label">Color — &lt;studio-color&gt; (Coloris)</div>
+    <div class="row">
+      <studio-color id="color" value="#6e6154"></studio-color>
+      <span class="out" id="color-out">#6e6154</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="label">Motion (kit/motion.js)</div>
+    <div class="row">
+      <button class="btn" id="m-enter">enter</button>
+      <button class="btn" id="m-stagger">stagger</button>
+      <button class="btn" id="m-pop">pop</button>
+    </div>
+    <div class="row" id="boxes">
+      <div class="demo-box"></div><div class="demo-box"></div>
+      <div class="demo-box"></div><div class="demo-box"></div>
+    </div>
+  </section>
+
+  <script type="module">
+    import "../kit/components.js";
+    import { enter, enterStagger, pop } from "../kit/motion.js";
+
+    const boxes = [...document.querySelectorAll(".demo-box")];
+    const show = (els) => els.forEach((b) => (b.style.opacity = "0"));
+
+    document.getElementById("m-enter").onclick = () => {
+      show(boxes); boxes.forEach((b) => enter(b));
+    };
+    document.getElementById("m-stagger").onclick = () => {
+      show(boxes); enterStagger(boxes, { each: 0.06 });
+    };
+    document.getElementById("m-pop").onclick = () => {
+      boxes.forEach((b) => (b.style.opacity = "1"));
+      boxes.forEach((b) => pop(b));
+    };
+    // Show boxes once on load.
+    boxes.forEach((b) => enter(b));
+
+    const color = document.getElementById("color");
+    const colorOut = document.getElementById("color-out");
+    color.addEventListener("input", () => (colorOut.textContent = color.value));
+  </script>
+</body>
+</html>

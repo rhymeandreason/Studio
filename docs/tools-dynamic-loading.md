@@ -243,10 +243,15 @@ read `.value`, listen for events).
 
 Chosen set (kept deliberately small):
 
-| Lib | For | Why |
-|---|---|---|
-| **Motion** (motion.dev) | animation | ~3.8 kB ESM, vanilla `animate()`, thin layer over the Web Animations API |
-| **Coloris** (`@melloware/coloris`) | color picker | vanilla ES6, zero deps, accessible, ESM entry |
+| Lib | For | Vendored as | Why |
+|---|---|---|---|
+| **Motion One** (`@motionone/dom@10.18.0`) | animation | `src/vendor/motion-one.mjs` (24 kB, self-contained ESM: `animate`/`spring`/`stagger`/`timeline`/`inView`) | thin layer over the Web Animations API |
+| **Coloris** (`@melloware/coloris@0.25.0`) | color picker | `src/vendor/coloris.js` (42 kB ESM) + `coloris.css` (11 kB) | vanilla ES6, zero deps, accessible |
+
+> Note: we vendor **Motion One** (`@motionone/dom`, the lightweight WAAPI lib),
+> not the heavier merged `motion@12` (Framer Motion) — the latter isn't a
+> self-contained single-file ESM. Tools use the `kit/motion.js` wrapper, never
+> the package directly.
 
 Rules for adopting any library here:
 
@@ -301,8 +306,14 @@ forces it. Staged:
 Lowest-risk, highest-value first:
 
 0. **Extract `tokens.css`** — shared foundation for app + tools. ✅ *Done.*
-1. **`kit.css` + starter template** — component classes and a scaffold so new
-   (especially Claude-generated) tools are consistent by default.
+0b. **Vendor the icon font** — Material Symbols woff2 + `@font-face` in
+   `tokens.css`, off the CDN. ✅ *Done.*
+1. **Kit scaffold** — `src/kit/` (`kit.css`, `motion.js`, `components.js`),
+   vendor Motion One + Coloris, first component `<studio-color>`, and a
+   `kit-gallery.html` tool as living styleguide. ✅ *Done.*
+   - Still to do here: a starter template + one-page kit reference for
+     generation; theme Coloris's CSS to Runes; host-inject the kit so tools get
+     it without remembering to link.
 2. **Live-list + watch** the user tools dir and rebuild the Tools submenu — kills
    the restart for the listing half. (Works for static/save tools immediately.)
 3. **`tool://` scheme** so user-dir tools load with IPC/save intact — and serve
