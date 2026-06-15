@@ -12,11 +12,27 @@ npm run tauri dev → image → Extend background → drag/pick ratio → option
 If it still errors, the status line now shows the real response (SD <code>: <body>) — paste it and I'll adjust. Otherwise, once a fill comes back, tell me how the result looks and we can tune denoising_strength / inpainting_fill / mask_blur.
 
 ## UI / polish
-- **Vendor Material Symbols locally.** Icons currently load from Google Fonts
-  (Material Symbols Rounded), so they need network — offline they degrade to
-  ligature text. Bundle the icon font (woff2) into `src/vendor/` and serve it
-  locally so the UI works fully offline. Same applies to confirming Futura is
-  always available vs. shipping a fallback.
+- **Confirm Futura availability.** The type stack assumes Futura (a macOS system
+  font). Confirm it's always present in the target environment, or ship/choose a
+  fallback. (Material Symbols is now vendored — `src/vendor/material-symbols-rounded.woff2`
+  + `@font-face` in `tokens.css` — so icons work offline.)
+
+## Design-system kit (`src/kit/`)
+Scaffold is in (tokens.css, kit.css, motion.js, `<studio-color>`, Kit Gallery —
+see [docs/tools-dynamic-loading.md](docs/tools-dynamic-loading.md)). Follow-ups:
+- **Theme the Coloris picker to Runes.** It currently shows Coloris's default
+  look; map its `--clr-*` CSS variables to our tokens so the popover matches.
+- **Host-inject the kit.** Have `open_tool_window_near` inject the tokens/kit CSS
+  + `components.js` (via `.initialization_script()`) so every tool gets the design
+  system without remembering to link it — and so it's reachable for future
+  `tool://` (user-dir) tools at a stable `/_kit/…` URL.
+- **Kit reference + starter template.** A one-page reference (every class/`<studio-*>`
+  tag, attributes, events, snippets) cheap to drop into context, plus a "new tool"
+  scaffold — the lever that makes Claude-generated tools consistent by default.
+- **More `<studio-*>` components as needed.** Only build custom elements where
+  native falls short (e.g. `<studio-slider>` for filled-track/value-bubble/dual
+  handles; `<studio-select>` for rich options). Native-styled via `kit.css`
+  otherwise. (Rationale + per-component calls in the design doc.)
 
 ## Background removal
 Current impl (on `main`): native macOS **Vision** via a Swift helper

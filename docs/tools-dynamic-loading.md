@@ -142,11 +142,12 @@ style assets live and which origins can reach them.**
   three existing tools `<link>` it (placed before their own `<style>`, so each
   tool's own `:root` still wins where it differs — appearance unchanged, shared
   tokens now available).
-- **`kit.css` (components)** — base element styling + a handful of component
-  classes (`.btn`, `.field`, `.card`, the title-strip convention) so tools look
-  consistent without re-styling primitives. *Not yet built.*
-- **Web-component primitives** (`<studio-field>`, …) — only if shared widgets
-  outgrow CSS classes. Later/optional.
+- **`kit.css` (components)** — base element styling + component classes (`.btn`,
+  `.field`, `.range`, `.card`, `.title-strip`, …) so tools look consistent without
+  re-styling primitives. *Done (`src/kit/kit.css`).*
+- **Web-component primitives** (`<studio-color>`, …) — for widgets that outgrow
+  CSS classes. *Started: `<studio-color>` in `src/kit/components.js`; more as
+  needed.*
 
 ### Where it collides with dynamic loading
 
@@ -310,10 +311,9 @@ Lowest-risk, highest-value first:
    `tokens.css`, off the CDN. ✅ *Done.*
 1. **Kit scaffold** — `src/kit/` (`kit.css`, `motion.js`, `components.js`),
    vendor Motion One + Coloris, first component `<studio-color>`, and a
-   `kit-gallery.html` tool as living styleguide. ✅ *Done.*
-   - Still to do here: a starter template + one-page kit reference for
-     generation; theme Coloris's CSS to Runes; host-inject the kit so tools get
-     it without remembering to link.
+   `kit-gallery.html` tool as living styleguide. ✅ *Done.* (Kit follow-ups —
+   theme Coloris, host-inject the kit, kit reference + starter template, more
+   `<studio-*>` — are tracked in [BACKLOG.md](../BACKLOG.md).)
 2. **Live-list + watch** the user tools dir and rebuild the Tools submenu — kills
    the restart for the listing half. (Works for static/save tools immediately.)
 3. **`tool://` scheme** so user-dir tools load with IPC/save intact — and serve
