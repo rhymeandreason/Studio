@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Mutex;
 
@@ -9,12 +9,10 @@ use tauri::{AppHandle, Emitter, Manager, Url};
 
 // --- Workspace repo resolution -------------------------------------------
 
-/// Minimal view of a project's workspace.json — the `repo` field (to run Claude
-/// in the git repo) and the `sprite` (the project's animal, shown in the chat).
+/// Minimal view of a project's workspace.json — the `sprite` (the project's
+/// animal, shown in the chat).
 #[derive(Deserialize, Default)]
 struct Workspace {
-    #[serde(default)]
-    repo: String,
     #[serde(default)]
     sprite: String,
 }
@@ -27,33 +25,13 @@ fn read_workspace(project_path: &str) -> Workspace {
         .unwrap_or_default()
 }
 
-/// Resolve a manifest path entry: expand `~`, leave absolute paths, treat the
-/// rest as relative to the project folder.
-fn resolve_path(home: &Path, project_dir: &Path, raw: &str) -> PathBuf {
-    let raw = raw.trim();
-    if let Some(rest) = raw.strip_prefix("~/") {
-        home.join(rest)
-    } else if raw == "~" {
-        home.to_path_buf()
-    } else if Path::new(raw).is_absolute() {
-        PathBuf::from(raw)
-    } else {
-        project_dir.join(raw)
-    }
-}
-
-/// The directory Claude should run in for a project: the workspace's resolved
-/// `repo` path if set, otherwise the project folder itself.
-fn claude_cwd(app: &AppHandle, project_path: &str) -> PathBuf {
-    let project_dir = PathBuf::from(project_path);
-    let ws = read_workspace(project_path);
-    if ws.repo.trim().is_empty() {
-        return project_dir;
-    }
-    match app.path().home_dir() {
-        Ok(home) => resolve_path(&home, &project_dir, &ws.repo),
-        Err(_) => project_dir,
-    }
+/// The directory Claude runs in for a project: the **project folder** itself.
+/// Studio's media, notes, and `artifacts/` all live here, so design artifacts
+/// Claude writes (e.g. `artifacts/brand-kit/…`) land where the Artifacts panel
+/// reads them. The git repo, if it's a separate subfolder, is still reachable
+/// from here.
+fn claude_cwd(_app: &AppHandle, project_path: &str) -> PathBuf {
+    PathBuf::from(project_path)
 }
 
 /// GUI apps don't inherit the user's shell PATH (nvm, homebrew, etc.). Resolve

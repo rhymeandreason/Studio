@@ -3049,20 +3049,13 @@ fn git_open_file(app: AppHandle, repo: String, file: String) -> Result<(), Strin
 
 // --- Claude companion window -------------------------------------------
 
-/// The directory Claude should run in for a project: the workspace's resolved
-/// `repo` path if set, otherwise the project folder itself. Keeps the companion
-/// window pointed at the actual git repo, in sync with the terminal-mode launch
-/// (which also cd's into the repo).
-fn claude_cwd(app: &AppHandle, project_path: &str) -> PathBuf {
-    let project_dir = PathBuf::from(project_path);
-    let ws = read_workspace(project_path.to_string()).unwrap_or_default();
-    if ws.repo.trim().is_empty() {
-        return project_dir;
-    }
-    match app.path().home_dir() {
-        Ok(home) => resolve_path(&home, &project_dir, &ws.repo),
-        Err(_) => project_dir,
-    }
+/// The directory Claude runs in for a project: the **project folder** itself.
+/// Studio's media, notes, and `artifacts/` all live here, so design artifacts
+/// Claude writes (e.g. `artifacts/brand-kit/…`) land where the Artifacts panel
+/// reads them. The git repo, if a separate subfolder, stays reachable from here.
+/// (Matches the standalone companion's `claude_cwd`.)
+fn claude_cwd(_app: &AppHandle, project_path: &str) -> PathBuf {
+    PathBuf::from(project_path)
 }
 
 /// GUI apps don't inherit the user's shell PATH (nvm, homebrew, etc.), so
