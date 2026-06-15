@@ -489,6 +489,13 @@ fn build_tray_menu(
         true,
         None::<&str>,
     )?));
+    items.push(Box::new(MenuItem::with_id(
+        app,
+        "open_video",
+        "🎬 Video Editor",
+        true,
+        None::<&str>,
+    )?));
     for t in &scan_tools(app) {
         items.push(Box::new(MenuItem::with_id(
             app,
@@ -580,6 +587,11 @@ fn build_studio_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Re
                 }
                 "open_schedules" => {
                     let _ = open_schedules_window(app.clone());
+                }
+                "open_video" => {
+                    if let Some(project) = app.state::<AppState>().active.lock().unwrap().clone() {
+                        let _ = open_video_window(app.clone(), project.path);
+                    }
                 }
                 "quit" => app.exit(0),
                 _ if id.starts_with(PROJECT_PREFIX) => {

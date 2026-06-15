@@ -534,14 +534,6 @@ function initTabs() {
   });
 }
 
-function initVideoButton() {
-  document.getElementById("video-btn").addEventListener("click", () => {
-    if (state.activeProject) {
-      invoke("open_video_window", { path: state.activeProject.path });
-    }
-  });
-}
-
 function initAllProjectsButton() {
   document.getElementById("all-projects-btn").addEventListener("click", showOverview);
 }
@@ -2007,7 +1999,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   initDevInspect();
   initTabs();
   initAllProjectsButton();
-  initVideoButton();
   initLaunch();
   initClaudeButton();
   initSpriteBadge();
