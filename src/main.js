@@ -534,13 +534,6 @@ function initTabs() {
   });
 }
 
-function initSchedulesButton() {
-  const open = () => invoke("open_schedules_window");
-  document.getElementById("schedules-btn").addEventListener("click", open);
-  document.getElementById("overview-schedules-btn").addEventListener("click", open);
-  document.getElementById("empty-schedules-btn").addEventListener("click", open);
-}
-
 function initVideoButton() {
   document.getElementById("video-btn").addEventListener("click", () => {
     if (state.activeProject) {
@@ -2014,7 +2007,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   initDevInspect();
   initTabs();
   initAllProjectsButton();
-  initSchedulesButton();
   initVideoButton();
   initLaunch();
   initClaudeButton();
