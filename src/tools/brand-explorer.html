@@ -139,7 +139,8 @@
     </div>
 
     <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
-      <button class="btn btn-primary" id="save">Save kit (JSON)</button>
+      <button class="btn btn-primary" id="save" style="display:none;">Save</button>
+      <button class="btn btn-secondary" id="duplicate">Save as new kit</button>
       <div class="status" id="status"></div>
     </div>
   </div>
@@ -369,21 +370,42 @@
     // ---- Save kit (JSON) ---------------------------------------------------
     const statusEl = document.getElementById("status");
     const invoke = window.__TAURI__?.core?.invoke;
+    let activePath = null; // set when opened via ?artifact=
 
-    document.getElementById("save").onclick = async () => {
+    function buildKit() {
       const name = document.getElementById("kit-name").value.trim() || "Brand kit";
-      const kit = {
-        kind: "brand-kit",
-        version: 1,
+      return {
+        kit: {
+          kind: "brand-kit",
+          version: 1,
+          name,
+          fonts: { heading: state.heading, body: state.body },
+          colors: state.colors,
+          savedAt: new Date().toISOString(),
+        },
         name,
-        fonts: { heading: state.heading, body: state.body },
-        colors: state.colors,
-        savedAt: new Date().toISOString(),
       };
+    }
+
+    // Save — overwrite the artifact we opened from.
+    document.getElementById("save").onclick = async () => {
+      const { kit } = buildKit();
+      kit.name = document.getElementById("kit-name").value.trim() || kit.name;
+      const content = JSON.stringify(kit, null, 2);
+      try {
+        await invoke("overwrite_artifact", { path: activePath, content });
+        statusEl.textContent = "Saved.";
+      } catch (err) {
+        statusEl.textContent = "Save failed: " + err;
+      }
+    };
+
+    // Duplicate — save as a new file under the kit name.
+    document.getElementById("duplicate").onclick = async () => {
+      const { kit, name } = buildKit();
       const content = JSON.stringify(kit, null, 2);
 
       if (invoke) {
-        // Save into the active project's artifacts/brand-kit/<name>.json.
         try {
           const path = await invoke("save_artifact", {
             kind: "brand-kit",
@@ -426,6 +448,8 @@
           if (data.name) document.getElementById("kit-name").value = data.name;
           loadFont(state.heading.family, state.heading.weight);
           loadFont(state.body.family, state.body.weight);
+          activePath = artifactPath;
+          document.getElementById("save").style.display = "";
         } catch (e) {
           statusEl.textContent = "Couldn't load artifact: " + e;
         }
