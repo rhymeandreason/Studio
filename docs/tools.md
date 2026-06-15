@@ -7,7 +7,9 @@ window but are still useful to have one click away.
 > For the design discussion on adding tools **without a rebuild** and giving
 > tools explicit **categories**, see
 > [docs/tools-dynamic-loading.md](tools-dynamic-loading.md). For a brainstorm of
-> tools to build next, see [docs/tool-ideas.md](tool-ideas.md).
+> tools to build next, see [docs/tool-ideas.md](tool-ideas.md). For how tools,
+> Claude, and the designer collaborate through shared **artifacts**, see
+> [docs/artifacts.md](artifacts.md).
 
 ## Using the design-system kit
 
