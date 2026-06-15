@@ -34,6 +34,16 @@ see [docs/tools-dynamic-loading.md](docs/tools-dynamic-loading.md)). Follow-ups:
   handles; `<studio-select>` for rich options). Native-styled via `kit.css`
   otherwise. (Rationale + per-component calls in the design doc.)
 
+## Tools
+- **Brand Explorer: vendor chosen fonts (offline kit).** `brand-explorer.html`
+  saves a JSON kit and previews fonts from the Google Fonts CDN. Optionally, on
+  save, download the chosen families' woff2 into the project and emit `@font-face`
+  so the exported kit needs no network (the "+ vendored font files" output option
+  we deferred). Honors vendor-not-CDN end-to-end.
+- **Brand Explorer: bigger / live font list.** Currently a curated ~60 baked in.
+  Could expand the list or pull the full set via a keyless service
+  (google-webfonts-helper) if coverage matters.
+
 ## Background removal
 Current impl (on `main`): native macOS **Vision** via a Swift helper
 (`src-tauri/swift/bgremove.swift`, `VNGenerateForegroundInstanceMaskRequest`),

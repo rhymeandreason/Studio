@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brand Explorer</title>
+<!-- Foundation + kit (tokens, then kit, then page styles). -->
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<script type="module" src="../kit/components.js"></script>
+<style>
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* Left: font browser. Right: the kit being built. */
+  .browser {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--hairline);
+  }
+  .kit {
+    flex: 0 0 320px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .browser-head {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--hairline-strong);
+    background: var(--elevated);
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .font-list { overflow-y: auto; padding: 8px 16px 24px; }
+  .font-card {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--hairline);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .font-sample { font-size: 24px; line-height: 1.1; min-width: 0; }
+  .font-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .font-name { font-family: var(--sans); font-size: 11px; color: var(--text-muted); }
+  .font-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+  .assign {
+    font-size: 11px; padding: 4px 8px; height: auto;
+  }
+  .assign.on { background: var(--sage); border-color: var(--sage); color: #fff; }
+
+  /* Kit panel */
+  .kit h2 { font-family: var(--serif); font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+  .roles { display: flex; flex-direction: column; gap: 10px; }
+  .role-preview {
+    border: 1px dashed var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    min-height: 52px;
+  }
+  .role-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-soft); }
+  #heading-sample { font-size: 26px; line-height: 1.15; }
+  #body-sample { font-size: 14px; line-height: 1.5; }
+
+  .swatch-row { display: flex; align-items: center; gap: 8px; }
+  .swatch-row .field { height: 28px; }
+  .swatch-row .btn-icon { height: 28px; width: 28px; }
+
+  .status { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-height: 14px; }
+</style>
+</head>
+<body>
+  <div class="browser">
+    <div class="browser-head">
+      <input id="search" class="field" placeholder="Search fonts…" />
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="font-list" id="font-list"></div>
+  </div>
+
+  <div class="kit">
+    <div>
+      <h2>Fonts</h2>
+      <div class="roles">
+        <div class="role-preview">
+          <div class="role-tag" id="heading-tag">Heading — none</div>
+          <div id="heading-sample">Almost before we knew it</div>
+        </div>
+        <div class="role-preview">
+          <div class="role-tag" id="body-tag">Body — none</div>
+          <div id="body-sample">The quick brown fox jumps over the lazy dog. 0123456789</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2>Colors</h2>
+      <div id="palette" style="display:flex; flex-direction:column; gap:8px;"></div>
+      <button class="btn btn-ghost" id="add-color" style="margin-top:8px;">
+        <span class="mi mi-sm">add</span> Add color
+      </button>
+    </div>
+
+    <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+      <button class="btn btn-primary" id="save">Save kit (JSON)</button>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    // ---- Curated top Google Fonts (family, category, sample weight) --------
+    // Baked in: no API key, instant, offline list. Previews load from the
+    // Google Fonts CDN on demand (the explorer browses Google's library).
+    const FONTS = [
+      // sans
+      ["Inter","sans"],["Roboto","sans"],["Open Sans","sans"],["Lato","sans"],
+      ["Montserrat","sans"],["Poppins","sans"],["Raleway","sans"],["Nunito","sans"],
+      ["Work Sans","sans"],["Source Sans 3","sans"],["Mulish","sans"],["Rubik","sans"],
+      ["DM Sans","sans"],["Manrope","sans"],["Karla","sans"],["Figtree","sans"],
+      ["Outfit","sans"],["Plus Jakarta Sans","sans"],["Hanken Grotesk","sans"],
+      ["Be Vietnam Pro","sans"],["Space Grotesk","sans"],["Josefin Sans","sans"],
+      ["Syne","sans"],["Onest","sans"],
+      // serif
+      ["Playfair Display","serif"],["Merriweather","serif"],["Lora","serif"],
+      ["PT Serif","serif"],["Source Serif 4","serif"],["Libre Baskerville","serif"],
+      ["EB Garamond","serif"],["Cormorant Garamond","serif"],["Crimson Text","serif"],
+      ["Bitter","serif"],["Spectral","serif"],["Newsreader","serif"],
+      ["Fraunces","serif"],["Instrument Serif","serif"],["Frank Ruhl Libre","serif"],
+      // display
+      ["Oswald","display"],["Bebas Neue","display"],["Anton","display"],
+      ["Archivo Black","display"],["Abril Fatface","display"],["Righteous","display"],
+      ["Comfortaa","display"],["Unbounded","display"],
+      // handwriting
+      ["Caveat","handwriting"],["Dancing Script","handwriting"],["Pacifico","handwriting"],
+      ["Lobster","handwriting"],["Satisfy","handwriting"],["Shadows Into Light","handwriting"],
+      ["Great Vibes","handwriting"],["Sacramento","handwriting"],
+      // mono
+      ["JetBrains Mono","mono"],["Roboto Mono","mono"],["Source Code Pro","mono"],
+      ["Fira Code","mono"],["IBM Plex Mono","mono"],["Space Mono","mono"],
+      ["Inconsolata","mono"],["DM Mono","mono"],
+    ].map(([family, category]) => ({ family, category }));
+
+    const CATEGORIES = ["all","sans","serif","display","handwriting","mono"];
+
+    // ---- Lazy font loading (inject Google Fonts CSS per family on demand) --
+    const loaded = new Set();
+    function loadFont(family) {
+      if (loaded.has(family)) return;
+      loaded.add(family);
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href =
+        "https://fonts.googleapis.com/css2?family=" +
+        family.replace(/ /g, "+") +
+        "&display=swap";
+      document.head.appendChild(link);
+    }
+
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          loadFont(e.target.dataset.family);
+          io.unobserve(e.target);
+        }
+      }
+    }, { root: document.getElementById("font-list"), rootMargin: "200px" });
+
+    // ---- State -------------------------------------------------------------
+    const state = {
+      filter: "all",
+      query: "",
+      heading: null,
+      body: null,
+      colors: [
+        { name: "Primary", value: "#6e6154" },
+        { name: "Background", value: "#f7f5f0" },
+        { name: "Text", value: "#2a2a28" },
+      ],
+    };
+
+    // ---- Font browser ------------------------------------------------------
+    const listEl = document.getElementById("font-list");
+
+    function renderChips() {
+      const chips = document.getElementById("chips");
+      chips.innerHTML = "";
+      for (const c of CATEGORIES) {
+        const el = document.createElement("button");
+        el.className = "chip" + (state.filter === c ? " active" : "");
+        el.textContent = c;
+        el.onclick = () => { state.filter = c; renderList(); };
+        chips.appendChild(el);
+      }
+    }
+
+    function renderList() {
+      renderChips();
+      listEl.innerHTML = "";
+      const q = state.query.trim().toLowerCase();
+      const items = FONTS.filter(
+        (f) =>
+          (state.filter === "all" || f.category === state.filter) &&
+          (!q || f.family.toLowerCase().includes(q)),
+      );
+      for (const f of items) {
+        const card = document.createElement("div");
+        card.className = "font-card";
+        card.dataset.family = f.family;
+
+        const meta = document.createElement("div");
+        meta.className = "font-meta";
+        const sample = document.createElement("div");
+        sample.className = "font-sample";
+        sample.style.fontFamily = `"${f.family}", ${cssFallback(f.category)}`;
+        sample.textContent = f.family;
+        const name = document.createElement("div");
+        name.className = "font-name";
+        name.textContent = f.category;
+        meta.append(sample, name);
+
+        const actions = document.createElement("div");
+        actions.className = "font-actions";
+        actions.append(
+          assignBtn("Head", f.family, "heading"),
+          assignBtn("Body", f.family, "body"),
+        );
+
+        card.append(meta, actions);
+        listEl.appendChild(card);
+        io.observe(card);
+      }
+    }
+
+    function assignBtn(label, family, role) {
+      const b = document.createElement("button");
+      b.className = "btn assign" + (state[role] === family ? " on" : "");
+      b.textContent = label;
+      b.onclick = () => { state[role] = family; loadFont(family); renderRoles(); renderList(); };
+      return b;
+    }
+
+    function cssFallback(cat) {
+      return cat === "serif" ? "serif"
+        : cat === "mono" ? "monospace"
+        : cat === "handwriting" ? "cursive"
+        : "sans-serif";
+    }
+
+    // ---- Kit panel: roles + colors ----------------------------------------
+    function renderRoles() {
+      const set = (role, tagId, sampleId) => {
+        const fam = state[role];
+        document.getElementById(tagId).textContent =
+          `${role === "heading" ? "Heading" : "Body"} — ${fam || "none"}`;
+        const s = document.getElementById(sampleId);
+        s.style.fontFamily = fam ? `"${fam}", sans-serif` : "var(--sans)";
+      };
+      set("heading", "heading-tag", "heading-sample");
+      set("body", "body-tag", "body-sample");
+    }
+
+    const paletteEl = document.getElementById("palette");
+    function renderPalette() {
+      paletteEl.innerHTML = "";
+      state.colors.forEach((c, i) => {
+        const row = document.createElement("div");
+        row.className = "swatch-row";
+
+        const name = document.createElement("input");
+        name.className = "field";
+        name.value = c.name;
+        name.oninput = () => (state.colors[i].name = name.value);
+
+        const color = document.createElement("studio-color");
+        color.setAttribute("value", c.value);
+        color.style.flex = "0 0 auto";
+        color.addEventListener("input", () => (state.colors[i].value = color.value));
+
+        const del = document.createElement("button");
+        del.className = "btn btn-icon btn-ghost";
+        del.innerHTML = '<span class="mi mi-sm">close</span>';
+        del.onclick = () => { state.colors.splice(i, 1); renderPalette(); };
+
+        row.append(name, color, del);
+        paletteEl.appendChild(row);
+      });
+    }
+
+    document.getElementById("add-color").onclick = () => {
+      state.colors.push({ name: "Color", value: "#6f7d6a" });
+      renderPalette();
+    };
+
+    document.getElementById("search").oninput = (e) => {
+      state.query = e.target.value;
+      renderList();
+    };
+
+    // ---- Save kit (JSON) ---------------------------------------------------
+    const statusEl = document.getElementById("status");
+    document.getElementById("save").onclick = async () => {
+      const kit = {
+        kind: "studio-brand-kit",
+        version: 1,
+        fonts: {
+          heading: state.heading,
+          body: state.body,
+        },
+        colors: state.colors,
+        savedAt: new Date().toISOString(),
+      };
+      const content = JSON.stringify(kit, null, 2);
+      const filename = "brand-kit.json";
+
+      const tauri = window.__TAURI__?.core?.invoke;
+      if (tauri) {
+        try {
+          const path = await tauri("save_tool_export", { filename, content });
+          statusEl.textContent = "Saved → " + path;
+        } catch (err) {
+          if (String(err) !== "__cancelled__")
+            statusEl.textContent = "Save failed: " + err;
+        }
+      } else {
+        // Standalone (opened in a browser): download fallback.
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+        a.download = filename;
+        a.click();
+        statusEl.textContent = "Downloaded " + filename;
+      }
+    };
+
+    // ---- Boot --------------------------------------------------------------
+    renderList();
+    renderRoles();
+    renderPalette();
+  </script>
+</body>
+</html>

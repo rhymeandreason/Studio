@@ -269,6 +269,13 @@ Rules for adopting any library here:
   explosion · WKWebView-clean · solves something genuinely hard. Explicitly out:
   anything imposing a build (React/Vue/Svelte) or a foreign look (full UI kits).
 
+> **Sanctioned CDN exception:** vendor-not-CDN governs the app's *own* shipped
+> UI. A tool whose purpose is to *browse* an external library may load from its
+> CDN at design time — e.g. `brand-explorer.html` loads Google Fonts on demand to
+> preview faces. Honor the principle at the *output* end: if such a tool exports a
+> kit, it should be able to vendor the chosen assets so the result is offline-clean
+> (the Brand Explorer's "vendor chosen fonts" option is backlogged).
+
 **Biggest risk:** not under-investing in machinery, but **API drift with no
 catalog** — Claude generating three subtly different ways to use a slider. Mitigate
 with a one-page **kit reference** (every tag, attributes, events, a snippet) that's
