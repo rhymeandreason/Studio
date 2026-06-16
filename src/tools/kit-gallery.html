@@ -37,38 +37,84 @@
   <!-- Buttons -->
   <section class="card">
     <div class="label">Buttons — .btn variants</div>
-    <div class="row" style="align-items:flex-end;">
-      <div class="stack" style="align-items:center;max-width:none;">
+    <div class="row" style="align-items:flex-start; gap:20px;">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">.btn</span>
         <button class="btn">Default</button>
       </div>
-      <div class="stack" style="align-items:center;max-width:none;">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">.btn-primary</span>
         <button class="btn btn-primary">Primary</button>
       </div>
-      <div class="stack" style="align-items:center;max-width:none;">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">.btn-secondary</span>
         <button class="btn btn-secondary">Secondary</button>
       </div>
-      <div class="stack" style="align-items:center;max-width:none;">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">.btn-ghost</span>
         <button class="btn btn-ghost">Ghost</button>
       </div>
-      <div class="stack" style="align-items:center;max-width:none;">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">.btn-icon</span>
         <button class="btn btn-icon" title="Icon"><span class="mi">add</span></button>
       </div>
-      <div class="stack" style="align-items:center;max-width:none;">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">disabled</span>
         <button class="btn" disabled>Disabled</button>
       </div>
-      <div class="stack" style="align-items:center;max-width:none;">
+    </div>
+    <div class="row" style="align-items:flex-start; gap:20px; margin-top:12px;">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">.btn-main</span>
         <button class="btn-main">Save</button>
       </div>
-      <div class="stack" style="align-items:center;max-width:none;">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">.btn-main--icon</span>
         <button class="btn-main btn-main--icon" title="Save icon"><span class="mi mi-sm">save</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Round icon button -->
+  <section class="card">
+    <div class="label">Round icon button — .btn-round</div>
+    <div class="row">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
+        <span class="out">.btn-round</span>
+        <button class="btn-round" title="Font"><span class="mi mi-sm">font_download</span></button>
+      </div>
+      <div class="stack" style="align-items:flex-start;max-width:none;">
+        <span class="out">hover</span>
+        <button class="btn-round" title="More"><span class="mi mi-sm">more_horiz</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Segmented toggle -->
+  <section class="card">
+    <div class="label">Segmented toggle — .seg-toggle</div>
+    <div class="row">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
+        <span class="out">.seg-toggle</span>
+        <div class="seg-toggle" id="seg-demo">
+          <button class="seg-toggle__btn is-active" data-seg="0"><span class="mi mi-sm">view_module</span></button>
+          <button class="seg-toggle__btn" data-seg="1"><span class="mi mi-sm">view_list</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pill tabs -->
+  <section class="card">
+    <div class="label">Pill tabs — .pill-tabs / .pill-tab</div>
+    <div class="row">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
+        <span class="out">.pill-tabs</span>
+        <div class="pill-tabs" id="pill-demo">
+          <button class="pill-tab is-active">Recent</button>
+          <button class="pill-tab">Name</button>
+          <button class="pill-tab">Kind</button>
+        </div>
       </div>
     </div>
   </section>
@@ -166,6 +212,22 @@
   <script type="module">
     import "../kit/components.js";
     import { enter, enterStagger, pop } from "../kit/motion.js";
+
+    // Pill tabs demo
+    document.getElementById("pill-demo").addEventListener("click", (e) => {
+      const btn = e.target.closest(".pill-tab");
+      if (!btn) return;
+      btn.closest(".pill-tabs").querySelectorAll(".pill-tab")
+        .forEach((b) => b.classList.toggle("is-active", b === btn));
+    });
+
+    // Seg toggle demo
+    document.getElementById("seg-demo").addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-toggle__btn");
+      if (!btn) return;
+      btn.closest(".seg-toggle").querySelectorAll(".seg-toggle__btn")
+        .forEach((b) => b.classList.toggle("is-active", b === btn));
+    });
 
     // Motion demos
     const boxes = [...document.querySelectorAll(".demo-box")];

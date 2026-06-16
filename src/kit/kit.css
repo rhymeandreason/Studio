@@ -372,6 +372,99 @@ select.field {
 .swatch-strip { display: flex; gap: 0; border-radius: var(--radius-sm); overflow: hidden; }
 .swatch-strip__item { flex: 1 1 0; height: 22px; }
 
+/* ---- Pill tabs ----------------------------------------------------------- */
+/* A pill-shaped tab strip with text labels; one tab active at a time.
+ * Usage:
+ *   <div class="pill-tabs">
+ *     <button class="pill-tab is-active">Recent</button>
+ *     <button class="pill-tab">Name</button>
+ *   </div>
+ */
+
+.pill-tabs {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 2px;
+}
+.pill-tab {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--sans);
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.pill-tab:hover { color: var(--text); }
+.pill-tab.is-active {
+    background: var(--elevated);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
+}
+
+/* ---- Icon button (round) ------------------------------------------------- */
+/* A circular icon-only button with a hairline border. */
+
+.btn-round {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.btn-round:hover {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--text);
+}
+
+/* ---- Segmented toggle ---------------------------------------------------- */
+/* A pill-shaped container holding 2–4 icon buttons; one is active at a time.
+ * Usage:
+ *   <div class="seg-toggle">
+ *     <button class="seg-toggle__btn is-active"><span class="mi">view_module</span></button>
+ *     <button class="seg-toggle__btn"><span class="mi">view_list</span></button>
+ *   </div>
+ */
+
+.seg-toggle {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    background: var(--elevated);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+}
+.seg-toggle__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: calc(var(--radius) - 2px);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+}
+.seg-toggle__btn:hover { color: var(--text); }
+.seg-toggle__btn.is-active {
+    background: var(--accent);
+    color: var(--accent-contrast, #fff);
+}
+
 /* ---- Title strip (minimal-window convention) ----------------------------- */
 
 /* A ~34px draggable strip at the top of a tool window; pair with an empty
