@@ -20,7 +20,7 @@
 
   /* Three columns: slide reel · stage · inspector. */
   .reel {
-    flex: 0 0 168px;
+    flex: 0 0 200px;
     border-right: 1px solid var(--hairline);
     display: flex;
     flex-direction: column;
@@ -33,11 +33,13 @@
     flex-direction: column;
     gap: 8px;
   }
-  .reel-list { overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .reel-list { overflow-y: auto; padding: 14px 14px 14px 2px; display: flex; flex-direction: column; gap: 8px; }
+  .reel-row { display: flex; align-items: center; gap: 8px; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .reel-num { flex: 0 0 16px; text-align: right; font-size: 11px; font-family: var(--mono); color: var(--text-soft); }
   .thumb {
     position: relative;
-    flex: 0 0 auto;        /* keep 16:9; don't compress when the reel is tall */
-    width: 100%;
+    flex: 1 1 auto;        /* fills the row beside the number */
+    min-width: 0;
     aspect-ratio: 16 / 9;
     border: 1px solid var(--hairline-strong);
     border-radius: var(--radius-sm);
@@ -45,16 +47,11 @@
     cursor: pointer;
     background: #fff;
   }
-  .thumb { touch-action: none; user-select: none; -webkit-user-select: none; }
   .thumb.selected { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
   .thumb.active { outline: 2px solid var(--accent); outline-offset: 1px; }
   body.reordering { cursor: grabbing; }
-  body.reordering .thumb { pointer-events: none; }
+  body.reordering .reel-row { pointer-events: none; }
   .drop-line { height: 0; border-top: 2px solid var(--accent); margin: -5px 0 3px; border-radius: 2px; }
-  .thumb__num {
-    position: absolute; top: 3px; left: 5px; z-index: 2;
-    font-size: 10px; font-family: var(--mono); color: var(--text-soft);
-  }
   /* The scaled-down render lives in here. */
   .thumb__stage { position: absolute; top: 0; left: 0; transform-origin: top left; }
 
@@ -111,7 +108,7 @@
   .slot--unused { opacity: .45; }
   .slot--unused:focus-within { opacity: 1; }
 
-  .layout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .layout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 12px; }
   .layout-cell { display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
   .layout-opt {
     aspect-ratio: 16 / 9; border: 1px solid var(--hairline-strong);
@@ -124,7 +121,7 @@
   .layout-cell.active .layout-cell__name { color: var(--accent); }
 
   /* Theme presets as mini Title-slide preview cards */
-  .theme-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .theme-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 12px; }
   .theme-card { cursor: pointer; }
   .theme-card__preview { aspect-ratio: 16 / 9; border: 1px solid var(--hairline-strong); border-radius: var(--radius-sm); overflow: hidden; position: relative; background: #fff; }
   .theme-card.active .theme-card__preview { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -494,15 +491,19 @@
     function renderReel() {
       reel.innerHTML = "";
       state.slides.forEach((slide, i) => {
+        const row = document.createElement("div");
+        row.className = "reel-row";
+        const num = document.createElement("div");
+        num.className = "reel-num"; num.textContent = i+1;
         const thumb = document.createElement("div");
         thumb.className = "thumb" + (i===current?" active":"") + (selected.has(i)?" selected":"");
-        thumb.innerHTML = `<div class="thumb__num">${i+1}</div>`;
         const stage = document.createElement("div");
         stage.className = "thumb__stage";
         stage.appendChild(renderSlide(slide, state.theme));
         thumb.appendChild(stage);
-        thumb.addEventListener("pointerdown", (e) => startThumbDrag(e, i));
-        reel.appendChild(thumb);
+        row.append(num, thumb);
+        row.addEventListener("pointerdown", (e) => startThumbDrag(e, i));
+        reel.appendChild(row);
         // scale the 1280-wide render down to the thumb width
         requestAnimationFrame(() => {
           const w = thumb.clientWidth; const s = w/1280;
@@ -562,17 +563,17 @@
     }
     // Insertion index (0..n) from a pointer Y over the reel.
     function dropIndexAt(y){
-      const thumbs = [...reel.querySelectorAll(".thumb")];
-      for (let k=0;k<thumbs.length;k++){
-        const r = thumbs[k].getBoundingClientRect();
+      const rows = [...reel.querySelectorAll(".reel-row")];
+      for (let k=0;k<rows.length;k++){
+        const r = rows[k].getBoundingClientRect();
         if (y < r.top + r.height/2) return k;
       }
-      return thumbs.length;
+      return rows.length;
     }
     function showDropLine(idx){
       const line = document.createElement("div"); line.className="drop-line"; line.id="drop-line";
-      const thumbs = reel.querySelectorAll(".thumb");
-      reel.insertBefore(line, thumbs[idx] || null);
+      const rows = reel.querySelectorAll(".reel-row");
+      reel.insertBefore(line, rows[idx] || null);
     }
     function clearDropLine(){ document.getElementById("drop-line")?.remove(); }
     // Move the given slide objects so they sit at insertion index `target`
