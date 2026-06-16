@@ -51,18 +51,15 @@ export async function renderArtifacts() {
     return;
   }
 
-  // Header: title + actions.
-  const head = el("div", "artifacts__head");
-  head.appendChild(el("h2", "artifacts__title", { textContent: "Artifacts" }));
-  const actions = el("div", "artifacts__actions");
-  actions.appendChild(
-    actionBtn("add", "New brand kit", () =>
-      invoke("open_tool", { file: EDITOR["brand-kit"], query: null }),
-    ),
+  // Toolbar.
+  const toolbar = el("div", "ws-toolbar");
+  const newKitBtn = el("button", "btn-add", { type: "button" });
+  newKitBtn.innerHTML = `<span class="mi mi-sm">add</span>Brand kit`;
+  newKitBtn.addEventListener("click", () =>
+    invoke("open_tool", { file: EDITOR["brand-kit"], query: null }),
   );
-  actions.appendChild(actionBtn("refresh", "Refresh", renderArtifacts, true));
-  head.appendChild(actions);
-  root.appendChild(head);
+  toolbar.appendChild(newKitBtn);
+  root.appendChild(toolbar);
 
   let items = [];
   try {
