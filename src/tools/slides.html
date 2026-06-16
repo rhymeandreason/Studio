@@ -109,7 +109,7 @@
   .slot--unused:focus-within { opacity: 1; }
 
   .layout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 12px; }
-  .layout-cell { display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+  .layout-cell { display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
   .layout-opt {
     aspect-ratio: 16 / 9; border: 1px solid var(--hairline-strong);
     border-radius: var(--radius-sm); position: relative;
@@ -117,7 +117,7 @@
   }
   .layout-cell.active .layout-opt { outline: 2px solid var(--accent); outline-offset: 1px; }
   .layout-opt svg { width: 100%; height: 100%; display: block; }
-  .layout-cell__name { text-align: center; font-size: 10px; color: var(--text-soft); }
+  .layout-cell__name { text-align: center; font-size: 10px; color: var(--text-muted); font-family:system-ui;}
   .layout-cell.active .layout-cell__name { color: var(--accent); }
 
   /* Theme presets as mini Title-slide preview cards */
@@ -126,8 +126,8 @@
   .theme-card__preview { aspect-ratio: 16 / 9; border: 1px solid var(--hairline-strong); border-radius: var(--radius-sm); overflow: hidden; position: relative; background: #fff; }
   .theme-card.active .theme-card__preview { outline: 2px solid var(--accent); outline-offset: 1px; }
   .theme-card__stage { position: absolute; top: 0; left: 0; transform-origin: top left; }
-  .theme-card__meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; }
-  .theme-card__name { font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .theme-card__meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 8px; }
+  .theme-card__name { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family:system-ui;}
   .theme-card.active .theme-card__name { color: var(--accent); }
   .theme-card__chips { display: flex; gap: 3px; flex: 0 0 auto; }
   .theme-card__chips span { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
@@ -219,6 +219,7 @@
   <div class="inspector" id="inspector"></div>
 
   <script type="module">
+    import { initDevInspect } from "../devinspect.js";
     const marked = window.marked;
     const invoke = window.__TAURI__?.core?.invoke;
 
@@ -961,6 +962,7 @@
       loadThemeFonts(state.theme);
       initColoris();
       initImageImport();
+      initDevInspect();
       renderAll();
       // Mark the loaded (or default) state as already-saved, then enable auto-save.
       lastSaved = snapshot();
