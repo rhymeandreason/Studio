@@ -33,8 +33,10 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
 - **Claude window** (in-app `src/claude/` + standalone `companion/`; per-session
   Artifacts/Code cwd toggle) — [docs/claude-window.md](docs/claude-window.md)
 - **Git windows** — `src/git/`. [docs/git.md](docs/git.md)
+- **Design system** (Runes — tokens, kit classes, `<studio-*>` components) —
+  [docs/DESIGN.md](docs/DESIGN.md)
 - **Tools** (single-file HTML utilities in `src/tools/`, kit-styled;
-  `kit-gallery.html` is the styleguide) — [docs/tools.md](docs/tools.md),
+  `kit-gallery.html` is the living reference) — [docs/tools.md](docs/tools.md),
   [docs/tools-dynamic-loading.md](docs/tools-dynamic-loading.md),
   [docs/tool-ideas.md](docs/tool-ideas.md)
 - **Interaction model** (shared selection + keyboard) — `selection.js` /

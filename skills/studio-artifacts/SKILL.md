@@ -105,4 +105,7 @@ Rules:
   links). `**bold**` renders in the accent color.
 - `image` slots are **project-relative paths** (e.g. `media/chart.png`) — point
   at files already in the project's `media/` folder.
+- Optional `imageFit` on an image slide controls how the image sits in its
+  frame: `"cover"` (default, fills and crops) or `"contain"` (fits the whole
+  image, letterboxed).
 - `savedAt` = current ISO 8601 timestamp; `version` = 1.

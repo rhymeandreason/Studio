@@ -132,7 +132,23 @@
   .row > * { flex: 1; min-width: 0; }
   .status { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-height: 14px; padding: 0 14px 12px; }
   .img-row { display: flex; gap: 6px; align-items: center; }
-  .img-row .preview { width: 40px; height: 28px; object-fit: cover; border-radius: 3px; border: 1px solid var(--hairline); background: var(--elevated); }
+  .img-row .field { flex: 1; min-width: 0; }
+  .img-row .preview { width: 40px; height: 28px; object-fit: cover; border-radius: 3px; border: 1px solid var(--hairline); background: var(--elevated); flex: 0 0 auto; }
+  .img-row .btn-icon { flex: 0 0 auto; }
+  .img-name { flex: 1; min-width: 0; font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .img-name--empty { color: var(--text-soft); font-style: italic; }
+
+  /* Media picker overlay */
+  .picker-overlay { position: fixed; inset: 0; z-index: 50; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(3px); display: flex; flex-direction: column; }
+  .picker-bar { padding: 14px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--hairline); }
+  .picker-bar h3 { font-family: var(--serif); font-size: 14px; flex: 1; }
+  .picker-grid { flex: 1; overflow-y: auto; padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: 112px; gap: 12px; align-content: start; }
+  .picker-tile { height: 112px; border: 1px solid var(--hairline-strong); border-radius: var(--radius-sm); overflow: hidden; cursor: pointer; background: var(--elevated); position: relative; }
+  .picker-tile:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .picker-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .picker-tile span { position: absolute; bottom: 0; left: 0; right: 0; padding: 4px 6px; font-size: 10px; background: linear-gradient(transparent, rgba(0,0,0,.6)); color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .picker-empty { padding: 40px; text-align: center; color: var(--text-muted); grid-column: 1 / -1; }
+  body.dropping::after { content: "Drop to add image"; position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 14%, transparent); border: 3px dashed var(--accent); color: var(--accent); font-family: var(--serif); font-size: 22px; pointer-events: none; }
 
   /* ---- The slide renderer's own styles (shared by canvas + thumbs + export) ----
      Scoped under .slide so they can be serialized into exports verbatim. */
@@ -280,6 +296,49 @@
       } catch { return null; }
     }
 
+    // Convert an absolute path (returned by import_media / list_media / paste_image)
+    // to the project-relative form we store on slides.
+    function toRel(abs) {
+      if (!abs) return abs;
+      if (projectRoot && abs.startsWith(projectRoot + "/")) return abs.slice(projectRoot.length + 1);
+      return abs;
+    }
+
+    // Set the current slide's image (used by drop + paste). Stores even when the
+    // active layout has no image slot — the always-visible Image field surfaces it.
+    function setCurrentImage(rel) {
+      const slide = state.slides[current];
+      if (!slide) return;
+      slide.image = rel;
+      renderAll();
+      statusEl.textContent = "Image set: " + rel;
+    }
+
+    // ---------- Media picker ----------
+    // Grid of the active project's media/ images; click one to pick it.
+    async function openMediaPicker(onPick) {
+      if (!invoke || !projectRoot) { statusEl.textContent = "No active project — type a media path instead."; return; }
+      const overlay = document.createElement("div"); overlay.className = "picker-overlay";
+      overlay.innerHTML = `<div class="picker-bar"><h3>Project media</h3><button class="btn btn-secondary" id="pk-close">Close</button></div><div class="picker-grid" id="pk-grid"></div>`;
+      document.body.appendChild(overlay);
+      const close = () => overlay.remove();
+      overlay.querySelector("#pk-close").onclick = close;
+      overlay.onclick = (e) => { if (e.target === overlay) close(); };
+      const grid = overlay.querySelector("#pk-grid");
+      let items = [];
+      try { items = (await invoke("list_media", { path: projectRoot })).filter(m => m.kind === "image"); }
+      catch (e) { grid.innerHTML = `<div class="picker-empty">Couldn't read media: ${e}</div>`; return; }
+      if (!items.length) { grid.innerHTML = `<div class="picker-empty">No images in this project's media/ folder yet. Drop or paste one onto a slide, or add via Studio's Media tab.</div>`; return; }
+      for (const m of items) {
+        const tile = document.createElement("div"); tile.className = "picker-tile";
+        tile.innerHTML = `<span>${m.name}</span>`;
+        const rel = toRel(m.path);
+        resolveImage(rel).then(u => { if (u) { const img = document.createElement("img"); img.src = u; tile.prepend(img); } });
+        tile.onclick = () => { onPick(rel); close(); };
+        grid.appendChild(tile);
+      }
+    }
+
     // ---------- Slide rendering ----------
     // Returns an .slide element for a given slide + theme. `resolved` maps image
     // refs to data URLs (or web paths in export mode).
@@ -306,9 +365,10 @@
         el.style.color = t.colors.text;
       }
 
+      const fit = slide.imageFit || "cover";   // how the image sits in its frame
       const img = (ref, ph) => {
         const url = resolved[ref] ?? (ref && imgCache.get(ref));
-        return url ? `<img src="${url}">` : `<div class="img-placeholder">${ph}</div>`;
+        return url ? `<img src="${url}" style="object-fit:${fit}">` : `<div class="img-placeholder">${ph}</div>`;
       };
 
       let inner = "";
@@ -325,7 +385,7 @@
           inner = `<div class="slide__inner l-quote"><blockquote>${esc(slide.quote)}</blockquote>${slide.attribution?`<div class="attr">— ${esc(slide.attribution)}</div>`:""}</div>`; break;
         case "image-full":
           { const url = resolved[slide.image] ?? (slide.image && imgCache.get(slide.image));
-            inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${url?`<img class="full-img" src="${url}">`:`<div class="img-placeholder" style="height:100%">No image</div>`}${slide.caption?`<div class="cap">${esc(slide.caption)}</div>`:""}</div>`; }
+            inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${url?`<img class="full-img" src="${url}" style="object-fit:${fit}">`:`<div class="img-placeholder" style="height:100%">No image</div>`}${slide.caption?`<div class="cap">${esc(slide.caption)}</div>`:""}</div>`; }
           break;
         case "image-text":
           inner = `<div class="slide__inner l-image-text"><h1>${esc(slide.title)}</h1><div class="split"><div>${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}</div><div class="deck-body">${md(slide.body)}</div></div></div>`; break;
@@ -427,9 +487,21 @@
           const row = document.createElement("div"); row.className="img-row";
           const prev = document.createElement("img"); prev.className="preview";
           resolveImage(slide[key]).then(u=>{ if(u) prev.src=u; });
-          const inp = document.createElement("input"); inp.className="field"; inp.placeholder="media/photo.jpg";
-          inp.value = slide[key]||""; inp.oninput = () => { slide[key]=inp.value.trim(); scheduleRender(); resolveImage(slide[key]).then(u=>{if(u)prev.src=u;}); };
-          row.append(prev, inp); wrap.appendChild(row);
+          const nameEl = document.createElement("div"); nameEl.className="img-name";
+          nameEl.textContent = slide[key] ? slide[key].split("/").pop() : "No image";
+          if (!slide[key]) nameEl.classList.add("img-name--empty");
+          const browse = document.createElement("button");
+          browse.className = "btn btn-ghost btn-icon"; browse.title = "Choose from media"; browse.innerHTML = `<span class="mi mi-sm">photo_library</span>`;
+          browse.onclick = () => openMediaPicker(rel => { slide[key]=rel; renderAll(); });
+          row.append(prev, nameEl, browse); wrap.appendChild(row);
+          // Fit: how the image sits in its frame.
+          const fitSel = document.createElement("select"); fitSel.className="field"; fitSel.style.marginTop="6px";
+          for (const [v,t] of [["cover","Fill frame (crop)"],["contain","Fit whole image"]]) {
+            const o=document.createElement("option"); o.value=v; o.textContent=t; fitSel.appendChild(o);
+          }
+          fitSel.value = slide.imageFit || "cover";
+          fitSel.onchange = () => { slide.imageFit = fitSel.value; scheduleRender(); };
+          wrap.appendChild(fitSel);
         } else {
           const ta = document.createElement(kind==="md"?"textarea":"input");
           ta.className = "field"; ta.value = slide[key]||"";
@@ -647,6 +719,39 @@
     // ---------- Coloris ----------
     function initColoris(){ const sc=document.createElement("studio-color"); sc.style.display="none"; document.body.appendChild(sc); requestAnimationFrame(()=>sc.remove()); }
 
+    // ---------- Drop + paste to import an image into the project's media/ ----
+    // Drop a file anywhere on the window, or Cmd/Ctrl+V a copied image; the file
+    // lands in media/ (via Studio's import_media / paste_image) and is set on the
+    // current slide. The OS drop overlay is handled by Tauri's drag-drop event.
+    function initImageImport(){
+      if (!invoke || !window.__TAURI__?.event) return;
+      const { listen } = window.__TAURI__.event;
+      listen("tauri://drag-enter", () => document.body.classList.add("dropping"));
+      listen("tauri://drag-leave", () => document.body.classList.remove("dropping"));
+      listen("tauri://drag-drop", async (e) => {
+        document.body.classList.remove("dropping");
+        if (!projectRoot) { statusEl.textContent = "Save the deck first so images have a project to import into."; return; }
+        const paths = (e.payload && e.payload.paths) || [];
+        if (!paths.length) return;
+        try {
+          const imported = await invoke("import_media", { projectPath: projectRoot, files: paths });
+          if (imported && imported.length) setCurrentImage(toRel(imported[imported.length - 1]));
+          else statusEl.textContent = "No image in the dropped files.";
+        } catch(err){ statusEl.textContent = "Import failed: " + err; }
+      });
+      // Cmd/Ctrl+V — paste a clipboard image (ignore when typing in a field).
+      window.addEventListener("keydown", async (e) => {
+        if (!((e.metaKey || e.ctrlKey) && e.key === "v")) return;
+        const t = e.target;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+        if (!projectRoot) return;
+        try {
+          const p = await invoke("paste_image", { projectPath: projectRoot });
+          setCurrentImage(toRel(p));
+        } catch { /* no image on clipboard — ignore */ }
+      });
+    }
+
     // ---------- Boot ----------
     function deriveProjectRoot(p){ const m=p.match(/^(.*)\/artifacts\//); projectRoot = m? m[1] : null; }
     async function boot(){
@@ -664,6 +769,7 @@
       document.getElementById("deck-name").value = state.name;
       loadThemeFonts(state.theme);
       initColoris();
+      initImageImport();
       renderAll();
     }
     boot();
