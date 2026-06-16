@@ -94,7 +94,7 @@ function scheduleSave() {
 function setDirty(dirty) {
   const btn = document.getElementById("schedules-save");
   btn.disabled = !dirty;
-  btn.classList.toggle("btn-save", dirty);
+  btn.classList.toggle("btn-main", dirty);
   btn.innerHTML = dirty ? `${mi("check")}Save schedule` : `${mi("check")}Saved`;
 }
 

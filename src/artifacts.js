@@ -196,7 +196,7 @@ function emptyMsg(text) {
 }
 
 function actionBtn(icon, label, onClick, iconOnly = false) {
-  const b = el("button", "btn-save" + (iconOnly ? " btn-save--icon" : ""), {
+  const b = el("button", "btn-main" + (iconOnly ? " btn-main--icon" : ""), {
     type: "button",
     title: label,
   });

@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kit Gallery</title>
-<!-- Foundation + kit. Order matters: tokens, then kit, then page styles. -->
 <link rel="stylesheet" href="../tokens.css" />
 <link rel="stylesheet" href="../kit/kit.css" />
 <style>
@@ -17,35 +16,74 @@
     flex-direction: column;
     gap: 18px;
   }
-  h1 {
-    font-family: var(--serif);
-    font-size: 18px;
-    font-weight: 500;
-  }
+  h1 { font-family: var(--serif); font-size: 18px; font-weight: 500; }
   section { display: flex; flex-direction: column; gap: 12px; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .stack { display: flex; flex-direction: column; gap: 8px; max-width: 280px; }
   .demo-box {
     width: 44px; height: 44px; border-radius: var(--radius-sm);
-    background: var(--accent); opacity: 0; /* animated in */
+    background: var(--accent); opacity: 0;
   }
   .out { font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
+  .section-label {
+    font-family: var(--sans); font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-soft); margin-bottom: 2px;
+  }
 </style>
 </head>
 <body>
   <h1>Studio Kit — gallery</h1>
 
+  <!-- Buttons -->
   <section class="card">
-    <div class="label">Buttons</div>
-    <div class="row">
-      <button class="btn">Default</button>
-      <button class="btn btn-primary">Primary</button>
-      <button class="btn btn-ghost">Ghost</button>
-      <button class="btn btn-icon" title="Icon"><span class="mi">add</span></button>
-      <button class="btn" disabled>Disabled</button>
+    <div class="label">Buttons — .btn variants</div>
+    <div class="row" style="align-items:flex-end;">
+      <div class="stack" style="align-items:center;max-width:none;">
+        <span class="out">.btn</span>
+        <button class="btn">Default</button>
+      </div>
+      <div class="stack" style="align-items:center;max-width:none;">
+        <span class="out">.btn-primary</span>
+        <button class="btn btn-primary">Primary</button>
+      </div>
+      <div class="stack" style="align-items:center;max-width:none;">
+        <span class="out">.btn-secondary</span>
+        <button class="btn btn-secondary">Secondary</button>
+      </div>
+      <div class="stack" style="align-items:center;max-width:none;">
+        <span class="out">.btn-ghost</span>
+        <button class="btn btn-ghost">Ghost</button>
+      </div>
+      <div class="stack" style="align-items:center;max-width:none;">
+        <span class="out">.btn-icon</span>
+        <button class="btn btn-icon" title="Icon"><span class="mi">add</span></button>
+      </div>
+      <div class="stack" style="align-items:center;max-width:none;">
+        <span class="out">disabled</span>
+        <button class="btn" disabled>Disabled</button>
+      </div>
+      <div class="stack" style="align-items:center;max-width:none;">
+        <span class="out">.btn-main</span>
+        <button class="btn-main">Save</button>
+      </div>
+      <div class="stack" style="align-items:center;max-width:none;">
+        <span class="out">.btn-main--icon</span>
+        <button class="btn-main btn-main--icon" title="Save icon"><span class="mi mi-sm">save</span></button>
+      </div>
     </div>
   </section>
 
+  <!-- Toolbar + btn-add -->
+  <section class="card">
+    <div class="label">Toolbar + .btn-add</div>
+    <div class="toolbar">
+      <button class="btn-add"><span class="mi mi-sm">add</span>New item</button>
+      <button class="btn-add"><span class="mi mi-sm">folder_open</span>Open</button>
+      <button class="btn-add" disabled><span class="mi mi-sm">add</span>Disabled</button>
+    </div>
+  </section>
+
+  <!-- Fields -->
   <section class="card">
     <div class="label">Fields</div>
     <div class="stack">
@@ -59,6 +97,7 @@
     </div>
   </section>
 
+  <!-- Range -->
   <section class="card">
     <div class="label">Range</div>
     <input class="range" type="range" min="0" max="100" value="50"
@@ -66,6 +105,7 @@
     <div class="out" id="range-out">50</div>
   </section>
 
+  <!-- Color picker -->
   <section class="card">
     <div class="label">Color — &lt;studio-color&gt; (Coloris)</div>
     <div class="row">
@@ -74,6 +114,42 @@
     </div>
   </section>
 
+  <!-- Swatch grid -->
+  <section class="card">
+    <div class="label">Color swatch grid — .swatch-grid / .swatch-chip</div>
+    <div class="swatch-grid" id="swatch-grid"></div>
+  </section>
+
+  <!-- Swatch strip -->
+  <section class="card">
+    <div class="label">Swatch strip — .swatch-strip (compact, used in preview cards)</div>
+    <div class="swatch-strip" style="width:200px;">
+      <div class="swatch-strip__item" style="background:#2a2a28;"></div>
+      <div class="swatch-strip__item" style="background:#a85a4a;"></div>
+      <div class="swatch-strip__item" style="background:#f7f5f0;"></div>
+      <div class="swatch-strip__item" style="background:#efece5;"></div>
+      <div class="swatch-strip__item" style="background:#2a2a28;"></div>
+    </div>
+  </section>
+
+  <!-- Preview card -->
+  <section class="card">
+    <div class="label">Preview card — .preview-card in .preview-grid</div>
+    <div class="preview-grid" id="preview-grid"></div>
+  </section>
+
+  <!-- Card selection -->
+  <section class="card">
+    <div class="label">.card.is-selected</div>
+    <div class="row">
+      <div class="card" style="width:120px;padding:12px;cursor:pointer;"
+           onclick="this.classList.toggle('is-selected')">Click to select</div>
+      <div class="card is-selected" style="width:120px;padding:12px;cursor:pointer;"
+           onclick="this.classList.toggle('is-selected')">Selected</div>
+    </div>
+  </section>
+
+  <!-- Motion -->
   <section class="card">
     <div class="label">Motion (kit/motion.js)</div>
     <div class="row">
@@ -91,25 +167,66 @@
     import "../kit/components.js";
     import { enter, enterStagger, pop } from "../kit/motion.js";
 
+    // Motion demos
     const boxes = [...document.querySelectorAll(".demo-box")];
-    const show = (els) => els.forEach((b) => (b.style.opacity = "0"));
-
-    document.getElementById("m-enter").onclick = () => {
-      show(boxes); boxes.forEach((b) => enter(b));
-    };
-    document.getElementById("m-stagger").onclick = () => {
-      show(boxes); enterStagger(boxes, { each: 0.06 });
-    };
-    document.getElementById("m-pop").onclick = () => {
-      boxes.forEach((b) => (b.style.opacity = "1"));
-      boxes.forEach((b) => pop(b));
-    };
-    // Show boxes once on load.
+    const reset = () => boxes.forEach((b) => (b.style.opacity = "0"));
+    document.getElementById("m-enter").onclick = () => { reset(); boxes.forEach((b) => enter(b)); };
+    document.getElementById("m-stagger").onclick = () => { reset(); enterStagger(boxes, { each: 0.06 }); };
+    document.getElementById("m-pop").onclick = () => { boxes.forEach((b) => (b.style.opacity = "1")); boxes.forEach((b) => pop(b)); };
     boxes.forEach((b) => enter(b));
 
+    // Color picker
     const color = document.getElementById("color");
-    const colorOut = document.getElementById("color-out");
-    color.addEventListener("input", () => (colorOut.textContent = color.value));
+    color.addEventListener("input", () => (document.getElementById("color-out").textContent = color.value));
+
+    // Swatch grid demo
+    const swatchColors = [
+      { name: "Primary", value: "#2a2a28" },
+      { name: "Accent", value: "#a85a4a" },
+      { name: "Background", value: "#f7f5f0" },
+      { name: "Surface", value: "#efece5" },
+      { name: "Text", value: "#2a2a28" },
+    ];
+    const grid = document.getElementById("swatch-grid");
+    for (const c of swatchColors) {
+      const chip = document.createElement("div");
+      chip.className = "swatch-chip";
+      chip.innerHTML = `
+        <div class="swatch-chip__block" style="background:${c.value};"></div>
+        <input class="swatch-chip__name" value="${c.name}" />
+        <div class="swatch-chip__hex">${c.value}</div>
+        <button class="swatch-chip__del" title="Remove">×</button>
+      `;
+      grid.appendChild(chip);
+    }
+
+    // Preview card grid demo
+    const kits = [
+      { name: "Editorial Mono", h: "Fraunces", b: "Newsreader", colors: ["#2a2a28","#a85a4a","#f7f5f0","#efece5","#2a2a28"] },
+      { name: "Nordic Stoneware", h: "Cormorant Garamond", b: "Work Sans", colors: ["#2e3338","#8aa39b","#f5f4f1","#e3e1dc","#23262a"] },
+      { name: "Midnight Glaze", h: "Spectral", b: "Inter", colors: ["#1f2a3c","#5b8fb0","#0f151f","#22303f","#e8edf2"] },
+    ];
+    const pgrid = document.getElementById("preview-grid");
+    for (const kit of kits) {
+      const card = document.createElement("div");
+      card.className = "preview-card";
+      card.onclick = () => card.classList.toggle("is-selected");
+      card.innerHTML = `
+        <div class="preview-card__body">
+          <div>
+            <div style="font-family:'${kit.h}',serif;font-size:20px;line-height:1.1;color:var(--text);">${kit.h}</div>
+            <div style="font-family:'${kit.b}',sans-serif;font-size:13px;color:var(--text-muted);margin-top:2px;">${kit.b}</div>
+          </div>
+          <div class="swatch-strip">
+            ${kit.colors.map(c => `<div class="swatch-strip__item" style="background:${c};"></div>`).join("")}
+          </div>
+        </div>
+        <div class="preview-card__foot">
+          <span class="preview-card__name">${kit.name}</span>
+        </div>
+      `;
+      pgrid.appendChild(card);
+    }
   </script>
 </body>
 </html>

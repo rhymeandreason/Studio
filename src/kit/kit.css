@@ -64,11 +64,81 @@
     background: var(--surface);
 }
 
+/* Secondary — muted filled, for paired actions next to Primary. */
+.btn-secondary {
+    background: var(--surface);
+    border-color: var(--hairline-strong);
+    color: var(--text-muted);
+}
+.btn-secondary:hover {
+    background: var(--elevated);
+    color: var(--text);
+}
+
 /* Icon-only — square, for a single .mi glyph. */
 .btn-icon {
     width: 30px;
     padding: 0;
 }
+
+/* Add — dashed "add something" button for toolbars. */
+.btn-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 1px dashed var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 7px 12px;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.btn-add:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.btn-add:disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Save — pill action button (dark filled). .btn-main is an alias. */
+.btn-main,
+.btn-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--text);
+    color: var(--bg);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    padding: 9px 18px;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.15s;
+}
+.btn-main:hover,
+.btn-main:hover { opacity: 0.88; }
+.btn-main:active,
+.btn-main:active { transform: scale(0.98); }
+
+/* Icon-only variant — ghost, no fill or border. */
+.btn-main--icon {
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    padding: 6px;
+}
+.btn-main--icon:hover { background: transparent; opacity: 1; color: var(--text); }
 
 /* ---- Fields (text, number, styled-native select) ------------------------- */
 
@@ -142,6 +212,21 @@ select.field {
     box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
+/* ---- Toolbar ------------------------------------------------------------- */
+
+/* A flex row for btn-add / action buttons above a panel. */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.toolbar .btn-add:disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
+}
+
 /* ---- Card & label -------------------------------------------------------- */
 
 .card {
@@ -151,6 +236,10 @@ select.field {
     box-shadow: var(--shadow-sm);
     padding: 16px;
 }
+.card.is-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
 
 .label {
     font-family: var(--sans);
@@ -159,6 +248,129 @@ select.field {
     letter-spacing: 0.06em;
     color: var(--text-muted);
 }
+
+/* ---- Preview card (artifact-card pattern) -------------------------------- */
+/* A card with a preview area on top and a labeled footer below.
+ * Typically placed in a .preview-grid. */
+
+.preview-card {
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--elevated);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color var(--dur-fast) var(--ease-standard);
+}
+.preview-card:hover { border-color: var(--hairline-strong); }
+.preview-card.is-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.preview-card__body {
+    height: 120px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: var(--surface);
+}
+
+.preview-card__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-top: 1px solid var(--hairline);
+}
+
+.preview-card__name {
+    font-size: 13px;
+    color: var(--text);
+}
+
+/* A responsive grid of preview-cards. */
+.preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+/* ---- Color swatch grid --------------------------------------------------- */
+/* Square color chips: block on top, name + hex below.
+ * Click the block to open a Coloris picker (wire up data-coloris). */
+
+.swatch-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.swatch-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+}
+.swatch-chip__block {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(0,0,0,0.08);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.swatch-chip__name {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: center;
+    width: 56px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: text;
+    border: none;
+    background: transparent;
+    padding: 0;
+    font-family: var(--sans);
+    outline: none;
+}
+.swatch-chip__name:focus {
+    color: var(--text);
+    text-decoration: underline;
+}
+.swatch-chip__hex {
+    font-size: 9px;
+    color: var(--text-soft);
+    font-family: var(--mono);
+    text-align: center;
+    width: 56px;
+}
+.swatch-chip__del {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--elevated);
+    border: 1px solid var(--hairline-strong);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+    color: var(--text-muted);
+}
+.swatch-chip:hover .swatch-chip__del { display: flex; }
+
+/* Inline color swatches — compact strip (brand-kit preview). */
+.swatch-strip { display: flex; gap: 0; border-radius: var(--radius-sm); overflow: hidden; }
+.swatch-strip__item { flex: 1 1 0; height: 22px; }
 
 /* ---- Title strip (minimal-window convention) ----------------------------- */
 

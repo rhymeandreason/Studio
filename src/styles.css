@@ -144,14 +144,14 @@ body {
 }
 
 /* Pill buttons */
-.btn-add.btn-save {
+.btn-add.btn-main {
     background: #000;
     color: #fff;
     border-color: #000;
 }
 
-.btn-launch,
-.btn-save {
+.btn-main,
+.btn-main {
     flex: 0 0 auto;
     background: var(--text);
     color: var(--bg);
@@ -171,17 +171,17 @@ body {
     gap: 6px;
 }
 
-.btn-launch:hover,
-.btn-save:hover {
+.btn-main:hover,
+.btn-main:hover {
     opacity: 0.88;
 }
 
-.btn-launch:active,
-.btn-save:active {
+.btn-main:active,
+.btn-main:active {
     transform: scale(0.98);
 }
 
-.btn-launch:disabled {
+.btn-main:disabled {
     opacity: 0.55;
     cursor: default;
 }
@@ -2752,7 +2752,8 @@ td.ntable__total-cell {
     font-weight: 500;
 }
 .artifacts__actions { display: flex; gap: 8px; }
-.btn-save--icon { padding: 6px; }
+.btn-main--icon { background: transparent; color: var(--text-muted); border-radius: var(--radius-sm); padding: 6px; }
+.btn-main--icon:hover { opacity: 1; color: var(--text); }
 .artifacts__empty { color: var(--text-muted); font-size: 13px; max-width: 42ch; }
 .artifacts__kind {
     font-size: 11px;
