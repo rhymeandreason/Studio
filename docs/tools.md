@@ -1,15 +1,10 @@
 # Tools
 
-"Tools" are small single-purpose widgets (unit converter, bento grid maker,
-git diff viewer, icon maker, …) that don't belong as panels in Studio's main
+"Tools" are small single-purpose widgets (bento grid maker,
+git diff viewer…) that don't belong as panels in Studio's main
 window but are still useful to have one click away.
 
-> For the design discussion on adding tools **without a rebuild** and giving
-> tools explicit **categories**, see
-> [docs/tools-dynamic-loading.md](tools-dynamic-loading.md). For a brainstorm of
-> tools to build next, see [docs/tool-ideas.md](tool-ideas.md). For how tools,
-> Claude, and the designer collaborate through shared **artifacts**, see
-> [docs/artifacts.md](artifacts.md).
+ For how tools, Claude, and the designer collaborate through shared **artifacts**, see [docs/artifacts.md](artifacts.md).
 
 ## Using the design-system kit
 
@@ -68,7 +63,7 @@ alphabetically. To control which tools appear and in what order, edit
 ```json
 [
   { "file": "bento-grid.html", "name": "Bento Grid" },
-  { "file": "unit-converter.html" }
+  { "file": "unit-converter.html", "name": "Unit Converter" }
 ]
 ```
 
@@ -79,20 +74,7 @@ alphabetically. To control which tools appear and in what order, edit
 - If `Tools.json` is missing or invalid, Studio falls back to scanning all
   `*.html` files in `tools/`.
 
-## Custom tools from outside the repo
 
-Not currently supported — only `*.html` files under `src/tools/` (bundled
-into `frontendDist`) can be opened, because IPC/`save_tool_export` requires
-the `tauri://localhost` protocol, and that protocol only serves embedded
-`frontendDist` content.
-
-To let users import a tool from an arbitrary folder later, the path is a
-**custom URI scheme** (e.g. `tool://`) backed by a Rust handler that reads
-from a user directory (e.g. `~/Library/Application Support/Studio/tools/`)
-and serves it with a real origin — analogous to what `tauri://` does for
-`frontendDist`. Windows using that scheme would need the same `tool-*`
-capability grant for `save_tool_export` to keep working. Until that's built,
-new tools have to live in `src/tools/` and ship with Studio.
 
 ## Saving exports to the active project
 
@@ -123,33 +105,51 @@ inside Studio (e.g. opened directly in a browser for testing).
 ## Title bar conventions
 
 By default tool windows get a normal title bar showing the file's stem (e.g.
-`bento-grid.html` → "bento-grid"). A tool can opt into a custom look by
-special-casing its filename in `open_tool_window_near`
-(`src-tauri/src/lib.rs`):
-
-- **Untitled / blank title bar** — pass an empty string to `.title(...)`.
-  Used by `daily-notes.html` since "daily-notes" adds nothing for a small
-  utility window.
-- **Title bar tinted to match the tool's background** — set
-  `.title_bar_style(TitleBarStyle::Transparent)` and
-  `.background_color(Color(r, g, b, 255))` to the tool's own `--bg`. This
-  makes the traffic-light area blend into the page instead of showing the
-  default black/white bar; pair it with extra top padding (~34px) on the
-  tool's first visible element so content doesn't sit under the traffic
-  lights, and `data-tauri-drag-region` on that element so the window is still
-  draggable.
+`bento-grid.html` → "Bento Grid"). The user may ask for the 'Minimal window style', instructions below:
 
 ### Minimal window style
 
-The combination of the two options above is the **minimal window style**: an
-**empty native title** (`.title("")`) plus a transparent, `--bg`-tinted title
-bar, so the OS chrome disappears entirely and the page owns the whole window.
-The window's own content provides whatever "title" it needs in an in-page
-**title strip** — a ~34px-tall `data-tauri-drag-region` element at the top
-(which keeps the window draggable). Used by the Daily Notes and Git companion
-windows; the Git window's strip shows `ProjectName ⎇ branch`. Reach for this
-for small, single-purpose windows where the folder/file stem in a normal title
-bar adds nothing.
+Empty native title + transparent `--bg`-tinted title bar, so OS chrome
+disappears and the page owns the whole window. The tool provides its own title
+in an in-page drag strip. To apply to a tool (e.g. `my-tool.html`):
+
+1. In `open_tool_window_near` (`src-tauri/src/lib.rs`), add the filename to
+   the `title` blank-string branch and add a `background_color` block:
+
+   ```rust
+   // title
+   let title = if filename == "daily-notes.html" || filename == "my-tool.html" { … }
+
+   // background color
+   if filename == "my-tool.html" {
+       builder = builder
+           .title_bar_style(tauri::TitleBarStyle::Transparent)
+           .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff)); // --bg
+   }
+   ```
+
+2. In the tool's HTML, add a drag strip as the **first element inside
+   `<body>`**. Put any in-page title text inside it:
+
+   ```html
+   <div class="titlebar" data-tauri-drag-region>
+     <div class="page-title">My Tool</div>
+   </div>
+   ```
+
+   ```css
+   .titlebar {
+     height: 52px;          /* enough room for traffic lights + heading */
+     display: flex;
+     align-items: flex-end;
+     padding-bottom: 10px;
+     -webkit-app-region: drag;
+   }
+   .page-title { font-size: 16px; font-weight: 600; }
+   ```
+
+   Remove any top `padding` from `body` — the titlebar div provides the
+   spacing instead. Run `cargo check` after the Rust edit.
 
 ## Dedicated tray icon + positioning
 
@@ -213,21 +213,35 @@ to force one.
 the affected tray icon(s) via `tray_by_id` + a fresh `build_*_tray` call,
 instead of requiring a restart.
 
-## Other options considered
-
-For future tools that outgrow a single HTML file, options in increasing
-order of effort:
+## How advanced is the tool?
 
 1. **Tray-launched HTML window (current approach)** — zero build step, just
    drop a file in `src/tools/`. Best for quick, self-contained widgets that
    want project-aware saves via `save_tool_export`.
-2. **System default browser** — `open`/`tauri-plugin-opener` on the file.
-   Even simpler, but it's a browser tab with browser chrome, no IPC, and no
-   project-aware save.
-3. **Separate standalone Tauri app** — its own folder/repo, own
+2. **Separate standalone Tauri app** — its own folder/repo, own
    `src-tauri/`, built and run independently. Worth it only if a tool needs
    real native capabilities (filesystem access beyond its own files,
-   subprocesses, etc.) beyond what a `tauri://` webview window can get.
+   subprocesses, etc.) beyond what a `tauri://` webview window can get. Currently Studio Claude is built this way.
 
-Start with (1); reach for (3) only when a tool's needs outgrow what a
+Start with (1); reach for (2) only when a tool's needs outgrow what a
 webview window can do.
+
+## Ideas
+
+For the design discussion on adding tools **without a rebuild** and giving tools explicit **categories**, see [docs/tools-dynamic-loading.md](tools-dynamic-loading.md). 
+For a brainstorm of tools to build next, see [docs/tool-ideas.md](tool-ideas.md).
+
+## Custom tools from outside the repo
+
+Not currently supported — only `*.html` files under `src/tools/` (bundled
+into `frontendDist`) can be opened, because IPC/`save_tool_export` requires
+the `tauri://localhost` protocol, and that protocol only serves embedded
+`frontendDist` content.
+
+To let users import a tool from an arbitrary folder later, the path is a
+**custom URI scheme** (e.g. `tool://`) backed by a Rust handler that reads
+from a user directory (e.g. `~/Library/Application Support/Studio/tools/`)
+and serves it with a real origin — analogous to what `tauri://` does for
+`frontendDist`. Windows using that scheme would need the same `tool-*`
+capability grant for `save_tool_export` to keep working. Until that's built,
+new tools have to live in `src/tools/` and ship with Studio.

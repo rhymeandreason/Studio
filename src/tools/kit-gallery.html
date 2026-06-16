@@ -12,23 +12,25 @@
     background: var(--bg);
     color: var(--text);
     font-family: system-ui, sans-serif;
-    padding: 40px 48px 80px;
+    padding: 0 48px 80px;
     display: flex;
     flex-direction: column;
     gap: 0;
     max-width: 860px;
   }
+  .titlebar {
+    height: 52px;
+    flex: 0 0 52px;
+    -webkit-app-region: drag;
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 10px;
+  }
   .page-title {
     font-family: var(--serif);
-    font-size: 22px;
+    font-size: 16px;
     font-weight: 600;
     letter-spacing: -0.01em;
-    margin-bottom: 8px;
-  }
-  .page-sub {
-    font-size: 13px;
-    color: var(--text-muted);
-    margin-bottom: 40px;
   }
 
   /* --- Section --- */
@@ -88,8 +90,9 @@
 </style>
 </head>
 <body>
-  <div class="page-title">Studio Design System</div>
-  <div class="page-sub">Runes — warm paper, Futura, hairline surfaces. tokens.css + kit.css.</div>
+  <div class="titlebar" data-tauri-drag-region>
+    <div class="page-title">Design System</div>
+  </div>
 
   <!-- Color tokens -->
   <section>
