@@ -99,6 +99,9 @@
   .insp-sec h3 { font-family: var(--serif); font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
   .insp-sec textarea.field { min-height: 64px; resize: vertical; line-height: 1.4; }
   .field-label { font-size: 11px; color: var(--text-soft); margin-bottom: 3px; display: block; }
+  input, textarea, select, .field { font-family: system-ui, sans-serif; }
+  .slot--unused { opacity: .45; }
+  .slot--unused:focus-within { opacity: 1; }
 
   .layout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .layout-cell { display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
@@ -208,6 +211,16 @@
       "image-full": { name: "Image full", slots: [["image","Image","image"],["caption","Caption"]] },
       "image-text": { name: "Image + Text", slots: [["title","Title"],["image","Image","image"],["body","Body","md"]] },
     };
+
+    // The union of every slot across layouts, in a stable order. The inspector
+    // shows all of these so values aren't lost (or hidden) when you switch
+    // layouts — the chosen layout just decides which ones actually render.
+    const ALL_SLOTS = [
+      ["title","Title"], ["subtitle","Subtitle"],
+      ["quote","Quote"], ["attribution","Attribution"],
+      ["body","Body","md"], ["left","Left","md"], ["right","Right","md"],
+      ["image","Image","image"], ["caption","Caption"],
+    ];
 
     // ---------- Theme presets ----------
     const PRESETS = [
@@ -400,11 +413,15 @@
       layoutSec.appendChild(grid);
       inspector.appendChild(layoutSec);
 
-      // Content slots
+      // Content slots — show every field, dimming ones the current layout hides.
       const content = sec("Content");
-      for (const [key, label, kind] of LAYOUTS[slide.layout].slots) {
+      const used = new Set(LAYOUTS[slide.layout].slots.map(s => s[0]));
+      for (const [key, label, kind] of ALL_SLOTS) {
+        const inLayout = used.has(key);
         const wrap = document.createElement("div");
+        wrap.className = "slot" + (inLayout ? "" : " slot--unused");
         const lab = document.createElement("label"); lab.className="field-label"; lab.textContent=label;
+        if (!inLayout) lab.textContent += " · hidden in this layout";
         wrap.appendChild(lab);
         if (kind === "image") {
           const row = document.createElement("div"); row.className="img-row";
