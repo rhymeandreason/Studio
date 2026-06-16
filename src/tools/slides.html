@@ -95,6 +95,9 @@
     flex-direction: column;
     overflow-y: auto;
   }
+  .insp-tabs { display: flex; border-bottom: 1px solid var(--hairline); position: sticky; top: 0; background: var(--bg); z-index: 1; }
+  .insp-tab { flex: 1; padding: 11px 0; border: none; background: transparent; cursor: pointer; font-family: var(--sans); font-size: 12px; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .insp-tab.active { color: var(--text); border-bottom-color: var(--accent); }
   .insp-sec { padding: 14px; border-bottom: 1px solid var(--hairline); display: flex; flex-direction: column; gap: 10px; }
   .insp-sec h3 { font-family: var(--serif); font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
   .insp-sec textarea.field { min-height: 64px; resize: vertical; line-height: 1.4; }
@@ -115,15 +118,17 @@
   .layout-cell__name { text-align: center; font-size: 10px; color: var(--text-soft); }
   .layout-cell.active .layout-cell__name { color: var(--accent); }
 
-  /* Theme presets as brand-kit-style preview cards */
-  .theme-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .theme-card { border: 1px solid var(--hairline-strong); border-radius: var(--radius-sm); overflow: hidden; cursor: pointer; background: var(--surface); }
-  .theme-card.active { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .theme-card__type { padding: 10px 10px 8px; }
-  .theme-card__h { font-size: 18px; line-height: 1.05; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .theme-card__b { font-size: 12px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .theme-card__sw { display: flex; }
-  .theme-card__sw span { flex: 1 1 0; height: 18px; }
+  /* Theme presets as mini Title-slide preview cards */
+  .theme-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .theme-card { cursor: pointer; }
+  .theme-card__preview { aspect-ratio: 16 / 9; border: 1px solid var(--hairline-strong); border-radius: var(--radius-sm); overflow: hidden; position: relative; background: #fff; }
+  .theme-card.active .theme-card__preview { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .theme-card__stage { position: absolute; top: 0; left: 0; transform-origin: top left; }
+  .theme-card__meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; }
+  .theme-card__name { font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .theme-card.active .theme-card__name { color: var(--accent); }
+  .theme-card__chips { display: flex; gap: 3px; flex: 0 0 auto; }
+  .theme-card__chips span { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
 
   .swatch-row { display: flex; align-items: center; gap: 8px; }
   .swatch-row .swatch-block { width: 26px; height: 26px; border-radius: var(--radius-sm); border: 1px solid var(--hairline-strong); cursor: pointer; flex: 0 0 auto; }
@@ -275,6 +280,7 @@
       slides: [ { layout: "title", title: "Your title", subtitle: "A subtitle" } ],
     };
     let current = 0;
+    let inspectorTab = "slide";   // "slide" (layout + content) | "theme"
     let activePath = null;       // set when opened via ?artifact=
     let projectRoot = null;      // derived from artifact path; for resolving images
     const imgCache = new Map();  // project-relative path -> data URL
@@ -478,6 +484,19 @@
       const slide = state.slides[current];
       inspector.innerHTML = "";
 
+      // Tab bar — Slide (layout + content) vs Theme.
+      const tabs = document.createElement("div"); tabs.className = "insp-tabs";
+      for (const [id, label] of [["slide","Slide"],["theme","Theme"]]) {
+        const b = document.createElement("button");
+        b.className = "insp-tab" + (inspectorTab===id?" active":"");
+        b.textContent = label;
+        b.onclick = () => { inspectorTab = id; renderInspector(); };
+        tabs.appendChild(b);
+      }
+      inspector.appendChild(tabs);
+
+      if (inspectorTab === "theme") { inspector.appendChild(themeSection()); return; }
+
       // Layout picker
       const layoutSec = sec("Layout");
       const grid = document.createElement("div"); grid.className = "layout-grid";
@@ -540,16 +559,18 @@
         wrap.append(lab, sel); content.appendChild(wrap);
       }
       inspector.appendChild(content);
-
-      // Theme
-      inspector.appendChild(themeSection());
     }
 
     function sec(title){ const s=document.createElement("div"); s.className="insp-sec"; const h=document.createElement("h3"); h.textContent=title; s.appendChild(h); return s; }
 
     function themeSection() {
       const s = sec("Theme");
-      // presets — brand-kit-style preview cards (type sample + swatch strip)
+      // presets — mini Title-slide preview cards. Use the deck's own first slide
+      // as the preview content when it's a title card; otherwise a generic sample.
+      const first = state.slides[0];
+      const sample = first && first.layout === "title"
+        ? { layout:"title", title:first.title||"Title", subtitle:first.subtitle||"" }
+        : { layout:"title", title:"Title", subtitle:"Subtitle" };
       const presetWrap = document.createElement("div"); presetWrap.className="theme-cards";
       PRESETS.forEach(p => {
         loadFont(p.fonts.heading.family, p.fonts.heading.weight);
@@ -558,12 +579,17 @@
         const card = document.createElement("div");
         card.className = "theme-card" + (isActive?" active":"");
         card.title = p.name;
-        const h = `<div class="theme-card__h" style="font-family:'${p.fonts.heading.family}',serif;font-weight:${p.fonts.heading.weight}">${p.name}</div>`;
-        const b = `<div class="theme-card__b" style="font-family:'${p.fonts.body.family}',sans-serif;font-weight:${p.fonts.body.weight}">${p.fonts.heading.family} · ${p.fonts.body.family}</div>`;
-        const sw = `<div class="theme-card__sw">${["bg","text","accent"].map(k=>`<span style="background:${p.colors[k]}"></span>`).join("")}</div>`;
-        card.innerHTML = `<div class="theme-card__type">${h}${b}</div>${sw}`;
+        // Mini Title-slide preview rendered with this preset's theme.
+        const preview = document.createElement("div"); preview.className = "theme-card__preview";
+        const stage = document.createElement("div"); stage.className = "theme-card__stage";
+        stage.appendChild(renderSlide(sample, p));
+        preview.appendChild(stage);
+        const meta = document.createElement("div"); meta.className = "theme-card__meta";
+        meta.innerHTML = `<div class="theme-card__name">${p.name}</div><div class="theme-card__chips">${["bg","text","accent"].map(k=>`<span style="background:${p.colors[k]}"></span>`).join("")}</div>`;
+        card.append(preview, meta);
         card.onclick = () => { state.theme = structuredClone(p); loadThemeFonts(state.theme); renderAll(); };
         presetWrap.appendChild(card);
+        requestAnimationFrame(() => { stage.style.transform = `scale(${preview.clientWidth/1280})`; });
       });
       s.appendChild(presetWrap);
       return s;
