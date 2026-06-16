@@ -115,13 +115,15 @@
   .layout-cell__name { text-align: center; font-size: 10px; color: var(--text-soft); }
   .layout-cell.active .layout-cell__name { color: var(--accent); }
 
-  .theme-presets { display: flex; flex-wrap: wrap; gap: 6px; }
-  .theme-chip {
-    display: flex; gap: 3px; padding: 4px; border: 1px solid var(--hairline-strong);
-    border-radius: 999px; cursor: pointer; align-items: center;
-  }
-  .theme-chip.active { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .theme-chip span { width: 12px; height: 12px; border-radius: 50%; }
+  /* Theme presets as brand-kit-style preview cards */
+  .theme-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .theme-card { border: 1px solid var(--hairline-strong); border-radius: var(--radius-sm); overflow: hidden; cursor: pointer; background: var(--surface); }
+  .theme-card.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .theme-card__type { padding: 10px 10px 8px; }
+  .theme-card__h { font-size: 18px; line-height: 1.05; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .theme-card__b { font-size: 12px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .theme-card__sw { display: flex; }
+  .theme-card__sw span { flex: 1 1 0; height: 18px; }
 
   .swatch-row { display: flex; align-items: center; gap: 8px; }
   .swatch-row .swatch-block { width: 26px; height: 26px; border-radius: var(--radius-sm); border: 1px solid var(--hairline-strong); cursor: pointer; flex: 0 0 auto; }
@@ -547,44 +549,23 @@
 
     function themeSection() {
       const s = sec("Theme");
-      // presets
-      const presetWrap = document.createElement("div"); presetWrap.className="theme-presets";
+      // presets — brand-kit-style preview cards (type sample + swatch strip)
+      const presetWrap = document.createElement("div"); presetWrap.className="theme-cards";
       PRESETS.forEach(p => {
-        const chip = document.createElement("div");
+        loadFont(p.fonts.heading.family, p.fonts.heading.weight);
+        loadFont(p.fonts.body.family, p.fonts.body.weight);
         const isActive = p.colors.bg===state.theme.colors.bg && p.fonts.heading.family===state.theme.fonts.heading.family;
-        chip.className = "theme-chip" + (isActive?" active":"");
-        chip.title = p.name;
-        for (const k of ["bg","accent","text"]) { const d=document.createElement("span"); d.style.background=p.colors[k]; chip.appendChild(d); }
-        chip.onclick = () => { state.theme = structuredClone(p); loadThemeFonts(state.theme); renderAll(); };
-        presetWrap.appendChild(chip);
+        const card = document.createElement("div");
+        card.className = "theme-card" + (isActive?" active":"");
+        card.title = p.name;
+        const h = `<div class="theme-card__h" style="font-family:'${p.fonts.heading.family}',serif;font-weight:${p.fonts.heading.weight}">${p.name}</div>`;
+        const b = `<div class="theme-card__b" style="font-family:'${p.fonts.body.family}',sans-serif;font-weight:${p.fonts.body.weight}">${p.fonts.heading.family} · ${p.fonts.body.family}</div>`;
+        const sw = `<div class="theme-card__sw">${["bg","text","accent"].map(k=>`<span style="background:${p.colors[k]}"></span>`).join("")}</div>`;
+        card.innerHTML = `<div class="theme-card__type">${h}${b}</div>${sw}`;
+        card.onclick = () => { state.theme = structuredClone(p); loadThemeFonts(state.theme); renderAll(); };
+        presetWrap.appendChild(card);
       });
       s.appendChild(presetWrap);
-
-      // fonts
-      for (const role of ["heading","body"]) {
-        const wrap = document.createElement("div"); wrap.className="row";
-        const fam = document.createElement("input"); fam.className="field"; fam.value=state.theme.fonts[role].family;
-        fam.title = role+" font"; fam.placeholder = role+" font";
-        fam.onchange = () => { state.theme.fonts[role].family=fam.value.trim(); loadThemeFonts(state.theme); renderAll(); };
-        const w = document.createElement("select"); w.className="field"; w.style.flex="0 0 72px";
-        [300,400,500,600,700,800].forEach(n=>{ const o=document.createElement("option"); o.value=n;o.textContent=n; w.appendChild(o); });
-        w.value = state.theme.fonts[role].weight;
-        w.onchange = () => { state.theme.fonts[role].weight=+w.value; loadThemeFonts(state.theme); renderAll(); };
-        const lab = document.createElement("label"); lab.className="field-label"; lab.textContent=role;
-        s.appendChild(lab); wrap.append(fam,w); s.appendChild(wrap);
-      }
-
-      // colors
-      for (const [key,label] of [["bg","Background"],["text","Text"],["accent","Accent"]]) {
-        const row = document.createElement("div"); row.className="swatch-row"; row.style.position="relative";
-        const trigger = document.createElement("input"); trigger.type="text"; trigger.className="coloris-trigger";
-        trigger.setAttribute("data-coloris",""); trigger.value=state.theme.colors[key];
-        const block = document.createElement("div"); block.className="swatch-block"; block.style.background=state.theme.colors[key];
-        block.onclick = () => trigger.click();
-        trigger.addEventListener("input", () => { state.theme.colors[key]=trigger.value; block.style.background=trigger.value; scheduleRender(); });
-        const lab = document.createElement("label"); lab.textContent=label;
-        row.append(trigger, block, lab); s.appendChild(row);
-      }
       return s;
     }
 
