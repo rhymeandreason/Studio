@@ -199,7 +199,6 @@
     <div class="stage-bar">
       <input class="title" id="deck-name" value="Untitled deck" spellcheck="false" />
       <button class="btn btn-ghost" id="export-web"><span class="mi mi-sm">public</span> Web</button>
-      <button class="btn btn-primary" id="save" style="display:none;">Save</button>
       <button class="btn btn-secondary" id="save-as">Save as…</button>
     </div>
     <div class="stage-scroll">
@@ -608,8 +607,8 @@
 
     // ---------- Render orchestration ----------
     let renderTimer;
-    function scheduleRender(){ clearTimeout(renderTimer); renderTimer=setTimeout(()=>{ renderStage(); renderReel(); }, 120); }
-    function renderAll(){ renderStage(); renderReel(); renderInspector(); }
+    function scheduleRender(){ clearTimeout(renderTimer); renderTimer=setTimeout(()=>{ renderStage(); renderReel(); }, 120); scheduleSave(); }
+    function renderAll(){ renderStage(); renderReel(); renderInspector(); scheduleSave(); }
 
     // ---------- Defaults for new slides ----------
     const SLIDE_DEFAULTS = {
@@ -627,7 +626,7 @@
       current++; renderAll();
     };
 
-    document.getElementById("deck-name").oninput = e => { state.name = e.target.value; };
+    document.getElementById("deck-name").oninput = e => { state.name = e.target.value; scheduleSave(); };
 
     // ---------- Save (artifact JSON) ----------
     const statusEl = document.getElementById("status");
@@ -635,17 +634,45 @@
       return { kind:"presentation", version:1, name:state.name||"Untitled deck",
                theme:state.theme, slides:state.slides, savedAt:new Date().toISOString() };
     }
-    document.getElementById("save").onclick = async () => {
-      try { await invoke("overwrite_artifact", { path:activePath, content:JSON.stringify(buildDoc(),null,2) }); statusEl.textContent="Saved."; }
-      catch(e){ statusEl.textContent="Save failed: "+e; }
-    };
+
+    // Debounced auto-save: overwrites the active artifact once the deck has a
+    // file (a brand-new deck is created on first edit, or via "Save as…").
+    let booted = false, saveTimer = null, saving = false, saveAgain = false, lastSaved = "";
+    // Content fingerprint (sans savedAt) so navigation/re-renders don't churn the file.
+    function snapshot(){ return JSON.stringify({ name: state.name, theme: state.theme, slides: state.slides }); }
+    function scheduleSave(){
+      if (!booted || !invoke) return;
+      if (snapshot() === lastSaved) return;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(autoSave, 700);
+    }
+    async function autoSave(){
+      if (saving) { saveAgain = true; return; }   // coalesce edits during a write
+      saving = true;
+      const snap = snapshot();
+      try {
+        const content = JSON.stringify(buildDoc(), null, 2);
+        if (activePath) {
+          await invoke("overwrite_artifact", { path: activePath, content });
+        } else {
+          // First save of a new deck — create the file and adopt it.
+          const p = await invoke("save_artifact", { kind:"presentation", name: state.name||"Untitled deck", content });
+          activePath = p; deriveProjectRoot(p);
+        }
+        lastSaved = snap;
+        statusEl.textContent = "Saved " + new Date().toLocaleTimeString();
+      } catch(e){ statusEl.textContent = "Save failed: " + e; }
+      saving = false;
+      if (saveAgain) { saveAgain = false; autoSave(); }
+    }
+
     document.getElementById("save-as").onclick = async () => {
       const name = state.name||"Untitled deck";
       const content = JSON.stringify(buildDoc(),null,2);
       if (invoke) {
-        try { const p = await invoke("save_artifact", { kind:"presentation", name, content }); statusEl.textContent="Saved → "+p;
-              // adopt the new file as the active artifact so subsequent Save overwrites it
-              activePath = p; deriveProjectRoot(p); document.getElementById("save").style.display=""; }
+        try { const p = await invoke("save_artifact", { kind:"presentation", name, content });
+              // adopt the new file so auto-save overwrites it from here on
+              activePath = p; deriveProjectRoot(p); statusEl.textContent="Saved → "+p; }
         catch(e){ statusEl.textContent="Save failed: "+e; }
       } else {
         const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([content],{type:"application/json"}));
@@ -790,7 +817,6 @@
           if (Array.isArray(data.slides) && data.slides.length) state.slides = data.slides;
           if (data.name) state.name = data.name;
           activePath = path; deriveProjectRoot(path);
-          document.getElementById("save").style.display="";
         } catch(e){ statusEl.textContent="Couldn't load deck: "+e; }
       }
       document.getElementById("deck-name").value = state.name;
@@ -798,6 +824,9 @@
       initColoris();
       initImageImport();
       renderAll();
+      // Mark the loaded (or default) state as already-saved, then enable auto-save.
+      lastSaved = snapshot();
+      booted = true;
     }
     boot();
   </script>
