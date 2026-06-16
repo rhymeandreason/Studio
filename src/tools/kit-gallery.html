@@ -7,113 +7,181 @@
 <link rel="stylesheet" href="../tokens.css" />
 <link rel="stylesheet" href="../kit/kit.css" />
 <style>
+  /* --- Page chrome --- */
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: var(--sans);
-    padding: 24px;
+    font-family: system-ui, sans-serif;
+    padding: 40px 48px 80px;
     display: flex;
     flex-direction: column;
     gap: 0;
+    max-width: 860px;
   }
-  h1 { font-family: var(--serif); font-size: 18px; font-weight: 500; margin-bottom: 24px; }
+  .page-title {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+  .page-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 40px;
+  }
+
+  /* --- Section --- */
   section {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 20px 0;
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 0 40px;
+    padding: 28px 0;
     border-top: 1px solid var(--hairline);
+    align-items: start;
   }
-  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .stack { display: flex; flex-direction: column; gap: 8px; max-width: 280px; }
-  .demo-box {
-    width: 44px; height: 44px; border-radius: var(--radius-sm);
-    background: var(--accent); opacity: 0;
+  .section-meta { display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }
+  .section-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.01em;
   }
-  .out { font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
-  .section-label {
-    font-family: var(--sans); font-size: 10px; text-transform: uppercase;
-    letter-spacing: 0.08em; color: var(--text-soft); margin-bottom: 2px;
+  .section-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
   }
+  .section-body { display: flex; flex-direction: column; gap: 20px; }
+
+  /* --- Component row within a section --- */
+  .comp { display: flex; flex-direction: column; gap: 6px; }
+  .comp-name {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text-soft);
+  }
+  .comp-caption {
+    font-size: 11px;
+    color: var(--text-soft);
+    margin-top: 2px;
+  }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .stack { display: flex; flex-direction: column; gap: 6px; }
+
+  /* --- Color tokens --- */
   .token-grid { display: flex; flex-wrap: wrap; gap: 10px; }
-  .token-chip { display: flex; flex-direction: column; gap: 6px; }
+  .token-chip { display: flex; flex-direction: column; gap: 5px; }
   .token-chip__swatch {
-    width: 56px; height: 56px;
+    width: 48px; height: 48px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--hairline-strong);
   }
-  .token-chip__name { font-family: var(--mono); font-size: 9px; color: var(--text-muted); width: 56px; }
+  .token-chip__name { font-family: var(--mono); font-size: 9px; color: var(--text-muted); width: 48px; line-height: 1.4; }
+
+  /* --- Motion demo boxes --- */
+  .demo-box {
+    width: 40px; height: 40px;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    opacity: 0;
+  }
 </style>
 </head>
 <body>
-  <h1>Studio Design System</h1>
+  <div class="page-title">Studio Design System</div>
+  <div class="page-sub">Runes — warm paper, Futura, hairline surfaces. tokens.css + kit.css.</div>
 
   <!-- Color tokens -->
   <section>
-    <div class="label">Color tokens</div>
-    <div class="token-grid">
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--bg);"></div><span class="token-chip__name">--bg</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--surface);"></div><span class="token-chip__name">--surface</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--elevated);"></div><span class="token-chip__name">--elevated</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--text);"></div><span class="token-chip__name">--text</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--text-muted);"></div><span class="token-chip__name">--text-muted</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--text-soft);"></div><span class="token-chip__name">--text-soft</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--accent);"></div><span class="token-chip__name">--accent</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--accent-soft);"></div><span class="token-chip__name">--accent-soft</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--accent-ring);"></div><span class="token-chip__name">--accent-ring</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--sage);"></div><span class="token-chip__name">--sage</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--sage-soft);"></div><span class="token-chip__name">--sage-soft</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--rose);"></div><span class="token-chip__name">--rose</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--hairline);"></div><span class="token-chip__name">--hairline</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--hairline-strong);"></div><span class="token-chip__name">--hairline-strong</span></div>
-      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--border);"></div><span class="token-chip__name">--border</span></div>
+    <div class="section-meta">
+      <div class="section-name">Color</div>
+      <div class="section-desc">Semantic tokens from tokens.css. Use these, not raw hex.</div>
+    </div>
+    <div class="section-body">
+      <div class="comp">
+        <div class="comp-name">Surfaces</div>
+        <div class="token-grid">
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--bg);"></div><span class="token-chip__name">--bg</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--surface);"></div><span class="token-chip__name">--surface</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--elevated);"></div><span class="token-chip__name">--elevated</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--border);"></div><span class="token-chip__name">--border</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--hairline);"></div><span class="token-chip__name">--hairline</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--hairline-strong);"></div><span class="token-chip__name">--hairline-strong</span></div>
+        </div>
+      </div>
+      <div class="comp">
+        <div class="comp-name">Text</div>
+        <div class="token-grid">
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--text);"></div><span class="token-chip__name">--text</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--text-muted);"></div><span class="token-chip__name">--text-muted</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--text-soft);"></div><span class="token-chip__name">--text-soft</span></div>
+        </div>
+      </div>
+      <div class="comp">
+        <div class="comp-name">Brand</div>
+        <div class="token-grid">
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--accent);"></div><span class="token-chip__name">--accent</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--accent-soft);"></div><span class="token-chip__name">--accent-soft</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--accent-ring);"></div><span class="token-chip__name">--accent-ring</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--sage);"></div><span class="token-chip__name">--sage</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--sage-soft);"></div><span class="token-chip__name">--sage-soft</span></div>
+          <div class="token-chip"><div class="token-chip__swatch" style="background:var(--rose);"></div><span class="token-chip__name">--rose</span></div>
+        </div>
+      </div>
     </div>
   </section>
 
   <!-- Typography -->
   <section>
-    <div class="label">Typography</div>
-    <div style="display:flex; flex-direction:column; gap:16px;">
-      <div>
-        <div class="out" style="margin-bottom:6px;">--sans · Futura</div>
-        <div style="font-family:var(--sans); font-size:28px; line-height:1.1;">The quick brown fox</div>
-        <div style="font-family:var(--sans); font-size:13px; color:var(--text-muted); margin-top:4px;">13px · Regular body text for UI labels and controls</div>
+    <div class="section-meta">
+      <div class="section-name">Typography</div>
+      <div class="section-desc">Three typefaces. All accessed via CSS variables.</div>
+    </div>
+    <div class="section-body">
+      <div class="comp">
+        <div class="comp-name">--sans · Futura</div>
+        <div style="font-family:var(--sans); font-size:26px; line-height:1.1;">The quick brown fox</div>
+        <div class="comp-caption">UI labels, controls, body copy · 13px default</div>
       </div>
-      <div>
-        <div class="out" style="margin-bottom:6px;">--serif · Futura (display)</div>
-        <div style="font-family:var(--serif); font-size:28px; font-weight:600; line-height:1.1;">The quick brown fox</div>
-        <div style="font-family:var(--serif); font-size:13px; color:var(--text-muted); margin-top:4px;">Used for headings, titles, wordmark</div>
+      <div class="comp">
+        <div class="comp-name">--serif · Futura (display weight)</div>
+        <div style="font-family:var(--serif); font-size:26px; font-weight:600; line-height:1.1;">The quick brown fox</div>
+        <div class="comp-caption">Headings, titles, wordmark</div>
       </div>
-      <div>
-        <div class="out" style="margin-bottom:6px;">--mono · JetBrains Mono</div>
-        <div style="font-family:var(--mono); font-size:13px; line-height:1.6;">#2a2a28 · rgba(42, 42, 40, 0.1) · 0.13s</div>
-        <div style="font-family:var(--mono); font-size:11px; color:var(--text-muted); margin-top:4px;">Values, tokens, code, status output</div>
+      <div class="comp">
+        <div class="comp-name">--mono · JetBrains Mono</div>
+        <div style="font-family:var(--mono); font-size:13px; line-height:1.6;">#2a2a28 · rgba(42, 42, 40, 0.1) · 0.13s cubic-bezier(0.2, 0, 0, 1)</div>
+        <div class="comp-caption">Tokens, values, code, status output</div>
       </div>
     </div>
   </section>
 
   <!-- Headings -->
   <section>
-    <div class="label">Headings</div>
-    <div style="display:flex; flex-direction:column; gap:20px;">
-      <div>
-        <div class="out" style="margin-bottom:6px;">Project name · serif 22px 600 −0.01em</div>
+    <div class="section-meta">
+      <div class="section-name">Headings</div>
+      <div class="section-desc">Scale from project name down to section label.</div>
+    </div>
+    <div class="section-body">
+      <div class="comp">
+        <div class="comp-name">Project name · serif 22px 600 −0.01em</div>
         <div style="font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-0.01em;">Ceramics Studio</div>
       </div>
-      <div>
-        <div class="out" style="margin-bottom:6px;">Page / panel title · serif 18px 500</div>
+      <div class="comp">
+        <div class="comp-name">Page title · serif 18px 500</div>
         <div style="font-family:var(--serif); font-size:18px; font-weight:500;">Design System</div>
       </div>
-      <div>
-        <div class="out" style="margin-bottom:6px;">Section title · serif 17px 500</div>
+      <div class="comp">
+        <div class="comp-name">Panel / section title · serif 17px 500</div>
         <div style="font-family:var(--serif); font-size:17px; font-weight:500;">Brand kits</div>
       </div>
-      <div>
-        <div class="out" style="margin-bottom:6px;">.eyebrow · serif 12px 600 uppercase +0.14em muted</div>
+      <div class="comp">
+        <div class="comp-name">.eyebrow · serif 12px 600 uppercase +0.14em</div>
         <div class="eyebrow">Projects</div>
       </div>
-      <div>
-        <div class="out" style="margin-bottom:6px;">.label · sans 11px uppercase +0.06em muted</div>
+      <div class="comp">
+        <div class="comp-name">.label · sans 11px uppercase +0.06em</div>
         <div class="label">Color tokens</div>
       </div>
     </div>
@@ -121,63 +189,75 @@
 
   <!-- Buttons -->
   <section>
-    <div class="label">Buttons</div>
-    <div class="row" style="align-items:flex-start; gap:20px;">
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.btn</span>
-        <button class="btn">Default</button>
-      </div>
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.btn-primary</span>
-        <button class="btn btn-primary">Primary</button>
-      </div>
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.btn-secondary</span>
-        <button class="btn btn-secondary">Secondary</button>
-      </div>
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.btn-ghost</span>
-        <button class="btn btn-ghost">Ghost</button>
-      </div>
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.btn-icon</span>
-        <button class="btn btn-icon" title="Icon"><span class="mi">add</span></button>
-      </div>
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">disabled</span>
-        <button class="btn" disabled>Disabled</button>
-      </div>
+    <div class="section-meta">
+      <div class="section-name">Buttons</div>
+      <div class="section-desc">All extend .btn base. Use .btn-primary for one CTA per surface.</div>
     </div>
-    <div class="row" style="align-items:flex-start; gap:20px; margin-top:12px;">
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.btn-main</span>
-        <button class="btn-main">Save</button>
+    <div class="section-body">
+      <div class="comp">
+        <div class="comp-name">.btn variants</div>
+        <div class="row">
+          <div class="stack"><span class="comp-name">.btn</span><button class="btn">Default</button></div>
+          <div class="stack"><span class="comp-name">.btn-primary</span><button class="btn btn-primary">Primary</button></div>
+          <div class="stack"><span class="comp-name">.btn-secondary</span><button class="btn btn-secondary">Secondary</button></div>
+          <div class="stack"><span class="comp-name">.btn-ghost</span><button class="btn btn-ghost">Ghost</button></div>
+          <div class="stack"><span class="comp-name">.btn-icon</span><button class="btn btn-icon"><span class="mi">add</span></button></div>
+          <div class="stack"><span class="comp-name">disabled</span><button class="btn" disabled>Disabled</button></div>
+        </div>
       </div>
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.btn-main--icon</span>
-        <button class="btn-main btn-main--icon" title="Save icon"><span class="mi mi-sm">save</span></button>
+      <div class="comp">
+        <div class="comp-name">.btn-main — pill action button</div>
+        <div class="row">
+          <div class="stack"><span class="comp-name">.btn-main</span><button class="btn-main">Save</button></div>
+          <div class="stack"><span class="comp-name">.btn-main--icon</span><button class="btn-main btn-main--icon"><span class="mi mi-sm">save</span></button></div>
+        </div>
+        <div class="comp-caption">Dark filled pill. --icon variant is ghost. .btn-launch is an alias.</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name">.btn-add — dashed add button for toolbars</div>
+        <div class="toolbar" style="margin:0;">
+          <button class="btn-add"><span class="mi mi-sm">add</span>New item</button>
+          <button class="btn-add" disabled><span class="mi mi-sm">add</span>Disabled</button>
+        </div>
+      </div>
+      <div class="comp">
+        <div class="comp-name">.btn-round — circular icon button</div>
+        <div class="row">
+          <button class="btn-round"><span class="mi mi-sm">text_fields</span></button>
+          <button class="btn-round"><span class="mi mi-sm">more_horiz</span></button>
+        </div>
+        <div class="comp-caption">Hairline border, no fill. Used in Notes toolbar and Lightbox.</div>
       </div>
     </div>
   </section>
 
-  <!-- Dropdown menu -->
+  <!-- Controls -->
   <section>
-    <div class="label">Dropdown menu </div>
-    <div class="row">
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.menu (always open)</span>
-        <div style="position:relative;height:130px;">
-          <div class="menu" style="position:relative;top:0;right:auto;display:flex;">
-            <button class="menu__item"><span class="mi mi-sm">edit</span>Edit</button>
-            <button class="menu__item"><span class="mi mi-sm">content_copy</span>Duplicate</button>
-            <div class="menu__sep"></div>
-            <button class="menu__item" disabled><span class="mi mi-sm">delete</span>Delete</button>
-          </div>
+    <div class="section-meta">
+      <div class="section-name">Controls</div>
+      <div class="section-desc">Segmented toggle, pill tabs, dropdown, fields, range.</div>
+    </div>
+    <div class="section-body">
+      <div class="comp">
+        <div class="comp-name">.seg-toggle — icon-based view switcher</div>
+        <div class="seg-toggle" id="seg-demo" style="width:fit-content;">
+          <button class="seg-toggle__btn is-active"><span class="mi mi-sm">view_module</span></button>
+          <button class="seg-toggle__btn"><span class="mi mi-sm">view_list</span></button>
         </div>
+        <div class="comp-caption">Active state uses --accent fill. From Notes view toggle.</div>
       </div>
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.dropdown (click to open)</span>
-        <div class="dropdown" id="drop-demo">
+      <div class="comp">
+        <div class="comp-name">.pill-tabs — text tab strip</div>
+        <div class="pill-tabs" id="pill-demo" style="width:fit-content;">
+          <button class="pill-tab is-active">Recent</button>
+          <button class="pill-tab">Name</button>
+          <button class="pill-tab">Kind</button>
+        </div>
+        <div class="comp-caption">Inset pill on --surface. From the media sort bar.</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name">.dropdown — compact labelled select</div>
+        <div class="dropdown" id="drop-demo" style="width:fit-content;">
           <button class="dropdown__btn" id="drop-btn">
             <span class="dropdown__swatch" style="background:#a85a4a;"></span>
             <span class="dropdown__label">Accent</span>
@@ -189,141 +269,100 @@
             <button class="menu__item dropdown__item" data-label="Slate" data-color="#5b8fb0">Slate</button>
           </div>
         </div>
+        <div class="comp-caption">Optional swatch. Checkmark on active item.</div>
       </div>
-    </div>
-  </section>
-
-  <!-- Round icon button -->
-  <section>
-    <div class="label">Round icon button</div>
-    <div class="row">
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.btn-round</span>
-        <button class="btn-round" title="Font"><span class="mi mi-sm">font_download</span></button>
+      <div class="comp">
+        <div class="comp-name">.menu — floating dropdown panel</div>
+        <div style="position:relative; height:118px;">
+          <div class="menu" style="position:relative;top:0;right:auto;display:flex;">
+            <button class="menu__item"><span class="mi mi-sm">edit</span>Edit</button>
+            <button class="menu__item"><span class="mi mi-sm">content_copy</span>Duplicate</button>
+            <div class="menu__sep"></div>
+            <button class="menu__item" disabled><span class="mi mi-sm">delete</span>Delete</button>
+          </div>
+        </div>
       </div>
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">hover</span>
-        <button class="btn-round" title="More"><span class="mi mi-sm">more_horiz</span></button>
+      <div class="comp">
+        <div class="comp-name">.field — text, select, textarea</div>
+        <div class="stack" style="max-width:260px;">
+          <input class="field" placeholder="Text field" />
+          <select class="field"><option>Styled native select</option><option>Option two</option></select>
+          <textarea class="field" rows="2" placeholder="Textarea"></textarea>
+        </div>
       </div>
-    </div>
-  </section>
-
-  <!-- Segmented toggle -->
-  <section>
-    <div class="label">Segmented toggle</div>
-    <div class="row">
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.seg-toggle</span>
-        <div class="seg-toggle" id="seg-demo">
-          <button class="seg-toggle__btn is-active" data-seg="0"><span class="mi mi-sm">view_module</span></button>
-          <button class="seg-toggle__btn" data-seg="1"><span class="mi mi-sm">view_list</span></button>
+      <div class="comp">
+        <div class="comp-name">.range</div>
+        <input class="range" type="range" min="0" max="100" value="50" style="max-width:260px;"
+               oninput="document.getElementById('range-out').textContent = this.value" />
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted);" id="range-out">50</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name">&lt;studio-color&gt; — Coloris color picker</div>
+        <div class="row">
+          <studio-color id="color" value="#6e6154"></studio-color>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted);" id="color-out">#6e6154</span>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Pill tabs -->
+  <!-- Cards & layout -->
   <section>
-    <div class="label">Pill tabs</div>
-    <div class="row">
-      <div class="stack" style="align-items:flex-start;max-width:none;">
-        <span class="out">.pill-tabs</span>
-        <div class="pill-tabs" id="pill-demo">
-          <button class="pill-tab is-active">Recent</button>
-          <button class="pill-tab">Name</button>
-          <button class="pill-tab">Kind</button>
+    <div class="section-meta">
+      <div class="section-name">Cards &amp; layout</div>
+      <div class="section-desc">Surface containers and grid patterns.</div>
+    </div>
+    <div class="section-body">
+      <div class="comp">
+        <div class="comp-name">.card — elevated surface with border</div>
+        <div class="row">
+          <div class="card" style="padding:12px;cursor:pointer;font-size:13px;" onclick="this.classList.toggle('is-selected')">Default · click to select</div>
+          <div class="card is-selected" style="padding:12px;cursor:pointer;font-size:13px;" onclick="this.classList.toggle('is-selected')">Selected</div>
+        </div>
+        <div class="comp-caption">.is-selected adds accent border + ring.</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name">.preview-card in .preview-grid</div>
+        <div class="preview-grid" id="preview-grid"></div>
+        <div class="comp-caption">Preview area on top, labeled footer below. Click to select.</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name">.swatch-strip — compact inline swatches</div>
+        <div class="swatch-strip" style="width:180px;">
+          <div class="swatch-strip__item" style="background:#2a2a28;"></div>
+          <div class="swatch-strip__item" style="background:#a85a4a;"></div>
+          <div class="swatch-strip__item" style="background:#f7f5f0;"></div>
+          <div class="swatch-strip__item" style="background:#efece5;"></div>
+          <div class="swatch-strip__item" style="background:#6f7d6a;"></div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- Toolbar + btn-add -->
-  <section>
-    <div class="label">Toolbar + .btn-add</div>
-    <div class="toolbar">
-      <button class="btn-add"><span class="mi mi-sm">add</span>New item</button>
-      <button class="btn-add"><span class="mi mi-sm">folder_open</span>Open</button>
-      <button class="btn-add" disabled><span class="mi mi-sm">add</span>Disabled</button>
-    </div>
-  </section>
-
-  <!-- Fields -->
-  <section>
-    <div class="label">Fields</div>
-    <div class="stack">
-      <input class="field" placeholder="Text field" />
-      <select class="field">
-        <option>Styled native select</option>
-        <option>Option two</option>
-        <option>Option three</option>
-      </select>
-      <textarea class="field" rows="3" placeholder="Textarea"></textarea>
-    </div>
-  </section>
-
-  <!-- Range -->
-  <section>
-    <div class="label">Range</div>
-    <input class="range" type="range" min="0" max="100" value="50"
-           oninput="document.getElementById('range-out').textContent = this.value" />
-    <div class="out" id="range-out">50</div>
-  </section>
-
-  <!-- Color picker -->
-  <section>
-    <div class="label">Color — &lt;studio-color&gt; (Coloris)</div>
-    <div class="row">
-      <studio-color id="color" value="#6e6154"></studio-color>
-      <span class="out" id="color-out">#6e6154</span>
-    </div>
-  </section>
-
-  <!-- Swatch grid -->
-  <section>
-    <div class="label">Color swatch grid — .swatch-grid / .swatch-chip</div>
-    <div class="swatch-grid" id="swatch-grid"></div>
-  </section>
-
-  <!-- Swatch strip -->
-  <section>
-    <div class="label">Swatch strip — .swatch-strip (compact, used in preview cards)</div>
-    <div class="swatch-strip" style="width:200px;">
-      <div class="swatch-strip__item" style="background:#2a2a28;"></div>
-      <div class="swatch-strip__item" style="background:#a85a4a;"></div>
-      <div class="swatch-strip__item" style="background:#f7f5f0;"></div>
-      <div class="swatch-strip__item" style="background:#efece5;"></div>
-      <div class="swatch-strip__item" style="background:#2a2a28;"></div>
-    </div>
-  </section>
-
-  <!-- Preview card -->
-  <section>
-    <div class="label">Preview card — .preview-card in .preview-grid</div>
-    <div class="preview-grid" id="preview-grid"></div>
-  </section>
-
-  <!-- Card selection -->
-  <section>
-    <div class="label">Card</div>
-    <div class="row">
-      <div class="card" style="width:120px;padding:12px;cursor:pointer;"
-           onclick="this.classList.toggle('is-selected')">Click to select</div>
-      <div class="card is-selected" style="width:120px;padding:12px;cursor:pointer;"
-           onclick="this.classList.toggle('is-selected')">Selected</div>
+      <div class="comp">
+        <div class="comp-name">.swatch-grid / .swatch-chip — editable color chips</div>
+        <div class="swatch-grid" id="swatch-grid"></div>
+        <div class="comp-caption">Click swatch to open Coloris picker. Name is editable inline.</div>
+      </div>
     </div>
   </section>
 
   <!-- Motion -->
   <section>
-    <div class="label">Motion (kit/motion.js)</div>
-    <div class="row">
-      <button class="btn" id="m-enter">enter</button>
-      <button class="btn" id="m-stagger">stagger</button>
-      <button class="btn" id="m-pop">pop</button>
+    <div class="section-meta">
+      <div class="section-name">Motion</div>
+      <div class="section-desc">kit/motion.js — enter, stagger, pop.</div>
     </div>
-    <div class="row" id="boxes">
-      <div class="demo-box"></div><div class="demo-box"></div>
-      <div class="demo-box"></div><div class="demo-box"></div>
+    <div class="section-body">
+      <div class="comp">
+        <div class="comp-name">Animations — click to trigger</div>
+        <div class="row">
+          <button class="btn" id="m-enter">enter()</button>
+          <button class="btn" id="m-stagger">enterStagger()</button>
+          <button class="btn" id="m-pop">pop()</button>
+        </div>
+        <div class="row" id="boxes" style="margin-top:12px;">
+          <div class="demo-box"></div><div class="demo-box"></div>
+          <div class="demo-box"></div><div class="demo-box"></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -331,7 +370,7 @@
     import "../kit/components.js";
     import { enter, enterStagger, pop } from "../kit/motion.js";
 
-    // Dropdown demo
+    // Dropdown
     const dropBtn = document.getElementById("drop-btn");
     const dropMenu = document.getElementById("drop-menu");
     dropBtn.onclick = () => dropMenu.hidden = !dropMenu.hidden;
@@ -344,45 +383,33 @@
       dropBtn.querySelector(".dropdown__swatch").style.background = item.dataset.color;
       dropMenu.hidden = true;
     });
-    document.addEventListener("click", (e) => {
-      if (!e.target.closest("#drop-demo")) dropMenu.hidden = true;
-    });
+    document.addEventListener("click", (e) => { if (!e.target.closest("#drop-demo")) dropMenu.hidden = true; });
 
-    // Pill tabs demo
+    // Pill tabs
     document.getElementById("pill-demo").addEventListener("click", (e) => {
       const btn = e.target.closest(".pill-tab");
       if (!btn) return;
-      btn.closest(".pill-tabs").querySelectorAll(".pill-tab")
-        .forEach((b) => b.classList.toggle("is-active", b === btn));
+      btn.closest(".pill-tabs").querySelectorAll(".pill-tab").forEach((b) => b.classList.toggle("is-active", b === btn));
     });
 
-    // Seg toggle demo
+    // Seg toggle
     document.getElementById("seg-demo").addEventListener("click", (e) => {
       const btn = e.target.closest(".seg-toggle__btn");
       if (!btn) return;
-      btn.closest(".seg-toggle").querySelectorAll(".seg-toggle__btn")
-        .forEach((b) => b.classList.toggle("is-active", b === btn));
+      btn.closest(".seg-toggle").querySelectorAll(".seg-toggle__btn").forEach((b) => b.classList.toggle("is-active", b === btn));
     });
-
-    // Motion demos
-    const boxes = [...document.querySelectorAll(".demo-box")];
-    const reset = () => boxes.forEach((b) => (b.style.opacity = "0"));
-    document.getElementById("m-enter").onclick = () => { reset(); boxes.forEach((b) => enter(b)); };
-    document.getElementById("m-stagger").onclick = () => { reset(); enterStagger(boxes, { each: 0.06 }); };
-    document.getElementById("m-pop").onclick = () => { boxes.forEach((b) => (b.style.opacity = "1")); boxes.forEach((b) => pop(b)); };
-    boxes.forEach((b) => enter(b));
 
     // Color picker
     const color = document.getElementById("color");
     color.addEventListener("input", () => (document.getElementById("color-out").textContent = color.value));
 
-    // Swatch grid demo
+    // Swatch grid
     const swatchColors = [
       { name: "Primary", value: "#2a2a28" },
       { name: "Accent", value: "#a85a4a" },
       { name: "Background", value: "#f7f5f0" },
       { name: "Surface", value: "#efece5" },
-      { name: "Text", value: "#2a2a28" },
+      { name: "Sage", value: "#6f7d6a" },
     ];
     const grid = document.getElementById("swatch-grid");
     for (const c of swatchColors) {
@@ -397,7 +424,7 @@
       grid.appendChild(chip);
     }
 
-    // Preview card grid demo
+    // Preview card grid
     const kits = [
       { name: "Editorial Mono", h: "Fraunces", b: "Newsreader", colors: ["#2a2a28","#a85a4a","#f7f5f0","#efece5","#2a2a28"] },
       { name: "Nordic Stoneware", h: "Cormorant Garamond", b: "Work Sans", colors: ["#2e3338","#8aa39b","#f5f4f1","#e3e1dc","#23262a"] },
@@ -414,9 +441,7 @@
             <div style="font-family:'${kit.h}',serif;font-size:20px;line-height:1.1;color:var(--text);">${kit.h}</div>
             <div style="font-family:'${kit.b}',sans-serif;font-size:13px;color:var(--text-muted);margin-top:2px;">${kit.b}</div>
           </div>
-          <div class="swatch-strip">
-            ${kit.colors.map(c => `<div class="swatch-strip__item" style="background:${c};"></div>`).join("")}
-          </div>
+          <div class="swatch-strip">${kit.colors.map(c=>`<div class="swatch-strip__item" style="background:${c};"></div>`).join("")}</div>
         </div>
         <div class="preview-card__foot">
           <span class="preview-card__name">${kit.name}</span>
@@ -424,6 +449,14 @@
       `;
       pgrid.appendChild(card);
     }
+
+    // Motion
+    const boxes = [...document.querySelectorAll(".demo-box")];
+    const reset = () => boxes.forEach((b) => (b.style.opacity = "0"));
+    document.getElementById("m-enter").onclick = () => { reset(); boxes.forEach((b) => enter(b)); };
+    document.getElementById("m-stagger").onclick = () => { reset(); enterStagger(boxes, { each: 0.06 }); };
+    document.getElementById("m-pop").onclick = () => { boxes.forEach((b) => (b.style.opacity = "1")); boxes.forEach((b) => pop(b)); };
+    boxes.forEach((b) => enter(b));
   </script>
 </body>
 </html>
