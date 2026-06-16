@@ -164,7 +164,7 @@
   .slide { width: 1280px; height: 720px; position: relative; box-sizing: border-box;
            display: flex; flex-direction: column; overflow: hidden;
            --pad: 96px; }
-  .slide__inner { flex: 1; display: flex; flex-direction: column; padding: var(--pad); min-height: 0; }
+  .slide__inner { flex: 1; display: flex; flex-direction: column; padding: var(--pad); min-height: 0; gap: 20px;}
   .slide h1 { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); margin: 0; line-height: 1.05; }
   .slide .kicker { font-family: var(--deck-body); font-weight: 600; text-transform: uppercase; letter-spacing: .12em; font-size: 22px; opacity: .7; margin: 0 0 18px; }
   .slide .deck-body { font-family: var(--deck-body); font-weight: var(--deck-body-w); line-height: 1.45; font-size: 34px; }
@@ -179,7 +179,7 @@
   .l-section { justify-content: center; align-items: flex-start; }
   .l-section h1 { font-size: 84px; }
   .l-section, .l-section .deck-body { color: var(--deck-bg); }
-  .l-title-body h1 { font-size: 64px; margin-bottom: 28px; }
+  .l-title-body h1 { font-size: 64px; margin-bottom: 50px; }
   .l-two-col .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; min-height: 0; }
   .l-two-col h1 { font-size: 60px; margin-bottom: 28px; }
   .l-quote { justify-content: center; }
@@ -190,9 +190,11 @@
   .l-image-full { padding: 0; }
   .l-image-full .full-img { width: 100%; height: 100%; object-fit: cover; }
   .l-image-full .cap { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 96px; font-family: var(--deck-body); font-size: 26px; background: linear-gradient(transparent, rgba(0,0,0,.6)); color: #fff; }
-  .l-image-text .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; min-height: 0; align-items: center; }
+  .l-image-text .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; min-height: 0; align-items: stretch; }
+  .l-image-text .split-media { min-height: 0; }
+  .l-image-text .split-img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+  .l-image-text .split-text { display: flex; flex-direction: column; justify-content: center; min-height: 0; }
   .l-image-text h1 { font-size: 56px; margin-bottom: 24px; }
-  .l-image-text .split-img { width: 100%; height: 100%; max-height: 528px; object-fit: cover; border-radius: 8px; }
   .img-placeholder { display: grid; place-items: center; width: 100%; height: 100%; min-height: 200px; background: color-mix(in srgb, var(--deck-text) 8%, transparent); color: var(--deck-text); opacity: .4; font-family: var(--deck-body); font-size: 24px; border-radius: 8px; }
 </style>
 </head>
@@ -419,7 +421,7 @@
             inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${url?`<img class="full-img" src="${url}" style="object-fit:${fit}">`:`<div class="img-placeholder" style="height:100%">No image</div>`}${slide.caption?`<div class="cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div>`; }
           break;
         case "image-text":
-          inner = `<div class="slide__inner l-image-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="split"><div>${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}</div><div class="deck-body" data-slot="body">${md(slide.body)}</div></div></div>`; break;
+          inner = `<div class="slide__inner l-image-text"><div class="split"><div class="split-media">${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}</div><div class="split-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="deck-body" data-slot="body">${md(slide.body)}</div></div></div></div>`; break;
         default:
           inner = `<div class="slide__inner"><h1>${esc(slide.title||"")}</h1></div>`;
       }
@@ -739,7 +741,7 @@
         case "two-col": g2=box(14,10,40,6,a)+box(14,24,32,4,g)+box(14,32,32,4,g)+box(54,24,32,4,g)+box(54,32,32,4,g); break;
         case "quote": g2=box(20,20,60,7,a)+box(20,32,40,7,a)+box(20,46,24,4,g); break;
         case "image-full": g2=box(0,0,100,56,g); break;
-        case "image-text": g2=box(10,16,38,30,g)+box(54,16,34,6,a)+box(54,28,34,4,g)+box(54,36,28,4,g); break;
+        case "image-text": g2=box(8,8,40,40,g)+box(54,16,34,7,a)+box(54,30,34,4,g)+box(54,38,28,4,g); break;
       }
       return `<svg viewBox="0 0 100 56" preserveAspectRatio="none">${g2}</svg>`;
     }
