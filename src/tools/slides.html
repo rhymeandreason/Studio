@@ -45,7 +45,12 @@
     cursor: pointer;
     background: #fff;
   }
+  .thumb { touch-action: none; user-select: none; -webkit-user-select: none; }
+  .thumb.selected { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
   .thumb.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  body.reordering { cursor: grabbing; }
+  body.reordering .thumb { pointer-events: none; }
+  .drop-line { height: 0; border-top: 2px solid var(--accent); margin: -5px 0 3px; border-radius: 2px; }
   .thumb__num {
     position: absolute; top: 3px; left: 5px; z-index: 2;
     font-size: 10px; font-family: var(--mono); color: var(--text-soft);
@@ -79,6 +84,12 @@
     font-family: var(--serif); font-size: 13px;
   }
   .stage-scroll { flex: 1 1 auto; overflow: auto; display: grid; place-items: center; padding: 28px; }
+  /* Click-to-edit text regions on the canvas. Ring uses currentColor (the
+     slide's text color) so it stays visible on light and dark backgrounds. */
+  .canvas .editable { cursor: text; outline: none; border-radius: 3px; transition: box-shadow .12s; user-select: none; }
+  .canvas .editable:focus { user-select: text; }
+  .canvas .editable:hover { box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent); }
+  .canvas .editable:focus { box-shadow: 0 0 0 1.5px color-mix(in srgb, currentColor 50%, transparent); }
   /* The editing canvas: a fixed-size 1280×720 slide, scaled to fit. */
   .canvas {
     width: 1280px; height: 720px;
@@ -280,6 +291,8 @@
       slides: [ { layout: "title", title: "Your title", subtitle: "A subtitle" } ],
     };
     let current = 0;
+    let selected = new Set([0]);   // indices of selected slides (multi-select)
+    let selAnchor = 0;             // anchor for shift-range selection
     let inspectorTab = "slide";   // "slide" (layout + content) | "theme"
     let activePath = null;       // set when opened via ?artifact=
     let projectRoot = null;      // derived from artifact path; for resolving images
@@ -393,26 +406,28 @@
         return url ? `<img src="${url}" style="object-fit:${fit}">` : `<div class="img-placeholder">${ph}</div>`;
       };
 
+      // data-slot tags an editable text region (used for click-to-edit on the
+      // canvas); harmless on thumbnails/export where it's ignored.
       let inner = "";
       switch (slide.layout) {
         case "title":
-          inner = `<div class="slide__inner l-title"><h1>${esc(slide.title)}</h1>${slide.subtitle?`<div class="subtitle">${esc(slide.subtitle)}</div>`:""}</div>`; break;
+          inner = `<div class="slide__inner l-title"><h1 data-slot="title">${esc(slide.title)}</h1>${slide.subtitle?`<div class="subtitle" data-slot="subtitle">${esc(slide.subtitle)}</div>`:""}</div>`; break;
         case "section":
-          inner = `<div class="slide__inner l-section"><h1>${esc(slide.title)}</h1></div>`; break;
+          inner = `<div class="slide__inner l-section"><h1 data-slot="title">${esc(slide.title)}</h1></div>`; break;
         case "title-body":
           { const cols = slide.columns === 2 ? ` style="column-count:2;column-gap:56px"` : "";
-            inner = `<div class="slide__inner l-title-body"><h1>${esc(slide.title)}</h1><div class="deck-body"${cols}>${md(slide.body)}</div></div>`; }
+            inner = `<div class="slide__inner l-title-body"><h1 data-slot="title">${esc(slide.title)}</h1><div class="deck-body" data-slot="body"${cols}>${md(slide.body)}</div></div>`; }
           break;
         case "two-col":
-          inner = `<div class="slide__inner l-two-col"><h1>${esc(slide.title)}</h1><div class="cols"><div class="deck-body">${md(slide.left)}</div><div class="deck-body">${md(slide.right)}</div></div></div>`; break;
+          inner = `<div class="slide__inner l-two-col"><h1 data-slot="title">${esc(slide.title)}</h1><div class="cols"><div class="deck-body" data-slot="left">${md(slide.left)}</div><div class="deck-body" data-slot="right">${md(slide.right)}</div></div></div>`; break;
         case "quote":
-          inner = `<div class="slide__inner l-quote"><blockquote>${esc(slide.quote)}</blockquote>${slide.attribution?`<div class="attr">— ${esc(slide.attribution)}</div>`:""}</div>`; break;
+          inner = `<div class="slide__inner l-quote"><blockquote data-slot="quote">${esc(slide.quote)}</blockquote>${slide.attribution?`<div class="attr">— <span data-slot="attribution">${esc(slide.attribution)}</span></div>`:""}</div>`; break;
         case "image-full":
           { const url = resolved[slide.image] ?? (slide.image && imgCache.get(slide.image));
-            inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${url?`<img class="full-img" src="${url}" style="object-fit:${fit}">`:`<div class="img-placeholder" style="height:100%">No image</div>`}${slide.caption?`<div class="cap">${esc(slide.caption)}</div>`:""}</div>`; }
+            inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${url?`<img class="full-img" src="${url}" style="object-fit:${fit}">`:`<div class="img-placeholder" style="height:100%">No image</div>`}${slide.caption?`<div class="cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div>`; }
           break;
         case "image-text":
-          inner = `<div class="slide__inner l-image-text"><h1>${esc(slide.title)}</h1><div class="split"><div>${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}</div><div class="deck-body">${md(slide.body)}</div></div></div>`; break;
+          inner = `<div class="slide__inner l-image-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="split"><div>${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}</div><div class="deck-body" data-slot="body">${md(slide.body)}</div></div></div>`; break;
         default:
           inner = `<div class="slide__inner"><h1>${esc(slide.title||"")}</h1></div>`;
       }
@@ -423,6 +438,12 @@
 
     // ---------- Stage (current slide, scaled to fit) ----------
     const canvas = document.getElementById("canvas");
+    // Clicking anywhere off a text region (slide margin, stage background, or
+    // outside the canvas entirely) commits and deselects the active edit.
+    document.addEventListener("mousedown", (e) => {
+      const ae = document.activeElement;
+      if (ae?.classList?.contains("editable") && !e.target.closest(".editable")) ae.blur();
+    });
     function renderStage() {
       const slide = state.slides[current];
       canvas.innerHTML = "";
@@ -430,6 +451,7 @@
       // pre-resolve image then render
       const node = renderSlide(slide, state.theme);
       canvas.appendChild(node);
+      makeEditable(node, slide);
       fitCanvas();
       // If this slide has an image we haven't cached yet, fetch it then re-render
       // once (the cache hit on the next pass means no loop).
@@ -437,6 +459,32 @@
       if (ref && !imgCache.has(ref) && !/^data:|^https?:/.test(ref)) {
         resolveImage(ref).then(url => { if (url) renderStage(); });
       }
+    }
+
+    // Make the canvas's text regions click-to-edit. Markdown slots show their raw
+    // source while focused and re-render (formatted) on blur. We avoid re-rendering
+    // the canvas on each keystroke so the caret isn't lost — only the reel + save.
+    const MD_SLOTS = new Set(["body","left","right"]);
+    function makeEditable(node, slide){
+      node.querySelectorAll("[data-slot]").forEach(elm => {
+        const slot = elm.dataset.slot;
+        const isMd = MD_SLOTS.has(slot);
+        elm.classList.add("editable");
+        elm.contentEditable = "true";
+        elm.spellcheck = false;
+        if (isMd) {
+          elm.addEventListener("focus", () => { elm.textContent = slide[slot] || ""; elm.style.whiteSpace = "pre-wrap"; });
+          elm.addEventListener("blur", () => { slide[slot] = elm.textContent; renderAll(); });
+        } else {
+          elm.addEventListener("blur", () => { slide[slot] = elm.textContent.trim(); renderAll(); });
+        }
+        elm.addEventListener("input", () => { slide[slot] = isMd ? elm.textContent : elm.textContent.trim(); renderReel(); scheduleSave(); });
+        // Enter commits for single-line (plain) slots; Esc blurs anywhere.
+        elm.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") { e.preventDefault(); elm.blur(); }
+          if (e.key === "Enter" && !isMd) { e.preventDefault(); elm.blur(); }
+        });
+      });
     }
     function fitCanvas() {
       const wrap = canvas.parentElement;
@@ -453,17 +501,20 @@
       reel.innerHTML = "";
       state.slides.forEach((slide, i) => {
         const thumb = document.createElement("div");
-        thumb.className = "thumb" + (i===current?" active":"");
+        thumb.className = "thumb" + (i===current?" active":"") + (selected.has(i)?" selected":"");
         thumb.innerHTML = `<div class="thumb__num">${i+1}</div><button class="thumb__del" title="Delete">×</button>`;
         const stage = document.createElement("div");
         stage.className = "thumb__stage";
         stage.appendChild(renderSlide(slide, state.theme));
         thumb.appendChild(stage);
-        thumb.onclick = (e) => { if (e.target.classList.contains("thumb__del")) return; current=i; renderAll(); };
+        thumb.addEventListener("pointerdown", (e) => startThumbDrag(e, i));
         thumb.querySelector(".thumb__del").onclick = (e) => {
           e.stopPropagation();
           if (state.slides.length<=1) return;
-          state.slides.splice(i,1); current=Math.min(current, state.slides.length-1); renderAll();
+          state.slides.splice(i,1);
+          current = Math.min(current, state.slides.length-1);
+          selected = new Set([current]); selAnchor = current;
+          renderAll();
         };
         reel.appendChild(thumb);
         // scale the 1280-wide render down to the thumb width
@@ -476,6 +527,80 @@
           resolveImage(slide.image).then(u => { if (u) renderReel(); });
         }
       });
+    }
+
+    // Click selection: plain = single, cmd/ctrl = toggle, shift = range.
+    function selectThumb(i, e){
+      if (e.shiftKey) {
+        selected = new Set();
+        const lo = Math.min(selAnchor,i), hi = Math.max(selAnchor,i);
+        for (let k=lo;k<=hi;k++) selected.add(k);
+        current = i;
+      } else if (e.metaKey || e.ctrlKey) {
+        if (selected.has(i) && selected.size>1) { selected.delete(i); if (current===i) current=[...selected][0]; }
+        else { selected.add(i); current=i; }
+        selAnchor = i;
+      } else {
+        selected = new Set([i]); current = i; selAnchor = i;
+      }
+      renderAll();
+    }
+
+    // Pointer-based drag reorder (HTML5 drag is swallowed in Tauri windows).
+    // Dragging an unselected thumb first selects just it; dragging a selected one
+    // moves the whole selection. A click (no movement) falls through to select.
+    function startThumbDrag(e, i){
+      if (e.button !== 0 || e.target.closest(".thumb__del")) return;
+      if (!selected.has(i)) { selected = new Set([i]); current=i; selAnchor=i; renderAll(); }
+      const startY = e.clientY;
+      let dragging = false;
+      const moving = [...selected].sort((a,b)=>a-b).map(k=>state.slides[k]);
+      const onMove = (ev) => {
+        if (!dragging) { if (Math.abs(ev.clientY-startY) < 5) return; dragging = true; document.body.classList.add("reordering"); }
+        clearDropLine();
+        showDropLine(dropIndexAt(ev.clientY));
+      };
+      const onUp = (ev) => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        if (dragging) {
+          const target = dropIndexAt(ev.clientY);
+          clearDropLine(); document.body.classList.remove("reordering");
+          reorderTo(moving, target);
+        } else {
+          selectThumb(i, ev);   // treat as a click
+        }
+      };
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+    }
+    // Insertion index (0..n) from a pointer Y over the reel.
+    function dropIndexAt(y){
+      const thumbs = [...reel.querySelectorAll(".thumb")];
+      for (let k=0;k<thumbs.length;k++){
+        const r = thumbs[k].getBoundingClientRect();
+        if (y < r.top + r.height/2) return k;
+      }
+      return thumbs.length;
+    }
+    function showDropLine(idx){
+      const line = document.createElement("div"); line.className="drop-line"; line.id="drop-line";
+      const thumbs = reel.querySelectorAll(".thumb");
+      reel.insertBefore(line, thumbs[idx] || null);
+    }
+    function clearDropLine(){ document.getElementById("drop-line")?.remove(); }
+    // Move the given slide objects so they sit at insertion index `target`
+    // (in the pre-move array's coordinates), preserving their relative order.
+    function reorderTo(moving, target){
+      const set = new Set(moving);
+      const before = state.slides.slice(0, target).filter(s => set.has(s)).length;
+      const remaining = state.slides.filter(s => !set.has(s));
+      remaining.splice(target - before, 0, ...moving);
+      state.slides = remaining;
+      selected = new Set(moving.map(s => state.slides.indexOf(s)));
+      current = state.slides.indexOf(moving[0]);
+      selAnchor = current;
+      renderAll();
     }
 
     // ---------- Inspector ----------
@@ -630,7 +755,7 @@
     document.getElementById("add-slide").onclick = () => {
       const layout = state.slides[current]?.layout || "title-body";
       state.slides.splice(current+1, 0, { layout, ...structuredClone(SLIDE_DEFAULTS[layout]) });
-      current++; renderAll();
+      current++; selected = new Set([current]); selAnchor = current; renderAll();
     };
 
     document.getElementById("deck-name").oninput = e => { state.name = e.target.value; scheduleSave(); };
