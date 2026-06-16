@@ -132,6 +132,11 @@
   .theme-card__chips { display: flex; gap: 3px; flex: 0 0 auto; }
   .theme-card__chips span { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
 
+  .scheme-chips { display: flex; gap: 8px; }
+  .scheme-chip { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--hairline-strong); cursor: pointer; display: grid; place-items: center; padding: 0; }
+  .scheme-chip span { font-family: var(--serif); font-size: 15px; line-height: 1; }
+  .scheme-chip.active { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   .swatch-row { display: flex; align-items: center; gap: 8px; }
   .swatch-row .swatch-block { width: 26px; height: 26px; border-radius: var(--radius-sm); border: 1px solid var(--hairline-strong); cursor: pointer; flex: 0 0 auto; }
   .swatch-row label { font-size: 11px; color: var(--text-muted); flex: 1; }
@@ -178,7 +183,6 @@
   .l-title .subtitle { font-family: var(--deck-body); font-size: 38px; margin-top: 24px; opacity: .8; }
   .l-section { justify-content: center; align-items: flex-start; }
   .l-section h1 { font-size: 84px; }
-  .l-section, .l-section .deck-body { color: var(--deck-bg); }
   .l-title-body h1 { font-size: 64px; margin-bottom: 50px; }
   .l-two-col .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; min-height: 0; }
   .l-two-col h1 { font-size: 60px; margin-bottom: 28px; }
@@ -375,26 +379,34 @@
     // refs to data URLs (or web paths in export mode).
     function md(s) { return marked.parse(s || "", { breaks: true }); }
 
+    // Derive a {bg, text, accent} palette for a slide's color scheme from the
+    // theme's three colors — no extra theme fields needed.
+    //   light  → theme bg / text          accent = accent
+    //   dark   → text as bg, bg as text    accent = accent
+    //   accent → accent as bg, bg as text  accent = text (so bold stays visible)
+    function colorScheme(c, scheme) {
+      if (scheme === "dark")   return { bg: c.text,   text: c.bg, accent: c.accent };
+      if (scheme === "accent") return { bg: c.accent, text: c.bg, accent: c.text };
+      return { bg: c.bg, text: c.text, accent: c.accent };
+    }
+
     function renderSlide(slide, theme, resolved = {}) {
       const t = theme;
       const el = document.createElement("div");
       el.className = "slide";
-      el.style.setProperty("--deck-bg", t.colors.bg);
-      el.style.setProperty("--deck-text", t.colors.text);
-      el.style.setProperty("--deck-accent", t.colors.accent);
+      // Per-slide color scheme, derived from the theme's three colors. The
+      // background is painted on the slide root so it always fills the frame.
+      const scheme = slide.colorScheme || (slide.layout === "section" ? "accent" : "light");
+      const pal = colorScheme(t.colors, scheme);
+      el.style.setProperty("--deck-bg", pal.bg);
+      el.style.setProperty("--deck-text", pal.text);
+      el.style.setProperty("--deck-accent", pal.accent);
       el.style.setProperty("--deck-heading", `"${t.fonts.heading.family}", serif`);
       el.style.setProperty("--deck-heading-w", t.fonts.heading.weight);
       el.style.setProperty("--deck-body", `"${t.fonts.body.family}", sans-serif`);
       el.style.setProperty("--deck-body-w", t.fonts.body.weight);
-      // Section slides are full-bleed accent; paint it on the slide root so the
-      // color always fills the whole frame (not just the inner content box).
-      if (slide.layout === "section") {
-        el.style.background = t.colors.accent;
-        el.style.color = t.colors.bg;
-      } else {
-        el.style.background = t.colors.bg;
-        el.style.color = t.colors.text;
-      }
+      el.style.background = pal.bg;
+      el.style.color = pal.text;
 
       const fit = slide.imageFit || "cover";   // how the image sits in its frame
       const img = (ref, ph) => {
@@ -645,6 +657,24 @@
       }
       layoutSec.appendChild(grid);
       inspector.appendChild(layoutSec);
+
+      // Color scheme — light / dark / accent, shown as swatches of each scheme's
+      // background color (derived from the deck theme).
+      const colorSec = sec("Color");
+      const chips = document.createElement("div"); chips.className="scheme-chips";
+      const activeScheme = slide.colorScheme || (slide.layout === "section" ? "accent" : "light");
+      for (const v of ["light","dark","accent"]) {
+        const pal = colorScheme(state.theme.colors, v);
+        const chip = document.createElement("button");
+        chip.className = "scheme-chip" + (v===activeScheme?" active":"");
+        chip.title = v[0].toUpperCase()+v.slice(1);
+        chip.style.background = pal.bg;
+        chip.innerHTML = `<span style="color:${pal.text}">A</span>`;
+        chip.onclick = () => { slide.colorScheme = v; renderAll(); };
+        chips.appendChild(chip);
+      }
+      colorSec.appendChild(chips);
+      inspector.appendChild(colorSec);
 
       // Content slots — show every field, dimming ones the current layout hides.
       const content = sec("Content");

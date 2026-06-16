@@ -109,4 +109,8 @@ Rules:
 - Optional `imageFit` on an image slide controls how the image sits in its
   frame: `"cover"` (default, fills and crops) or `"contain"` (fits the whole
   image, letterboxed).
+- Optional `colorScheme` on any slide: `"light"` (default), `"dark"`, or
+  `"accent"` — derived from the theme's three colors (dark swaps bg/text;
+  accent uses the accent color as background). `section` slides default to
+  `"accent"`.
 - `savedAt` = current ISO 8601 timestamp; `version` = 1.
