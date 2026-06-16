@@ -1,6 +1,6 @@
 ---
 name: studio-artifacts
-description: Create or edit Studio design artifacts — brand kits (font pairings + color palettes), and other design specs stored as JSON under a project's artifacts/ folder. Use when asked to generate, brainstorm, or modify brand kits, palettes, or design directions for a Studio project.
+description: Create or edit Studio design artifacts — brand kits (font pairings + color palettes), slide decks/presentations, and other design specs stored as JSON under a project's artifacts/ folder. Use when asked to generate, brainstorm, or modify brand kits, palettes, presentations/slides, or design directions for a Studio project.
 ---
 
 # Studio design artifacts
@@ -50,8 +50,59 @@ Rules:
 - 5–6 colors, each `{ "name": <role>, "value": <#rrggbb> }`.
 - `savedAt` = current ISO 8601 timestamp; `version` = 1.
 
-### Making a *set* (the common request)
+### Making a *set* (the common request for brand kit)
 When asked for N kits, make each one **genuinely distinct and deliberately
 non-generic** — vary the mood (editorial, warm/organic, brutalist, playful,
 refined-luxury…), the type personality, and the color temperature. Avoid default
 SaaS/AI looks. Briefly note the intent behind each.
+
+
+### presentation — a slide deck
+- **Path:** `artifacts/presentation/<slug>.json`
+
+Edited in the **Slides** tool; the Artifacts panel previews it. Shape:
+
+```json
+{
+  "kind": "presentation",
+  "version": 1,
+  "name": "Q3 Review",
+  "theme": {
+    "fonts": {
+      "heading": { "family": "Fraunces", "weight": 600 },
+      "body": { "family": "Newsreader", "weight": 400 }
+    },
+    "colors": { "bg": "#f7f5f0", "text": "#2a2a28", "accent": "#a85a4a" }
+  },
+  "slides": [
+    { "layout": "title", "title": "Q3 Review", "subtitle": "Product & growth" },
+    { "layout": "section", "title": "Where we are" },
+    { "layout": "title-body", "title": "Highlights", "body": "- Shipped **v2**\n- 3× signups" },
+    { "layout": "two-col", "title": "Wins vs risks", "left": "**Wins**\n- A\n- B", "right": "**Risks**\n- C" },
+    { "layout": "quote", "quote": "Make the obvious thing easy.", "attribution": "Design principle" },
+    { "layout": "image-full", "image": "media/chart.png", "caption": "Signups over time" },
+    { "layout": "image-text", "title": "The new flow", "image": "media/flow.png", "body": "Three steps, no signup wall." }
+  ],
+  "savedAt": "2026-06-16T18:00:00Z"
+}
+```
+
+Rules:
+- `kind` must be exactly `presentation`.
+- `theme.fonts.heading|body` are `{ family, weight }` (real Google Fonts family,
+  weight 100–900), same contract as brand-kit fonts. `theme.colors` =
+  `{ bg, text, accent }` hex values.
+- Each slide has a `layout` plus the slots that layout uses. Valid layouts and
+  their slots:
+  - `title` → `title`, `subtitle`
+  - `section` → `title`
+  - `title-body` → `title`, `body`
+  - `two-col` → `title`, `left`, `right`
+  - `quote` → `quote`, `attribution`
+  - `image-full` → `image`, `caption`
+  - `image-text` → `title`, `image`, `body`
+- Body-type slots (`body`, `left`, `right`) accept **Markdown** (bold, lists,
+  links). `**bold**` renders in the accent color.
+- `image` slots are **project-relative paths** (e.g. `media/chart.png`) — point
+  at files already in the project's `media/` folder.
+- `savedAt` = current ISO 8601 timestamp; `version` = 1.

@@ -812,6 +812,52 @@ async fn save_tool_export(
     Ok(path.to_string_lossy().to_string())
 }
 
+#[derive(Deserialize)]
+struct ExportAsset {
+    /// Filename to write inside `assets/` (no slashes).
+    name: String,
+    /// Absolute source path to copy from (must be inside the active project).
+    source: String,
+}
+
+/// Save a multi-file export bundle (e.g. a web presentation) into the active
+/// project's `designs/<folder>/`. Writes `index.html` and copies each asset's
+/// source file into `designs/<folder>/assets/<name>`. Returns the folder path.
+/// Used by the Slides tool's "Export for web". Source paths are restricted to
+/// within the active project so a deck can only bundle its own media.
+#[tauri::command]
+fn save_export_dir(
+    state: tauri::State<AppState>,
+    folder: String,
+    html: String,
+    assets: Vec<ExportAsset>,
+) -> Result<String, String> {
+    if folder.is_empty() || folder.contains(['/', '\\']) || folder.starts_with('.') {
+        return Err("Invalid folder name.".into());
+    }
+    let project = state
+        .active
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or("No active project.")?;
+    let dir = PathBuf::from(&project.path).join("designs").join(&folder);
+    let assets_dir = dir.join("assets");
+    std::fs::create_dir_all(&assets_dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("index.html"), html).map_err(|e| e.to_string())?;
+    for a in &assets {
+        if a.name.is_empty() || a.name.contains(['/', '\\']) || a.name.starts_with('.') {
+            continue;
+        }
+        let src = PathBuf::from(&a.source);
+        if !src.starts_with(&project.path) {
+            continue; // never copy from outside the project tree
+        }
+        std::fs::copy(&src, assets_dir.join(&a.name)).map_err(|e| e.to_string())?;
+    }
+    Ok(dir.to_string_lossy().to_string())
+}
+
 // --- Artifacts (designs/brand-kits/etc. as schema'd files) ----------------
 // See docs/artifacts.md. An artifact is a JSON file under <project>/artifacts/
 // carrying a `kind`; tools edit them, Claude authors them, the Artifacts panel
@@ -3952,6 +3998,7 @@ pub fn run() {
             get_active_project,
             clear_active_project,
             save_tool_export,
+            save_export_dir,
             list_artifacts,
             read_artifact,
             save_artifact,

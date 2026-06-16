@@ -34,10 +34,12 @@ export function clearArtifactsSelection() {
 // Editor tool per artifact kind (open-on-artifact via ?artifact=<path>).
 const EDITOR = {
   "brand-kit": "brand-explorer.html",
+  "presentation": "slides.html",
 };
 
 const KIND_LABEL = {
   "brand-kit": "Brand kits",
+  "presentation": "Presentations",
 };
 
 export async function renderArtifacts() {
@@ -59,6 +61,12 @@ export async function renderArtifacts() {
     invoke("open_tool", { file: EDITOR["brand-kit"], query: null }),
   );
   toolbar.appendChild(newKitBtn);
+  const newDeckBtn = el("button", "btn-add", { type: "button" });
+  newDeckBtn.innerHTML = `<span class="mi mi-sm">add</span>Presentation`;
+  newDeckBtn.addEventListener("click", () =>
+    invoke("open_tool", { file: EDITOR["presentation"], query: null }),
+  );
+  toolbar.appendChild(newDeckBtn);
   root.appendChild(toolbar);
 
   let items = [];
@@ -110,7 +118,9 @@ function artifactCard(item) {
   card.appendChild(
     item.kind === "brand-kit"
       ? brandKitPreview(data)
-      : el("div", "artifact__preview"),
+      : item.kind === "presentation"
+        ? presentationPreview(data)
+        : el("div", "artifact__preview"),
   );
 
   const open = () => {
@@ -185,6 +195,57 @@ export function brandKitPreview(data) {
       title: `${c.name || ""} ${c.value || ""}`.trim(),
     });
     s.style.background = c.value || "#ccc";
+    sw.appendChild(s);
+  }
+  wrap.appendChild(sw);
+  return wrap;
+}
+
+// --- Presentation preview: theme swatch + a few slide-title lines -----------
+export function presentationPreview(data) {
+  const theme = data.theme || {};
+  const colors = theme.colors || {};
+  const fonts = theme.fonts || {};
+  const slides = Array.isArray(data.slides) ? data.slides : [];
+
+  const heading = fonts.heading?.family;
+  if (heading) loadGoogleFont(heading, fonts.heading?.weight);
+
+  const wrap = el("div", "artifact__preview artifact__preview--deck");
+  wrap.style.background = colors.bg || "#fff";
+  wrap.style.color = colors.text || "#222";
+  wrap.style.padding = "12px";
+  wrap.style.borderRadius = "var(--radius-sm)";
+  wrap.style.overflow = "hidden";
+
+  const titleSlide = slides.find((s) => s.title) || slides[0] || {};
+  const big = el("div", "", { textContent: titleSlide.title || "Untitled deck" });
+  big.style.fontFamily = heading ? `"${heading}", serif` : "var(--serif)";
+  if (fonts.heading?.weight) big.style.fontWeight = String(fonts.heading.weight);
+  big.style.fontSize = "18px";
+  big.style.lineHeight = "1.1";
+  big.style.whiteSpace = "nowrap";
+  big.style.overflow = "hidden";
+  big.style.textOverflow = "ellipsis";
+  wrap.appendChild(big);
+
+  const meta = el("div", "", {
+    textContent: `${slides.length} slide${slides.length === 1 ? "" : "s"}`,
+  });
+  meta.style.fontSize = "11px";
+  meta.style.opacity = "0.6";
+  meta.style.marginTop = "6px";
+  wrap.appendChild(meta);
+
+  const sw = el("div", "");
+  sw.style.display = "flex";
+  sw.style.gap = "4px";
+  sw.style.marginTop = "8px";
+  for (const v of [colors.bg, colors.text, colors.accent].filter(Boolean)) {
+    const s = el("span", "");
+    s.style.cssText =
+      "width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.15)";
+    s.style.background = v;
     sw.appendChild(s);
   }
   wrap.appendChild(sw);

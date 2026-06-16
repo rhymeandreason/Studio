@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slides</title>
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<script type="module" src="../kit/components.js"></script>
+<script src="../vendor/marked.min.js"></script>
+<style>
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* Three columns: slide reel · stage · inspector. */
+  .reel {
+    flex: 0 0 168px;
+    border-right: 1px solid var(--hairline);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .reel-head {
+    padding: 12px;
+    border-bottom: 1px solid var(--hairline);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .reel-list { overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .thumb {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    cursor: pointer;
+    background: #fff;
+  }
+  .thumb.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .thumb__num {
+    position: absolute; top: 3px; left: 5px; z-index: 2;
+    font-size: 10px; font-family: var(--mono); color: var(--text-soft);
+  }
+  .thumb__del {
+    position: absolute; top: 2px; right: 3px; z-index: 2;
+    border: none; background: transparent; cursor: pointer;
+    color: var(--text-soft); font-size: 14px; line-height: 1; opacity: 0;
+  }
+  .thumb:hover .thumb__del { opacity: 1; }
+  /* The scaled-down render lives in here. */
+  .thumb__stage { position: absolute; top: 0; left: 0; transform-origin: top left; }
+
+  .stage-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .stage-bar {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--hairline);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .stage-bar .title { font-family: var(--serif); font-size: 13px; flex: 1 1 auto; min-width: 0; }
+  .stage-bar input.title {
+    border: none; background: transparent; color: var(--text);
+    font-family: var(--serif); font-size: 13px;
+  }
+  .stage-scroll { flex: 1 1 auto; overflow: auto; display: grid; place-items: center; padding: 28px; }
+  /* The editing canvas: a fixed-size 1280×720 slide, scaled to fit. */
+  .canvas {
+    width: 1280px; height: 720px;
+    transform-origin: center;
+    box-shadow: 0 6px 30px rgba(0,0,0,.18);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .inspector {
+    flex: 0 0 300px;
+    border-left: 1px solid var(--hairline);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .insp-sec { padding: 14px; border-bottom: 1px solid var(--hairline); display: flex; flex-direction: column; gap: 10px; }
+  .insp-sec h3 { font-family: var(--serif); font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+  .insp-sec textarea.field { min-height: 64px; resize: vertical; line-height: 1.4; }
+  .field-label { font-size: 11px; color: var(--text-soft); margin-bottom: 3px; display: block; }
+
+  .layout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .layout-opt {
+    aspect-ratio: 16 / 9; border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm); cursor: pointer; position: relative;
+    background: var(--elevated); overflow: hidden;
+  }
+  .layout-opt.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .layout-opt svg { width: 100%; height: 100%; display: block; }
+  .layout-opt__name { position:absolute; bottom:2px; left:0; right:0; text-align:center; font-size:8px; color:var(--text-soft); }
+
+  .theme-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  .theme-chip {
+    display: flex; gap: 3px; padding: 4px; border: 1px solid var(--hairline-strong);
+    border-radius: 999px; cursor: pointer; align-items: center;
+  }
+  .theme-chip.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .theme-chip span { width: 12px; height: 12px; border-radius: 50%; }
+
+  .swatch-row { display: flex; align-items: center; gap: 8px; }
+  .swatch-row .swatch-block { width: 26px; height: 26px; border-radius: var(--radius-sm); border: 1px solid var(--hairline-strong); cursor: pointer; flex: 0 0 auto; }
+  .swatch-row label { font-size: 11px; color: var(--text-muted); flex: 1; }
+  .coloris-trigger { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; min-width: 0; }
+  .status { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-height: 14px; padding: 0 14px 12px; }
+  .img-row { display: flex; gap: 6px; align-items: center; }
+  .img-row .preview { width: 40px; height: 28px; object-fit: cover; border-radius: 3px; border: 1px solid var(--hairline); background: var(--elevated); }
+
+  /* ---- The slide renderer's own styles (shared by canvas + thumbs + export) ----
+     Scoped under .slide so they can be serialized into exports verbatim. */
+  .slide { width: 1280px; height: 720px; position: relative; box-sizing: border-box;
+           display: flex; flex-direction: column; overflow: hidden;
+           --pad: 96px; }
+  .slide__inner { flex: 1; display: flex; flex-direction: column; padding: var(--pad); min-height: 0; }
+  .slide h1 { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); margin: 0; line-height: 1.05; }
+  .slide .kicker { font-family: var(--deck-body); font-weight: 600; text-transform: uppercase; letter-spacing: .12em; font-size: 22px; opacity: .7; margin: 0 0 18px; }
+  .slide .deck-body { font-family: var(--deck-body); font-weight: var(--deck-body-w); line-height: 1.45; font-size: 34px; }
+  .slide .deck-body p { margin: 0 0 .6em; }
+  .slide .deck-body ul { margin: 0; padding-left: 1.1em; }
+  .slide .deck-body li { margin: 0 0 .5em; }
+  .slide .deck-body strong { color: var(--deck-accent); }
+  .slide .deck-body a { color: var(--deck-accent); }
+  .l-title { justify-content: center; align-items: flex-start; }
+  .l-title h1 { font-size: 96px; }
+  .l-title .subtitle { font-family: var(--deck-body); font-size: 38px; margin-top: 24px; opacity: .8; }
+  .l-section { justify-content: center; align-items: flex-start; background: var(--deck-accent); }
+  .l-section h1 { font-size: 84px; color: var(--deck-bg); }
+  .l-section, .l-section .deck-body { color: var(--deck-bg); }
+  .l-title-body h1 { font-size: 64px; margin-bottom: 28px; }
+  .l-two-col .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; min-height: 0; }
+  .l-two-col h1 { font-size: 60px; margin-bottom: 28px; }
+  .l-quote { justify-content: center; }
+  .l-quote blockquote { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); font-size: 64px; line-height: 1.15; margin: 0; }
+  .l-quote .attr { font-family: var(--deck-body); font-size: 30px; margin-top: 32px; opacity: .7; }
+  .l-quote blockquote::before { content: "“"; }
+  .l-quote blockquote::after { content: "”"; }
+  .l-image-full { padding: 0; }
+  .l-image-full .full-img { width: 100%; height: 100%; object-fit: cover; }
+  .l-image-full .cap { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 96px; font-family: var(--deck-body); font-size: 26px; background: linear-gradient(transparent, rgba(0,0,0,.6)); color: #fff; }
+  .l-image-text .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; min-height: 0; align-items: center; }
+  .l-image-text h1 { font-size: 56px; margin-bottom: 24px; }
+  .l-image-text .split-img { width: 100%; height: 100%; max-height: 528px; object-fit: cover; border-radius: 8px; }
+  .img-placeholder { display: grid; place-items: center; width: 100%; height: 100%; min-height: 200px; background: color-mix(in srgb, var(--deck-text) 8%, transparent); color: var(--deck-text); opacity: .4; font-family: var(--deck-body); font-size: 24px; border-radius: 8px; }
+</style>
+</head>
+<body>
+  <div class="reel">
+    <div class="reel-head">
+      <button class="btn btn-primary" id="add-slide"><span class="mi mi-sm">add</span> Slide</button>
+    </div>
+    <div class="reel-list" id="reel-list"></div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="stage-bar">
+      <input class="title" id="deck-name" value="Untitled deck" spellcheck="false" />
+      <button class="btn btn-ghost" id="export-web"><span class="mi mi-sm">public</span> Web</button>
+      <button class="btn btn-primary" id="save" style="display:none;">Save</button>
+      <button class="btn btn-secondary" id="save-as">Save as…</button>
+    </div>
+    <div class="stage-scroll">
+      <div class="canvas" id="canvas"></div>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="inspector" id="inspector"></div>
+
+  <script type="module">
+    const marked = window.marked;
+    const invoke = window.__TAURI__?.core?.invoke;
+
+    // ---------- Layouts ----------
+    // Each layout declares the slots it edits. Slots are markdown-capable text
+    // unless type:"image". This list is the contract Claude follows (mirrored in
+    // the studio-artifacts skill).
+    const LAYOUTS = {
+      "title":      { name: "Title",      slots: [["title","Title"],["subtitle","Subtitle"]] },
+      "section":    { name: "Section",    slots: [["title","Section title"]] },
+      "title-body": { name: "Title + Body", slots: [["title","Title"],["body","Body","md"]] },
+      "two-col":    { name: "Two column", slots: [["title","Title"],["left","Left","md"],["right","Right","md"]] },
+      "quote":      { name: "Quote",      slots: [["quote","Quote"],["attribution","Attribution"]] },
+      "image-full": { name: "Image full", slots: [["image","Image","image"],["caption","Caption"]] },
+      "image-text": { name: "Image + Text", slots: [["title","Title"],["image","Image","image"],["body","Body","md"]] },
+    };
+
+    // ---------- Theme presets ----------
+    const PRESETS = [
+      { name: "Runes", fonts:{heading:{family:"Fraunces",weight:600},body:{family:"Newsreader",weight:400}},
+        colors:{bg:"#f7f5f0",text:"#2a2a28",accent:"#a85a4a"} },
+      { name: "Mono", fonts:{heading:{family:"Space Grotesk",weight:600},body:{family:"Inter",weight:400}},
+        colors:{bg:"#ffffff",text:"#111111",accent:"#2563eb"} },
+      { name: "Editorial", fonts:{heading:{family:"Playfair Display",weight:700},body:{family:"Lora",weight:400}},
+        colors:{bg:"#fbf9f4",text:"#1b1b1a",accent:"#7a5c3e"} },
+      { name: "Night", fonts:{heading:{family:"Manrope",weight:700},body:{family:"Manrope",weight:400}},
+        colors:{bg:"#16161a",text:"#f4f4f5",accent:"#c4f042"} },
+      { name: "Warm", fonts:{heading:{family:"DM Serif Display",weight:400},body:{family:"DM Sans",weight:400}},
+        colors:{bg:"#fdf3e7",text:"#3a2a1e",accent:"#d2693a"} },
+    ];
+
+    // ---------- State ----------
+    let state = {
+      name: "Untitled deck",
+      theme: structuredClone(PRESETS[0]),
+      slides: [ { layout: "title", title: "Your title", subtitle: "A subtitle" } ],
+    };
+    let current = 0;
+    let activePath = null;       // set when opened via ?artifact=
+    let projectRoot = null;      // derived from artifact path; for resolving images
+    const imgCache = new Map();  // project-relative path -> data URL
+
+    // ---------- Fonts (lazy Google Fonts) ----------
+    const loaded = new Set();
+    function loadFont(family, weight) {
+      if (!family) return;
+      const key = `${family}@${weight||""}`;
+      if (loaded.has(key)) return; loaded.add(key);
+      const l = document.createElement("link");
+      l.rel = "stylesheet";
+      l.href = "https://fonts.googleapis.com/css2?family=" + family.replace(/ /g,"+") +
+               (weight ? `:wght@${weight}` : "") + "&display=swap";
+      document.head.appendChild(l);
+    }
+    function loadThemeFonts(t) {
+      loadFont(t.fonts.heading.family, t.fonts.heading.weight);
+      loadFont(t.fonts.body.family, t.fonts.body.weight);
+    }
+
+    // ---------- Image resolution ----------
+    // Slides store images as project-relative paths (e.g. "media/x.png"). The
+    // tool window can't load project files directly, so fetch a data URL via Rust.
+    async function resolveImage(rel) {
+      if (!rel) return null;
+      if (/^data:|^https?:/.test(rel)) return rel;
+      if (imgCache.has(rel)) return imgCache.get(rel);
+      if (!invoke || !projectRoot) return null;
+      try {
+        const abs = projectRoot + "/" + rel.replace(/^\//, "");
+        const url = await invoke("read_image_data", { path: abs });
+        imgCache.set(rel, url);
+        return url;
+      } catch { return null; }
+    }
+
+    // ---------- Slide rendering ----------
+    // Returns an .slide element for a given slide + theme. `resolved` maps image
+    // refs to data URLs (or web paths in export mode).
+    function md(s) { return marked.parse(s || "", { breaks: true }); }
+
+    function renderSlide(slide, theme, resolved = {}) {
+      const t = theme;
+      const el = document.createElement("div");
+      el.className = "slide";
+      el.style.setProperty("--deck-bg", t.colors.bg);
+      el.style.setProperty("--deck-text", t.colors.text);
+      el.style.setProperty("--deck-accent", t.colors.accent);
+      el.style.setProperty("--deck-heading", `"${t.fonts.heading.family}", serif`);
+      el.style.setProperty("--deck-heading-w", t.fonts.heading.weight);
+      el.style.setProperty("--deck-body", `"${t.fonts.body.family}", sans-serif`);
+      el.style.setProperty("--deck-body-w", t.fonts.body.weight);
+      el.style.background = t.colors.bg;
+      el.style.color = t.colors.text;
+
+      const img = (ref, ph) => {
+        const url = resolved[ref] ?? (ref && imgCache.get(ref));
+        return url ? `<img src="${url}">` : `<div class="img-placeholder">${ph}</div>`;
+      };
+
+      let inner = "";
+      switch (slide.layout) {
+        case "title":
+          inner = `<div class="slide__inner l-title"><h1>${esc(slide.title)}</h1>${slide.subtitle?`<div class="subtitle">${esc(slide.subtitle)}</div>`:""}</div>`; break;
+        case "section":
+          inner = `<div class="slide__inner l-section"><h1>${esc(slide.title)}</h1></div>`; break;
+        case "title-body":
+          inner = `<div class="slide__inner l-title-body"><h1>${esc(slide.title)}</h1><div class="deck-body">${md(slide.body)}</div></div>`; break;
+        case "two-col":
+          inner = `<div class="slide__inner l-two-col"><h1>${esc(slide.title)}</h1><div class="cols"><div class="deck-body">${md(slide.left)}</div><div class="deck-body">${md(slide.right)}</div></div></div>`; break;
+        case "quote":
+          inner = `<div class="slide__inner l-quote"><blockquote>${esc(slide.quote)}</blockquote>${slide.attribution?`<div class="attr">— ${esc(slide.attribution)}</div>`:""}</div>`; break;
+        case "image-full":
+          { const url = resolved[slide.image] ?? (slide.image && imgCache.get(slide.image));
+            inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${url?`<img class="full-img" src="${url}">`:`<div class="img-placeholder" style="height:100%">No image</div>`}${slide.caption?`<div class="cap">${esc(slide.caption)}</div>`:""}</div>`; }
+          break;
+        case "image-text":
+          inner = `<div class="slide__inner l-image-text"><h1>${esc(slide.title)}</h1><div class="split"><div>${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}</div><div class="deck-body">${md(slide.body)}</div></div></div>`; break;
+        default:
+          inner = `<div class="slide__inner"><h1>${esc(slide.title||"")}</h1></div>`;
+      }
+      el.innerHTML = inner;
+      return el;
+    }
+    function esc(s){ return (s??"").replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+    // ---------- Stage (current slide, scaled to fit) ----------
+    const canvas = document.getElementById("canvas");
+    function renderStage() {
+      const slide = state.slides[current];
+      canvas.innerHTML = "";
+      if (!slide) return;
+      // pre-resolve image then render
+      const node = renderSlide(slide, state.theme);
+      canvas.appendChild(node);
+      fitCanvas();
+      // If this slide has an image we haven't cached yet, fetch it then re-render
+      // once (the cache hit on the next pass means no loop).
+      const ref = slide.image;
+      if (ref && !imgCache.has(ref) && !/^data:|^https?:/.test(ref)) {
+        resolveImage(ref).then(url => { if (url) renderStage(); });
+      }
+    }
+    function fitCanvas() {
+      const wrap = canvas.parentElement;
+      const scale = Math.min((wrap.clientWidth-56)/1280, (wrap.clientHeight-56)/720, 1);
+      canvas.style.transform = `scale(${scale})`;
+      canvas.style.width = "1280px"; canvas.style.height = "720px";
+      canvas.style.margin = `${(720*scale-720)/2}px ${(1280*scale-1280)/2}px`;
+    }
+    window.addEventListener("resize", fitCanvas);
+
+    // ---------- Reel (thumbnails) ----------
+    const reel = document.getElementById("reel-list");
+    function renderReel() {
+      reel.innerHTML = "";
+      state.slides.forEach((slide, i) => {
+        const thumb = document.createElement("div");
+        thumb.className = "thumb" + (i===current?" active":"");
+        thumb.innerHTML = `<div class="thumb__num">${i+1}</div><button class="thumb__del" title="Delete">×</button>`;
+        const stage = document.createElement("div");
+        stage.className = "thumb__stage";
+        stage.appendChild(renderSlide(slide, state.theme));
+        thumb.appendChild(stage);
+        thumb.onclick = (e) => { if (e.target.classList.contains("thumb__del")) return; current=i; renderAll(); };
+        thumb.querySelector(".thumb__del").onclick = (e) => {
+          e.stopPropagation();
+          if (state.slides.length<=1) return;
+          state.slides.splice(i,1); current=Math.min(current, state.slides.length-1); renderAll();
+        };
+        reel.appendChild(thumb);
+        // scale the 1280-wide render down to the thumb width
+        requestAnimationFrame(() => {
+          const w = thumb.clientWidth; const s = w/1280;
+          stage.style.transform = `scale(${s})`;
+        });
+        // async image for thumbs — fetch uncached refs, then re-render once
+        if (slide.image && !imgCache.has(slide.image) && !/^data:|^https?:/.test(slide.image)) {
+          resolveImage(slide.image).then(u => { if (u) renderReel(); });
+        }
+      });
+    }
+
+    // ---------- Inspector ----------
+    const inspector = document.getElementById("inspector");
+    function renderInspector() {
+      const slide = state.slides[current];
+      inspector.innerHTML = "";
+
+      // Layout picker
+      const layoutSec = sec("Layout");
+      const grid = document.createElement("div"); grid.className = "layout-grid";
+      for (const [key, def] of Object.entries(LAYOUTS)) {
+        const opt = document.createElement("div");
+        opt.className = "layout-opt" + (slide.layout===key?" active":"");
+        opt.innerHTML = layoutIcon(key) + `<div class="layout-opt__name">${def.name}</div>`;
+        opt.onclick = () => { slide.layout = key; renderAll(); };
+        grid.appendChild(opt);
+      }
+      layoutSec.appendChild(grid);
+      inspector.appendChild(layoutSec);
+
+      // Content slots
+      const content = sec("Content");
+      for (const [key, label, kind] of LAYOUTS[slide.layout].slots) {
+        const wrap = document.createElement("div");
+        const lab = document.createElement("label"); lab.className="field-label"; lab.textContent=label;
+        wrap.appendChild(lab);
+        if (kind === "image") {
+          const row = document.createElement("div"); row.className="img-row";
+          const prev = document.createElement("img"); prev.className="preview";
+          resolveImage(slide[key]).then(u=>{ if(u) prev.src=u; });
+          const inp = document.createElement("input"); inp.className="field"; inp.placeholder="media/photo.jpg";
+          inp.value = slide[key]||""; inp.oninput = () => { slide[key]=inp.value.trim(); scheduleRender(); resolveImage(slide[key]).then(u=>{if(u)prev.src=u;}); };
+          row.append(prev, inp); wrap.appendChild(row);
+        } else {
+          const ta = document.createElement(kind==="md"?"textarea":"input");
+          ta.className = "field"; ta.value = slide[key]||"";
+          if (kind==="md") ta.placeholder="Markdown — **bold**, lists, links";
+          ta.oninput = () => { slide[key]=ta.value; scheduleRender(); };
+          wrap.appendChild(ta);
+        }
+        content.appendChild(wrap);
+      }
+      inspector.appendChild(content);
+
+      // Theme
+      inspector.appendChild(themeSection());
+    }
+
+    function sec(title){ const s=document.createElement("div"); s.className="insp-sec"; const h=document.createElement("h3"); h.textContent=title; s.appendChild(h); return s; }
+
+    function themeSection() {
+      const s = sec("Theme");
+      // presets
+      const presetWrap = document.createElement("div"); presetWrap.className="theme-presets";
+      PRESETS.forEach(p => {
+        const chip = document.createElement("div");
+        const isActive = p.colors.bg===state.theme.colors.bg && p.fonts.heading.family===state.theme.fonts.heading.family;
+        chip.className = "theme-chip" + (isActive?" active":"");
+        chip.title = p.name;
+        for (const k of ["bg","accent","text"]) { const d=document.createElement("span"); d.style.background=p.colors[k]; chip.appendChild(d); }
+        chip.onclick = () => { state.theme = structuredClone(p); loadThemeFonts(state.theme); renderAll(); };
+        presetWrap.appendChild(chip);
+      });
+      s.appendChild(presetWrap);
+
+      // fonts
+      for (const role of ["heading","body"]) {
+        const wrap = document.createElement("div"); wrap.className="row";
+        const fam = document.createElement("input"); fam.className="field"; fam.value=state.theme.fonts[role].family;
+        fam.title = role+" font"; fam.placeholder = role+" font";
+        fam.onchange = () => { state.theme.fonts[role].family=fam.value.trim(); loadThemeFonts(state.theme); renderAll(); };
+        const w = document.createElement("select"); w.className="field"; w.style.flex="0 0 72px";
+        [300,400,500,600,700,800].forEach(n=>{ const o=document.createElement("option"); o.value=n;o.textContent=n; w.appendChild(o); });
+        w.value = state.theme.fonts[role].weight;
+        w.onchange = () => { state.theme.fonts[role].weight=+w.value; loadThemeFonts(state.theme); renderAll(); };
+        const lab = document.createElement("label"); lab.className="field-label"; lab.textContent=role; lab.style.flex="0 0 100%";
+        s.appendChild(lab); wrap.append(fam,w); s.appendChild(wrap);
+      }
+
+      // colors
+      for (const [key,label] of [["bg","Background"],["text","Text"],["accent","Accent"]]) {
+        const row = document.createElement("div"); row.className="swatch-row"; row.style.position="relative";
+        const trigger = document.createElement("input"); trigger.type="text"; trigger.className="coloris-trigger";
+        trigger.setAttribute("data-coloris",""); trigger.value=state.theme.colors[key];
+        const block = document.createElement("div"); block.className="swatch-block"; block.style.background=state.theme.colors[key];
+        block.onclick = () => trigger.click();
+        trigger.addEventListener("input", () => { state.theme.colors[key]=trigger.value; block.style.background=trigger.value; scheduleRender(); });
+        const lab = document.createElement("label"); lab.textContent=label;
+        row.append(trigger, block, lab); s.appendChild(row);
+      }
+      return s;
+    }
+
+    // tiny inline schematic per layout
+    function layoutIcon(key){
+      const a="var(--accent)", g="var(--hairline-strong)";
+      const box=(x,y,w,h,f)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${f}"/>`;
+      let g2="";
+      switch(key){
+        case "title": g2=box(14,40,50,8,a)+box(14,52,38,5,g); break;
+        case "section": g2=`<rect x="0" y="0" width="100" height="56" fill="${a}" opacity=".25"/>`+box(14,24,48,8,a); break;
+        case "title-body": g2=box(14,12,40,7,a)+box(14,26,72,4,g)+box(14,34,72,4,g)+box(14,42,52,4,g); break;
+        case "two-col": g2=box(14,10,40,6,a)+box(14,24,32,4,g)+box(14,32,32,4,g)+box(54,24,32,4,g)+box(54,32,32,4,g); break;
+        case "quote": g2=box(20,20,60,7,a)+box(20,32,40,7,a)+box(20,46,24,4,g); break;
+        case "image-full": g2=box(0,0,100,56,g); break;
+        case "image-text": g2=box(10,16,38,30,g)+box(54,16,34,6,a)+box(54,28,34,4,g)+box(54,36,28,4,g); break;
+      }
+      return `<svg viewBox="0 0 100 56" preserveAspectRatio="none">${g2}</svg>`;
+    }
+
+    // ---------- Render orchestration ----------
+    let renderTimer;
+    function scheduleRender(){ clearTimeout(renderTimer); renderTimer=setTimeout(()=>{ renderStage(); renderReel(); }, 120); }
+    function renderAll(){ renderStage(); renderReel(); renderInspector(); }
+
+    // ---------- Defaults for new slides ----------
+    const SLIDE_DEFAULTS = {
+      "title": { title:"Title", subtitle:"Subtitle" },
+      "section": { title:"Section" },
+      "title-body": { title:"Title", body:"Your content here." },
+      "two-col": { title:"Title", left:"- Point one\n- Point two", right:"- Point three\n- Point four" },
+      "quote": { quote:"A memorable line.", attribution:"Source" },
+      "image-full": { image:"", caption:"" },
+      "image-text": { title:"Title", image:"", body:"Describe the image." },
+    };
+    document.getElementById("add-slide").onclick = () => {
+      const layout = state.slides[current]?.layout || "title-body";
+      state.slides.splice(current+1, 0, { layout, ...structuredClone(SLIDE_DEFAULTS[layout]) });
+      current++; renderAll();
+    };
+
+    document.getElementById("deck-name").oninput = e => { state.name = e.target.value; };
+
+    // ---------- Save (artifact JSON) ----------
+    const statusEl = document.getElementById("status");
+    function buildDoc(){
+      return { kind:"presentation", version:1, name:state.name||"Untitled deck",
+               theme:state.theme, slides:state.slides, savedAt:new Date().toISOString() };
+    }
+    document.getElementById("save").onclick = async () => {
+      try { await invoke("overwrite_artifact", { path:activePath, content:JSON.stringify(buildDoc(),null,2) }); statusEl.textContent="Saved."; }
+      catch(e){ statusEl.textContent="Save failed: "+e; }
+    };
+    document.getElementById("save-as").onclick = async () => {
+      const name = state.name||"Untitled deck";
+      const content = JSON.stringify(buildDoc(),null,2);
+      if (invoke) {
+        try { const p = await invoke("save_artifact", { kind:"presentation", name, content }); statusEl.textContent="Saved → "+p;
+              // adopt the new file as the active artifact so subsequent Save overwrites it
+              activePath = p; deriveProjectRoot(p); document.getElementById("save").style.display=""; }
+        catch(e){ statusEl.textContent="Save failed: "+e; }
+      } else {
+        const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([content],{type:"application/json"}));
+        a.download=name.replace(/[^a-z0-9]+/gi,"-").toLowerCase()+".json"; a.click();
+      }
+    };
+
+    // ---------- Export: build a standalone HTML deck ----------
+    // Resolve every image, then emit a self-contained navigable HTML document.
+    // `mode`: "inline" embeds images as data URLs; "assets" rewrites refs to
+    // assets/<file> and returns the asset copy list for save_export_dir.
+    async function buildDeckHtml(mode){
+      const assets = []; const seen = new Map();
+      const resolved = {};
+      for (const s of state.slides) {
+        if (s.image) {
+          if (mode==="assets") {
+            if (!seen.has(s.image)) {
+              const base = s.image.split("/").pop().replace(/[^a-z0-9._-]/gi,"_");
+              let name = base, n=1;
+              const used = new Set(seen.values());
+              while (used.has(name)) name = (n++)+"-"+base;
+              seen.set(s.image, name);
+              assets.push({ name, source: projectRoot ? projectRoot+"/"+s.image.replace(/^\//,"") : s.image });
+            }
+            resolved[s.image] = "assets/"+seen.get(s.image);
+          } else {
+            resolved[s.image] = await resolveImage(s.image);
+          }
+        }
+      }
+      const t = state.theme;
+      const slideHtml = state.slides.map(s => renderSlide(s, t, resolved).outerHTML).join("\n");
+      const css = document.querySelector("style").textContent
+        .split("/* ---- The slide renderer")[1];   // grab only the .slide* rules
+      const fontHref = "https://fonts.googleapis.com/css2?family=" +
+        [t.fonts.heading, t.fonts.body].map(f=>f.family.replace(/ /g,"+")+":wght@"+f.weight).join("&family=") + "&display=swap";
+      return { html: deckShell(state.name, css, fontHref, slideHtml, t), assets };
+    }
+
+    function deckShell(name, css, fontHref, slides, t){
+      return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>${esc(name)}</title>
+<link rel="stylesheet" href="${fontHref}">
+<style>
+  :root{color-scheme:light}
+  *{box-sizing:border-box} html,body{margin:0;height:100%}
+  body{background:#111;font-family:sans-serif;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .deck{position:relative}
+  .scaler{transform-origin:center}
+  .slide{display:none!important}
+  .slide.show{display:flex!important}
+  ${css}
+  /* print: one slide per page for Save-as-PDF */
+  @media print{
+    @page{size:1280px 720px;margin:0}
+    body{display:block;background:#fff}
+    .nav{display:none}
+    .slide{display:flex!important;page-break-after:always;box-shadow:none;border-radius:0}
+  }
+  .nav{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:10;font-family:sans-serif}
+  .nav button{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:14px}
+  .nav .count{color:#fff;opacity:.7;align-self:center;font-size:13px}
+</style></head>
+<body>
+<div class="deck"><div class="scaler" id="scaler">${slides}</div></div>
+<div class="nav"><button id="prev">‹</button><span class="count" id="count"></span><button id="next">›</button></div>
+<script>
+  const slides=[...document.querySelectorAll('.slide')]; let i=0;
+  const scaler=document.getElementById('scaler');
+  function fit(){ const s=Math.min(innerWidth/1280, innerHeight/720); scaler.style.transform='scale('+s+')'; scaler.style.width='1280px'; scaler.style.height='720px'; }
+  function show(n){ i=(n+slides.length)%slides.length; slides.forEach((s,k)=>s.classList.toggle('show',k===i)); document.getElementById('count').textContent=(i+1)+' / '+slides.length; }
+  addEventListener('resize',fit); fit(); show(0);
+  document.getElementById('next').onclick=()=>show(i+1); document.getElementById('prev').onclick=()=>show(i-1);
+  addEventListener('keydown',e=>{ if(e.key==='ArrowRight'||e.key===' ')show(i+1); if(e.key==='ArrowLeft')show(i-1); });
+<\/script>
+</body></html>`;
+    }
+
+    document.getElementById("export-web").onclick = async () => {
+      statusEl.textContent = "Building web export…";
+      try {
+        const { html, assets } = await buildDeckHtml("assets");
+        if (invoke) {
+          const folder = (state.name||"deck").replace(/[^a-z0-9]+/gi,"-").toLowerCase();
+          const p = await invoke("save_export_dir", { folder, html, assets });
+          statusEl.textContent = "Web deck → " + p;
+        } else {
+          const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([html],{type:"text/html"})); a.download="deck.html"; a.click();
+        }
+      } catch(e){ statusEl.textContent = "Export failed: "+e; }
+    };
+
+    // ---------- Coloris ----------
+    function initColoris(){ const sc=document.createElement("studio-color"); sc.style.display="none"; document.body.appendChild(sc); requestAnimationFrame(()=>sc.remove()); }
+
+    // ---------- Boot ----------
+    function deriveProjectRoot(p){ const m=p.match(/^(.*)\/artifacts\//); projectRoot = m? m[1] : null; }
+    async function boot(){
+      const path = new URLSearchParams(location.search).get("artifact");
+      if (path && invoke) {
+        try {
+          const data = JSON.parse(await invoke("read_artifact", { path }));
+          if (data.theme) state.theme = data.theme;
+          if (Array.isArray(data.slides) && data.slides.length) state.slides = data.slides;
+          if (data.name) state.name = data.name;
+          activePath = path; deriveProjectRoot(path);
+          document.getElementById("save").style.display="";
+        } catch(e){ statusEl.textContent="Couldn't load deck: "+e; }
+      }
+      document.getElementById("deck-name").value = state.name;
+      loadThemeFonts(state.theme);
+      initColoris();
+      renderAll();
+    }
+    boot();
+  </script>
+</body>
+</html>
