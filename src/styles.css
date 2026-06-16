@@ -2777,6 +2777,25 @@ td.ntable__total-cell {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 14px;
 }
+.artifact-card {
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--elevated);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    cursor: pointer;
+}
+.artifact-card:hover { border-color: var(--hairline-strong); }
+.artifact-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.artifact-card__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-top: 1px solid var(--hairline);
+}
+.artifact-card__name { font-size: 13px; color: var(--text); }
 .artifact__preview {
     height: 120px;
     padding: 14px;
