@@ -13,7 +13,7 @@ const { invoke } = window.__TAURI__.core;
 export const artifactsSelection = createSelection({
   mode: "multi",
   onChange: (sel) => {
-    document.querySelectorAll(".artifact-card[data-path]").forEach((c) =>
+    document.querySelectorAll(".preview-card[data-path]").forEach((c) =>
       c.classList.toggle("is-selected", sel.has(c.dataset.path)),
     );
   },
@@ -52,7 +52,7 @@ export async function renderArtifacts() {
   }
 
   // Toolbar.
-  const toolbar = el("div", "ws-toolbar");
+  const toolbar = el("div", "toolbar");
   const newKitBtn = el("button", "btn-add", { type: "button" });
   newKitBtn.innerHTML = `<span class="mi mi-sm">add</span>Brand kit`;
   newKitBtn.addEventListener("click", () =>
@@ -102,7 +102,7 @@ function artifactCard(item) {
     data = JSON.parse(item.content);
   } catch {}
 
-  const card = el("div", "artifact-card");
+  const card = el("div", "preview-card");
   card.dataset.path = item.path;
   card.addEventListener("click", (e) => {
     artifactsSelection.toggle(item.path, e.metaKey || e.ctrlKey);
@@ -122,8 +122,8 @@ function artifactCard(item) {
     });
   };
 
-  const foot = el("div", "artifact-card__foot");
-  foot.appendChild(el("span", "artifact-card__name", { textContent: item.name }));
+  const foot = el("div", "preview-card__foot");
+  foot.appendChild(el("span", "preview-card__name", { textContent: item.name }));
   foot.appendChild(actionBtn("open_in_new", "Open", open, true));
   card.appendChild(foot);
 

@@ -328,7 +328,7 @@
     border-bottom: 1px solid var(--hairline);
 }
 
-.claude-sessions__head .iconbtn-round {
+.claude-sessions__head .btn-round {
     width: 24px;
     height: 24px;
 }

@@ -1666,7 +1666,7 @@ export function renderNotes() {
 
 function updateNotesViewToggle() {
   const view = state.notesData.viewMode || "bento";
-  document.querySelectorAll("#notes-view-toggle .notes-view-toggle__btn").forEach((btn) => {
+  document.querySelectorAll("#notes-view-toggle .seg-toggle__btn").forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.view === view);
   });
 }
@@ -1924,7 +1924,7 @@ function initNotes() {
   const viewToggle = document.getElementById("notes-view-toggle");
   updateNotesViewToggle();
   viewToggle.addEventListener("click", (e) => {
-    const btn = e.target.closest(".notes-view-toggle__btn");
+    const btn = e.target.closest(".seg-toggle__btn");
     if (!btn) return;
     const view = btn.dataset.view;
     if (view === (state.notesData.viewMode || "bento")) return;

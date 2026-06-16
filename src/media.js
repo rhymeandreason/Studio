@@ -60,7 +60,7 @@ function sortMediaItems(items) {
 }
 
 function updateMediaSortUI() {
-  document.querySelectorAll("#media-sort .sort-btn").forEach((b) => {
+  document.querySelectorAll("#media-sort .pill-tab").forEach((b) => {
     b.classList.toggle("is-active", b.dataset.sort === mediaSortMode);
     if (b.dataset.sort === "user") b.hidden = mediaManualOrder.length === 0;
   });
@@ -2445,7 +2445,7 @@ function initEditor() {
 
   // Media sort toggles.
   document.getElementById("media-sort").addEventListener("click", (e) => {
-    const btn = e.target.closest(".sort-btn");
+    const btn = e.target.closest(".pill-tab");
     if (!btn) return;
     mediaSortMode = btn.dataset.sort;
     updateMediaSortUI();

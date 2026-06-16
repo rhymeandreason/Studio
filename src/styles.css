@@ -920,18 +920,18 @@ select.field__input {
     background: rgba(110, 97, 84, 0.04);
 }
 
-.ws-toolbar {
+.toolbar {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 4px;
 }
 
-.ws-toolbar .ws__status {
+.toolbar .ws__status {
     margin-left: auto;
 }
 
-.ws-toolbar .btn-add:disabled {
+.toolbar .btn-add:disabled {
     opacity: 0.35;
     cursor: default;
     pointer-events: none;
@@ -1018,7 +1018,7 @@ select.field__input {
     flex-wrap: wrap;
 }
 
-.notes-view-toggle,
+
 .seg-toggle {
     display: flex;
     gap: 2px;
@@ -1028,7 +1028,7 @@ select.field__input {
     border-radius: var(--radius);
 }
 
-.notes-view-toggle__btn,
+
 .seg-toggle__btn {
     display: flex;
     align-items: center;
@@ -1042,12 +1042,12 @@ select.field__input {
     cursor: pointer;
 }
 
-.notes-view-toggle__btn:hover,
+
 .seg-toggle__btn:hover {
     color: var(--text);
 }
 
-.notes-view-toggle__btn.is-active,
+
 .seg-toggle__btn.is-active {
     background: var(--accent);
     color: var(--accent-contrast, #fff);
@@ -1672,7 +1672,7 @@ td.ntable__total-cell {
 }
 
 /* Round icon button (Lightbox / More) — alias for kit's .btn-round */
-.iconbtn-round,
+
 .btn-round {
     flex: 0 0 auto;
     width: 32px;
@@ -1691,7 +1691,7 @@ td.ntable__total-cell {
         border-color 0.15s;
 }
 
-.iconbtn-round:hover,
+
 .btn-round:hover {
     background: var(--surface);
     color: var(--text);
@@ -1794,7 +1794,7 @@ td.ntable__total-cell {
     margin-bottom: 14px;
 }
 
-.media-sort,
+
 .pill-tabs {
     display: inline-flex;
     gap: 2px;
@@ -1803,7 +1803,7 @@ td.ntable__total-cell {
     padding: 2px;
 }
 
-.sort-btn,
+
 .pill-tab {
     border: none;
     background: transparent;
@@ -1816,12 +1816,12 @@ td.ntable__total-cell {
     transition: background 0.15s, color 0.15s;
 }
 
-.sort-btn:hover,
+
 .pill-tab:hover {
     color: var(--text);
 }
 
-.sort-btn.is-active,
+
 .pill-tab.is-active {
     background: var(--elevated);
     color: var(--text);
@@ -2777,16 +2777,6 @@ td.ntable__total-cell {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 14px;
 }
-.artifact-card {
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius);
-    background: var(--elevated);
-    box-shadow: var(--shadow-sm);
-    overflow: hidden;
-    cursor: pointer;
-}
-.artifact-card:hover { border-color: var(--hairline-strong); }
-.artifact-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
 .artifact__preview {
     height: 120px;
     padding: 14px;
@@ -2799,12 +2789,3 @@ td.ntable__total-cell {
 .artifact__type-b { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
 .artifact__swatches { display: flex; gap: 0; border-radius: var(--radius-sm); overflow: hidden; }
 .artifact__swatch { flex: 1 1 0; height: 22px; }
-.artifact-card__foot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 8px 10px;
-    border-top: 1px solid var(--hairline);
-}
-.artifact-card__name { font-size: 13px; color: var(--text); }
