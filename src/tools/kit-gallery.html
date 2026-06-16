@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kit Gallery</title>
+<title>Studio Design System</title>
 <link rel="stylesheet" href="../tokens.css" />
 <link rel="stylesheet" href="../kit/kit.css" />
 <style>
@@ -14,10 +14,16 @@
     padding: 24px;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 0;
   }
-  h1 { font-family: var(--serif); font-size: 18px; font-weight: 500; }
-  section { display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-family: var(--serif); font-size: 18px; font-weight: 500; margin-bottom: 24px; }
+  section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px 0;
+    border-top: 1px solid var(--hairline);
+  }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .stack { display: flex; flex-direction: column; gap: 8px; max-width: 280px; }
   .demo-box {
@@ -29,14 +35,44 @@
     font-family: var(--sans); font-size: 10px; text-transform: uppercase;
     letter-spacing: 0.08em; color: var(--text-soft); margin-bottom: 2px;
   }
+  .token-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+  .token-chip { display: flex; flex-direction: column; gap: 6px; }
+  .token-chip__swatch {
+    width: 56px; height: 56px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--hairline-strong);
+  }
+  .token-chip__name { font-family: var(--mono); font-size: 9px; color: var(--text-muted); width: 56px; }
 </style>
 </head>
 <body>
-  <h1>Studio Kit — gallery</h1>
+  <h1>Studio Design System</h1>
+
+  <!-- Color tokens -->
+  <section>
+    <div class="label">Color tokens</div>
+    <div class="token-grid">
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--bg);"></div><span class="token-chip__name">--bg</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--surface);"></div><span class="token-chip__name">--surface</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--elevated);"></div><span class="token-chip__name">--elevated</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--text);"></div><span class="token-chip__name">--text</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--text-muted);"></div><span class="token-chip__name">--text-muted</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--text-soft);"></div><span class="token-chip__name">--text-soft</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--accent);"></div><span class="token-chip__name">--accent</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--accent-soft);"></div><span class="token-chip__name">--accent-soft</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--accent-ring);"></div><span class="token-chip__name">--accent-ring</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--sage);"></div><span class="token-chip__name">--sage</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--sage-soft);"></div><span class="token-chip__name">--sage-soft</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--rose);"></div><span class="token-chip__name">--rose</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--hairline);"></div><span class="token-chip__name">--hairline</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--hairline-strong);"></div><span class="token-chip__name">--hairline-strong</span></div>
+      <div class="token-chip"><div class="token-chip__swatch" style="background:var(--border);"></div><span class="token-chip__name">--border</span></div>
+    </div>
+  </section>
 
   <!-- Buttons -->
-  <section class="card">
-    <div class="label">Buttons — .btn variants</div>
+  <section>
+    <div class="label">Buttons</div>
     <div class="row" style="align-items:flex-start; gap:20px;">
       <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">.btn</span>
@@ -75,9 +111,42 @@
     </div>
   </section>
 
+  <!-- Dropdown menu -->
+  <section>
+    <div class="label">Dropdown menu </div>
+    <div class="row">
+      <div class="stack" style="align-items:flex-start;max-width:none;">
+        <span class="out">.menu (always open)</span>
+        <div style="position:relative;height:130px;">
+          <div class="menu" style="position:relative;top:0;right:auto;display:flex;">
+            <button class="menu__item"><span class="mi mi-sm">edit</span>Edit</button>
+            <button class="menu__item"><span class="mi mi-sm">content_copy</span>Duplicate</button>
+            <div class="menu__sep"></div>
+            <button class="menu__item" disabled><span class="mi mi-sm">delete</span>Delete</button>
+          </div>
+        </div>
+      </div>
+      <div class="stack" style="align-items:flex-start;max-width:none;">
+        <span class="out">.dropdown (click to open)</span>
+        <div class="dropdown" id="drop-demo">
+          <button class="dropdown__btn" id="drop-btn">
+            <span class="dropdown__swatch" style="background:#a85a4a;"></span>
+            <span class="dropdown__label">Accent</span>
+            <span class="mi dropdown__chev">expand_more</span>
+          </button>
+          <div class="menu dropdown__menu" id="drop-menu" hidden>
+            <button class="menu__item dropdown__item is-active" data-label="Accent" data-color="#a85a4a">Accent</button>
+            <button class="menu__item dropdown__item" data-label="Sage" data-color="#6f7d6a">Sage</button>
+            <button class="menu__item dropdown__item" data-label="Slate" data-color="#5b8fb0">Slate</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Round icon button -->
-  <section class="card">
-    <div class="label">Round icon button — .btn-round</div>
+  <section>
+    <div class="label">Round icon button</div>
     <div class="row">
       <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">.btn-round</span>
@@ -91,8 +160,8 @@
   </section>
 
   <!-- Segmented toggle -->
-  <section class="card">
-    <div class="label">Segmented toggle — .seg-toggle</div>
+  <section>
+    <div class="label">Segmented toggle</div>
     <div class="row">
       <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">.seg-toggle</span>
@@ -105,8 +174,8 @@
   </section>
 
   <!-- Pill tabs -->
-  <section class="card">
-    <div class="label">Pill tabs — .pill-tabs / .pill-tab</div>
+  <section>
+    <div class="label">Pill tabs</div>
     <div class="row">
       <div class="stack" style="align-items:flex-start;max-width:none;">
         <span class="out">.pill-tabs</span>
@@ -120,7 +189,7 @@
   </section>
 
   <!-- Toolbar + btn-add -->
-  <section class="card">
+  <section>
     <div class="label">Toolbar + .btn-add</div>
     <div class="toolbar">
       <button class="btn-add"><span class="mi mi-sm">add</span>New item</button>
@@ -130,7 +199,7 @@
   </section>
 
   <!-- Fields -->
-  <section class="card">
+  <section>
     <div class="label">Fields</div>
     <div class="stack">
       <input class="field" placeholder="Text field" />
@@ -144,7 +213,7 @@
   </section>
 
   <!-- Range -->
-  <section class="card">
+  <section>
     <div class="label">Range</div>
     <input class="range" type="range" min="0" max="100" value="50"
            oninput="document.getElementById('range-out').textContent = this.value" />
@@ -152,7 +221,7 @@
   </section>
 
   <!-- Color picker -->
-  <section class="card">
+  <section>
     <div class="label">Color — &lt;studio-color&gt; (Coloris)</div>
     <div class="row">
       <studio-color id="color" value="#6e6154"></studio-color>
@@ -161,13 +230,13 @@
   </section>
 
   <!-- Swatch grid -->
-  <section class="card">
+  <section>
     <div class="label">Color swatch grid — .swatch-grid / .swatch-chip</div>
     <div class="swatch-grid" id="swatch-grid"></div>
   </section>
 
   <!-- Swatch strip -->
-  <section class="card">
+  <section>
     <div class="label">Swatch strip — .swatch-strip (compact, used in preview cards)</div>
     <div class="swatch-strip" style="width:200px;">
       <div class="swatch-strip__item" style="background:#2a2a28;"></div>
@@ -179,14 +248,14 @@
   </section>
 
   <!-- Preview card -->
-  <section class="card">
+  <section>
     <div class="label">Preview card — .preview-card in .preview-grid</div>
     <div class="preview-grid" id="preview-grid"></div>
   </section>
 
   <!-- Card selection -->
-  <section class="card">
-    <div class="label">.card.is-selected</div>
+  <section>
+    <div class="label">Card</div>
     <div class="row">
       <div class="card" style="width:120px;padding:12px;cursor:pointer;"
            onclick="this.classList.toggle('is-selected')">Click to select</div>
@@ -196,7 +265,7 @@
   </section>
 
   <!-- Motion -->
-  <section class="card">
+  <section>
     <div class="label">Motion (kit/motion.js)</div>
     <div class="row">
       <button class="btn" id="m-enter">enter</button>
@@ -212,6 +281,23 @@
   <script type="module">
     import "../kit/components.js";
     import { enter, enterStagger, pop } from "../kit/motion.js";
+
+    // Dropdown demo
+    const dropBtn = document.getElementById("drop-btn");
+    const dropMenu = document.getElementById("drop-menu");
+    dropBtn.onclick = () => dropMenu.hidden = !dropMenu.hidden;
+    dropMenu.addEventListener("click", (e) => {
+      const item = e.target.closest(".dropdown__item");
+      if (!item) return;
+      dropMenu.querySelectorAll(".dropdown__item").forEach((i) => i.classList.remove("is-active"));
+      item.classList.add("is-active");
+      dropBtn.querySelector(".dropdown__label").textContent = item.dataset.label;
+      dropBtn.querySelector(".dropdown__swatch").style.background = item.dataset.color;
+      dropMenu.hidden = true;
+    });
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest("#drop-demo")) dropMenu.hidden = true;
+    });
 
     // Pill tabs demo
     document.getElementById("pill-demo").addEventListener("click", (e) => {
