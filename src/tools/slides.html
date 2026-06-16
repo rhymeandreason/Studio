@@ -238,6 +238,21 @@
       ["image","Image","image"], ["caption","Caption"],
     ];
 
+    // The primary prose slot for each layout — used to carry body text across a
+    // layout change (e.g. title-body's `body` ↔ two-col's `left`).
+    const PRIMARY_BODY = {
+      "title-body": "body", "two-col": "left", "image-text": "body", "quote": "quote",
+    };
+
+    // Switch a slide's layout, moving its main text into the new layout's primary
+    // prose slot when that slot is empty (so converting doesn't lose the content).
+    function convertLayout(slide, next) {
+      if (slide.layout === next) return;
+      const from = PRIMARY_BODY[slide.layout], to = PRIMARY_BODY[next];
+      if (from && to && from !== to && slide[from] && !slide[to]) slide[to] = slide[from];
+      slide.layout = next;
+    }
+
     // ---------- Theme presets ----------
     const PRESETS = [
       { name: "Runes", fonts:{heading:{family:"Fraunces",weight:600},body:{family:"Newsreader",weight:400}},
@@ -378,7 +393,9 @@
         case "section":
           inner = `<div class="slide__inner l-section"><h1>${esc(slide.title)}</h1></div>`; break;
         case "title-body":
-          inner = `<div class="slide__inner l-title-body"><h1>${esc(slide.title)}</h1><div class="deck-body">${md(slide.body)}</div></div>`; break;
+          { const cols = slide.columns === 2 ? ` style="column-count:2;column-gap:56px"` : "";
+            inner = `<div class="slide__inner l-title-body"><h1>${esc(slide.title)}</h1><div class="deck-body"${cols}>${md(slide.body)}</div></div>`; }
+          break;
         case "two-col":
           inner = `<div class="slide__inner l-two-col"><h1>${esc(slide.title)}</h1><div class="cols"><div class="deck-body">${md(slide.left)}</div><div class="deck-body">${md(slide.right)}</div></div></div>`; break;
         case "quote":
@@ -467,7 +484,7 @@
         const cell = document.createElement("div");
         cell.className = "layout-cell" + (slide.layout===key?" active":"");
         cell.innerHTML = `<div class="layout-opt">${layoutIcon(key)}</div><div class="layout-cell__name">${def.name}</div>`;
-        cell.onclick = () => { slide.layout = key; renderAll(); };
+        cell.onclick = () => { convertLayout(slide, key); renderAll(); };
         grid.appendChild(cell);
       }
       layoutSec.appendChild(grid);
@@ -510,6 +527,16 @@
           wrap.appendChild(ta);
         }
         content.appendChild(wrap);
+      }
+      // Columns control — title-body flows its single body into 1 or 2 columns.
+      if (slide.layout === "title-body") {
+        const wrap = document.createElement("div");
+        const lab = document.createElement("label"); lab.className="field-label"; lab.textContent="Columns";
+        const sel = document.createElement("select"); sel.className="field";
+        for (const n of [1,2]) { const o=document.createElement("option"); o.value=n; o.textContent=`${n} column${n>1?"s":""}`; sel.appendChild(o); }
+        sel.value = slide.columns === 2 ? 2 : 1;
+        sel.onchange = () => { slide.columns = +sel.value; scheduleRender(); };
+        wrap.append(lab, sel); content.appendChild(wrap);
       }
       inspector.appendChild(content);
 

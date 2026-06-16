@@ -96,7 +96,8 @@ Rules:
   their slots:
   - `title` → `title`, `subtitle`
   - `section` → `title`
-  - `title-body` → `title`, `body`
+  - `title-body` → `title`, `body` (optional `columns`: `1` (default) or `2` —
+    flows the single body into that many columns via CSS column-count)
   - `two-col` → `title`, `left`, `right`
   - `quote` → `quote`, `attribution`
   - `image-full` → `image`, `caption`
