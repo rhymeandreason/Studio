@@ -70,3 +70,4 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
 - Prefer native macOS frameworks. Project structure is convention, not enforced —
   tolerate missing subfolders.
 - One user (the author), v0.1. The user is a designer who codes with Claude Code.
+- Design principles are modularity and lightweight simplicity. Lean towards making the UX obvious and easy to edit. When proposing architecture, don't overdo it.
