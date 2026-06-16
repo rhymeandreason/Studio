@@ -1,15 +1,19 @@
 # Studio — agent primer
 
 A macOS menu-bar app for designer-developers: each **project** is a folder under
-`~/Projects/`. Studio activates a project (launches its apps + `claude` in the
-repo), shows a **media** grid with a non-destructive **image editor**, and keeps
-lightweight **notes**.
+`~/Projects/`. Studio activates a project (launches its apps + `claude`), shows a
+**media** grid with a non-destructive **image editor**, keeps lightweight
+**notes**, and manages design **artifacts** (brand kits, etc.).
 
 ## Stack
 - **Tauri v2** (Rust backend) + **vanilla JS/HTML/CSS** frontend (no bundler).
 - Frontend: `src/` ES modules (loaded via `<script type="module" src="/main.js">`),
-  `index.html`, `styles.css`; vendored libs in `src/vendor/` (`marked`). Design =
-  warm "Runes" theme, Futura + Material Symbols.
+  `index.html`, `styles.css`. Design = warm "Runes" theme, Futura + Material
+  Symbols. **Design tokens live in `src/tokens.css`** (`@import`ed by styles.css,
+  linked by tools); shared component CSS + `<studio-*>` web components in
+  `src/kit/`. Vendored libs in `src/vendor/`: `marked`, `coloris`, `motion-one`,
+  and the Material Symbols woff2 (all offline, not CDN). See
+  [docs/tools-dynamic-loading.md](docs/tools-dynamic-loading.md).
 - Backend: `src-tauri/src/lib.rs` (all `#[tauri::command]`s + the tray).
 - Native Swift helpers compiled by `src-tauri/build.rs`, called as subprocesses:
   `bgremove` (Vision background removal), `qlthumb` (QuickLook thumbnails),
@@ -20,6 +24,8 @@ The frontend is split into ES modules:
 - `main.js` — app shell: boot, `render()`/`selectTab()`, notes, projects, modals,
   the keyboard dispatcher install.
 - `workspace.js` — the **Workspace tab**. See [docs/workspace.md](docs/workspace.md).
+- `artifacts.js` — the **Artifacts tab**: lists/previews design artifacts and
+  opens them in their editor tool. See [docs/artifacts.md](docs/artifacts.md).
 - `media.js` — the **whole media subsystem**: grid, selection, image editor,
   lightbox, export, tools (remove-bg, extend, generate). See [docs/media.md](docs/media.md).
 - `state.js` — `export const state = {}`: mutable globals shared **across
@@ -51,13 +57,22 @@ app — no Dock icon; click the tray icon. Test projects live in `~/Projects/`.
 - **Notes:** see [docs/notes.md](docs/notes.md).
 - **Media + image editor:** see [docs/media.md](docs/media.md).
 - **Workspace:** per-project launchpad. See [docs/workspace.md](docs/workspace.md).
-- **Claude window:** in-app chat UI (`src/claude/`) driving the `claude` CLI.
-  See [docs/claude-window.md](docs/claude-window.md).
+- **Claude window:** in-app chat UI (`src/claude/`) driving the `claude` CLI, and
+  a standalone companion app (`companion/`). A per-session **Artifacts/Code**
+  toggle picks the cwd (project folder vs git repo). See
+  [docs/claude-window.md](docs/claude-window.md).
+- **Artifacts:** schema'd JSON design files under `<project>/artifacts/<kind>/`
+  (brand kits, etc.) — Claude writes them, tools edit them, the Artifacts panel
+  shows them. Formats are documented for Claude in the `studio-artifacts` skill
+  (`skills/studio-artifacts/`, symlinked into `~/.claude/skills/`). See
+  [docs/artifacts.md](docs/artifacts.md).
 - **Git windows:** bright per-repo windows (`src/git/`) — branch, changed files,
   commit. Launched from the Workspace repo card. See [docs/git.md](docs/git.md).
 - **Interaction model:** shared selection + keyboard model across all panels.
   See [docs/interaction-spec.md](docs/interaction-spec.md).
-- **Tools:** small built-in HTML utilities. See [docs/tools.md](docs/tools.md).
+- **Tools:** small built-in HTML utilities (`src/tools/`), styled with the kit;
+  `kit-gallery.html` is the living styleguide. See [docs/tools.md](docs/tools.md)
+  and [docs/tool-ideas.md](docs/tool-ideas.md).
 
 ## Cross-cutting patterns
 - All Tauri commands use `invoke()`. Saves are debounced
