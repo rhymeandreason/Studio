@@ -55,12 +55,6 @@
     position: absolute; top: 3px; left: 5px; z-index: 2;
     font-size: 10px; font-family: var(--mono); color: var(--text-soft);
   }
-  .thumb__del {
-    position: absolute; top: 2px; right: 3px; z-index: 2;
-    border: none; background: transparent; cursor: pointer;
-    color: var(--text-soft); font-size: 14px; line-height: 1; opacity: 0;
-  }
-  .thumb:hover .thumb__del { opacity: 1; }
   /* The scaled-down render lives in here. */
   .thumb__stage { position: absolute; top: 0; left: 0; transform-origin: top left; }
 
@@ -502,20 +496,12 @@
       state.slides.forEach((slide, i) => {
         const thumb = document.createElement("div");
         thumb.className = "thumb" + (i===current?" active":"") + (selected.has(i)?" selected":"");
-        thumb.innerHTML = `<div class="thumb__num">${i+1}</div><button class="thumb__del" title="Delete">×</button>`;
+        thumb.innerHTML = `<div class="thumb__num">${i+1}</div>`;
         const stage = document.createElement("div");
         stage.className = "thumb__stage";
         stage.appendChild(renderSlide(slide, state.theme));
         thumb.appendChild(stage);
         thumb.addEventListener("pointerdown", (e) => startThumbDrag(e, i));
-        thumb.querySelector(".thumb__del").onclick = (e) => {
-          e.stopPropagation();
-          if (state.slides.length<=1) return;
-          state.slides.splice(i,1);
-          current = Math.min(current, state.slides.length-1);
-          selected = new Set([current]); selAnchor = current;
-          renderAll();
-        };
         reel.appendChild(thumb);
         // scale the 1280-wide render down to the thumb width
         requestAnimationFrame(() => {
@@ -550,7 +536,7 @@
     // Dragging an unselected thumb first selects just it; dragging a selected one
     // moves the whole selection. A click (no movement) falls through to select.
     function startThumbDrag(e, i){
-      if (e.button !== 0 || e.target.closest(".thumb__del")) return;
+      if (e.button !== 0) return;
       if (!selected.has(i)) { selected = new Set([i]); current=i; selAnchor=i; renderAll(); }
       const startY = e.clientY;
       let dragging = false;
@@ -602,6 +588,25 @@
       selAnchor = current;
       renderAll();
     }
+
+    // Delete the selected slides (Backspace/Delete). Keeps at least one slide.
+    function deleteSelected(){
+      if (!selected.size) return;
+      const keep = state.slides.filter((s,k) => !selected.has(k));
+      if (!keep.length) return;   // never empty the deck
+      const first = Math.min(...selected);
+      state.slides = keep;
+      current = Math.min(first, state.slides.length-1);
+      selected = new Set([current]); selAnchor = current;
+      renderAll();
+    }
+    window.addEventListener("keydown", (e) => {
+      if (e.key !== "Backspace" && e.key !== "Delete") return;
+      const t = e.target;
+      if (t && (t.isContentEditable || t.tagName==="INPUT" || t.tagName==="TEXTAREA")) return;
+      e.preventDefault();
+      deleteSelected();
+    });
 
     // ---------- Inspector ----------
     const inspector = document.getElementById("inspector");
