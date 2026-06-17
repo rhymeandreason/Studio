@@ -553,13 +553,15 @@
         elm.classList.add("editable");
         elm.contentEditable = "true";
         elm.spellcheck = false;
+        // Read markdown slots via innerText so on-canvas line breaks (Enter)
+        // survive as newlines; plain slots stay single-line via textContent.
         if (isMd) {
           elm.addEventListener("focus", () => { elm.textContent = slide[slot] || ""; elm.style.whiteSpace = "pre-wrap"; });
-          elm.addEventListener("blur", () => { slide[slot] = elm.textContent; renderAll(); });
+          elm.addEventListener("blur", () => { slide[slot] = elm.innerText; renderAll(); });
         } else {
           elm.addEventListener("blur", () => { slide[slot] = elm.textContent.trim(); renderAll(); });
         }
-        elm.addEventListener("input", () => { slide[slot] = isMd ? elm.textContent : elm.textContent.trim(); renderReel(); scheduleSave(); });
+        elm.addEventListener("input", () => { slide[slot] = isMd ? elm.innerText : elm.textContent.trim(); renderReel(); scheduleSave(); });
         // Enter commits for single-line (plain) slots; Esc blurs anywhere.
         elm.addEventListener("keydown", (e) => {
           if (e.key === "Escape") { e.preventDefault(); elm.blur(); }
