@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Theme Editor</title>
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<link rel="stylesheet" href="../deck/render.css" />
+<script type="module" src="../kit/components.js"></script>
+<script src="../vendor/marked.min.js"></script>
+<style>
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); height: 100vh; display: flex; overflow: hidden; }
+
+  /* Left: compact controls. Right: live multi-layout preview. */
+  .controls {
+    flex: 0 0 300px; border-right: 1px solid var(--hairline);
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .ctl-sec { padding: 14px; border-bottom: 1px solid var(--hairline); display: flex; flex-direction: column; gap: 10px; }
+  .ctl-sec h3 { font-family: var(--serif); font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+  .field-label { font-size: 11px; color: var(--text-soft); margin-bottom: 3px; display: block; }
+  input, select, .field { font-family: system-ui, sans-serif; }
+
+  /* Font row: family combobox + weight select. */
+  .font-row { display: flex; gap: 8px; }
+  .font-row .field { flex: 1; min-width: 0; }
+  .font-row select.field { flex: 0 0 72px; }
+  .font-sample { font-size: 22px; line-height: 1.1; margin-top: 4px; min-height: 26px; }
+
+  /* Colors: a row per role. */
+  .swatch-row { display: flex; align-items: center; gap: 8px; position: relative; }
+  .swatch-block { width: 28px; height: 28px; border-radius: var(--radius-sm); border: 1px solid var(--hairline-strong); cursor: pointer; flex: 0 0 auto; }
+  .swatch-row label { font-size: 12px; color: var(--text); flex: 1; }
+  .swatch-row .hex { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
+  .coloris-trigger { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+
+  .row2 { display: flex; gap: 10px; }
+  .row2 > div { flex: 1; }
+
+  /* Preview side */
+  .preview-wrap { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .preview-bar { padding: 10px 16px; border-bottom: 1px solid var(--hairline); display: flex; align-items: center; gap: 8px; }
+  .preview-bar input.name { flex: 1; min-width: 0; border: none; background: transparent; color: var(--text); font-family: var(--serif); font-size: 14px; }
+  .preview-grid { flex: 1; overflow-y: auto; padding: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; align-content: start; }
+  .preview-tile { display: flex; flex-direction: column; gap: 6px; }
+  .preview-frame { aspect-ratio: 16 / 9; border: 1px solid var(--hairline-strong); border-radius: var(--radius-sm); overflow: hidden; position: relative; background: #fff; }
+  .preview-frame .scaler { position: absolute; top: 0; left: 0; transform-origin: top left; }
+  .preview-tile .cap { font-size: 11px; color: var(--text-soft); text-align: center; }
+
+  .status { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-height: 14px; padding: 0 16px 12px; }
+</style>
+</head>
+<body>
+  <div class="controls">
+    <div class="ctl-sec">
+      <h3>Fonts</h3>
+      <div>
+        <label class="field-label">Heading</label>
+        <div class="font-row">
+          <input class="field" id="heading-fam" list="font-list" placeholder="Family" />
+          <select class="field" id="heading-w"></select>
+        </div>
+        <div class="font-sample" id="heading-sample">Almost before we knew it</div>
+      </div>
+      <div>
+        <label class="field-label">Body</label>
+        <div class="font-row">
+          <input class="field" id="body-fam" list="font-list" placeholder="Family" />
+          <select class="field" id="body-w"></select>
+        </div>
+        <div class="font-sample" id="body-sample" style="font-size:15px;">The quick brown fox jumps over the lazy dog.</div>
+      </div>
+      <datalist id="font-list"></datalist>
+    </div>
+
+    <div class="ctl-sec">
+      <h3>Colors</h3>
+      <div id="colors"></div>
+    </div>
+
+    <div class="ctl-sec">
+      <h3>Type sizes</h3>
+      <div class="row2">
+        <div>
+          <label class="field-label">Heading base (px)</label>
+          <input class="field" id="heading-size" type="number" min="24" max="120" />
+        </div>
+        <div>
+          <label class="field-label">Body base (px)</label>
+          <input class="field" id="body-size" type="number" min="12" max="48" />
+        </div>
+      </div>
+    </div>
+
+    <div class="ctl-sec" style="margin-top:auto; border-bottom:none;">
+      <button class="btn btn-primary" id="save" style="display:none;">Save</button>
+      <button class="btn btn-secondary" id="save-as">Save as new theme</button>
+    </div>
+  </div>
+
+  <div class="preview-wrap">
+    <div class="preview-bar">
+      <input class="name" id="theme-name" value="Untitled theme" spellcheck="false" />
+    </div>
+    <div class="preview-grid" id="preview-grid"></div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <script type="module">
+    import { renderSlide, PREVIEW_SLIDES } from "../deck/render.js";
+    const invoke = window.__TAURI__?.core?.invoke;
+
+    // ---- Curated Google Fonts for the family combobox -----------------------
+    const FONTS = [
+      "Inter","Roboto","Open Sans","Lato","Montserrat","Poppins","Raleway","Work Sans","DM Sans",
+      "Manrope","Plus Jakarta Sans","Space Grotesk","Outfit","Figtree","Hanken Grotesk","Jost",
+      "Urbanist","Lexend","Albert Sans","Instrument Sans","Schibsted Grotesk","Onest","Geist",
+      "Playfair Display","Merriweather","Lora","PT Serif","Source Serif 4","Libre Baskerville",
+      "EB Garamond","Cormorant Garamond","Spectral","Newsreader","Fraunces","Instrument Serif",
+      "Frank Ruhl Libre","DM Serif Display","Bodoni Moda","Vollkorn","Alegreya",
+      "Oswald","Bebas Neue","Anton","Archivo","Chivo","Syne","Unbounded","Space Mono",
+      "JetBrains Mono","IBM Plex Sans","IBM Plex Serif","IBM Plex Mono","Crimson Text","Bitter",
+    ];
+    const WEIGHTS = [300,400,500,600,700,800];
+
+    const loaded = new Set();
+    function loadFont(family, weight){
+      if (!family) return;
+      const key = `${family}@${weight||""}`;
+      if (loaded.has(key)) return; loaded.add(key);
+      const l = document.createElement("link"); l.rel = "stylesheet";
+      l.href = "https://fonts.googleapis.com/css2?family=" + family.replace(/ /g,"+") + (weight?`:wght@${weight}`:"") + "&display=swap";
+      document.head.appendChild(l);
+    }
+
+    // ---- Theme state --------------------------------------------------------
+    const COLOR_ROLES = [
+      ["bg","Background"],["surface","Surface"],["text","Text"],
+      ["muted","Muted"],["accent","Accent"],["accent2","Accent 2"],
+    ];
+    let theme = {
+      name: "Untitled theme",
+      fonts: { heading: { family: "Fraunces", weight: 600 }, body: { family: "Newsreader", weight: 400 } },
+      colors: { bg:"#f7f5f0", surface:"#efece5", text:"#2a2a28", muted:"#6e6154", accent:"#a85a4a", accent2:"#3f5e5a" },
+      headingSize: 56, bodySize: 24,
+    };
+    let activePath = null;
+
+    // ---- Preview grid -------------------------------------------------------
+    const grid = document.getElementById("preview-grid");
+    function renderPreview(){
+      loadFont(theme.fonts.heading.family, theme.fonts.heading.weight);
+      loadFont(theme.fonts.body.family, theme.fonts.body.weight);
+      grid.innerHTML = "";
+      for (const slide of PREVIEW_SLIDES) {
+        const tile = document.createElement("div"); tile.className = "preview-tile";
+        const frame = document.createElement("div"); frame.className = "preview-frame";
+        const scaler = document.createElement("div"); scaler.className = "scaler";
+        scaler.appendChild(renderSlide(slide, theme));
+        frame.appendChild(scaler);
+        const cap = document.createElement("div"); cap.className = "cap"; cap.textContent = slide.layout;
+        tile.append(frame, cap); grid.appendChild(tile);
+        requestAnimationFrame(() => { scaler.style.transform = `scale(${frame.clientWidth/1280})`; });
+      }
+    }
+
+    // ---- Font controls ------------------------------------------------------
+    function initFontControls(){
+      document.getElementById("font-list").innerHTML = FONTS.map(f => `<option value="${f}">`).join("");
+      for (const role of ["heading","body"]) {
+        const w = document.getElementById(`${role}-w`);
+        w.innerHTML = WEIGHTS.map(n => `<option value="${n}">${n}</option>`).join("");
+      }
+      const bind = (role) => {
+        const fam = document.getElementById(`${role}-fam`);
+        const w = document.getElementById(`${role}-w`);
+        const sample = document.getElementById(`${role}-sample`);
+        const sync = () => {
+          fam.value = theme.fonts[role].family;
+          w.value = theme.fonts[role].weight;
+          sample.style.fontFamily = `"${theme.fonts[role].family}", ${role==="heading"?"serif":"sans-serif"}`;
+          sample.style.fontWeight = theme.fonts[role].weight;
+        };
+        fam.addEventListener("change", () => { theme.fonts[role].family = fam.value.trim(); loadFont(theme.fonts[role].family, theme.fonts[role].weight); sync(); renderPreview(); });
+        w.addEventListener("change", () => { theme.fonts[role].weight = +w.value; loadFont(theme.fonts[role].family, theme.fonts[role].weight); sync(); renderPreview(); });
+        sync();
+      };
+      bind("heading"); bind("body");
+    }
+
+    // ---- Color controls (Coloris) ------------------------------------------
+    function initColorControls(){
+      const wrap = document.getElementById("colors");
+      wrap.innerHTML = "";
+      for (const [key, label] of COLOR_ROLES) {
+        const row = document.createElement("div"); row.className = "swatch-row";
+        const trigger = document.createElement("input"); trigger.type = "text"; trigger.className = "coloris-trigger";
+        trigger.setAttribute("data-coloris",""); trigger.value = theme.colors[key];
+        const block = document.createElement("div"); block.className = "swatch-block"; block.style.background = theme.colors[key];
+        block.onclick = () => trigger.click();
+        const lab = document.createElement("label"); lab.textContent = label;
+        const hex = document.createElement("span"); hex.className = "hex"; hex.textContent = theme.colors[key];
+        trigger.addEventListener("input", () => { theme.colors[key] = trigger.value; block.style.background = trigger.value; hex.textContent = trigger.value; renderPreview(); });
+        row.append(trigger, block, lab, hex); wrap.appendChild(row);
+      }
+      // Boot Coloris (delegated mode picks up [data-coloris] inputs).
+      const sc = document.createElement("studio-color"); sc.style.display = "none";
+      document.body.appendChild(sc); requestAnimationFrame(() => sc.remove());
+    }
+
+    // ---- Size + name controls ----------------------------------------------
+    function initSizeControls(){
+      const hs = document.getElementById("heading-size"), bs = document.getElementById("body-size");
+      hs.value = theme.headingSize; bs.value = theme.bodySize;
+      hs.oninput = () => { theme.headingSize = +hs.value || 56; renderPreview(); };
+      bs.oninput = () => { theme.bodySize = +bs.value || 24; renderPreview(); };
+      const name = document.getElementById("theme-name");
+      name.value = theme.name;
+      name.oninput = () => { theme.name = name.value; };
+    }
+
+    // ---- Save ---------------------------------------------------------------
+    const statusEl = document.getElementById("status");
+    function buildDoc(){
+      return { kind:"theme", version:1, name: theme.name||"Untitled theme",
+               fonts: theme.fonts, colors: theme.colors,
+               headingSize: theme.headingSize, bodySize: theme.bodySize,
+               savedAt: new Date().toISOString() };
+    }
+    document.getElementById("save").onclick = async () => {
+      try { await invoke("overwrite_artifact", { path: activePath, content: JSON.stringify(buildDoc(),null,2) }); statusEl.textContent = "Saved."; }
+      catch(e){ statusEl.textContent = "Save failed: " + e; }
+    };
+    document.getElementById("save-as").onclick = async () => {
+      const name = theme.name || "Untitled theme";
+      const content = JSON.stringify(buildDoc(), null, 2);
+      if (invoke) {
+        try { const p = await invoke("save_artifact", { kind:"theme", name, content });
+              activePath = p; document.getElementById("save").style.display = ""; statusEl.textContent = "Saved → " + p; }
+        catch(e){ statusEl.textContent = "Save failed: " + e; }
+      } else {
+        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([content],{type:"application/json"}));
+        a.download = name.replace(/[^a-z0-9]+/gi,"-").toLowerCase()+".json"; a.click();
+      }
+    };
+
+    // ---- Boot ---------------------------------------------------------------
+    async function boot(){
+      const path = new URLSearchParams(location.search).get("artifact");
+      if (path && invoke) {
+        try {
+          const data = JSON.parse(await invoke("read_artifact", { path }));
+          if (data.fonts) theme.fonts = data.fonts;
+          if (data.colors) theme.colors = { ...theme.colors, ...data.colors };
+          if (data.name) theme.name = data.name;
+          if (data.headingSize) theme.headingSize = data.headingSize;
+          if (data.bodySize) theme.bodySize = data.bodySize;
+          activePath = path; document.getElementById("save").style.display = "";
+        } catch(e){ statusEl.textContent = "Couldn't load theme: " + e; }
+      }
+      initFontControls();
+      initColorControls();
+      initSizeControls();
+      renderPreview();
+    }
+    boot();
+  </script>
+</body>
+</html>

@@ -129,3 +129,30 @@ Rules:
   derives a full palette from the theme's 6 colors. `section` slides default to
   `"accent"`.
 - `savedAt` = current ISO 8601 timestamp; `version` = 1.
+
+### theme — a reusable presentation theme
+- **Path:** `artifacts/theme/<slug>.json`
+
+A presentation's `theme` block, saved on its own so it can be reused across
+decks. Edited in the **Theme editor** (live multi-layout preview); the Slides
+tool's Theme tab lists saved themes alongside the built-in presets. Shape:
+
+```json
+{
+  "kind": "theme",
+  "version": 1,
+  "name": "Editorial Warm",
+  "fonts": {
+    "heading": { "family": "Fraunces", "weight": 600 },
+    "body": { "family": "Newsreader", "weight": 400 }
+  },
+  "colors": { "bg": "#f7f5f0", "surface": "#efece5", "text": "#2a2a28", "muted": "#6e6154", "accent": "#a85a4a", "accent2": "#3f5e5a" },
+  "headingSize": 56,
+  "bodySize": 24,
+  "savedAt": "2026-06-17T18:00:00Z"
+}
+```
+
+Same shape as a presentation's `theme` (minus `kind`/`name`/`savedAt`), so a
+theme file's fields can be copied straight into a deck's `theme`. Make a set of
+themes genuinely distinct (mood, type personality, color temperature).

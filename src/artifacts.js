@@ -35,11 +35,13 @@ export function clearArtifactsSelection() {
 const EDITOR = {
   "brand-kit": "brand-explorer.html",
   "presentation": "slides.html",
+  "theme": "theme-editor.html",
 };
 
 const KIND_LABEL = {
   "brand-kit": "Brand kits",
   "presentation": "Presentations",
+  "theme": "Themes",
 };
 
 export async function renderArtifacts() {
@@ -67,6 +69,12 @@ export async function renderArtifacts() {
     invoke("open_tool", { file: EDITOR["presentation"], query: null }),
   );
   toolbar.appendChild(newDeckBtn);
+  const newThemeBtn = el("button", "btn-add", { type: "button" });
+  newThemeBtn.innerHTML = `<span class="mi mi-sm">add</span>Theme`;
+  newThemeBtn.addEventListener("click", () =>
+    invoke("open_tool", { file: EDITOR["theme"], query: null }),
+  );
+  toolbar.appendChild(newThemeBtn);
   root.appendChild(toolbar);
 
   let items = [];
@@ -120,7 +128,9 @@ function artifactCard(item) {
       ? brandKitPreview(data)
       : item.kind === "presentation"
         ? presentationPreview(data)
-        : el("div", "artifact__preview"),
+        : item.kind === "theme"
+          ? themePreview(data)
+          : el("div", "artifact__preview"),
   );
 
   const open = () => {
@@ -217,6 +227,19 @@ function deckSchemePalette(c, scheme) {
   if (scheme === "accent") return { bg: c.accent, text: c.bg, muted: c.bg };
   if (scheme === "accent2") return { bg: c.accent2, text: c.bg, muted: c.bg };
   return { bg: c.bg, text: c.text, muted: c.muted };
+}
+
+// --- Theme preview: brand-kit-style card on the theme's fonts + 6 colors -----
+export function themePreview(data) {
+  const c = data.colors || {};
+  return brandKitPreview({
+    fonts: data.fonts || {},
+    colors: [
+      { name: "Background", value: c.bg }, { name: "Surface", value: c.surface },
+      { name: "Text", value: c.text }, { name: "Muted", value: c.muted },
+      { name: "Accent", value: c.accent }, { name: "Accent 2", value: c.accent2 },
+    ].filter((x) => x.value),
+  });
 }
 
 // --- Presentation preview: a mini render of the deck's first slide ----------

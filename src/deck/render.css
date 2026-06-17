@@ -1,0 +1,70 @@
+/* Shared presentation slide renderer styles.
+   Scoped under .slide so they serialize into web exports verbatim and can be
+   reused by any consumer (Slides editor, theme editor, Artifacts preview).
+   Depends on the per-slide CSS vars set by renderSlide() in render.js, plus
+   `--mono` from tokens.css (code blocks only; degrades gracefully without it). */
+.slide { width: 1280px; height: 720px; position: relative; box-sizing: border-box;
+         display: flex; flex-direction: column; overflow: hidden;
+         --pad: 96px; }
+.slide__inner { flex: 1; display: flex; flex-direction: column; padding: var(--pad); min-height: 0; gap: 20px;}
+.slide h1 { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); margin: 0; line-height: 1.05; font-size: calc(var(--heading-base, 56px) * var(--heading-scale, 1)); }
+.slide .kicker { font-family: var(--deck-body); font-weight: 600; text-transform: uppercase; letter-spacing: .12em; font-size: 22px; color: var(--deck-muted); margin: 0 0 18px; }
+.slide .deck-body { font-family: var(--deck-body); font-weight: var(--deck-body-w); line-height: 1.45; font-size: calc(var(--body-base, 24px) * var(--body-scale, 1)); }
+.slide .deck-body > :first-child { margin-top: 0; }
+.slide .deck-body > :last-child { margin-bottom: 0; }
+.slide .deck-body p { margin: 0 0 .6em; }
+.slide .deck-body h2 { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); font-size: 1.15em; line-height: 1.1; margin: .2em 0 .35em; }
+.slide .deck-body h3 { font-family: var(--deck-body); font-weight: 700; font-size: .82em; text-transform: uppercase; letter-spacing: .08em; color: var(--deck-muted); margin: .2em 0 .3em; }
+.slide .deck-body ul, .slide .deck-body ol { margin: 0; padding-left: 1.1em; }
+.slide .deck-body li { margin: 0 0 .5em; }
+.slide .deck-body li::marker { color: var(--deck-accent); }
+.slide .deck-body strong { color: var(--deck-accent); }
+.slide .deck-body a { color: var(--deck-accent); }
+.slide .deck-body blockquote { margin: 0 0 .6em; padding-left: .7em; border-left: 4px solid var(--deck-accent); color: var(--deck-muted); }
+.slide .deck-body code { font-family: var(--mono, monospace); font-size: .85em; background: color-mix(in srgb, var(--deck-text) 8%, transparent); padding: .08em .3em; border-radius: 5px; }
+.slide .deck-body hr { border: none; border-top: 2px solid color-mix(in srgb, var(--deck-text) 15%, transparent); margin: .6em 0; }
+/* Cards: render top-level list items as surface panels. */
+.slide .deck-body.cards ul { list-style: none; padding: 0; display: grid; gap: 18px; }
+.slide .deck-body.cards > ul > li {
+  margin: 0; background: var(--deck-surface); border-radius: 14px; padding: 22px 26px;
+  border: 1px solid color-mix(in srgb, var(--deck-text) 8%, transparent);
+}
+.slide .deck-body.cards > ul > li::marker { content: none; }
+.l-title { justify-content: center; align-items: flex-start; }
+.l-title .subtitle { font-family: var(--deck-body); font-size: 38px; margin-top: 24px; color: var(--deck-muted); }
+.l-section { justify-content: center; align-items: flex-start; position: relative; }
+/* Optional full-bleed background image behind the heading. */
+.l-section .section-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.l-section .section-scrim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.6), rgba(0,0,0,.15)); }
+.l-section h1 { position: relative; z-index: 1; }
+.l-section.has-bg h1 { color: #fff; }
+.l-title-body h1 { margin-bottom: 44px; }
+.l-two-col .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; flex: 1; min-height: 0; }
+.l-two-col .cols > .deck-body { font-size: calc(var(--body-base, 24px) * var(--body-scale, 1)); }
+/* Columns sit on subtle surface panels — only on light/soft schemes, where a
+   panel reads as separation (on dark/accent it just muddies the background). */
+.slide[data-scheme="light"] .l-two-col .cols > .deck-body,
+.slide[data-scheme="soft"] .l-two-col .cols > .deck-body { background: var(--deck-surface); padding: 32px 36px; border-radius: 16px; }
+.l-two-col h1 { margin-bottom: 28px; }
+.l-three-col .cols { grid-template-columns: 1fr 1fr 1fr; gap: 32px; }
+.l-three-col .cols > .deck-body { font-size: calc(var(--body-base, 24px) * var(--body-scale, 1) * .85); }
+.slide[data-scheme="light"] .l-three-col .cols > .deck-body,
+.slide[data-scheme="soft"] .l-three-col .cols > .deck-body { padding: 26px 28px; }
+.l-quote { justify-content: center; }
+.l-quote blockquote { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); font-size: calc(var(--heading-base, 56px) * var(--heading-scale, 1)); line-height: 1.15; margin: 0; }
+.l-quote .attr { font-family: var(--deck-body); font-size: 30px; margin-top: 32px; color: var(--deck-muted); }
+.l-quote blockquote::before { content: "\201C"; color: var(--deck-accent); }
+.l-quote blockquote::after { content: "\201D"; color: var(--deck-accent); }
+.l-image-full { padding: 0; }
+.l-image-full .full-img { width: 100%; height: 100%; object-fit: cover; }
+.l-image-full .cap { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 96px; font-family: var(--deck-body); font-size: 26px; background: linear-gradient(transparent, rgba(0,0,0,.6)); color: #fff; }
+.l-image-text .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; min-height: 0; align-items: stretch; }
+.l-image-text .split-media { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+.l-image-text .split-img { width: 100%; flex: 1; min-height: 0; object-fit: cover; border-radius: 8px; }
+.l-image-text .split-cap { font-family: var(--deck-body); font-size: calc(var(--body-base, 24px) * .8); color: var(--deck-muted); }
+.l-image-text .split-text { display: flex; flex-direction: column; justify-content: center; min-height: 0; }
+.l-image-text h1 { margin-bottom: 24px; }
+/* Section caption — a muted line pinned to the bottom of the slide. */
+.l-section .section-cap { position: absolute; left: var(--pad); right: var(--pad); bottom: var(--pad); z-index: 1; font-family: var(--deck-body); font-size: 28px; color: var(--deck-muted); }
+.l-section.has-bg .section-cap { color: rgba(255,255,255,.85); }
+.img-placeholder { display: grid; place-items: center; width: 100%; height: 100%; min-height: 200px; background: color-mix(in srgb, var(--deck-text) 8%, transparent); color: var(--deck-text); opacity: .4; font-family: var(--deck-body); font-size: 24px; border-radius: 8px; }
