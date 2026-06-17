@@ -102,6 +102,22 @@ instead; if the user cancels that dialog, the command rejects with
 Falls back to `showSaveFilePicker` / browser download when not running
 inside Studio (e.g. opened directly in a browser for testing).
 
+## Window size
+
+Tools default to 900×640. To override, call `setSize` at the top of the tool's
+script — no Rust change needed:
+
+```js
+if (window.__TAURI__) {
+  const { getCurrentWindow } = window.__TAURI__.window;
+  const { LogicalSize } = window.__TAURI__.dpi;
+  getCurrentWindow().setSize(new LogicalSize(1280, 700));
+}
+```
+
+The `core:window:allow-set-size` permission is already granted to all `tool-*`
+windows in `src-tauri/capabilities/tools.json`.
+
 ## Title bar conventions
 
 By default tool windows get a normal title bar showing the file's stem (e.g.

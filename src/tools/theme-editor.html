@@ -83,6 +83,13 @@
     import { renderSlide, PREVIEW_SLIDES } from "../deck/render.js";
     const invoke = window.__TAURI__?.core?.invoke;
 
+    // Set preferred window size on load (avoids hardcoding in Rust).
+    if (window.__TAURI__) {
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const { LogicalSize } = window.__TAURI__.dpi;
+      getCurrentWindow().setSize(new LogicalSize(1280, 700));
+    }
+
     // ---- Curated top Google Fonts (family, category) — same set as Brand Explorer.
     const FONTS = [
       ["Inter","sans"],["Roboto","sans"],["Open Sans","sans"],["Lato","sans"],
