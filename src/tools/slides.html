@@ -63,7 +63,7 @@
     overflow: hidden;
   }
   .stage-bar {
-    padding: 10px 14px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--hairline);
     display: flex;
     align-items: center;
@@ -74,6 +74,16 @@
     border: none; background: transparent; color: var(--text);
     font-family: var(--serif); font-size: 13px;
   }
+  /* Contextual control bar above the canvas — only the current layout's controls. */
+  .stage-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 9px 14px; border-bottom: 1px solid var(--hairline); min-height: 0; }
+  .stage-controls:empty { display: none; }
+  .stage-ctl { display: flex; align-items: center; gap: 6px; }
+  .stage-ctl > .label { font-size: 11px; color: var(--text-soft); }
+  .stage-ctl select.field { height: 28px; padding: 0 24px 0 8px; font-size: 12px; width: auto; }
+  .stage-ctl .img-name { font-size: 12px; max-width: 140px; flex: 0 1 auto; }
+  .stage-ctl .preview { width: 38px; height: 24px; object-fit: cover; border-radius: 3px; border: 1px solid var(--hairline); background: var(--elevated); flex: 0 0 auto; }
+  .stage-ctl .btn-icon { flex: 0 0 auto; }
+  .stage-divider { width: 1px; align-self: stretch; background: var(--hairline-strong); margin: -2px 4px; }
   .stage-scroll { flex: 1 1 auto; overflow: auto; display: grid; place-items: center; padding: 28px; }
   /* Click-to-edit text regions on the canvas. Ring uses currentColor (the
      slide's text color) so it stays visible on light and dark backgrounds. */
@@ -103,7 +113,7 @@
     flex-direction: column;
     overflow-y: auto;
   }
-  .insp-tabs { display: flex; border-bottom: 1px solid var(--hairline); position: sticky; top: 0; background: var(--bg); z-index: 1; }
+  .insp-tabs { display: flex; border-bottom: 1px solid var(--hairline); position: sticky; top: 0; background: var(--bg); z-index: 1; padding-top:16px;}
   .insp-tab { flex: 1; padding: 11px 0; border: none; background: transparent; cursor: pointer; font-family: var(--sans); font-size: 12px; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
   .insp-tab.active { color: var(--text); border-bottom-color: var(--accent); }
   .insp-sec { padding: 14px; border-bottom: 1px solid var(--hairline); display: flex; flex-direction: column; gap: 10px; }
@@ -249,6 +259,7 @@
       <button class="btn btn-ghost" id="export-web"><span class="mi mi-sm">public</span> Web</button>
       <button class="btn btn-secondary" id="save-as">Save as…</button>
     </div>
+    <div class="stage-controls" id="stage-controls"></div>
     <div class="stage-scroll">
       <div class="canvas" id="canvas"></div>
     </div>
@@ -529,6 +540,7 @@
       const slide = state.slides[current];
       canvas.innerHTML = "";
       if (!slide) return;
+      renderStageControls();
       // pre-resolve image then render
       const node = renderSlide(slide, state.theme);
       canvas.appendChild(node);
@@ -751,87 +763,72 @@
       colorSec.appendChild(chips);
       inspector.appendChild(colorSec);
 
-      // Content slots — show every field, dimming ones the current layout hides.
+      // Content slots — text fields only. Image + sizing/style controls live in
+      // the stage control bar above the canvas. Show all, dimming hidden ones.
       const content = sec("Content");
       const used = new Set(LAYOUTS[slide.layout].slots.map(s => s[0]));
       for (const [key, label, kind] of ALL_SLOTS) {
+        if (kind === "image") continue;   // image lives in the stage control bar
         const inLayout = used.has(key);
         const wrap = document.createElement("div");
         wrap.className = "slot" + (inLayout ? "" : " slot--unused");
         const lab = document.createElement("label"); lab.className="field-label"; lab.textContent=label;
         if (!inLayout) lab.textContent += " · hidden in this layout";
         wrap.appendChild(lab);
-        if (kind === "image") {
-          const row = document.createElement("div"); row.className="img-row";
-          const prev = document.createElement("img"); prev.className="preview";
-          resolveImage(slide[key]).then(u=>{ if(u) prev.src=u; });
-          const nameEl = document.createElement("div"); nameEl.className="img-name";
-          nameEl.textContent = slide[key] ? slide[key].split("/").pop() : "No image";
-          if (!slide[key]) nameEl.classList.add("img-name--empty");
-          const browse = document.createElement("button");
-          browse.className = "btn btn-ghost btn-icon"; browse.title = "Choose from media"; browse.innerHTML = `<span class="mi mi-sm">photo_library</span>`;
-          browse.onclick = () => openMediaPicker(rel => { slide[key]=rel; renderAll(); });
-          row.append(prev, nameEl, browse); wrap.appendChild(row);
-          // Fit: how the image sits in its frame.
-          const fitSel = document.createElement("select"); fitSel.className="field"; fitSel.style.marginTop="6px";
-          for (const [v,t] of [["cover","Fill frame (crop)"],["contain","Fit whole image"]]) {
-            const o=document.createElement("option"); o.value=v; o.textContent=t; fitSel.appendChild(o);
-          }
-          fitSel.value = slide.imageFit || "cover";
-          fitSel.onchange = () => { slide.imageFit = fitSel.value; scheduleRender(); };
-          wrap.appendChild(fitSel);
-        } else {
-          const ta = document.createElement(kind==="md"?"textarea":"input");
-          ta.className = "field"; ta.value = slide[key]||"";
-          if (kind==="md") ta.placeholder="Markdown — **bold**, lists, links";
-          ta.oninput = () => { slide[key]=ta.value; scheduleRender(); };
-          wrap.appendChild(ta);
-        }
+        const ta = document.createElement(kind==="md"?"textarea":"input");
+        ta.className = "field"; ta.value = slide[key]||"";
+        if (kind==="md") ta.placeholder="Markdown — **bold**, lists, links";
+        ta.oninput = () => { slide[key]=ta.value; scheduleRender(); };
+        wrap.appendChild(ta);
         content.appendChild(wrap);
       }
-      // Columns control — title-body flows its single body into 1 or 2 columns.
-      if (slide.layout === "title-body") {
-        const wrap = document.createElement("div");
-        const lab = document.createElement("label"); lab.className="field-label"; lab.textContent="Columns";
-        const sel = document.createElement("select"); sel.className="field";
-        for (const n of [1,2]) { const o=document.createElement("option"); o.value=n; o.textContent=`${n} column${n>1?"s":""}`; sel.appendChild(o); }
-        sel.value = slide.columns === 2 ? 2 : 1;
-        sel.onchange = () => { slide.columns = +sel.value; scheduleRender(); };
-        wrap.append(lab, sel); content.appendChild(wrap);
-      }
-      const hasBody = LAYOUTS[slide.layout].slots.some(s => s[2] === "md");
-      const hasHeading = LAYOUTS[slide.layout].slots.some(s => s[0] === "title" || s[0] === "quote");
-      // Heading size — S/M/L/XL, scaled from the theme's base; layout sets default.
-      if (hasHeading) {
-        const wrap = document.createElement("div");
-        const lab = document.createElement("label"); lab.className="field-label"; lab.textContent="Heading size";
-        const sel = document.createElement("select"); sel.className="field";
-        for (const [v,t] of [["s","Small"],["m","Medium"],["l","Large"],["xl","X-Large"]]) { const o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); }
-        sel.value = slide.headingSize || HEADING_DEFAULT[slide.layout] || "m";
-        sel.onchange = () => { slide.headingSize = sel.value; scheduleRender(); };
-        wrap.append(lab, sel); content.appendChild(wrap);
-      }
-      // Body text size — S/M/L, scaled from the theme's base size.
-      if (hasBody) {
-        const wrap = document.createElement("div");
-        const lab = document.createElement("label"); lab.className="field-label"; lab.textContent="Body size";
-        const sel = document.createElement("select"); sel.className="field";
-        for (const [v,t] of [["s","Small"],["m","Medium"],["l","Large"]]) { const o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); }
-        sel.value = slide.bodySize || "m";
-        sel.onchange = () => { slide.bodySize = sel.value; scheduleRender(); };
-        wrap.append(lab, sel); content.appendChild(wrap);
-      }
-      // List style — render markdown lists as plain bullets or surface cards.
-      if (hasBody) {
-        const wrap = document.createElement("div");
-        const lab = document.createElement("label"); lab.className="field-label"; lab.textContent="List style";
-        const sel = document.createElement("select"); sel.className="field";
-        for (const [v,t] of [["bullets","Bullets"],["cards","Cards"]]) { const o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); }
-        sel.value = slide.listStyle || "bullets";
-        sel.onchange = () => { slide.listStyle = sel.value; scheduleRender(); };
-        wrap.append(lab, sel); content.appendChild(wrap);
-      }
       inspector.appendChild(content);
+    }
+
+    // ---------- Stage control bar (contextual controls above the canvas) -------
+    // Only the controls whose slot/feature the current layout actually uses.
+    const ctlBar = document.getElementById("stage-controls");
+    function renderStageControls(){
+      const slide = state.slides[current];
+      ctlBar.innerHTML = "";
+      if (!slide) return;
+      const slots = LAYOUTS[slide.layout].slots;
+      const hasBody = slots.some(s => s[2] === "md");
+      const hasHeading = slots.some(s => s[0] === "title" || s[0] === "quote");
+      const imgSlot = slots.find(s => s[2] === "image");
+
+      const addSelect = (label, opts, value, onchange) => {
+        const ctl = document.createElement("div"); ctl.className = "stage-ctl";
+        const lab = document.createElement("span"); lab.className = "label"; lab.textContent = label;
+        const sel = document.createElement("select"); sel.className = "field";
+        for (const [v,t] of opts) { const o = document.createElement("option"); o.value = v; o.textContent = t; sel.appendChild(o); }
+        sel.value = value; sel.onchange = () => onchange(sel.value);
+        ctl.append(lab, sel); ctlBar.appendChild(ctl);
+      };
+
+      if (imgSlot) {
+        const key = imgSlot[0];
+        const ctl = document.createElement("div"); ctl.className = "stage-ctl";
+        const tag = document.createElement("span"); tag.className = "label"; tag.textContent = imgSlot[1];
+        ctl.appendChild(tag);
+        const prev = document.createElement("img"); prev.className = "preview";
+        resolveImage(slide[key]).then(u => { if (u) prev.src = u; });
+        const nameEl = document.createElement("div"); nameEl.className = "img-name";
+        nameEl.textContent = slide[key] ? slide[key].split("/").pop() : "No image";
+        if (!slide[key]) nameEl.classList.add("img-name--empty");
+        const browse = document.createElement("button");
+        browse.className = "btn btn-ghost btn-icon"; browse.title = "Choose image";
+        browse.innerHTML = `<span class="mi mi-sm">photo_library</span>`;
+        browse.onclick = () => openMediaPicker(rel => { slide[key] = rel; renderAll(); });
+        ctl.append(prev, nameEl, browse); ctlBar.appendChild(ctl);
+        addSelect("Fit", [["cover","Fill"],["contain","Fit"]], slide.imageFit || "cover", v => { slide.imageFit = v; scheduleRender(); });
+        // Divider separating the image controls from the text controls.
+        if (hasHeading || hasBody) ctlBar.appendChild(Object.assign(document.createElement("div"), { className: "stage-divider" }));
+      }
+      if (hasHeading) addSelect("Heading", [["s","S"],["m","M"],["l","L"],["xl","XL"]], slide.headingSize || HEADING_DEFAULT[slide.layout] || "m", v => { slide.headingSize = v; scheduleRender(); });
+      if (hasBody) addSelect("Body", [["s","S"],["m","M"],["l","L"]], slide.bodySize || "m", v => { slide.bodySize = v; scheduleRender(); });
+      if (slide.layout === "title-body") addSelect("Columns", [["1","1"],["2","2"]], String(slide.columns === 2 ? 2 : 1), v => { slide.columns = +v; scheduleRender(); });
+      if (hasBody) addSelect("List", [["bullets","Bullets"],["cards","Cards"]], slide.listStyle || "bullets", v => { slide.listStyle = v; scheduleRender(); });
     }
 
     function sec(title){ const s=document.createElement("div"); s.className="insp-sec"; const h=document.createElement("h3"); h.textContent=title; s.appendChild(h); return s; }
