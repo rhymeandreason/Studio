@@ -130,7 +130,7 @@
   .theme-card__name { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family:system-ui;}
   .theme-card.active .theme-card__name { color: var(--accent); }
   .theme-card__chips { display: flex; gap: 3px; flex: 0 0 auto; }
-  .theme-card__chips span { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
+  .theme-card__chips span { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
 
   .scheme-chips { display: flex; gap: 8px; }
   .scheme-chip { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--hairline-strong); cursor: pointer; display: grid; place-items: center; padding: 0; }
@@ -171,7 +171,7 @@
            --pad: 96px; }
   .slide__inner { flex: 1; display: flex; flex-direction: column; padding: var(--pad); min-height: 0; gap: 20px;}
   .slide h1 { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); margin: 0; line-height: 1.05; }
-  .slide .kicker { font-family: var(--deck-body); font-weight: 600; text-transform: uppercase; letter-spacing: .12em; font-size: 22px; opacity: .7; margin: 0 0 18px; }
+  .slide .kicker { font-family: var(--deck-body); font-weight: 600; text-transform: uppercase; letter-spacing: .12em; font-size: 22px; color: var(--deck-muted); margin: 0 0 18px; }
   .slide .deck-body { font-family: var(--deck-body); font-weight: var(--deck-body-w); line-height: 1.45; font-size: 34px; }
   .slide .deck-body p { margin: 0 0 .6em; }
   .slide .deck-body ul { margin: 0; padding-left: 1.1em; }
@@ -180,17 +180,22 @@
   .slide .deck-body a { color: var(--deck-accent); }
   .l-title { justify-content: center; align-items: flex-start; }
   .l-title h1 { font-size: 96px; }
-  .l-title .subtitle { font-family: var(--deck-body); font-size: 38px; margin-top: 24px; opacity: .8; }
+  .l-title .subtitle { font-family: var(--deck-body); font-size: 38px; margin-top: 24px; color: var(--deck-muted); }
   .l-section { justify-content: center; align-items: flex-start; }
   .l-section h1 { font-size: 84px; }
-  .l-title-body h1 { font-size: 64px; margin-bottom: 50px; }
-  .l-two-col .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; min-height: 0; }
+  .l-title-body h1 { font-size: 64px; margin-bottom: 44px; }
+  .l-two-col .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; flex: 1; min-height: 0; }
+  .l-two-col .cols > .deck-body { font-size: 30px; }
+  /* Columns sit on subtle surface panels — only on light/soft schemes, where a
+     panel reads as separation (on dark/accent it just muddies the background). */
+  .slide[data-scheme="light"] .l-two-col .cols > .deck-body,
+  .slide[data-scheme="soft"] .l-two-col .cols > .deck-body { background: var(--deck-surface); padding: 32px 36px; border-radius: 16px; }
   .l-two-col h1 { font-size: 60px; margin-bottom: 28px; }
   .l-quote { justify-content: center; }
   .l-quote blockquote { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); font-size: 64px; line-height: 1.15; margin: 0; }
-  .l-quote .attr { font-family: var(--deck-body); font-size: 30px; margin-top: 32px; opacity: .7; }
-  .l-quote blockquote::before { content: "“"; }
-  .l-quote blockquote::after { content: "”"; }
+  .l-quote .attr { font-family: var(--deck-body); font-size: 30px; margin-top: 32px; color: var(--deck-muted); }
+  .l-quote blockquote::before { content: "“"; color: var(--deck-accent); }
+  .l-quote blockquote::after { content: "”"; color: var(--deck-accent); }
   .l-image-full { padding: 0; }
   .l-image-full .full-img { width: 100%; height: 100%; object-fit: cover; }
   .l-image-full .cap { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 96px; font-family: var(--deck-body); font-size: 26px; background: linear-gradient(transparent, rgba(0,0,0,.6)); color: #fff; }
@@ -269,19 +274,21 @@
     }
 
     // ---------- Theme presets ----------
+    // colors: { bg, surface, text, muted, accent, accentText } — a 6-role palette
+    // (surface = subtle panel bg, muted = secondary text, accentText = text on accent).
     const PRESETS = [
       { name: "Runes", fonts:{heading:{family:"Fraunces",weight:600},body:{family:"Newsreader",weight:400}},
-        colors:{bg:"#f7f5f0",text:"#2a2a28",accent:"#a85a4a"} },
+        colors:{bg:"#f7f5f0",surface:"#efece5",text:"#2a2a28",muted:"#6e6154",accent:"#a85a4a",accentText:"#f7f5f0"} },
       { name: "Mono", fonts:{heading:{family:"Space Grotesk",weight:600},body:{family:"Inter",weight:400}},
-        colors:{bg:"#ffffff",text:"#111111",accent:"#2563eb"} },
+        colors:{bg:"#ffffff",surface:"#f3f4f6",text:"#111111",muted:"#6b7280",accent:"#2563eb",accentText:"#ffffff"} },
       { name: "Editorial", fonts:{heading:{family:"Playfair Display",weight:700},body:{family:"Lora",weight:400}},
-        colors:{bg:"#fbf9f4",text:"#1b1b1a",accent:"#7a5c3e"} },
+        colors:{bg:"#fbf9f4",surface:"#f1ece1",text:"#1b1b1a",muted:"#7c736a",accent:"#7a5c3e",accentText:"#fbf9f4"} },
       { name: "Night", fonts:{heading:{family:"Manrope",weight:700},body:{family:"Manrope",weight:400}},
-        colors:{bg:"#16161a",text:"#f4f4f5",accent:"#c4f042"} },
+        colors:{bg:"#16161a",surface:"#23232a",text:"#f4f4f5",muted:"#a1a1aa",accent:"#c4f042",accentText:"#16161a"} },
       { name: "Warm", fonts:{heading:{family:"DM Serif Display",weight:400},body:{family:"DM Sans",weight:400}},
-        colors:{bg:"#fdf3e7",text:"#3a2a1e",accent:"#d2693a"} },
+        colors:{bg:"#fdf3e7",surface:"#f7e6d2",text:"#3a2a1e",muted:"#9a7a5e",accent:"#d2693a",accentText:"#fdf3e7"} },
       { name: "Design Class", fonts:{heading:{family:"Plus Jakarta Sans",weight:600},body:{family:"Plus Jakarta Sans",weight:400}},
-        colors:{bg:"#f7f5f0",text:"#3a2a1e",accent:"#2563eb"} },
+        colors:{bg:"#f7f5f0",surface:"#ecebe6",text:"#3a2a1e",muted:"#7a6f63",accent:"#2563eb",accentText:"#ffffff"} },
     ];
 
     // ---------- State ----------
@@ -384,10 +391,18 @@
     //   light  → theme bg / text          accent = accent
     //   dark   → text as bg, bg as text    accent = accent
     //   accent → accent as bg, bg as text  accent = text (so bold stays visible)
+    const SCHEMES = ["light","soft","dark","accent"];
     function colorScheme(c, scheme) {
-      if (scheme === "dark")   return { bg: c.text,   text: c.bg, accent: c.accent };
-      if (scheme === "accent") return { bg: c.accent, text: c.bg, accent: c.text };
-      return { bg: c.bg, text: c.text, accent: c.accent };
+      // light  — the palette as-is.
+      // soft   — `surface` becomes the background; panels fall back to base bg.
+      // dark   — invert onto the dark `text` color: text becomes the bg, the
+      //          light bg becomes the text, `muted` carries over, surface = muted
+      //          as a subtle dark panel, accent stays.
+      // accent — the accent fills bg; `accentText` is text + muted.
+      if (scheme === "soft")   return { bg: c.surface, surface: c.bg,        text: c.text,       muted: c.muted,      accent: c.accent };
+      if (scheme === "dark")   return { bg: c.text,    surface: c.muted,     text: c.bg,         muted: c.surface,    accent: c.accent };
+      if (scheme === "accent") return { bg: c.accent,  surface: c.accentText, text: c.accentText, muted: c.accentText, accent: c.accentText };
+      return { bg: c.bg, surface: c.surface, text: c.text, muted: c.muted, accent: c.accent };
     }
 
     function renderSlide(slide, theme, resolved = {}) {
@@ -397,9 +412,12 @@
       // Per-slide color scheme, derived from the theme's three colors. The
       // background is painted on the slide root so it always fills the frame.
       const scheme = slide.colorScheme || (slide.layout === "section" ? "accent" : "light");
+      el.dataset.scheme = scheme;
       const pal = colorScheme(t.colors, scheme);
       el.style.setProperty("--deck-bg", pal.bg);
+      el.style.setProperty("--deck-surface", pal.surface);
       el.style.setProperty("--deck-text", pal.text);
+      el.style.setProperty("--deck-muted", pal.muted);
       el.style.setProperty("--deck-accent", pal.accent);
       el.style.setProperty("--deck-heading", `"${t.fonts.heading.family}", serif`);
       el.style.setProperty("--deck-heading-w", t.fonts.heading.weight);
@@ -663,7 +681,7 @@
       const colorSec = sec("Color");
       const chips = document.createElement("div"); chips.className="scheme-chips";
       const activeScheme = slide.colorScheme || (slide.layout === "section" ? "accent" : "light");
-      for (const v of ["light","dark","accent"]) {
+      for (const v of SCHEMES) {
         const pal = colorScheme(state.theme.colors, v);
         const chip = document.createElement("button");
         chip.className = "scheme-chip" + (v===activeScheme?" active":"");
@@ -751,7 +769,7 @@
         stage.appendChild(renderSlide(sample, p));
         preview.appendChild(stage);
         const meta = document.createElement("div"); meta.className = "theme-card__meta";
-        meta.innerHTML = `<div class="theme-card__name">${p.name}</div><div class="theme-card__chips">${["bg","text","accent"].map(k=>`<span style="background:${p.colors[k]}"></span>`).join("")}</div>`;
+        meta.innerHTML = `<div class="theme-card__name">${p.name}</div><div class="theme-card__chips">${["bg","surface","text","muted","accent","accentText"].filter(k=>p.colors[k]).map(k=>`<span style="background:${p.colors[k]}"></span>`).join("")}</div>`;
         card.append(preview, meta);
         card.onclick = () => { state.theme = structuredClone(p); loadThemeFonts(state.theme); renderAll(); };
         presetWrap.appendChild(card);
