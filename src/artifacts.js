@@ -133,7 +133,15 @@ function artifactCard(item) {
   };
 
   const foot = el("div", "artifact-card__foot");
-  foot.appendChild(el("span", "artifact-card__name", { textContent: item.name }));
+  const info = el("div", "artifact-card__info");
+  info.appendChild(el("span", "artifact-card__name", { textContent: item.name }));
+  if (item.kind === "presentation") {
+    const n = Array.isArray(data.slides) ? data.slides.length : 0;
+    info.appendChild(
+      el("span", "artifact-card__meta", { textContent: `${n} slide${n === 1 ? "" : "s"}` }),
+    );
+  }
+  foot.appendChild(info);
   foot.appendChild(actionBtn("open_in_new", "Open", open, true));
   card.appendChild(foot);
 
@@ -201,54 +209,62 @@ export function brandKitPreview(data) {
   return wrap;
 }
 
-// --- Presentation preview: theme swatch + a few slide-title lines -----------
+// Derive a slide's {bg, text, muted} from the theme palette + color scheme.
+// Mirrors colorScheme() in slides.html (kept light — preview only).
+function deckSchemePalette(c, scheme) {
+  if (scheme === "soft") return { bg: c.surface, text: c.text, muted: c.muted };
+  if (scheme === "dark") return { bg: c.text, text: c.bg, muted: c.surface };
+  if (scheme === "accent") return { bg: c.accent, text: c.bg, muted: c.bg };
+  if (scheme === "accent2") return { bg: c.accent2, text: c.bg, muted: c.bg };
+  return { bg: c.bg, text: c.text, muted: c.muted };
+}
+
+// --- Presentation preview: a mini render of the deck's first slide ----------
 export function presentationPreview(data) {
   const theme = data.theme || {};
   const colors = theme.colors || {};
   const fonts = theme.fonts || {};
   const slides = Array.isArray(data.slides) ? data.slides : [];
+  const slide = slides[0] || {};
 
   const heading = fonts.heading?.family;
+  const body = fonts.body?.family;
   if (heading) loadGoogleFont(heading, fonts.heading?.weight);
+  if (body) loadGoogleFont(body, fonts.body?.weight);
+
+  const scheme = slide.colorScheme || (slide.layout === "section" ? "accent" : "light");
+  const pal = deckSchemePalette(colors, scheme);
 
   const wrap = el("div", "artifact__preview artifact__preview--deck");
-  wrap.style.background = colors.bg || "#fff";
-  wrap.style.color = colors.text || "#222";
-  wrap.style.padding = "12px";
-  wrap.style.borderRadius = "var(--radius-sm)";
+  wrap.style.background = pal.bg || "#fff";
+  wrap.style.color = pal.text || "#222";
+  wrap.style.justifyContent = "center";
+  wrap.style.gap = "7px";
+  wrap.style.padding = "16px 18px";
   wrap.style.overflow = "hidden";
 
-  const titleSlide = slides.find((s) => s.title) || slides[0] || {};
-  const big = el("div", "", { textContent: titleSlide.title || "Untitled deck" });
+  const titleText = slide.title || slide.quote || (slides.length ? "" : "Empty deck");
+  const big = el("div", "", { textContent: titleText });
   big.style.fontFamily = heading ? `"${heading}", serif` : "var(--serif)";
   if (fonts.heading?.weight) big.style.fontWeight = String(fonts.heading.weight);
-  big.style.fontSize = "18px";
+  big.style.fontSize = "21px";
   big.style.lineHeight = "1.1";
-  big.style.whiteSpace = "nowrap";
+  big.style.display = "-webkit-box";
+  big.style.webkitLineClamp = "3";
+  big.style.webkitBoxOrient = "vertical";
   big.style.overflow = "hidden";
-  big.style.textOverflow = "ellipsis";
   wrap.appendChild(big);
 
-  const meta = el("div", "", {
-    textContent: `${slides.length} slide${slides.length === 1 ? "" : "s"}`,
-  });
-  meta.style.fontSize = "11px";
-  meta.style.opacity = "0.6";
-  meta.style.marginTop = "6px";
-  wrap.appendChild(meta);
-
-  const sw = el("div", "");
-  sw.style.display = "flex";
-  sw.style.gap = "4px";
-  sw.style.marginTop = "8px";
-  for (const v of [colors.bg, colors.surface, colors.text, colors.muted, colors.accent, colors.accent2].filter(Boolean)) {
-    const s = el("span", "");
-    s.style.cssText =
-      "width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.15)";
-    s.style.background = v;
-    sw.appendChild(s);
+  if (slide.subtitle) {
+    const sub = el("div", "", { textContent: slide.subtitle });
+    sub.style.fontFamily = body ? `"${body}", sans-serif` : "var(--sans)";
+    sub.style.fontSize = "13px";
+    sub.style.color = pal.muted || pal.text;
+    sub.style.whiteSpace = "nowrap";
+    sub.style.overflow = "hidden";
+    sub.style.textOverflow = "ellipsis";
+    wrap.appendChild(sub);
   }
-  wrap.appendChild(sw);
   return wrap;
 }
 

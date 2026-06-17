@@ -1633,6 +1633,10 @@ td.ntable__total-cell {
     border-top: 2px solid var(--hairline-strong);
 }
 
+.panel {
+    padding-bottom: 80px;
+}
+
 /* Media panel — grid on the left, edit controls in a right side column */
 .panel--media {
     display: block;
@@ -2795,7 +2799,9 @@ td.ntable__total-cell {
     padding: 8px 10px;
     border-top: 1px solid var(--hairline);
 }
-.artifact-card__name { font-size: 13px; color: var(--text); }
+.artifact-card__info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.artifact-card__name { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.artifact-card__meta { font-size: 11px; color: var(--text-muted); }
 .artifact__preview {
     height: 120px;
     padding: 14px;
