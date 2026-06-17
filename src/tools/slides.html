@@ -191,6 +191,10 @@
   .slide[data-scheme="light"] .l-two-col .cols > .deck-body,
   .slide[data-scheme="soft"] .l-two-col .cols > .deck-body { background: var(--deck-surface); padding: 32px 36px; border-radius: 16px; }
   .l-two-col h1 { font-size: 60px; margin-bottom: 28px; }
+  .l-three-col .cols { grid-template-columns: 1fr 1fr 1fr; gap: 32px; }
+  .l-three-col .cols > .deck-body { font-size: 25px; }
+  .slide[data-scheme="light"] .l-three-col .cols > .deck-body,
+  .slide[data-scheme="soft"] .l-three-col .cols > .deck-body { padding: 26px 28px; }
   .l-quote { justify-content: center; }
   .l-quote blockquote { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); font-size: 64px; line-height: 1.15; margin: 0; }
   .l-quote .attr { font-family: var(--deck-body); font-size: 30px; margin-top: 32px; color: var(--deck-muted); }
@@ -243,6 +247,7 @@
       "section":    { name: "Section",    slots: [["title","Section title"]] },
       "title-body": { name: "Title + Body", slots: [["title","Title"],["body","Body","md"]] },
       "two-col":    { name: "Two column", slots: [["title","Title"],["left","Left","md"],["right","Right","md"]] },
+      "three-col":  { name: "Three column", slots: [["title","Title"],["left","Left","md"],["middle","Middle","md"],["right","Right","md"]] },
       "quote":      { name: "Quote",      slots: [["quote","Quote"],["attribution","Attribution"]] },
       "image-full": { name: "Image full", slots: [["image","Image","image"],["caption","Caption"]] },
       "image-text": { name: "Image + Text", slots: [["title","Title"],["image","Image","image"],["body","Body","md"]] },
@@ -254,14 +259,14 @@
     const ALL_SLOTS = [
       ["title","Title"], ["subtitle","Subtitle"],
       ["quote","Quote"], ["attribution","Attribution"],
-      ["body","Body","md"], ["left","Left","md"], ["right","Right","md"],
+      ["body","Body","md"], ["left","Left","md"], ["middle","Middle","md"], ["right","Right","md"],
       ["image","Image","image"], ["caption","Caption"],
     ];
 
     // The primary prose slot for each layout — used to carry body text across a
     // layout change (e.g. title-body's `body` ↔ two-col's `left`).
     const PRIMARY_BODY = {
-      "title-body": "body", "two-col": "left", "image-text": "body", "quote": "quote",
+      "title-body": "body", "two-col": "left", "three-col": "left", "image-text": "body", "quote": "quote",
     };
 
     // Switch a slide's layout, moving its main text into the new layout's primary
@@ -274,21 +279,22 @@
     }
 
     // ---------- Theme presets ----------
-    // colors: { bg, surface, text, muted, accent, accentText } — a 6-role palette
-    // (surface = subtle panel bg, muted = secondary text, accentText = text on accent).
+    // colors: { bg, surface, text, muted, accent, accent2 } — a 6-role palette
+    // (surface = subtle panel bg, muted = secondary text, accent/accent2 = two
+    // accent colors, each usable as a full-slide background scheme).
     const PRESETS = [
       { name: "Runes", fonts:{heading:{family:"Fraunces",weight:600},body:{family:"Newsreader",weight:400}},
-        colors:{bg:"#f7f5f0",surface:"#efece5",text:"#2a2a28",muted:"#6e6154",accent:"#a85a4a",accentText:"#f7f5f0"} },
+        colors:{bg:"#f7f5f0",surface:"#efece5",text:"#2a2a28",muted:"#6e6154",accent:"#a85a4a",accent2:"#3f5e5a"} },
       { name: "Mono", fonts:{heading:{family:"Space Grotesk",weight:600},body:{family:"Inter",weight:400}},
-        colors:{bg:"#ffffff",surface:"#f3f4f6",text:"#111111",muted:"#6b7280",accent:"#2563eb",accentText:"#ffffff"} },
+        colors:{bg:"#ffffff",surface:"#f3f4f6",text:"#111111",muted:"#6b7280",accent:"#2563eb",accent2:"#7c3aed"} },
       { name: "Editorial", fonts:{heading:{family:"Playfair Display",weight:700},body:{family:"Lora",weight:400}},
-        colors:{bg:"#fbf9f4",surface:"#f1ece1",text:"#1b1b1a",muted:"#7c736a",accent:"#7a5c3e",accentText:"#fbf9f4"} },
+        colors:{bg:"#fbf9f4",surface:"#f1ece1",text:"#1b1b1a",muted:"#7c736a",accent:"#7a5c3e",accent2:"#3d5a40"} },
       { name: "Night", fonts:{heading:{family:"Manrope",weight:700},body:{family:"Manrope",weight:400}},
-        colors:{bg:"#16161a",surface:"#23232a",text:"#f4f4f5",muted:"#a1a1aa",accent:"#c4f042",accentText:"#16161a"} },
+        colors:{bg:"#16161a",surface:"#23232a",text:"#f4f4f5",muted:"#a1a1aa",accent:"#c4f042",accent2:"#f0723e"} },
       { name: "Warm", fonts:{heading:{family:"DM Serif Display",weight:400},body:{family:"DM Sans",weight:400}},
-        colors:{bg:"#fdf3e7",surface:"#f7e6d2",text:"#3a2a1e",muted:"#9a7a5e",accent:"#d2693a",accentText:"#fdf3e7"} },
+        colors:{bg:"#fdf3e7",surface:"#f7e6d2",text:"#3a2a1e",muted:"#9a7a5e",accent:"#d2693a",accent2:"#6b4a8f"} },
       { name: "Design Class", fonts:{heading:{family:"Plus Jakarta Sans",weight:600},body:{family:"Plus Jakarta Sans",weight:400}},
-        colors:{bg:"#f7f5f0",surface:"#ecebe6",text:"#3a2a1e",muted:"#7a6f63",accent:"#2563eb",accentText:"#ffffff"} },
+        colors:{bg:"#f7f5f0",surface:"#ecebe6",text:"#3a2a1e",muted:"#7a6f63",accent:"#2563eb",accent2:"#e0653a"} },
     ];
 
     // ---------- State ----------
@@ -391,17 +397,19 @@
     //   light  → theme bg / text          accent = accent
     //   dark   → text as bg, bg as text    accent = accent
     //   accent → accent as bg, bg as text  accent = text (so bold stays visible)
-    const SCHEMES = ["light","soft","dark","accent"];
+    const SCHEMES = ["light","soft","dark","accent","accent2"];
     function colorScheme(c, scheme) {
-      // light  — the palette as-is.
-      // soft   — `surface` becomes the background; panels fall back to base bg.
-      // dark   — invert onto the dark `text` color: text becomes the bg, the
-      //          light bg becomes the text, `muted` carries over, surface = muted
-      //          as a subtle dark panel, accent stays.
-      // accent — the accent fills bg; `accentText` is text + muted.
-      if (scheme === "soft")   return { bg: c.surface, surface: c.bg,        text: c.text,       muted: c.muted,      accent: c.accent };
-      if (scheme === "dark")   return { bg: c.text,    surface: c.muted,     text: c.bg,         muted: c.surface,    accent: c.accent };
-      if (scheme === "accent") return { bg: c.accent,  surface: c.accentText, text: c.accentText, muted: c.accentText, accent: c.accentText };
+      // light   — the palette as-is.
+      // soft    — `surface` becomes the background; panels fall back to base bg.
+      // dark    — invert onto the dark `text` color: text becomes the bg, the
+      //           light bg becomes the text, `muted` carries over, surface = muted
+      //           as a subtle dark panel, accent stays.
+      // accent  — the `accent` color fills the slide; `bg` is the text.
+      // accent2 — same, with the second accent color.
+      if (scheme === "soft")    return { bg: c.surface, surface: c.bg,      text: c.text, muted: c.muted,   accent: c.accent };
+      if (scheme === "dark")    return { bg: c.text,    surface: c.muted,   text: c.bg,   muted: c.surface, accent: c.accent };
+      if (scheme === "accent")  return { bg: c.accent,  surface: c.accent,  text: c.bg,   muted: c.bg,      accent: c.bg };
+      if (scheme === "accent2") return { bg: c.accent2, surface: c.accent2, text: c.bg,   muted: c.bg,      accent: c.bg };
       return { bg: c.bg, surface: c.surface, text: c.text, muted: c.muted, accent: c.accent };
     }
 
@@ -446,6 +454,8 @@
           break;
         case "two-col":
           inner = `<div class="slide__inner l-two-col"><h1 data-slot="title">${esc(slide.title)}</h1><div class="cols"><div class="deck-body" data-slot="left">${md(slide.left)}</div><div class="deck-body" data-slot="right">${md(slide.right)}</div></div></div>`; break;
+        case "three-col":
+          inner = `<div class="slide__inner l-two-col l-three-col"><h1 data-slot="title">${esc(slide.title)}</h1><div class="cols"><div class="deck-body" data-slot="left">${md(slide.left)}</div><div class="deck-body" data-slot="middle">${md(slide.middle)}</div><div class="deck-body" data-slot="right">${md(slide.right)}</div></div></div>`; break;
         case "quote":
           inner = `<div class="slide__inner l-quote"><blockquote data-slot="quote">${esc(slide.quote)}</blockquote>${slide.attribution?`<div class="attr">— <span data-slot="attribution">${esc(slide.attribution)}</span></div>`:""}</div>`; break;
         case "image-full":
@@ -769,7 +779,7 @@
         stage.appendChild(renderSlide(sample, p));
         preview.appendChild(stage);
         const meta = document.createElement("div"); meta.className = "theme-card__meta";
-        meta.innerHTML = `<div class="theme-card__name">${p.name}</div><div class="theme-card__chips">${["bg","surface","text","muted","accent","accentText"].filter(k=>p.colors[k]).map(k=>`<span style="background:${p.colors[k]}"></span>`).join("")}</div>`;
+        meta.innerHTML = `<div class="theme-card__name">${p.name}</div><div class="theme-card__chips">${["bg","surface","text","muted","accent","accent2"].filter(k=>p.colors[k]).map(k=>`<span style="background:${p.colors[k]}"></span>`).join("")}</div>`;
         card.append(preview, meta);
         card.onclick = () => { state.theme = structuredClone(p); loadThemeFonts(state.theme); renderAll(); };
         presetWrap.appendChild(card);
@@ -789,6 +799,7 @@
         case "section": g2=`<rect x="0" y="0" width="100" height="56" fill="${a}" opacity=".25"/>`+box(14,24,48,8,a); break;
         case "title-body": g2=box(14,12,40,7,a)+box(14,26,72,4,g)+box(14,34,72,4,g)+box(14,42,52,4,g); break;
         case "two-col": g2=box(14,10,40,6,a)+box(14,24,32,4,g)+box(14,32,32,4,g)+box(54,24,32,4,g)+box(54,32,32,4,g); break;
+        case "three-col": g2=box(14,10,40,6,a)+box(14,24,20,4,g)+box(14,32,20,4,g)+box(40,24,20,4,g)+box(40,32,20,4,g)+box(66,24,20,4,g)+box(66,32,20,4,g); break;
         case "quote": g2=box(20,20,60,7,a)+box(20,32,40,7,a)+box(20,46,24,4,g); break;
         case "image-full": g2=box(0,0,100,56,g); break;
         case "image-text": g2=box(8,8,40,40,g)+box(54,16,34,7,a)+box(54,30,34,4,g)+box(54,38,28,4,g); break;
@@ -807,6 +818,7 @@
       "section": { title:"Section" },
       "title-body": { title:"Title", body:"Your content here." },
       "two-col": { title:"Title", left:"- Point one\n- Point two", right:"- Point three\n- Point four" },
+      "three-col": { title:"Title", left:"**One**\n\nFirst point.", middle:"**Two**\n\nSecond point.", right:"**Three**\n\nThird point." },
       "quote": { quote:"A memorable line.", attribution:"Source" },
       "image-full": { image:"", caption:"" },
       "image-text": { title:"Title", image:"", body:"Describe the image." },

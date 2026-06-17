@@ -72,7 +72,7 @@ Edited in the **Slides** tool; the Artifacts panel previews it. Shape:
       "heading": { "family": "Fraunces", "weight": 600 },
       "body": { "family": "Newsreader", "weight": 400 }
     },
-    "colors": { "bg": "#f7f5f0", "surface": "#efece5", "text": "#2a2a28", "muted": "#6e6154", "accent": "#a85a4a", "accentText": "#f7f5f0" }
+    "colors": { "bg": "#f7f5f0", "surface": "#efece5", "text": "#2a2a28", "muted": "#6e6154", "accent": "#a85a4a", "accent2": "#3f5e5a" }
   },
   "slides": [
     { "layout": "title", "title": "Q3 Review", "subtitle": "Product & growth" },
@@ -91,10 +91,10 @@ Rules:
 - `kind` must be exactly `presentation`.
 - `theme.fonts.heading|body` are `{ family, weight }` (real Google Fonts family,
   weight 100–900), same contract as brand-kit fonts. `theme.colors` =
-  `{ bg, surface, text, muted, accent, accentText }` hex values — `surface` is a
+  `{ bg, surface, text, muted, accent, accent2 }` hex values — `surface` is a
   subtle panel background, `muted` is secondary text (subtitles, captions),
-  `accentText` is text shown on the accent color. A per-slide `colorScheme`
-  derives light/dark/accent palettes from these.
+  `accent`/`accent2` are two accent colors (each usable as a full-slide
+  background). A per-slide `colorScheme` derives the palette from these.
 - Each slide has a `layout` plus the slots that layout uses. Valid layouts and
   their slots:
   - `title` → `title`, `subtitle`
@@ -102,6 +102,7 @@ Rules:
   - `title-body` → `title`, `body` (optional `columns`: `1` (default) or `2` —
     flows the single body into that many columns via CSS column-count)
   - `two-col` → `title`, `left`, `right`
+  - `three-col` → `title`, `left`, `middle`, `right`
   - `quote` → `quote`, `attribution`
   - `image-full` → `image`, `caption`
   - `image-text` → `title`, `image`, `body`
@@ -113,6 +114,7 @@ Rules:
   frame: `"cover"` (default, fills and crops) or `"contain"` (fits the whole
   image, letterboxed).
 - Optional `colorScheme` on any slide: `"light"` (default), `"soft"` (the
-  `surface` color as background), `"dark"`, or `"accent"` — each derives a full
-  palette from the theme's 6 colors. `section` slides default to `"accent"`.
+  `surface` color as background), `"dark"`, `"accent"`, or `"accent2"` — each
+  derives a full palette from the theme's 6 colors. `section` slides default to
+  `"accent"`.
 - `savedAt` = current ISO 8601 timestamp; `version` = 1.

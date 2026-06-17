@@ -241,7 +241,7 @@ export function presentationPreview(data) {
   sw.style.display = "flex";
   sw.style.gap = "4px";
   sw.style.marginTop = "8px";
-  for (const v of [colors.bg, colors.surface, colors.text, colors.muted, colors.accent, colors.accentText].filter(Boolean)) {
+  for (const v of [colors.bg, colors.surface, colors.text, colors.muted, colors.accent, colors.accent2].filter(Boolean)) {
     const s = el("span", "");
     s.style.cssText =
       "width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.15)";
