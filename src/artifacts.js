@@ -185,7 +185,7 @@ export function brandKitPreview(data) {
   const fontLabel = (f) => {
     if (!f) return "—";
     if (typeof f === "string") return f;
-    return f.weight ? `${f.family} · ${f.weight}` : f.family || "—";
+    return f.family || "—";
   };
   const fontFamily = (f) => (typeof f === "string" ? f : f?.family);
   const fontWeight = (f) => (f && typeof f === "object" ? f.weight : undefined);
