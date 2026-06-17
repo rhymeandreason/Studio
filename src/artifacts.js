@@ -44,7 +44,9 @@ const KIND_LABEL = {
   "theme": "Themes",
 };
 
+let _renderGen = 0;
 export async function renderArtifacts() {
+  const gen = ++_renderGen;
   const root = document.getElementById("artifacts-panel");
   if (!root) return;
   root.innerHTML = "";
@@ -81,9 +83,11 @@ export async function renderArtifacts() {
   try {
     items = await invoke("list_artifacts", { projectPath: project.path });
   } catch (err) {
+    if (gen !== _renderGen) return;
     root.appendChild(emptyMsg("Couldn't read artifacts: " + err));
     return;
   }
+  if (gen !== _renderGen) return;
 
   if (!items.length) {
     root.appendChild(
