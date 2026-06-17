@@ -63,8 +63,8 @@
     <div class="editor-head">
       <input class="name" id="theme-name" value="Untitled theme" spellcheck="false" />
       <div class="status" id="status"></div>
-      <button class="btn btn-primary" id="save" style="display:none;">Save</button>
       <button class="btn btn-secondary" id="save-as">Save as new theme</button>
+      <button class="btn btn-primary" id="save">Save</button>
     </div>
     <div class="editor-bar">
       <div class="ctl"><span class="label">Heading</span><select class="field" id="heading-w"></select></div>
@@ -260,16 +260,26 @@
                headingSize: theme.headingSize, bodySize: theme.bodySize,
                savedAt: new Date().toISOString() };
     }
+    // Save — overwrite the open theme artifact; if there isn't one yet (new or
+    // seeded theme), create it and adopt it.
     document.getElementById("save").onclick = async () => {
-      try { await invoke("overwrite_artifact", { path: activePath, content: JSON.stringify(buildDoc(),null,2) }); statusEl.textContent = "Saved."; }
-      catch(e){ statusEl.textContent = "Save failed: " + e; }
+      const content = JSON.stringify(buildDoc(), null, 2);
+      try {
+        if (activePath) {
+          await invoke("overwrite_artifact", { path: activePath, content });
+          statusEl.textContent = "Saved.";
+        } else {
+          const p = await invoke("save_artifact", { kind:"theme", name: theme.name||"Untitled theme", content });
+          activePath = p; statusEl.textContent = "Saved → " + p;
+        }
+      } catch(e){ statusEl.textContent = "Save failed: " + e; }
     };
     document.getElementById("save-as").onclick = async () => {
       const name = theme.name || "Untitled theme";
       const content = JSON.stringify(buildDoc(), null, 2);
       if (invoke) {
         try { const p = await invoke("save_artifact", { kind:"theme", name, content });
-              activePath = p; document.getElementById("save").style.display = ""; statusEl.textContent = "Saved → " + p; }
+              activePath = p; statusEl.textContent = "Saved → " + p; }
         catch(e){ statusEl.textContent = "Save failed: " + e; }
       } else {
         const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([content],{type:"application/json"}));
@@ -279,7 +289,20 @@
 
     // ---- Boot ---------------------------------------------------------------
     async function boot(){
-      const path = new URLSearchParams(location.search).get("artifact");
+      const params = new URLSearchParams(location.search);
+      // Seeded from the Slides "Edit theme" button (the deck's current theme).
+      const seeded = params.get("theme");
+      if (seeded) {
+        try {
+          const data = JSON.parse(seeded);
+          if (data.fonts) theme.fonts = data.fonts;
+          if (data.colors) theme.colors = { ...theme.colors, ...data.colors };
+          if (data.name) theme.name = data.name;
+          if (data.headingSize) theme.headingSize = data.headingSize;
+          if (data.bodySize) theme.bodySize = data.bodySize;
+        } catch {}
+      }
+      const path = params.get("artifact");
       if (path && invoke) {
         try {
           const data = JSON.parse(await invoke("read_artifact", { path }));
@@ -288,7 +311,7 @@
           if (data.name) theme.name = data.name;
           if (data.headingSize) theme.headingSize = data.headingSize;
           if (data.bodySize) theme.bodySize = data.bodySize;
-          activePath = path; document.getElementById("save").style.display = "";
+          activePath = path;
         } catch(e){ statusEl.textContent = "Couldn't load theme: " + e; }
       }
       initBarControls();
