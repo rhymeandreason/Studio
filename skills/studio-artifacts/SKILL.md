@@ -95,6 +95,8 @@ Rules:
   subtle panel background, `muted` is secondary text (subtitles, captions),
   `accent`/`accent2` are two accent colors (each usable as a full-slide
   background). A per-slide `colorScheme` derives the palette from these.
+  `theme.bodySize` (px, default 24) is the base body-text size (= Medium); a
+  per-slide `bodySize` of `"s"`/`"m"`/`"l"` scales from it.
 - Each slide has a `layout` plus the slots that layout uses. Valid layouts and
   their slots:
   - `title` → `title`, `subtitle`
@@ -106,8 +108,11 @@ Rules:
   - `quote` → `quote`, `attribution`
   - `image-full` → `image`, `caption`
   - `image-text` → `title`, `image`, `body`
-- Body-type slots (`body`, `left`, `right`) accept **Markdown** (bold, lists,
-  links). `**bold**` renders in the accent color.
+- Body-type slots (`body`, `left`, `middle`, `right`) accept **Markdown** (bold,
+  lists, links, `##`/`###` headings, blockquotes, `code`, `---`). `**bold**`
+  renders in the accent color.
+- Optional `listStyle` on a slide: `"bullets"` (default) or `"cards"` — renders
+  top-level list items as surface-colored cards (good for key-point slides).
 - `image` slots are **project-relative paths** (e.g. `media/chart.png`) — point
   at files already in the project's `media/` folder.
 - Optional `imageFit` on an image slide controls how the image sits in its

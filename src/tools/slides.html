@@ -178,12 +178,27 @@
   .slide__inner { flex: 1; display: flex; flex-direction: column; padding: var(--pad); min-height: 0; gap: 20px;}
   .slide h1 { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); margin: 0; line-height: 1.05; }
   .slide .kicker { font-family: var(--deck-body); font-weight: 600; text-transform: uppercase; letter-spacing: .12em; font-size: 22px; color: var(--deck-muted); margin: 0 0 18px; }
-  .slide .deck-body { font-family: var(--deck-body); font-weight: var(--deck-body-w); line-height: 1.45; font-size: 34px; }
+  .slide .deck-body { font-family: var(--deck-body); font-weight: var(--deck-body-w); line-height: 1.45; font-size: calc(var(--body-base, 24px) * var(--body-scale, 1)); }
+  .slide .deck-body > :first-child { margin-top: 0; }
+  .slide .deck-body > :last-child { margin-bottom: 0; }
   .slide .deck-body p { margin: 0 0 .6em; }
-  .slide .deck-body ul { margin: 0; padding-left: 1.1em; }
+  .slide .deck-body h2 { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); font-size: 1.15em; line-height: 1.1; margin: .2em 0 .35em; }
+  .slide .deck-body h3 { font-family: var(--deck-body); font-weight: 700; font-size: .82em; text-transform: uppercase; letter-spacing: .08em; color: var(--deck-muted); margin: .2em 0 .3em; }
+  .slide .deck-body ul, .slide .deck-body ol { margin: 0; padding-left: 1.1em; }
   .slide .deck-body li { margin: 0 0 .5em; }
+  .slide .deck-body li::marker { color: var(--deck-accent); }
   .slide .deck-body strong { color: var(--deck-accent); }
   .slide .deck-body a { color: var(--deck-accent); }
+  .slide .deck-body blockquote { margin: 0 0 .6em; padding-left: .7em; border-left: 4px solid var(--deck-accent); color: var(--deck-muted); }
+  .slide .deck-body code { font-family: var(--mono); font-size: .85em; background: color-mix(in srgb, var(--deck-text) 8%, transparent); padding: .08em .3em; border-radius: 5px; }
+  .slide .deck-body hr { border: none; border-top: 2px solid color-mix(in srgb, var(--deck-text) 15%, transparent); margin: .6em 0; }
+  /* Cards: render top-level list items as surface panels. */
+  .slide .deck-body.cards ul { list-style: none; padding: 0; display: grid; gap: 18px; }
+  .slide .deck-body.cards > ul > li {
+    margin: 0; background: var(--deck-surface); border-radius: 14px; padding: 22px 26px;
+    border: 1px solid color-mix(in srgb, var(--deck-text) 8%, transparent);
+  }
+  .slide .deck-body.cards > ul > li::marker { content: none; }
   .l-title { justify-content: center; align-items: flex-start; }
   .l-title h1 { font-size: 96px; }
   .l-title .subtitle { font-family: var(--deck-body); font-size: 38px; margin-top: 24px; color: var(--deck-muted); }
@@ -191,14 +206,14 @@
   .l-section h1 { font-size: 84px; }
   .l-title-body h1 { font-size: 64px; margin-bottom: 44px; }
   .l-two-col .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; flex: 1; min-height: 0; }
-  .l-two-col .cols > .deck-body { font-size: 30px; }
+  .l-two-col .cols > .deck-body { font-size: calc(var(--body-base, 24px) * var(--body-scale, 1)); }
   /* Columns sit on subtle surface panels — only on light/soft schemes, where a
      panel reads as separation (on dark/accent it just muddies the background). */
   .slide[data-scheme="light"] .l-two-col .cols > .deck-body,
   .slide[data-scheme="soft"] .l-two-col .cols > .deck-body { background: var(--deck-surface); padding: 32px 36px; border-radius: 16px; }
   .l-two-col h1 { font-size: 60px; margin-bottom: 28px; }
   .l-three-col .cols { grid-template-columns: 1fr 1fr 1fr; gap: 32px; }
-  .l-three-col .cols > .deck-body { font-size: 25px; }
+  .l-three-col .cols > .deck-body { font-size: calc(var(--body-base, 24px) * var(--body-scale, 1) * .85); }
   .slide[data-scheme="light"] .l-three-col .cols > .deck-body,
   .slide[data-scheme="soft"] .l-three-col .cols > .deck-body { padding: 26px 28px; }
   .l-quote { justify-content: center; }
@@ -289,17 +304,17 @@
     // (surface = subtle panel bg, muted = secondary text, accent/accent2 = two
     // accent colors, each usable as a full-slide background scheme).
     const PRESETS = [
-      { name: "Runes", fonts:{heading:{family:"Fraunces",weight:600},body:{family:"Newsreader",weight:400}},
+      { name: "Runes", fonts:{heading:{family:"Fraunces",weight:600},body:{family:"Newsreader",weight:400}}, bodySize:24,
         colors:{bg:"#f7f5f0",surface:"#efece5",text:"#2a2a28",muted:"#6e6154",accent:"#a85a4a",accent2:"#3f5e5a"} },
-      { name: "Mono", fonts:{heading:{family:"Space Grotesk",weight:600},body:{family:"Inter",weight:400}},
+      { name: "Mono", fonts:{heading:{family:"Space Grotesk",weight:600},body:{family:"Inter",weight:400}}, bodySize:24,
         colors:{bg:"#ffffff",surface:"#f3f4f6",text:"#111111",muted:"#6b7280",accent:"#2563eb",accent2:"#7c3aed"} },
-      { name: "Editorial", fonts:{heading:{family:"Playfair Display",weight:700},body:{family:"Lora",weight:400}},
+      { name: "Editorial", fonts:{heading:{family:"Playfair Display",weight:700},body:{family:"Lora",weight:400}}, bodySize:24,
         colors:{bg:"#fbf9f4",surface:"#f1ece1",text:"#1b1b1a",muted:"#7c736a",accent:"#7a5c3e",accent2:"#3d5a40"} },
-      { name: "Night", fonts:{heading:{family:"Manrope",weight:700},body:{family:"Manrope",weight:400}},
+      { name: "Night", fonts:{heading:{family:"Manrope",weight:700},body:{family:"Manrope",weight:400}}, bodySize:24,
         colors:{bg:"#16161a",surface:"#23232a",text:"#f4f4f5",muted:"#a1a1aa",accent:"#c4f042",accent2:"#f0723e"} },
-      { name: "Warm", fonts:{heading:{family:"DM Serif Display",weight:400},body:{family:"DM Sans",weight:400}},
+      { name: "Warm", fonts:{heading:{family:"DM Serif Display",weight:400},body:{family:"DM Sans",weight:400}}, bodySize:24,
         colors:{bg:"#fdf3e7",surface:"#f7e6d2",text:"#3a2a1e",muted:"#9a7a5e",accent:"#d2693a",accent2:"#6b4a8f"} },
-      { name: "Design Class", fonts:{heading:{family:"Plus Jakarta Sans",weight:600},body:{family:"Plus Jakarta Sans",weight:400}},
+      { name: "Design Class", fonts:{heading:{family:"Plus Jakarta Sans",weight:600},body:{family:"Plus Jakarta Sans",weight:400}}, bodySize:24,
         colors:{bg:"#f7f5f0",surface:"#ecebe6",text:"#3a2a1e",muted:"#7a6f63",accent:"#2563eb",accent2:"#e0653a"} },
     ];
 
@@ -437,10 +452,14 @@
       el.style.setProperty("--deck-heading-w", t.fonts.heading.weight);
       el.style.setProperty("--deck-body", `"${t.fonts.body.family}", sans-serif`);
       el.style.setProperty("--deck-body-w", t.fonts.body.weight);
+      // Body text size: theme base (M) × per-slide S/M/L scale.
+      el.style.setProperty("--body-base", (t.bodySize || 24) + "px");
+      el.style.setProperty("--body-scale", { s: 0.8, m: 1, l: 1.4 }[slide.bodySize || "m"]);
       el.style.background = pal.bg;
       el.style.color = pal.text;
 
       const fit = slide.imageFit || "cover";   // how the image sits in its frame
+      const bodyCls = slide.listStyle === "cards" ? "deck-body cards" : "deck-body";
       const img = (ref, ph) => {
         const url = resolved[ref] ?? (ref && imgCache.get(ref));
         return url ? `<img src="${url}" style="object-fit:${fit}">` : `<div class="img-placeholder">${ph}</div>`;
@@ -456,12 +475,12 @@
           inner = `<div class="slide__inner l-section"><h1 data-slot="title">${esc(slide.title)}</h1></div>`; break;
         case "title-body":
           { const cols = slide.columns === 2 ? ` style="column-count:2;column-gap:56px"` : "";
-            inner = `<div class="slide__inner l-title-body"><h1 data-slot="title">${esc(slide.title)}</h1><div class="deck-body" data-slot="body"${cols}>${md(slide.body)}</div></div>`; }
+            inner = `<div class="slide__inner l-title-body"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="body"${cols}>${md(slide.body)}</div></div>`; }
           break;
         case "two-col":
-          inner = `<div class="slide__inner l-two-col"><h1 data-slot="title">${esc(slide.title)}</h1><div class="cols"><div class="deck-body" data-slot="left">${md(slide.left)}</div><div class="deck-body" data-slot="right">${md(slide.right)}</div></div></div>`; break;
+          inner = `<div class="slide__inner l-two-col"><h1 data-slot="title">${esc(slide.title)}</h1><div class="cols"><div class="${bodyCls}" data-slot="left">${md(slide.left)}</div><div class="${bodyCls}" data-slot="right">${md(slide.right)}</div></div></div>`; break;
         case "three-col":
-          inner = `<div class="slide__inner l-two-col l-three-col"><h1 data-slot="title">${esc(slide.title)}</h1><div class="cols"><div class="deck-body" data-slot="left">${md(slide.left)}</div><div class="deck-body" data-slot="middle">${md(slide.middle)}</div><div class="deck-body" data-slot="right">${md(slide.right)}</div></div></div>`; break;
+          inner = `<div class="slide__inner l-two-col l-three-col"><h1 data-slot="title">${esc(slide.title)}</h1><div class="cols"><div class="${bodyCls}" data-slot="left">${md(slide.left)}</div><div class="${bodyCls}" data-slot="middle">${md(slide.middle)}</div><div class="${bodyCls}" data-slot="right">${md(slide.right)}</div></div></div>`; break;
         case "quote":
           inner = `<div class="slide__inner l-quote"><blockquote data-slot="quote">${esc(slide.quote)}</blockquote>${slide.attribution?`<div class="attr">— <span data-slot="attribution">${esc(slide.attribution)}</span></div>`:""}</div>`; break;
         case "image-full":
@@ -469,7 +488,7 @@
             inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${url?`<img class="full-img" src="${url}" style="object-fit:${fit}">`:`<div class="img-placeholder" style="height:100%">No image</div>`}${slide.caption?`<div class="cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div>`; }
           break;
         case "image-text":
-          inner = `<div class="slide__inner l-image-text"><div class="split"><div class="split-media">${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}</div><div class="split-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="deck-body" data-slot="body">${md(slide.body)}</div></div></div></div>`; break;
+          inner = `<div class="slide__inner l-image-text"><div class="split"><div class="split-media">${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}</div><div class="split-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="body">${md(slide.body)}</div></div></div></div>`; break;
         default:
           inner = `<div class="slide__inner"><h1>${esc(slide.title||"")}</h1></div>`;
       }
@@ -756,6 +775,27 @@
         for (const n of [1,2]) { const o=document.createElement("option"); o.value=n; o.textContent=`${n} column${n>1?"s":""}`; sel.appendChild(o); }
         sel.value = slide.columns === 2 ? 2 : 1;
         sel.onchange = () => { slide.columns = +sel.value; scheduleRender(); };
+        wrap.append(lab, sel); content.appendChild(wrap);
+      }
+      const hasBody = LAYOUTS[slide.layout].slots.some(s => s[2] === "md");
+      // Body text size — S/M/L, scaled from the theme's base size.
+      if (hasBody) {
+        const wrap = document.createElement("div");
+        const lab = document.createElement("label"); lab.className="field-label"; lab.textContent="Body size";
+        const sel = document.createElement("select"); sel.className="field";
+        for (const [v,t] of [["s","Small"],["m","Medium"],["l","Large"]]) { const o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); }
+        sel.value = slide.bodySize || "m";
+        sel.onchange = () => { slide.bodySize = sel.value; scheduleRender(); };
+        wrap.append(lab, sel); content.appendChild(wrap);
+      }
+      // List style — render markdown lists as plain bullets or surface cards.
+      if (hasBody) {
+        const wrap = document.createElement("div");
+        const lab = document.createElement("label"); lab.className="field-label"; lab.textContent="List style";
+        const sel = document.createElement("select"); sel.className="field";
+        for (const [v,t] of [["bullets","Bullets"],["cards","Cards"]]) { const o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); }
+        sel.value = slide.listStyle || "bullets";
+        sel.onchange = () => { slide.listStyle = sel.value; scheduleRender(); };
         wrap.append(lab, sel); content.appendChild(wrap);
       }
       inspector.appendChild(content);
