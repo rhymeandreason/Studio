@@ -1,0 +1,12 @@
+{
+  "kind": "theme",
+  "version": 1,
+  "name": "Design Class",
+  "fonts": {
+    "heading": { "family": "Plus Jakarta Sans", "weight": 600 },
+    "body": { "family": "Plus Jakarta Sans", "weight": 400 }
+  },
+  "colors": { "bg": "#f7f5f0", "surface": "#ecebe6", "text": "#3a2a1e", "muted": "#7a6f63", "accent": "#2563eb", "accent2": "#e0653a" },
+  "headingSize": 56,
+  "bodySize": 24
+}

@@ -1,0 +1,12 @@
+{
+  "kind": "theme",
+  "version": 1,
+  "name": "Night",
+  "fonts": {
+    "heading": { "family": "Manrope", "weight": 700 },
+    "body": { "family": "Manrope", "weight": 400 }
+  },
+  "colors": { "bg": "#16161a", "surface": "#23232a", "text": "#f4f4f5", "muted": "#a1a1aa", "accent": "#c4f042", "accent2": "#f0723e" },
+  "headingSize": 56,
+  "bodySize": 24
+}

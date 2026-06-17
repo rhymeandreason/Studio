@@ -1,0 +1,12 @@
+{
+  "kind": "theme",
+  "version": 1,
+  "name": "Runes",
+  "fonts": {
+    "heading": { "family": "Fraunces", "weight": 600 },
+    "body": { "family": "Newsreader", "weight": 400 }
+  },
+  "colors": { "bg": "#f7f5f0", "surface": "#efece5", "text": "#2a2a28", "muted": "#6e6154", "accent": "#a85a4a", "accent2": "#3f5e5a" },
+  "headingSize": 56,
+  "bodySize": 24
+}

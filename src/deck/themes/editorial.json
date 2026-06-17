@@ -1,0 +1,12 @@
+{
+  "kind": "theme",
+  "version": 1,
+  "name": "Editorial",
+  "fonts": {
+    "heading": { "family": "Playfair Display", "weight": 700 },
+    "body": { "family": "Lora", "weight": 400 }
+  },
+  "colors": { "bg": "#fbf9f4", "surface": "#f1ece1", "text": "#1b1b1a", "muted": "#7c736a", "accent": "#7a5c3e", "accent2": "#3d5a40" },
+  "headingSize": 56,
+  "bodySize": 24
+}

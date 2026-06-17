@@ -107,6 +107,20 @@ export function renderSlide(slide, theme, resolved = {}) {
   return el;
 }
 
+// Load the built-in preset themes from deck/themes/ (index.json lists the
+// files). Drop a new *.json in that folder and add it to index.json to add a
+// preset. Returns an array of theme objects (empty on failure).
+export async function loadPresets(){
+  try {
+    const base = new URL("./themes/", import.meta.url);
+    const index = await fetch(new URL("index.json", base)).then(r => r.json());
+    const themes = await Promise.all(
+      index.map(name => fetch(new URL(name, base)).then(r => r.json()).catch(() => null)),
+    );
+    return themes.filter(Boolean);
+  } catch { return []; }
+}
+
 // Representative slides (one per layout) for theme previews.
 export const PREVIEW_SLIDES = [
   { layout: "title", title: "Presentation Title", subtitle: "A subtitle goes here" },

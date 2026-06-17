@@ -212,7 +212,7 @@
 
   <script type="module">
     import { initDevInspect } from "../devinspect.js";
-    import { renderSlide as renderSlideBase, colorScheme, SCHEMES, HEADING_DEFAULT } from "../deck/render.js";
+    import { renderSlide as renderSlideBase, colorScheme, SCHEMES, HEADING_DEFAULT, loadPresets } from "../deck/render.js";
     const marked = window.marked;
     const invoke = window.__TAURI__?.core?.invoke;
     const esc = (s) => (s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -262,28 +262,21 @@
     }
 
     // ---------- Theme presets ----------
-    // colors: { bg, surface, text, muted, accent, accent2 } — a 6-role palette
-    // (surface = subtle panel bg, muted = secondary text, accent/accent2 = two
-    // accent colors, each usable as a full-slide background scheme).
-    const PRESETS = [
-      { name: "Runes", fonts:{heading:{family:"Fraunces",weight:600},body:{family:"Newsreader",weight:400}}, bodySize:24, headingSize:56,
-        colors:{bg:"#f7f5f0",surface:"#efece5",text:"#2a2a28",muted:"#6e6154",accent:"#a85a4a",accent2:"#3f5e5a"} },
-      { name: "Mono", fonts:{heading:{family:"Space Grotesk",weight:600},body:{family:"Inter",weight:400}}, bodySize:24, headingSize:56,
-        colors:{bg:"#ffffff",surface:"#f3f4f6",text:"#111111",muted:"#6b7280",accent:"#2563eb",accent2:"#7c3aed"} },
-      { name: "Editorial", fonts:{heading:{family:"Playfair Display",weight:700},body:{family:"Lora",weight:400}}, bodySize:24, headingSize:56,
-        colors:{bg:"#fbf9f4",surface:"#f1ece1",text:"#1b1b1a",muted:"#7c736a",accent:"#7a5c3e",accent2:"#3d5a40"} },
-      { name: "Night", fonts:{heading:{family:"Manrope",weight:700},body:{family:"Manrope",weight:400}}, bodySize:24, headingSize:56,
-        colors:{bg:"#16161a",surface:"#23232a",text:"#f4f4f5",muted:"#a1a1aa",accent:"#c4f042",accent2:"#f0723e"} },
-      { name: "Warm", fonts:{heading:{family:"DM Serif Display",weight:400},body:{family:"DM Sans",weight:400}}, bodySize:24, headingSize:56,
-        colors:{bg:"#fdf3e7",surface:"#f7e6d2",text:"#3a2a1e",muted:"#9a7a5e",accent:"#d2693a",accent2:"#6b4a8f"} },
-      { name: "Design Class", fonts:{heading:{family:"Plus Jakarta Sans",weight:600},body:{family:"Plus Jakarta Sans",weight:400}}, bodySize:24, headingSize:56,
-        colors:{bg:"#f7f5f0",surface:"#ecebe6",text:"#3a2a1e",muted:"#7a6f63",accent:"#2563eb",accent2:"#e0653a"} },
-    ];
+    // Preset themes are loaded from ../deck/themes/ at boot (see loadPresets).
+    // theme shape: { name, fonts:{heading,body}, colors:{bg,surface,text,muted,
+    // accent,accent2}, headingSize, bodySize }.
+    let PRESETS = [];
+    const DEFAULT_THEME = {
+      name: "Runes",
+      fonts: { heading: { family: "Fraunces", weight: 600 }, body: { family: "Newsreader", weight: 400 } },
+      colors: { bg:"#f7f5f0", surface:"#efece5", text:"#2a2a28", muted:"#6e6154", accent:"#a85a4a", accent2:"#3f5e5a" },
+      headingSize: 56, bodySize: 24,
+    };
 
     // ---------- State ----------
     let state = {
       name: "Untitled deck",
-      theme: structuredClone(PRESETS[0]),
+      theme: structuredClone(DEFAULT_THEME),
       slides: [ { layout: "title", title: "Your title", subtitle: "A subtitle" } ],
     };
     let current = 0;
@@ -705,10 +698,17 @@
     function themeCard(p, editPath){
       loadFont(p.fonts.heading.family, p.fonts.heading.weight);
       loadFont(p.fonts.body.family, p.fonts.body.weight);
-      const isActive = p.colors.bg===state.theme.colors.bg && p.fonts.heading.family===state.theme.fonts.heading.family;
       const card = document.createElement("div");
-      card.className = "theme-card" + (isActive?" active":"");
+      card.className = "theme-card";
       card.title = p.name;
+      // For single-active marking (see markActiveThemeCards). `key` uniquely
+      // identifies this card (project path vs preset name) so clicking the
+      // preset highlights it even when a project theme shares its name.
+      const key = editPath ? "path:" + editPath : "preset:" + p.name;
+      card.dataset.key = key;
+      card.dataset.themeName = p.name;
+      card.dataset.bg = p.colors.bg;
+      card.dataset.head = p.fonts.heading.family;
       const preview = document.createElement("div"); preview.className = "theme-card__preview";
       const stage = document.createElement("div"); stage.className = "theme-card__stage";
       stage.appendChild(renderSlide(themeSampleSlide(), p));
@@ -723,10 +723,11 @@
       const meta = document.createElement("div"); meta.className = "theme-card__meta";
       meta.innerHTML = `<div class="theme-card__name">${p.name}</div><div class="theme-card__chips">${["bg","surface","text","muted","accent","accent2"].filter(k=>p.colors[k]).map(k=>`<span style="background:${p.colors[k]}"></span>`).join("")}</div>`;
       card.append(preview, meta);
-      card.onclick = () => { state.theme = structuredClone(p); loadThemeFonts(state.theme); renderAll(); };
+      card.onclick = () => { appliedThemeKey = key; state.theme = structuredClone(p); loadThemeFonts(state.theme); renderAll(); };
       requestAnimationFrame(() => { stage.style.transform = `scale(${preview.clientWidth/1280})`; });
       return card;
     }
+    let appliedThemeKey = null;   // the card the user last picked (exact identity)
 
     function themeSection() {
       const s = sec("Theme");
@@ -750,7 +751,22 @@
       const presetWrap = document.createElement("div"); presetWrap.className = "theme-cards";
       PRESETS.forEach(p => presetWrap.appendChild(themeCard(p)));
       s.appendChild(presetWrap);
+      markActiveThemeCards();
       return s;
+    }
+
+    // Highlight exactly one theme card as active — the deck's current theme.
+    // Project cards precede presets in the DOM, so a project theme that shares a
+    // preset's name/colors wins (no double highlight).
+    function markActiveThemeCards(){
+      const cards = [...inspector.querySelectorAll(".theme-card")];
+      cards.forEach(c => c.classList.remove("active"));
+      const t = state.theme;
+      // Prefer the exact card the user picked; else fall back to a content match.
+      const pick = (appliedThemeKey && cards.find(c => c.dataset.key === appliedThemeKey))
+                || cards.find(c => c.dataset.themeName === t.name && c.dataset.bg === t.colors.bg)
+                || cards.find(c => c.dataset.bg === t.colors.bg && c.dataset.head === t.fonts.heading.family);
+      pick?.classList.add("active");
     }
 
     // Read the project's theme artifacts and render a card for each.
@@ -766,6 +782,7 @@
           container.appendChild(themeCard(data, it.path));
         } catch {}
       }
+      markActiveThemeCards();
     }
 
     // tiny inline schematic per layout
@@ -1010,6 +1027,8 @@
     function initArtifactWatch(){
       if (!invoke || !window.__TAURI__?.event) return;
       window.__TAURI__.event.listen("fs-changed", async () => {
+        // A theme artifact may have been added/edited — refresh the Theme tab.
+        if (inspectorTab === "theme") renderInspector();
         if (!activePath || saving) return;
         if (snapshot() !== lastSaved) return;     // local has unsaved edits — don't overwrite
         let data;
@@ -1032,6 +1051,7 @@
     }
 
     async function boot(){
+      PRESETS = await loadPresets();   // built-in themes from ../deck/themes/
       const path = new URLSearchParams(location.search).get("artifact");
       if (path && invoke) {
         try {

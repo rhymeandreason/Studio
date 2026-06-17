@@ -1,0 +1,12 @@
+{
+  "kind": "theme",
+  "version": 1,
+  "name": "Warm",
+  "fonts": {
+    "heading": { "family": "DM Serif Display", "weight": 400 },
+    "body": { "family": "DM Sans", "weight": 400 }
+  },
+  "colors": { "bg": "#fdf3e7", "surface": "#f7e6d2", "text": "#3a2a1e", "muted": "#9a7a5e", "accent": "#d2693a", "accent2": "#6b4a8f" },
+  "headingSize": 56,
+  "bodySize": 24
+}
