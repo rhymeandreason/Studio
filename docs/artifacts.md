@@ -57,16 +57,11 @@ expose a headless core later; read/write is enough so far.
 - **brand-kit kind** — the Brand Explorer (`src/tools/brand-explorer.html`)
   creates, opens-on-artifact, and saves named kits. Shape:
   `{ kind, version, name, fonts: { heading|body: {family, weight} }, colors: [{name, value}], savedAt }`.
-- **presentation kind** — the Slides tool (`src/tools/slides.html`) creates,
-  opens-on-artifact, and saves decks. A deck is `{ kind, version, name, theme:
-  {fonts, colors}, slides: [{layout, ...slots}], savedAt }`; each slide picks a
-  named `layout` (title, section, title-body, two-col, quote, image-full,
-  image-text) and fills its slots (body slots are Markdown; `image` slots are
-  project-relative paths). Theme presets + per-deck font/color editing.
-  Exports a self-contained navigable HTML deck via `save_export_dir` (writes
-  `designs/<deck>/index.html` + an `assets/` folder of copied images). The
-  exported deck includes print CSS (`@page` one-slide-per-page) so the browser's
-  Save-as-PDF still works on it.
+- **presentation + theme kinds** — the Slides tool (`src/tools/slides.html`) and
+  Theme editor (`src/tools/theme-editor.html`), built on a shared slide renderer
+  in `src/deck/`. A deck embeds its `theme` inline; themes can also be saved as
+  their own reusable `theme` artifacts. Full detail — layouts, per-slide options,
+  color schemes, presets-as-files, editing UX, export — in **[slides.md](slides.md)**.
 - **Studio Claude Artifacts/Code toggle** — picks Claude's cwd (project folder vs
   git repo); defaults to the project folder so artifacts land where the panel
   reads them. See [claude-window.md](claude-window.md).

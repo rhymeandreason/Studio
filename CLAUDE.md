@@ -39,6 +39,8 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
   `kit-gallery.html` is the living reference) — [docs/tools.md](docs/tools.md),
   [docs/tools-dynamic-loading.md](docs/tools-dynamic-loading.md),
   [docs/tool-ideas.md](docs/tool-ideas.md)
+- **Slides** (presentation builder: `presentation` + `theme` artifacts, shared
+  renderer in `src/deck/`, Slides + Theme editor tools) — [docs/slides.md](docs/slides.md)
 - **Interaction model** (shared selection + keyboard) — `selection.js` /
   `keymap.js`. [docs/interaction-spec.md](docs/interaction-spec.md)
 
