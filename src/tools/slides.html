@@ -201,7 +201,12 @@
   .slide .deck-body.cards > ul > li::marker { content: none; }
   .l-title { justify-content: center; align-items: flex-start; }
   .l-title .subtitle { font-family: var(--deck-body); font-size: 38px; margin-top: 24px; color: var(--deck-muted); }
-  .l-section { justify-content: center; align-items: flex-start; }
+  .l-section { justify-content: center; align-items: flex-start; position: relative; }
+  /* Optional full-bleed background image behind the heading. */
+  .l-section .section-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .l-section .section-scrim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.6), rgba(0,0,0,.15)); }
+  .l-section h1 { position: relative; z-index: 1; }
+  .l-section.has-bg h1 { color: #fff; }
   .l-title-body h1 { margin-bottom: 44px; }
   .l-two-col .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; flex: 1; min-height: 0; }
   .l-two-col .cols > .deck-body { font-size: calc(var(--body-base, 24px) * var(--body-scale, 1)); }
@@ -263,7 +268,7 @@
     // the studio-artifacts skill).
     const LAYOUTS = {
       "title":      { name: "Title",      slots: [["title","Title"],["subtitle","Subtitle"]] },
-      "section":    { name: "Section",    slots: [["title","Section title"]] },
+      "section":    { name: "Section",    slots: [["title","Section title"],["image","Background image","image"]] },
       "title-body": { name: "Title + Body", slots: [["title","Title"],["body","Body","md"]] },
       "two-col":    { name: "Two column", slots: [["title","Title"],["left","Left","md"],["right","Right","md"]] },
       "three-col":  { name: "Three column", slots: [["title","Title"],["left","Left","md"],["middle","Middle","md"],["right","Right","md"]] },
@@ -484,7 +489,10 @@
         case "title":
           inner = `<div class="slide__inner l-title"><h1 data-slot="title">${esc(slide.title)}</h1>${slide.subtitle?`<div class="subtitle" data-slot="subtitle">${esc(slide.subtitle)}</div>`:""}</div>`; break;
         case "section":
-          inner = `<div class="slide__inner l-section"><h1 data-slot="title">${esc(slide.title)}</h1></div>`; break;
+          { const url = resolved[slide.image] ?? (slide.image && imgCache.get(slide.image));
+            const bg = url ? `<img class="section-bg" src="${url}"><div class="section-scrim"></div>` : "";
+            inner = `<div class="slide__inner l-section${url?' has-bg':''}">${bg}<h1 data-slot="title">${esc(slide.title)}</h1></div>`; }
+          break;
         case "title-body":
           { const cols = slide.columns === 2 ? ` style="column-count:2;column-gap:56px"` : "";
             inner = `<div class="slide__inner l-title-body"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="body"${cols}>${md(slide.body)}</div></div>`; }

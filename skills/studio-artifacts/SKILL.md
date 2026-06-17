@@ -103,7 +103,8 @@ Rules:
 - Each slide has a `layout` plus the slots that layout uses. Valid layouts and
   their slots:
   - `title` → `title`, `subtitle`
-  - `section` → `title`
+  - `section` → `title`, optional `image` (full-bleed background, darkened so
+    the heading stays legible in white)
   - `title-body` → `title`, `body` (optional `columns`: `1` (default) or `2` —
     flows the single body into that many columns via CSS column-count)
   - `two-col` → `title`, `left`, `right`
