@@ -65,13 +65,16 @@
       <button class="btn btn-primary" id="save">Save</button>
     </div>
     <div class="editor-bar">
-      <div class="ctl"><span class="label">Heading</span><select class="field" id="heading-w"></select></div>
-      <div class="ctl"><span class="label">Body</span><select class="field" id="body-w"></select></div>
+        <span class="label">Heading</span>
+      <div class="ctl"><input class="field" id="heading-size" type="number" min="24" max="120" /></div>
+      <div class="ctl"><select class="field" id="heading-w"></select></div>
+
+      <div class="divider"></div>
+      <span class="label">Body</span>
+      <div class="ctl"><input class="field" id="body-size" type="number" min="12" max="48" /></div>
+    <div class="ctl"><select class="field" id="body-w"></select></div>
       <div class="divider"></div>
       <div class="swatch-grid" id="colors"></div>
-      <div class="divider"></div>
-      <div class="ctl"><span class="label">H size</span><input class="field" id="heading-size" type="number" min="24" max="120" /></div>
-      <div class="ctl"><span class="label">B size</span><input class="field" id="body-size" type="number" min="12" max="48" /></div>
     </div>
     <div class="preview-grid" id="preview-grid"></div>
   </div>

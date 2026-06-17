@@ -377,9 +377,11 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
     };
 
     let (width, height) = if filename == "daily-notes.html" {
-        (300.0, 560.0)
+        (300.0, 600.0)
     } else if filename == "ram-overview.html" {
         (380.0, 440.0)
+    } else if filename == "theme-editor.html" {
+        (1280.0, 640.0)
     } else {
         (900.0, 640.0)
     };
@@ -1025,9 +1027,15 @@ fn open_tool(app: AppHandle, file: String, query: Option<String>) {
         .and_then(|n| n.to_str())
         .unwrap_or("Tool")
         .to_string();
+    let filename = Path::new(&file).file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let (width, height) = if filename == "theme-editor.html" {
+        (1280.0, 640.0)
+    } else {
+        (900.0, 640.0)
+    };
     let _ = WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url.into()))
         .title(title)
-        .inner_size(900.0, 640.0)
+        .inner_size(width, height)
         .min_inner_size(420.0, 360.0)
         .build();
 }
