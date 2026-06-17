@@ -3064,6 +3064,66 @@ fn git_commit_files(repo: String, hash: String) -> Result<Vec<GitFile>, String> 
     Ok(files)
 }
 
+/// Open a native file picker and return the chosen path (or None if cancelled).
+/// Used by the Code Editor tool to load an arbitrary file to edit.
+#[tauri::command]
+async fn pick_text_file(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, mut rx) = tauri::async_runtime::channel(1);
+    app.dialog()
+        .file()
+        .add_filter(
+            "Web / text",
+            &["html", "htm", "css", "js", "mjs", "json", "svg", "md", "txt"],
+        )
+        .pick_file(move |picked| {
+            let _ = tx.try_send(picked);
+        });
+    let picked = rx.recv().await.ok_or("dialog closed")?;
+    match picked {
+        Some(fp) => Ok(Some(
+            fp.into_path()
+                .map_err(|e| e.to_string())?
+                .to_string_lossy()
+                .to_string(),
+        )),
+        None => Ok(None),
+    }
+}
+
+/// Read a UTF-8 text file by absolute path. Used by the Code Editor tool.
+#[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
+/// Write a UTF-8 text file by absolute path. Used by the Code Editor tool.
+#[tauri::command]
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+/// Unified `git diff` for a single file against HEAD, deriving the repo from the
+/// file's own directory (the file may live outside any Studio project). Returns
+/// the raw diff text; errors (not a repo, etc.) are surfaced so the editor can
+/// fall back to showing no diff. Used by the Code Editor tool.
+#[tauri::command]
+fn git_diff_file(path: String) -> Result<String, String> {
+    let p = PathBuf::from(&path);
+    let dir = p.parent().ok_or("file has no parent directory")?;
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["diff", "--no-color", "HEAD", "--"])
+        .arg(&path)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
 /// Stage everything and commit. Returns an error string on failure (e.g.
 /// nothing to commit), which the window surfaces.
 #[tauri::command]
@@ -4070,7 +4130,11 @@ pub fn run() {
             git_undo,
             git_open_file,
             git_get_draft,
-            git_set_draft
+            git_set_draft,
+            pick_text_file,
+            read_text_file,
+            write_text_file,
+            git_diff_file
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.

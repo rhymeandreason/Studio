@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Code Editor</title>
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --line-h: 19px;
+    --code-font: 12px/var(--line-h) var(--mono);
+    --add-bg: rgba(111, 125, 106, 0.18);   /* sage tint for changed lines */
+    --add-bar: var(--sage);
+  }
+
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---- toolbar ---- */
+  #toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--surface);
+  }
+  #toolbar .spacer { flex: 1; }
+  #filename {
+    font: var(--code-font);
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 360px;
+    direction: rtl;          /* keep the basename visible when truncating */
+    text-align: left;
+  }
+  #dirty {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--rose);
+    opacity: 0;
+    transition: opacity var(--dur-fast);
+  }
+  #dirty.on { opacity: 1; }
+  #diff-status { font: var(--code-font); color: var(--text-soft); }
+
+  /* ---- main 4-column row ---- */
+  #main {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+  }
+
+  /* DOM tree (left) */
+  #tree-col {
+    flex: 0 0 240px;
+    border-right: 1px solid var(--hairline);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--surface);
+  }
+  .col-head {
+    flex: 0 0 auto;
+    padding: 7px 12px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-soft);
+    border-bottom: 1px solid var(--hairline);
+  }
+  #tree {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: 6px 0 12px;
+    font: var(--code-font);
+  }
+  .node { white-space: nowrap; }
+  .node .tag {
+    display: inline-block;
+    padding: 1px 6px 1px 0;
+    cursor: default;
+    border-radius: var(--radius-sm);
+  }
+  .node .tag:hover { background: var(--accent-ring); }
+  .node .tag.sel { background: var(--accent-soft); }
+  .tname { color: var(--accent); }
+  .tid { color: var(--sage); }
+  .tcls { color: var(--text-muted); }
+  .twrap { padding-left: 14px; }
+
+  /* editor (center) */
+  #editor-col { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+  #editor {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+    position: relative;
+    background: var(--elevated);
+  }
+  #gutter {
+    flex: 0 0 auto;
+    width: 46px;
+    overflow: hidden;
+    text-align: right;
+    color: var(--text-soft);
+    font: var(--code-font);
+    padding: 8px 8px 8px 0;
+    user-select: none;
+    border-right: 1px solid var(--hairline);
+    background: var(--surface);
+  }
+  #gutter .gl { height: var(--line-h); position: relative; }
+  #gutter .gl.chg::after {
+    content: "";
+    position: absolute;
+    right: -8px; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--add-bar);
+  }
+  #codebox { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  #hl, #code {
+    position: absolute;
+    inset: 0;
+    padding: 8px 12px;
+    font: var(--code-font);
+    border: 0;
+    margin: 0;
+    white-space: pre;
+    overflow: auto;
+    tab-size: 2;
+  }
+  #hl {
+    pointer-events: none;
+    color: transparent;
+    z-index: 0;
+    overflow: hidden;
+  }
+  #hl .hline { height: var(--line-h); }
+  #hl .hline.chg { background: var(--add-bg); box-shadow: -12px 0 0 var(--add-bg), 9999px 0 0 var(--add-bg); }
+  #code {
+    z-index: 1;
+    background: transparent;
+    color: var(--text);
+    resize: none;
+    outline: none;
+    caret-color: var(--accent);
+  }
+
+  /* minimap */
+  #minimap {
+    flex: 0 0 14px;
+    position: relative;
+    background: var(--surface);
+    border-left: 1px solid var(--hairline);
+    cursor: pointer;
+  }
+  #minimap .mm {
+    position: absolute;
+    left: 2px; right: 2px;
+    min-height: 2px;
+    background: var(--add-bar);
+    border-radius: 1px;
+  }
+  #minimap .mm-view {
+    position: absolute;
+    left: 0; right: 0;
+    background: var(--accent-ring);
+    pointer-events: none;
+  }
+
+  /* preview + inspector (right) */
+  #right-col {
+    flex: 0 0 42%;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--hairline);
+    min-width: 0;
+  }
+  #preview-wrap { flex: 1 1 auto; min-height: 0; position: relative; background: #fff; }
+  #preview { width: 100%; height: 100%; border: 0; }
+  #inspector {
+    flex: 0 0 auto;
+    max-height: 38%;
+    overflow: auto;
+    border-top: 1px solid var(--hairline);
+    background: var(--surface);
+    padding: 10px 12px;
+    font: var(--code-font);
+  }
+  #inspector .ins-sel { color: var(--accent); margin-bottom: 6px; }
+  .chip {
+    display: inline-block;
+    padding: 1px 7px;
+    margin: 0 4px 4px 0;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+  .rule { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--hairline); }
+  .rule .rsel { color: var(--sage); }
+  .rule .rdecl { color: var(--text-muted); padding-left: 12px; }
+  .empty { color: var(--text-soft); }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <button class="btn" id="open"><span class="mi">folder_open</span>Open</button>
+    <button class="btn" id="save"><span class="mi">save</span>Save</button>
+    <button class="btn" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
+    <span id="dirty" title="Unsaved changes"></span>
+    <span class="spacer"></span>
+    <span id="diff-status"></span>
+    <span id="filename">No file</span>
+  </div>
+
+  <div id="main">
+    <div id="tree-col">
+      <div class="col-head">DOM</div>
+      <div id="tree"><div class="empty" style="padding:8px 12px">Open an HTML file</div></div>
+    </div>
+
+    <div id="editor-col">
+      <div id="editor">
+        <div id="gutter"></div>
+        <div id="codebox">
+          <div id="hl"></div>
+          <textarea id="code" spellcheck="false" wrap="off"></textarea>
+        </div>
+        <div id="minimap"><div class="mm-view"></div></div>
+      </div>
+    </div>
+
+    <div id="right-col">
+      <div id="preview-wrap">
+        <iframe id="preview" sandbox="allow-same-origin"></iframe>
+      </div>
+      <div id="inspector"><span class="empty">Select an element in the DOM tree.</span></div>
+    </div>
+  </div>
+
+  <input type="file" id="fallback-file" hidden />
+
+<script type="module">
+import "../vendor/beautify.js";        // window.js_beautify
+import "../vendor/beautify-css.js";    // window.css_beautify
+import "../vendor/beautify-html.js";   // window.html_beautify (needs the two above)
+
+const TAURI = window.__TAURI__;
+const invoke = TAURI ? TAURI.core.invoke : null;
+
+// Wider window for the 4-column layout.
+if (TAURI) {
+  const { getCurrentWindow } = TAURI.window;
+  const { LogicalSize } = TAURI.dpi;
+  getCurrentWindow().setSize(new LogicalSize(1320, 840));
+}
+
+const $ = (id) => document.getElementById(id);
+const code = $("code"), hl = $("hl"), gutter = $("gutter"), minimap = $("minimap");
+const treeEl = $("tree"), inspector = $("inspector"), preview = $("preview");
+const filenameEl = $("filename"), dirtyEl = $("dirty"), diffStatus = $("diff-status");
+
+let currentPath = null;
+let changedLines = new Set();   // 1-based line numbers (new file) marked as added/changed
+let dirty = false;
+
+// ---------- file open / save ----------
+$("open").addEventListener("click", openFile);
+$("save").addEventListener("click", saveFile);
+$("prettify").addEventListener("click", prettify);
+
+async function openFile() {
+  if (invoke) {
+    const path = await invoke("pick_text_file");
+    if (!path) return;
+    const text = await invoke("read_text_file", { path });
+    currentPath = path;
+    loadText(text);
+    await refreshDiff();
+  } else {
+    $("fallback-file").click();   // browser test fallback
+  }
+}
+$("fallback-file").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { currentPath = f.name; loadText(r.result); changedLines = new Set(); paint(); };
+  r.readAsText(f);
+});
+
+function loadText(text) {
+  code.value = text;
+  setDirty(false);
+  const base = currentPath ? currentPath.split("/").pop() : "untitled";
+  filenameEl.textContent = "‎" + (currentPath || base);
+  render();
+  paint();
+}
+
+async function saveFile() {
+  if (!currentPath) return;
+  if (invoke) {
+    await invoke("write_text_file", { path: currentPath, content: code.value });
+    setDirty(false);
+    await refreshDiff();
+  } else {
+    const blob = new Blob([code.value], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = currentPath; a.click();
+    setDirty(false);
+  }
+}
+
+function ext() { return (currentPath || "").split(".").pop().toLowerCase(); }
+
+function prettify() {
+  const opts = { indent_size: 2, end_with_newline: true };
+  let out;
+  try {
+    if (ext() === "css") out = window.css_beautify(code.value, opts);
+    else if (ext() === "js" || ext() === "mjs") out = window.js_beautify(code.value, opts);
+    else out = window.html_beautify(code.value, opts);
+  } catch (e) { console.error(e); return; }
+  code.value = out;
+  setDirty(true);
+  render(); paint();
+}
+
+function setDirty(v) { dirty = v; dirtyEl.classList.toggle("on", v); }
+
+// ---------- editor: gutter + highlight + minimap ----------
+code.addEventListener("input", () => { setDirty(true); paint(); scheduleRender(); });
+code.addEventListener("scroll", syncScroll);
+
+function lineCount() { return code.value.split("\n").length; }
+
+function paint() {
+  const n = lineCount();
+  // gutter
+  let g = "";
+  for (let i = 1; i <= n; i++) g += `<div class="gl${changedLines.has(i) ? " chg" : ""}">${i}</div>`;
+  gutter.innerHTML = g;
+  // highlight layer
+  let h = "";
+  for (let i = 1; i <= n; i++) h += `<div class="hline${changedLines.has(i) ? " chg" : ""}"></div>`;
+  hl.innerHTML = h;
+  paintMinimap(n);
+  syncScroll();
+}
+
+function paintMinimap(n) {
+  minimap.querySelectorAll(".mm").forEach((e) => e.remove());
+  for (const ln of changedLines) {
+    const d = document.createElement("div");
+    d.className = "mm";
+    d.style.top = ((ln - 0.5) / n * 100) + "%";
+    d.style.height = Math.max(2, 100 / n) + "%";
+    minimap.appendChild(d);
+  }
+  updateViewport();
+}
+
+function syncScroll() {
+  // #gutter/#hl are overflow:hidden, so translate their content instead of
+  // scrolling. Padding-top matches the textarea's, so they stay aligned.
+  const y = -code.scrollTop;
+  gutter.style.transform = `translateY(${y}px)`;
+  hl.style.transform = `translateY(${y}px)`;
+  updateViewport();
+}
+
+function updateViewport() {
+  const view = minimap.querySelector(".mm-view");
+  const total = code.scrollHeight || 1;
+  view.style.top = (code.scrollTop / total * 100) + "%";
+  view.style.height = (code.clientHeight / total * 100) + "%";
+}
+
+minimap.addEventListener("click", (e) => {
+  const frac = (e.clientY - minimap.getBoundingClientRect().top) / minimap.clientHeight;
+  code.scrollTop = frac * code.scrollHeight - code.clientHeight / 2;
+  syncScroll();
+});
+
+// ---------- git diff ----------
+async function refreshDiff() {
+  changedLines = new Set();
+  diffStatus.textContent = "";
+  if (!invoke || !currentPath) { paint(); return; }
+  try {
+    const diff = await invoke("git_diff_file", { path: currentPath });
+    parseDiff(diff);
+    diffStatus.textContent = changedLines.size ? `${changedLines.size} changed` : "no changes";
+  } catch (e) {
+    diffStatus.textContent = "not in git";
+  }
+  paint();
+}
+
+function parseDiff(diff) {
+  let newLine = 0;
+  for (const line of diff.split("\n")) {
+    const m = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (m) { newLine = parseInt(m[1], 10); continue; }
+    if (newLine === 0) continue;          // header lines before first hunk
+    if (line.startsWith("+")) { changedLines.add(newLine); newLine++; }
+    else if (line.startsWith("-")) { /* deletion: no new-file line */ }
+    else if (line.startsWith("\\")) { /* "No newline" marker */ }
+    else { newLine++; }                    // context line
+  }
+}
+
+// ---------- preview + DOM tree + inspector ----------
+let renderTimer = null;
+function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 250); }
+
+function render() {
+  preview.srcdoc = code.value;
+}
+
+preview.addEventListener("load", () => {
+  buildTree();
+  ensureOverlay();
+});
+
+function buildTree() {
+  let doc;
+  try { doc = preview.contentDocument; } catch { return; }
+  if (!doc || !doc.body) { treeEl.innerHTML = '<div class="empty" style="padding:8px 12px">No DOM</div>'; return; }
+  treeEl.innerHTML = "";
+  treeEl.appendChild(renderNode(doc.body));
+}
+
+function renderNode(el) {
+  const wrap = document.createElement("div");
+  wrap.className = "node";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  let label = `<span class="tname">${el.tagName.toLowerCase()}</span>`;
+  if (el.id) label += `<span class="tid"> #${el.id}</span>`;
+  if (el.classList.length) label += `<span class="tcls"> .${[...el.classList].join(".")}</span>`;
+  tag.innerHTML = label;
+  tag.addEventListener("click", () => selectElement(el, tag));
+  wrap.appendChild(tag);
+
+  const kids = [...el.children];
+  if (kids.length) {
+    const sub = document.createElement("div");
+    sub.className = "twrap";
+    for (const k of kids) sub.appendChild(renderNode(k));
+    wrap.appendChild(sub);
+  }
+  return wrap;
+}
+
+function selectElement(el, tagSpan) {
+  treeEl.querySelectorAll(".tag.sel").forEach((t) => t.classList.remove("sel"));
+  tagSpan.classList.add("sel");
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  positionOverlay(el);
+  showInspector(el);
+}
+
+let overlay = null;
+function ensureOverlay() {
+  const doc = preview.contentDocument;
+  overlay = doc.createElement("div");
+  Object.assign(overlay.style, {
+    position: "fixed", pointerEvents: "none", zIndex: 2147483647,
+    background: "rgba(110,97,84,0.18)", outline: "1px solid #6e6154",
+    display: "none", transition: "all 0.08s ease",
+  });
+  doc.body.appendChild(overlay);
+}
+function positionOverlay(el) {
+  if (!overlay) return;
+  const r = el.getBoundingClientRect();
+  Object.assign(overlay.style, {
+    display: "block",
+    top: r.top + "px", left: r.left + "px",
+    width: r.width + "px", height: r.height + "px",
+  });
+}
+
+function showInspector(el) {
+  const doc = preview.contentDocument;
+  let sel = el.tagName.toLowerCase();
+  if (el.id) sel += "#" + el.id;
+  let html = `<div class="ins-sel">${sel}${el.classList.length ? "." + [...el.classList].join(".") : ""}</div>`;
+
+  if (el.classList.length) {
+    html += [...el.classList].map((c) => `<span class="chip">.${c}</span>`).join("");
+  } else {
+    html += `<span class="empty">No classes</span>`;
+  }
+
+  // Matched CSS rules from the document's stylesheets.
+  const matches = [];
+  for (const sheet of doc.styleSheets) {
+    let rules;
+    try { rules = sheet.cssRules; } catch { continue; }
+    for (const rule of rules) {
+      if (rule.selectorText) {
+        try { if (el.matches(rule.selectorText)) matches.push(rule); } catch {}
+      }
+    }
+  }
+  if (matches.length) {
+    for (const rule of matches) {
+      const decls = [...rule.style].map((p) => `${p}: ${rule.style.getPropertyValue(p)};`).join("\n");
+      html += `<div class="rule"><div class="rsel">${rule.selectorText} {</div><div class="rdecl">${esc(decls)}</div><div class="rsel">}</div></div>`;
+    }
+  }
+  inspector.innerHTML = html;
+}
+
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>"); }
+
+// Cmd+S to save.
+window.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); saveFile(); }
+});
+
+paint();
+import("../devinspect.js").then((m) => m.initDevInspect()).catch(() => {});
+</script>
+</body>
+</html>
