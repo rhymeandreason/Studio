@@ -176,7 +176,7 @@
            display: flex; flex-direction: column; overflow: hidden;
            --pad: 96px; }
   .slide__inner { flex: 1; display: flex; flex-direction: column; padding: var(--pad); min-height: 0; gap: 20px;}
-  .slide h1 { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); margin: 0; line-height: 1.05; }
+  .slide h1 { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); margin: 0; line-height: 1.05; font-size: calc(var(--heading-base, 56px) * var(--heading-scale, 1)); }
   .slide .kicker { font-family: var(--deck-body); font-weight: 600; text-transform: uppercase; letter-spacing: .12em; font-size: 22px; color: var(--deck-muted); margin: 0 0 18px; }
   .slide .deck-body { font-family: var(--deck-body); font-weight: var(--deck-body-w); line-height: 1.45; font-size: calc(var(--body-base, 24px) * var(--body-scale, 1)); }
   .slide .deck-body > :first-child { margin-top: 0; }
@@ -200,24 +200,22 @@
   }
   .slide .deck-body.cards > ul > li::marker { content: none; }
   .l-title { justify-content: center; align-items: flex-start; }
-  .l-title h1 { font-size: 96px; }
   .l-title .subtitle { font-family: var(--deck-body); font-size: 38px; margin-top: 24px; color: var(--deck-muted); }
   .l-section { justify-content: center; align-items: flex-start; }
-  .l-section h1 { font-size: 84px; }
-  .l-title-body h1 { font-size: 64px; margin-bottom: 44px; }
+  .l-title-body h1 { margin-bottom: 44px; }
   .l-two-col .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; flex: 1; min-height: 0; }
   .l-two-col .cols > .deck-body { font-size: calc(var(--body-base, 24px) * var(--body-scale, 1)); }
   /* Columns sit on subtle surface panels — only on light/soft schemes, where a
      panel reads as separation (on dark/accent it just muddies the background). */
   .slide[data-scheme="light"] .l-two-col .cols > .deck-body,
   .slide[data-scheme="soft"] .l-two-col .cols > .deck-body { background: var(--deck-surface); padding: 32px 36px; border-radius: 16px; }
-  .l-two-col h1 { font-size: 60px; margin-bottom: 28px; }
+  .l-two-col h1 { margin-bottom: 28px; }
   .l-three-col .cols { grid-template-columns: 1fr 1fr 1fr; gap: 32px; }
   .l-three-col .cols > .deck-body { font-size: calc(var(--body-base, 24px) * var(--body-scale, 1) * .85); }
   .slide[data-scheme="light"] .l-three-col .cols > .deck-body,
   .slide[data-scheme="soft"] .l-three-col .cols > .deck-body { padding: 26px 28px; }
   .l-quote { justify-content: center; }
-  .l-quote blockquote { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); font-size: 64px; line-height: 1.15; margin: 0; }
+  .l-quote blockquote { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); font-size: calc(var(--heading-base, 56px) * var(--heading-scale, 1)); line-height: 1.15; margin: 0; }
   .l-quote .attr { font-family: var(--deck-body); font-size: 30px; margin-top: 32px; color: var(--deck-muted); }
   .l-quote blockquote::before { content: "“"; color: var(--deck-accent); }
   .l-quote blockquote::after { content: "”"; color: var(--deck-accent); }
@@ -228,7 +226,7 @@
   .l-image-text .split-media { min-height: 0; }
   .l-image-text .split-img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
   .l-image-text .split-text { display: flex; flex-direction: column; justify-content: center; min-height: 0; }
-  .l-image-text h1 { font-size: 56px; margin-bottom: 24px; }
+  .l-image-text h1 { margin-bottom: 24px; }
   .img-placeholder { display: grid; place-items: center; width: 100%; height: 100%; min-height: 200px; background: color-mix(in srgb, var(--deck-text) 8%, transparent); color: var(--deck-text); opacity: .4; font-family: var(--deck-body); font-size: 24px; border-radius: 8px; }
 </style>
 </head>
@@ -290,6 +288,17 @@
       "title-body": "body", "two-col": "left", "three-col": "left", "image-text": "body", "quote": "quote",
     };
 
+    // Default heading size level per layout (overridable per slide via headingSize).
+    const HEADING_DEFAULT = {
+      "title": "l", "section": "l", "title-body": "m", "two-col": "m",
+      "three-col": "m", "image-text": "m", "quote": "m",
+    };
+
+    // ⟶ TUNE ME: size multipliers for the S/M/L/XL selects. M = 1 = the theme's
+    //   base size (theme.headingSize / theme.bodySize); the rest scale from it.
+    const HEADING_SCALES = { s: 0.7, m: 1, l: 1.5, xl: 2 };
+    const BODY_SCALES    = { s: 0.8, m: 1, l: 1.2 };
+
     // Switch a slide's layout, moving its main text into the new layout's primary
     // prose slot when that slot is empty (so converting doesn't lose the content).
     function convertLayout(slide, next) {
@@ -304,17 +313,17 @@
     // (surface = subtle panel bg, muted = secondary text, accent/accent2 = two
     // accent colors, each usable as a full-slide background scheme).
     const PRESETS = [
-      { name: "Runes", fonts:{heading:{family:"Fraunces",weight:600},body:{family:"Newsreader",weight:400}}, bodySize:24,
+      { name: "Runes", fonts:{heading:{family:"Fraunces",weight:600},body:{family:"Newsreader",weight:400}}, bodySize:24, headingSize:56,
         colors:{bg:"#f7f5f0",surface:"#efece5",text:"#2a2a28",muted:"#6e6154",accent:"#a85a4a",accent2:"#3f5e5a"} },
-      { name: "Mono", fonts:{heading:{family:"Space Grotesk",weight:600},body:{family:"Inter",weight:400}}, bodySize:24,
+      { name: "Mono", fonts:{heading:{family:"Space Grotesk",weight:600},body:{family:"Inter",weight:400}}, bodySize:24, headingSize:56,
         colors:{bg:"#ffffff",surface:"#f3f4f6",text:"#111111",muted:"#6b7280",accent:"#2563eb",accent2:"#7c3aed"} },
-      { name: "Editorial", fonts:{heading:{family:"Playfair Display",weight:700},body:{family:"Lora",weight:400}}, bodySize:24,
+      { name: "Editorial", fonts:{heading:{family:"Playfair Display",weight:700},body:{family:"Lora",weight:400}}, bodySize:24, headingSize:56,
         colors:{bg:"#fbf9f4",surface:"#f1ece1",text:"#1b1b1a",muted:"#7c736a",accent:"#7a5c3e",accent2:"#3d5a40"} },
-      { name: "Night", fonts:{heading:{family:"Manrope",weight:700},body:{family:"Manrope",weight:400}}, bodySize:24,
+      { name: "Night", fonts:{heading:{family:"Manrope",weight:700},body:{family:"Manrope",weight:400}}, bodySize:24, headingSize:56,
         colors:{bg:"#16161a",surface:"#23232a",text:"#f4f4f5",muted:"#a1a1aa",accent:"#c4f042",accent2:"#f0723e"} },
-      { name: "Warm", fonts:{heading:{family:"DM Serif Display",weight:400},body:{family:"DM Sans",weight:400}}, bodySize:24,
+      { name: "Warm", fonts:{heading:{family:"DM Serif Display",weight:400},body:{family:"DM Sans",weight:400}}, bodySize:24, headingSize:56,
         colors:{bg:"#fdf3e7",surface:"#f7e6d2",text:"#3a2a1e",muted:"#9a7a5e",accent:"#d2693a",accent2:"#6b4a8f"} },
-      { name: "Design Class", fonts:{heading:{family:"Plus Jakarta Sans",weight:600},body:{family:"Plus Jakarta Sans",weight:400}}, bodySize:24,
+      { name: "Design Class", fonts:{heading:{family:"Plus Jakarta Sans",weight:600},body:{family:"Plus Jakarta Sans",weight:400}}, bodySize:24, headingSize:56,
         colors:{bg:"#f7f5f0",surface:"#ecebe6",text:"#3a2a1e",muted:"#7a6f63",accent:"#2563eb",accent2:"#e0653a"} },
     ];
 
@@ -454,7 +463,10 @@
       el.style.setProperty("--deck-body-w", t.fonts.body.weight);
       // Body text size: theme base (M) × per-slide S/M/L scale.
       el.style.setProperty("--body-base", (t.bodySize || 24) + "px");
-      el.style.setProperty("--body-scale", { s: 0.8, m: 1, l: 1.4 }[slide.bodySize || "m"]);
+      el.style.setProperty("--body-scale", BODY_SCALES[slide.bodySize || "m"]);
+      // Heading size: theme base (M) × scale; default level varies by layout.
+      el.style.setProperty("--heading-base", (t.headingSize || 56) + "px");
+      el.style.setProperty("--heading-scale", HEADING_SCALES[slide.headingSize || HEADING_DEFAULT[slide.layout] || "m"]);
       el.style.background = pal.bg;
       el.style.color = pal.text;
 
@@ -778,6 +790,17 @@
         wrap.append(lab, sel); content.appendChild(wrap);
       }
       const hasBody = LAYOUTS[slide.layout].slots.some(s => s[2] === "md");
+      const hasHeading = LAYOUTS[slide.layout].slots.some(s => s[0] === "title" || s[0] === "quote");
+      // Heading size — S/M/L/XL, scaled from the theme's base; layout sets default.
+      if (hasHeading) {
+        const wrap = document.createElement("div");
+        const lab = document.createElement("label"); lab.className="field-label"; lab.textContent="Heading size";
+        const sel = document.createElement("select"); sel.className="field";
+        for (const [v,t] of [["s","Small"],["m","Medium"],["l","Large"],["xl","X-Large"]]) { const o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); }
+        sel.value = slide.headingSize || HEADING_DEFAULT[slide.layout] || "m";
+        sel.onchange = () => { slide.headingSize = sel.value; scheduleRender(); };
+        wrap.append(lab, sel); content.appendChild(wrap);
+      }
       // Body text size — S/M/L, scaled from the theme's base size.
       if (hasBody) {
         const wrap = document.createElement("div");

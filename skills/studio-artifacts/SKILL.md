@@ -96,7 +96,10 @@ Rules:
   `accent`/`accent2` are two accent colors (each usable as a full-slide
   background). A per-slide `colorScheme` derives the palette from these.
   `theme.bodySize` (px, default 24) is the base body-text size (= Medium); a
-  per-slide `bodySize` of `"s"`/`"m"`/`"l"` scales from it.
+  per-slide `bodySize` of `"s"`/`"m"`/`"l"` scales from it. `theme.headingSize`
+  (px, default 56) is the base heading size; a per-slide `headingSize` of
+  `"s"`/`"m"`/`"l"`/`"xl"` scales from it (each layout sets its own default —
+  e.g. Title slides default Large, Title+Body Medium).
 - Each slide has a `layout` plus the slots that layout uses. Valid layouts and
   their slots:
   - `title` → `title`, `subtitle`
