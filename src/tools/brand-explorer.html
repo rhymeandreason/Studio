@@ -56,9 +56,9 @@
   }
   .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-  .font-list { overflow-y: auto; padding: 8px 16px 24px; }
+  .font-list { overflow-y: auto; padding: 8px 0px 24px; }
   .font-card {
-    padding: 12px 14px;
+    padding: 16px 16px;
     border-bottom: 1px solid var(--hairline);
     display: flex;
     align-items: center;
@@ -292,7 +292,7 @@
         sample.textContent = f.family;
         const name = document.createElement("div");
         name.className = "font-name";
-        name.textContent = f.category;
+        //name.textContent = f.category;
         meta.append(sample, name);
 
         const actions = document.createElement("div");
