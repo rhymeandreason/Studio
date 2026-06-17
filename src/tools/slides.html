@@ -75,11 +75,12 @@
     font-family: var(--serif); font-size: 13px;
   }
   /* Contextual control bar above the canvas — only the current layout's controls. */
-  .stage-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 9px 14px; border-bottom: 1px solid var(--hairline); min-height: 0; }
+  .stage-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 9px 14px; border-bottom: 1px solid var(--hairline); min-height: 0; }
   .stage-controls:empty { display: none; }
   .stage-ctl { display: flex; align-items: center; gap: 6px; }
   .stage-ctl > .label { font-size: 11px; color: var(--text-soft); }
   .stage-ctl select.field { height: 28px; padding: 0 24px 0 8px; font-size: 12px; width: auto; }
+  .stage-ctl input.field { height: 28px; padding: 0 8px; font-size: 12px; width: 160px; }
   .stage-ctl .img-name { font-size: 12px; max-width: 140px; flex: 0 1 auto; }
   .stage-ctl .preview { width: 38px; height: 24px; object-fit: cover; border-radius: 3px; border: 1px solid var(--hairline); background: var(--elevated); flex: 0 0 auto; }
   .stage-ctl .btn-icon { flex: 0 0 auto; }
@@ -238,10 +239,14 @@
   .l-image-full .full-img { width: 100%; height: 100%; object-fit: cover; }
   .l-image-full .cap { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 96px; font-family: var(--deck-body); font-size: 26px; background: linear-gradient(transparent, rgba(0,0,0,.6)); color: #fff; }
   .l-image-text .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; min-height: 0; align-items: stretch; }
-  .l-image-text .split-media { min-height: 0; }
-  .l-image-text .split-img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+  .l-image-text .split-media { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+  .l-image-text .split-img { width: 100%; flex: 1; min-height: 0; object-fit: cover; border-radius: 8px; }
+  .l-image-text .split-cap { font-family: var(--deck-body); font-size: calc(var(--body-base, 24px) * .8); color: var(--deck-muted); }
   .l-image-text .split-text { display: flex; flex-direction: column; justify-content: center; min-height: 0; }
   .l-image-text h1 { margin-bottom: 24px; }
+  /* Section caption — a muted line pinned to the bottom of the slide. */
+  .l-section .section-cap { position: absolute; left: var(--pad); right: var(--pad); bottom: var(--pad); z-index: 1; font-family: var(--deck-body); font-size: 28px; color: var(--deck-muted); }
+  .l-section.has-bg .section-cap { color: rgba(255,255,255,.85); }
   .img-placeholder { display: grid; place-items: center; width: 100%; height: 100%; min-height: 200px; background: color-mix(in srgb, var(--deck-text) 8%, transparent); color: var(--deck-text); opacity: .4; font-family: var(--deck-body); font-size: 24px; border-radius: 8px; }
 </style>
 </head>
@@ -502,7 +507,7 @@
         case "section":
           { const url = resolved[slide.image] ?? (slide.image && imgCache.get(slide.image));
             const bg = url ? `<img class="section-bg" src="${url}"><div class="section-scrim"></div>` : "";
-            inner = `<div class="slide__inner l-section${url?' has-bg':''}">${bg}<h1 data-slot="title">${esc(slide.title)}</h1></div>`; }
+            inner = `<div class="slide__inner l-section${url?' has-bg':''}">${bg}<h1 data-slot="title">${esc(slide.title)}</h1>${slide.caption?`<div class="section-cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div>`; }
           break;
         case "title-body":
           { const cols = slide.columns === 2 ? ` style="column-count:2;column-gap:56px"` : "";
@@ -519,7 +524,7 @@
             inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${url?`<img class="full-img" src="${url}" style="object-fit:${fit}">`:`<div class="img-placeholder" style="height:100%">No image</div>`}${slide.caption?`<div class="cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div>`; }
           break;
         case "image-text":
-          inner = `<div class="slide__inner l-image-text"><div class="split"><div class="split-media">${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}</div><div class="split-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="body">${md(slide.body)}</div></div></div></div>`; break;
+          inner = `<div class="slide__inner l-image-text"><div class="split"><div class="split-media">${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}${slide.caption?`<div class="split-cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div><div class="split-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="body">${md(slide.body)}</div></div></div></div>`; break;
         default:
           inner = `<div class="slide__inner"><h1>${esc(slide.title||"")}</h1></div>`;
       }
@@ -540,7 +545,6 @@
       const slide = state.slides[current];
       canvas.innerHTML = "";
       if (!slide) return;
-      renderStageControls();
       // pre-resolve image then render
       const node = renderSlide(slide, state.theme);
       canvas.appendChild(node);
@@ -768,7 +772,7 @@
       const content = sec("Content");
       const used = new Set(LAYOUTS[slide.layout].slots.map(s => s[0]));
       for (const [key, label, kind] of ALL_SLOTS) {
-        if (kind === "image") continue;   // image lives in the stage control bar
+        if (kind === "image" || key === "caption") continue;   // these live in the stage control bar
         const inLayout = used.has(key);
         const wrap = document.createElement("div");
         wrap.className = "slot" + (inLayout ? "" : " slot--unused");
@@ -822,6 +826,13 @@
         browse.onclick = () => openMediaPicker(rel => { slide[key] = rel; renderAll(); });
         ctl.append(prev, nameEl, browse); ctlBar.appendChild(ctl);
         addSelect("Fit", [["cover","Fill"],["contain","Fit"]], slide.imageFit || "cover", v => { slide.imageFit = v; scheduleRender(); });
+        // Optional caption — travels with the image on any image layout; only
+        // renders on the slide when it has text.
+        const cc = document.createElement("div"); cc.className = "stage-ctl";
+        const clab = document.createElement("span"); clab.className = "label"; clab.textContent = "Caption";
+        const inp = document.createElement("input"); inp.className = "field"; inp.placeholder = "optional"; inp.value = slide.caption || "";
+        inp.oninput = () => { slide.caption = inp.value; scheduleRender(); };
+        cc.append(clab, inp); ctlBar.appendChild(cc);
         // Divider separating the image controls from the text controls.
         if (hasHeading || hasBody) ctlBar.appendChild(Object.assign(document.createElement("div"), { className: "stage-divider" }));
       }
@@ -896,7 +907,7 @@
     // ---------- Render orchestration ----------
     let renderTimer;
     function scheduleRender(){ clearTimeout(renderTimer); renderTimer=setTimeout(()=>{ renderStage(); renderReel(); }, 120); scheduleSave(); }
-    function renderAll(){ renderStage(); renderReel(); renderInspector(); scheduleSave(); }
+    function renderAll(){ renderStage(); renderStageControls(); renderReel(); renderInspector(); scheduleSave(); }
 
     // ---------- Defaults for new slides ----------
     const SLIDE_DEFAULTS = {

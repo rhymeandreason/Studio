@@ -110,8 +110,10 @@ Rules:
   - `two-col` → `title`, `left`, `right`
   - `three-col` → `title`, `left`, `middle`, `right`
   - `quote` → `quote`, `attribution`
-  - `image-full` → `image`, `caption`
-  - `image-text` → `title`, `image`, `body`
+  - `image-full` → `image`, optional `caption`
+  - `image-text` → `title`, `image`, `body`, optional `caption`
+  - Any image layout (`image-full`, `image-text`, `section`) accepts an optional
+    `caption` that renders only when it has text.
 - Body-type slots (`body`, `left`, `middle`, `right`) accept **Markdown** (bold,
   lists, links, `##`/`###` headings, blockquotes, `code`, `---`). `**bold**`
   renders in the accent color.
