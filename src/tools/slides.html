@@ -1011,6 +1011,34 @@
 
     // ---------- Boot ----------
     function deriveProjectRoot(p){ const m=p.match(/^(.*)\/artifacts\//); projectRoot = m? m[1] : null; }
+
+    // Reload the deck when its file changes on disk externally (e.g. Studio Claude
+    // edits the artifact). Studio's recursive watcher broadcasts "fs-changed".
+    // Guarded so we never clobber in-progress edits or react to our own saves.
+    function initArtifactWatch(){
+      if (!invoke || !window.__TAURI__?.event) return;
+      window.__TAURI__.event.listen("fs-changed", async () => {
+        if (!activePath || saving) return;
+        if (snapshot() !== lastSaved) return;     // local has unsaved edits — don't overwrite
+        let data;
+        try { data = JSON.parse(await invoke("read_artifact", { path: activePath })); }
+        catch { return; }
+        const fileSnap = JSON.stringify({ name: data.name, theme: data.theme, slides: data.slides });
+        if (fileSnap === lastSaved) return;       // no external change (our own write / unrelated)
+        // Adopt the on-disk version.
+        if (data.theme) state.theme = data.theme;
+        if (Array.isArray(data.slides) && data.slides.length) state.slides = data.slides;
+        if (data.name != null) state.name = data.name;
+        current = Math.min(current, state.slides.length-1);
+        selected = new Set([current]); selAnchor = current;
+        lastSaved = snapshot();
+        document.getElementById("deck-name").value = state.name;
+        loadThemeFonts(state.theme);
+        renderAll();
+        statusEl.textContent = "Reloaded from disk " + new Date().toLocaleTimeString();
+      });
+    }
+
     async function boot(){
       const path = new URLSearchParams(location.search).get("artifact");
       if (path && invoke) {
@@ -1026,6 +1054,7 @@
       loadThemeFonts(state.theme);
       initColoris();
       initImageImport();
+      initArtifactWatch();
       initDevInspect();
       renderAll();
       // Mark the loaded (or default) state as already-saved, then enable auto-save.
