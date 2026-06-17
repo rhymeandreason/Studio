@@ -863,15 +863,25 @@
       const a="var(--accent)", g="var(--hairline-strong)";
       const box=(x,y,w,h,f)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${f}"/>`;
       let g2="";
+      const w="rgba(255,255,255,.9)";   // light bar over a filled background
       switch(key){
-        case "title": g2=box(14,40,50,8,a)+box(14,52,38,5,g); break;
-        case "section": g2=`<rect x="0" y="0" width="100" height="56" fill="${a}" opacity=".25"/>`+box(14,24,48,8,a); break;
-        case "title-body": g2=box(14,12,40,7,a)+box(14,26,72,4,g)+box(14,34,72,4,g)+box(14,42,52,4,g); break;
-        case "two-col": g2=box(14,10,40,6,a)+box(14,24,32,4,g)+box(14,32,32,4,g)+box(54,24,32,4,g)+box(54,32,32,4,g); break;
-        case "three-col": g2=box(14,10,40,6,a)+box(14,24,20,4,g)+box(14,32,20,4,g)+box(40,24,20,4,g)+box(40,32,20,4,g)+box(66,24,20,4,g)+box(66,32,20,4,g); break;
-        case "quote": g2=box(20,20,60,7,a)+box(20,32,40,7,a)+box(20,46,24,4,g); break;
+        // title — large left-aligned heading, vertically centered, subtitle under.
+        case "title": g2=box(12,22,52,9,a)+box(12,35,32,5,g); break;
+        // section — full background (supports an optional background image),
+        // centered heading in light text.
+        case "section": g2=box(0,0,100,56,g)+box(12,23,50,10,w); break;
+        // title-body — heading top, three body lines.
+        case "title-body": g2=box(12,11,42,7,a)+box(12,27,76,4,g)+box(12,35,76,4,g)+box(12,43,56,4,g); break;
+        // two-col — heading over two columns of lines.
+        case "two-col": g2=box(12,11,42,7,a)+box(12,26,32,4,g)+box(12,34,32,4,g)+box(12,42,22,4,g)+box(52,26,34,4,g)+box(52,34,34,4,g)+box(52,42,26,4,g); break;
+        // three-col — heading over three columns.
+        case "three-col": g2=box(12,11,42,7,a)+[12,40,68].map(x=>box(x,26,20,4,g)+box(x,34,20,4,g)+box(x,42,14,4,g)).join(""); break;
+        // quote — two large quote bars, attribution under.
+        case "quote": g2=box(16,18,68,8,a)+box(16,30,48,8,a)+box(16,45,22,4,g); break;
+        // image-full — full-bleed image.
         case "image-full": g2=box(0,0,100,56,g); break;
-        case "image-text": g2=box(8,8,40,40,g)+box(54,16,34,7,a)+box(54,30,34,4,g)+box(54,38,28,4,g); break;
+        // image-text — image left, heading + lines right.
+        case "image-text": g2=box(10,10,38,36,g)+box(54,16,34,7,a)+box(54,29,34,4,g)+box(54,37,26,4,g); break;
       }
       return `<svg viewBox="0 0 100 56" preserveAspectRatio="none">${g2}</svg>`;
     }
