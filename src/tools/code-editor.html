@@ -369,6 +369,7 @@ const $ = (id) => document.getElementById(id);
 const code = $("code"), hl = $("hl"), gutter = $("gutter"), minimap = $("minimap");
 const treeEl = $("tree"), inspector = $("inspector"), parser = $("parser");
 const sectionsEl = $("sections"), inlinePreview = $("inline-preview");
+let mdHeadings = [];   // parsed ATX headings { level, text, line } for the section browser
 const filenameEl = $("filename"), dirtyEl = $("dirty"), diffStatus = $("diff-status");
 
 let currentPath = null;
@@ -677,14 +678,56 @@ function applyMode() {
   $("view-toggle").innerHTML = `<span class="mi">visibility</span>Preview`;
 }
 
-// Code/Preview toggle (Markdown only).
+// Code/Preview toggle (Markdown only) — keeps scroll position by syncing to the
+// nearest preceding heading between the two views.
 $("view-toggle").addEventListener("click", () => {
+  const goingToPreview = !inPreview();
+  const idx = goingToPreview ? currentCodeSectionIdx() : currentPreviewSectionIdx();
   const on = document.body.classList.toggle("md-preview");
   $("view-toggle").innerHTML = on
     ? `<span class="mi">code</span>Code`
     : `<span class="mi">visibility</span>Preview`;
+  // Wait for the now-visible pane to lay out before reading/setting offsets.
+  requestAnimationFrame(() => {
+    if (on) {
+      if (idx >= 0) revealPreviewHeading(idx, "auto");
+      else inlinePreview.contentWindow?.scrollTo(0, 0);
+    } else {
+      if (idx >= 0 && mdHeadings[idx]) scrollCodeToLine(mdHeadings[idx].line);
+      else { code.scrollTop = 0; syncScroll(); }
+    }
+  });
 });
 function inPreview() { return document.body.classList.contains("md-preview"); }
+
+// Index of the last heading at or above the code panel's current top.
+function currentCodeSectionIdx() {
+  const top = code.scrollTop;
+  let topLine = 1;
+  for (let i = 0; i < hl.children.length; i++) {
+    if (hl.children[i].offsetTop >= top - 1) { topLine = i + 1; break; }
+  }
+  let idx = -1;
+  for (let i = 0; i < mdHeadings.length && mdHeadings[i].line <= topLine; i++) idx = i;
+  return idx;
+}
+
+// Index of the last rendered heading at or above the inline preview's top.
+function currentPreviewSectionIdx() {
+  const doc = inlinePreview.contentDocument;
+  if (!doc) return -1;
+  const hs = doc.querySelectorAll("h1, h2, h3, h4, h5, h6");
+  const top = inlinePreview.contentWindow.scrollY;
+  let idx = -1;
+  for (let i = 0; i < hs.length && hs[i].offsetTop <= top + 4; i++) idx = i;
+  return idx;
+}
+
+function scrollCodeToLine(line) {
+  const row = hl.children[line - 1];
+  if (row) code.scrollTop = row.offsetTop;
+  syncScroll();
+}
 
 // Parse ATX headings (#…######) from the source, skipping fenced code blocks.
 function buildSections() {
@@ -697,6 +740,7 @@ function buildSections() {
     const m = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(lines[i]);
     if (m) items.push({ level: m[1].length, text: m[2], line: i + 1 });
   }
+  mdHeadings = items;
   if (!items.length) {
     sectionsEl.innerHTML = '<span class="empty" style="padding:8px 12px">No headings</span>';
     return;
@@ -716,11 +760,11 @@ function buildSections() {
 
 // Scroll the inline preview to its idx-th heading (same order as the source
 // headings, since both come from the same Markdown).
-function revealPreviewHeading(idx) {
+function revealPreviewHeading(idx, behavior = "smooth") {
   const doc = inlinePreview.contentDocument;
   if (!doc) return;
   const hs = doc.querySelectorAll("h1, h2, h3, h4, h5, h6");
-  if (hs[idx]) hs[idx].scrollIntoView({ block: "start", behavior: "smooth" });
+  if (hs[idx]) hs[idx].scrollIntoView({ block: "start", behavior });
 }
 
 // Scroll the code panel to a 1-based source line and select it.

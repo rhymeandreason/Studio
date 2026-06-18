@@ -61,9 +61,27 @@ plain text if Prism errors.
 For `.md` / `.markdown` files the code panel highlights Markdown (vendored
 `prism-markdown`), and the **preview renders it** — `renderedHTML()` runs the
 source through vendored `marked` (`window.marked`) and wraps it in a readable
-typographic stylesheet (`MD_CSS`). The same rendered HTML feeds the offscreen
-parser, so the DOM tree shows the rendered document structure. The git diff
-still operates on the raw Markdown source.
+typographic stylesheet (`MD_CSS`). The git diff still operates on the raw
+Markdown source.
+
+Markdown files also swap the UI (toggled by a `body.is-markdown` class set in
+`applyMode()` on load/restore):
+
+- **Left column → section browser.** The DOM tree + Styles inspector are hidden;
+  `#sections` lists the ATX headings (`buildSections` parses `#`–`######`,
+  skipping fenced code, into `mdHeadings`), indented by level. Clicking a heading
+  scrolls the source line (Code view) or the rendered heading (Preview view).
+- **Inline preview + toggle.** A Code/Preview button (`#view-toggle`) swaps the
+  code panel for an in-window `#inline-preview` iframe (the separate-window
+  Preview button is hidden). `render()` keeps its `srcdoc` current.
+- **Scroll is preserved across the toggle** by syncing to the nearest preceding
+  heading: capture the last heading at/above the current pane's top
+  (`currentCodeSectionIdx` / `currentPreviewSectionIdx`), then after layout
+  scroll the other pane to it. Heading indices line up because both panes derive
+  from the same Markdown.
+
+For non-Markdown files the offscreen parser still gets the rendered source so the
+DOM tree works as usual.
 
 ## Git diff
 
