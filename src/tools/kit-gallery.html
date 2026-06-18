@@ -375,6 +375,26 @@
     import "../kit/components.js";
     import { enter, enterStagger, pop } from "../kit/motion.js";
 
+    // Click a color swatch → copy its computed hex to clipboard.
+    function rgbToHex(rgb) {
+      const m = rgb.match(/[\d.]+/g);
+      if (!m) return rgb;
+      return "#" + [m[0], m[1], m[2]].map(n => Math.round(n).toString(16).padStart(2, "0")).join("");
+    }
+    document.querySelectorAll(".token-chip__swatch").forEach(el => {
+      el.style.cursor = "pointer";
+      el.title = "Click to copy";
+      el.addEventListener("click", () => {
+        const color = getComputedStyle(el).backgroundColor;
+        const hex = rgbToHex(color);
+        navigator.clipboard.writeText(hex);
+        const orig = el.parentElement.querySelector(".token-chip__name").textContent;
+        const label = el.parentElement.querySelector(".token-chip__name");
+        label.textContent = "copied!";
+        setTimeout(() => label.textContent = orig, 1200);
+      });
+    });
+
     // Dropdown
     const dropBtn = document.getElementById("drop-btn");
     const dropMenu = document.getElementById("drop-menu");
