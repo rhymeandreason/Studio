@@ -278,12 +278,30 @@
 
   /* Inline Markdown preview: hidden by default; the Code/Preview toggle and the
      separate-window button only apply to Markdown. */
-  #inline-preview { display: none; flex: 1 1 auto; min-height: 0; width: 100%; border: 0; background: #fff; }
+  #md-view { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; position: relative; background: #fff; }
   #view-toggle { display: none; }
   body.is-markdown #view-toggle { display: inline-flex; }
   body.is-markdown #preview-btn { display: none; }
   body.md-preview #editor { display: none; }
-  body.md-preview #inline-preview { display: block; }
+  body.md-preview #md-view { display: block; }
+
+  /* Rendered Markdown typography (scoped to the inline view). */
+  .md-body { max-width: 740px; margin: 0 auto; padding: 32px 32px 80px;
+    font: 16px/1.65 -apple-system, system-ui, "Segoe UI", sans-serif; color: #2a2a28; }
+  .md-body h1, .md-body h2, .md-body h3, .md-body h4 { line-height: 1.25; margin: 1.6em 0 .5em; font-weight: 650; }
+  .md-body h1 { font-size: 2em; border-bottom: 1px solid #e5e2db; padding-bottom: .3em; }
+  .md-body h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: .25em; }
+  .md-body h3 { font-size: 1.22em; } .md-body h4 { font-size: 1.05em; }
+  .md-body p, .md-body ul, .md-body ol, .md-body blockquote, .md-body table, .md-body pre { margin: 0 0 1em; }
+  .md-body a { color: #1c6cd6; } .md-body li { margin: .25em 0; }
+  .md-body code { font: 0.88em var(--mono); background: #f1efe9; padding: .15em .4em; border-radius: 4px; }
+  .md-body pre { background: #f6f4ef; padding: 14px 16px; border-radius: 8px; overflow: auto; }
+  .md-body pre code { background: none; padding: 0; }
+  .md-body blockquote { border-left: 3px solid #d8d3c8; padding: .2em 0 .2em 1em; color: #6b6658; }
+  .md-body table { border-collapse: collapse; }
+  .md-body th, .md-body td { border: 1px solid #e0dcd2; padding: 6px 12px; }
+  .md-body th { background: #f3f1ea; } .md-body img { max-width: 100%; }
+  .md-body hr { border: 0; border-top: 1px solid #e5e2db; margin: 2em 0; }
 </style>
 </head>
 <body>
@@ -335,8 +353,9 @@
         <div id="minimap"><div class="mm-view"></div></div>
       </div>
       <!-- Inline rendered preview, shown in place of the code panel when a
-           Markdown file is in Preview mode. -->
-      <iframe id="inline-preview" sandbox="allow-same-origin"></iframe>
+           Markdown file is in Preview mode. A plain scrollable div (not an
+           iframe) so scrolling stays reliable across show/hide. -->
+      <div id="md-view"></div>
     </div>
   </div>
 
@@ -368,7 +387,7 @@ if (TAURI) {
 const $ = (id) => document.getElementById(id);
 const code = $("code"), hl = $("hl"), gutter = $("gutter"), minimap = $("minimap");
 const treeEl = $("tree"), inspector = $("inspector"), parser = $("parser");
-const sectionsEl = $("sections"), inlinePreview = $("inline-preview");
+const sectionsEl = $("sections"), mdView = $("md-view");
 let mdHeadings = [];   // parsed ATX headings { level, text, line } for the section browser
 const filenameEl = $("filename"), dirtyEl = $("dirty"), diffStatus = $("diff-status");
 
@@ -663,9 +682,10 @@ function mdWrap(body) {
 // Re-parse into the offscreen iframe (rebuilds the tree) and push to the
 // preview window if it's open.
 function render() {
-  const html = renderedHTML();
-  parser.srcdoc = html;
-  if (isMarkdown()) inlinePreview.srcdoc = html;   // keep inline preview current
+  parser.srcdoc = renderedHTML();
+  if (isMarkdown() && window.marked) {             // keep inline preview current
+    mdView.innerHTML = `<div class="md-body">${window.marked.parse(code.value, { breaks: true })}</div>`;
+  }
   pushPreview();
 }
 
@@ -687,18 +707,15 @@ $("view-toggle").addEventListener("click", () => {
   $("view-toggle").innerHTML = on
     ? `<span class="mi">code</span>Code`
     : `<span class="mi">visibility</span>Preview`;
-  // Wait for the now-visible pane to lay out before reading/setting offsets.
   requestAnimationFrame(() => {
-    if (on) {
-      if (idx >= 0) revealPreviewHeading(idx, "auto");
-      else inlinePreview.contentWindow?.scrollTo(0, 0);
-    } else {
-      if (idx >= 0 && mdHeadings[idx]) scrollCodeToLine(mdHeadings[idx].line);
-      else { code.scrollTop = 0; syncScroll(); }
-    }
+    if (on) scrollPreviewToSection(idx);
+    else if (idx >= 0 && mdHeadings[idx]) scrollCodeToLine(mdHeadings[idx].line);
+    else { code.scrollTop = 0; syncScroll(); }
   });
 });
 function inPreview() { return document.body.classList.contains("md-preview"); }
+
+function previewHeadings() { return mdView.querySelectorAll("h1, h2, h3, h4, h5, h6"); }
 
 // Index of the last heading at or above the code panel's current top.
 function currentCodeSectionIdx() {
@@ -714,13 +731,17 @@ function currentCodeSectionIdx() {
 
 // Index of the last rendered heading at or above the inline preview's top.
 function currentPreviewSectionIdx() {
-  const doc = inlinePreview.contentDocument;
-  if (!doc) return -1;
-  const hs = doc.querySelectorAll("h1, h2, h3, h4, h5, h6");
-  const top = inlinePreview.contentWindow.scrollY;
+  const hs = previewHeadings();
+  const top = mdView.scrollTop;
   let idx = -1;
   for (let i = 0; i < hs.length && hs[i].offsetTop <= top + 4; i++) idx = i;
   return idx;
+}
+
+// Scroll the inline preview to the idx-th heading (top-aligned).
+function scrollPreviewToSection(idx) {
+  const hs = previewHeadings();
+  mdView.scrollTop = (idx >= 0 && hs[idx]) ? hs[idx].offsetTop : 0;
 }
 
 function scrollCodeToLine(line) {
@@ -761,10 +782,8 @@ function buildSections() {
 // Scroll the inline preview to its idx-th heading (same order as the source
 // headings, since both come from the same Markdown).
 function revealPreviewHeading(idx, behavior = "smooth") {
-  const doc = inlinePreview.contentDocument;
-  if (!doc) return;
-  const hs = doc.querySelectorAll("h1, h2, h3, h4, h5, h6");
-  if (hs[idx]) hs[idx].scrollIntoView({ block: "start", behavior });
+  const hs = previewHeadings();
+  if (hs[idx]) mdView.scrollTo({ top: hs[idx].offsetTop, behavior });
 }
 
 // Scroll the code panel to a 1-based source line and select it.
