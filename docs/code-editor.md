@@ -56,6 +56,15 @@ split per source line, then rendered into `#hl` (so the per-line diff/wrap layer
 keeps working). Token colors are CSS classes `.tok-<prism-type>`. Falls back to
 plain text if Prism errors.
 
+## Markdown
+
+For `.md` / `.markdown` files the code panel highlights Markdown (vendored
+`prism-markdown`), and the **preview renders it** — `renderedHTML()` runs the
+source through vendored `marked` (`window.marked`) and wraps it in a readable
+typographic stylesheet (`MD_CSS`). The same rendered HTML feeds the offscreen
+parser, so the DOM tree shows the rendered document structure. The git diff
+still operates on the raw Markdown source.
+
 ## Git diff
 
 `git_diff_file(path)` runs `git diff --no-color HEAD -- <file>`, deriving the

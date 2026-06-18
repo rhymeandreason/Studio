@@ -301,11 +301,13 @@
           style="position:absolute;left:-9999px;top:0;width:1024px;height:768px;border:0"></iframe>
   <input type="file" id="fallback-file" hidden />
 
+<script src="../vendor/marked.min.js"></script>   <!-- window.marked (Markdown preview) -->
 <script type="module">
 import "../vendor/beautify.js";        // window.js_beautify
 import "../vendor/beautify-css.js";    // window.css_beautify
 import "../vendor/beautify-html.js";   // window.html_beautify (needs the two above)
 import "../vendor/prism.js";           // window.Prism (markup + css + js)
+import "../vendor/prism-markdown.min.js"; // adds Prism.languages.markdown
 
 const TAURI = window.__TAURI__;
 const invoke = TAURI ? TAURI.core.invoke : null;
@@ -430,10 +432,13 @@ code.addEventListener("scroll", syncScroll);
 function lineCount() { return code.value.split("\n").length; }
 
 // ---------- syntax highlighting (Prism) ----------
+function isMarkdown() { const e = ext(); return e === "md" || e === "markdown"; }
+
 function grammar() {
   const e = ext();
   if (e === "css") return ["css", Prism.languages.css];
   if (e === "js" || e === "mjs") return ["js", Prism.languages.javascript];
+  if (isMarkdown()) return ["markdown", Prism.languages.markdown];
   return ["markup", Prism.languages.markup];
 }
 
@@ -575,10 +580,41 @@ function parseDiff(diff) {
 let renderTimer = null;
 function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 250); }
 
+// The HTML shown in the preview / parsed for the tree. For Markdown files this
+// is marked-rendered HTML wrapped in a readable stylesheet; otherwise the raw
+// source (which is already HTML/CSS/JS).
+function renderedHTML() {
+  if (isMarkdown() && window.marked) return mdWrap(window.marked.parse(code.value, { breaks: true }));
+  return code.value;
+}
+
+const MD_CSS = `
+  :root { color-scheme: light; }
+  body { max-width: 740px; margin: 0 auto; padding: 40px 32px 80px;
+    font: 16px/1.65 -apple-system, system-ui, "Segoe UI", sans-serif; color: #2a2a28; }
+  h1, h2, h3, h4 { line-height: 1.25; margin: 1.6em 0 0.5em; font-weight: 650; }
+  h1 { font-size: 2em; border-bottom: 1px solid #e5e2db; padding-bottom: .3em; }
+  h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: .25em; }
+  h3 { font-size: 1.22em; } h4 { font-size: 1.05em; }
+  p, ul, ol, blockquote, table, pre { margin: 0 0 1em; }
+  a { color: #1c6cd6; } li { margin: .25em 0; }
+  code { font: 0.88em var(--mono, ui-monospace, Menlo, monospace);
+    background: #f1efe9; padding: .15em .4em; border-radius: 4px; }
+  pre { background: #f6f4ef; padding: 14px 16px; border-radius: 8px; overflow: auto; }
+  pre code { background: none; padding: 0; }
+  blockquote { border-left: 3px solid #d8d3c8; padding: .2em 0 .2em 1em; color: #6b6658; }
+  table { border-collapse: collapse; } th, td { border: 1px solid #e0dcd2; padding: 6px 12px; }
+  th { background: #f3f1ea; } img { max-width: 100%; }
+  hr { border: 0; border-top: 1px solid #e5e2db; margin: 2em 0; }`;
+
+function mdWrap(body) {
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${MD_CSS}</style></head><body>${body}</body></html>`;
+}
+
 // Re-parse into the offscreen iframe (rebuilds the tree) and push to the
 // preview window if it's open.
 function render() {
-  parser.srcdoc = code.value;
+  parser.srcdoc = renderedHTML();
   pushPreview();
 }
 
@@ -674,7 +710,7 @@ if (evt) {
   evt.listen("ce:closed", () => { previewOpen = false; });
 }
 function pushPreview() {
-  if (evt && previewOpen) evt.emit("ce:html", code.value);
+  if (evt && previewOpen) evt.emit("ce:html", renderedHTML());
 }
 
 function showInspector(el) {
