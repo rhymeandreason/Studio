@@ -1584,6 +1584,23 @@ fn open_app(name: String) -> Result<(), String> {
     Ok(())
 }
 
+const WINBOUNDS_BIN: &str = env!("WINBOUNDS_BIN");
+
+/// Return the frontmost non-utility window's info as "app,title,x,y,w,h".
+/// Calls the compiled winbounds Swift helper which uses CGWindowListCopyWindowInfo
+/// for compositor Z-order — reliable across mixed NSWindowLevel windows.
+#[tauri::command]
+fn get_focused_window_bounds() -> Result<String, String> {
+    let out = Command::new(WINBOUNDS_BIN)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
 /// Escape a string for embedding in an AppleScript double-quoted literal.
 fn applescript_quote(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
@@ -4182,7 +4199,8 @@ pub fn run() {
             open_code_preview,
             read_text_file,
             write_text_file,
-            git_diff_file
+            git_diff_file,
+            get_focused_window_bounds
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Window Size</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #1a1a1a;
+    color: #fff;
+    font-family: "SF Mono", Menlo, monospace;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 16px 0 80px; /* left pad for traffic lights */
+    -webkit-app-region: drag;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  #app-name {
+    font-size: 10px;
+    color: rgba(255,255,255,0.45);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #dims {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  #dims .x { font-size: 14px; font-weight: 400; color: rgba(255,255,255,0.45); margin: 0 2px; }
+  #dims .unit { font-size: 13px; font-weight: 400; color: rgba(255,255,255,0.45); margin-left: 3px; }
+
+  #no-window {
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+    display: none;
+  }
+</style>
+</head>
+<body>
+  <div id="app-name">—</div>
+  <div id="dims">
+    <span id="w">—</span><span class="x">×</span><span id="h">—</span><span class="unit">px</span>
+  </div>
+  <div id="no-window">no window</div>
+
+  <script>
+    if (window.__TAURI__) {
+      const { invoke } = window.__TAURI__.core;
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const { LogicalSize, PhysicalPosition } = window.__TAURI__.dpi;
+      const win = getCurrentWindow();
+
+      // Small floating overlay, always on top
+      win.setSize(new LogicalSize(240, 80));
+      win.setAlwaysOnTop(true);
+      win.setResizable(false);
+
+      let lastX = null, lastY = null, lastW = null, lastH = null;
+
+      const appNameEl = document.getElementById('app-name');
+      const wEl = document.getElementById('w');
+      const hEl = document.getElementById('h');
+      const dimsEl = document.getElementById('dims');
+      const noWinEl = document.getElementById('no-window');
+
+      async function poll() {
+        try {
+          const result = await invoke('get_focused_window_bounds');
+          // format: "AppName,Window Title,x,y,w,h"
+          const firstComma = result.indexOf(',');
+          const rest = result.slice(firstComma + 1);
+          const lastFour = rest.split(',').slice(-4);
+          const winTitle = rest.slice(0, rest.length - lastFour.join(',').length - 1);
+          const app = result.slice(0, firstComma);
+          const [x, y, w, h] = lastFour;
+
+          if (winTitle === 'Window Size') return; // skip ourselves
+
+          const wx = parseInt(x), wy = parseInt(y), ww = parseInt(w), wh = parseInt(h);
+
+          appNameEl.textContent = app;
+          if (ww === 0 && wh === 0) {
+            dimsEl.style.display = 'none';
+            noWinEl.style.display = 'block';
+          } else {
+            dimsEl.style.display = 'block';
+            noWinEl.style.display = 'none';
+            wEl.textContent = ww;
+            hEl.textContent = wh;
+          }
+
+          // Reposition: centered just above the focused window
+          if (wx !== lastX || wy !== lastY || ww !== lastW) {
+            lastX = wx; lastY = wy; lastW = ww; lastH = wh;
+            const scale = window.devicePixelRatio || 2;
+            const overlayW = 240 * scale;
+            const px = Math.round(wx * scale + (ww * scale - overlayW) / 2);
+            const py = Math.max(0, Math.round(wy * scale - 80 * scale - 8 * scale));
+            await win.setPosition(new PhysicalPosition(px, py));
+          }
+        } catch (_) {}
+      }
+
+      poll();
+      const interval = setInterval(poll, 500);
+
+      document.addEventListener('keydown', async (e) => {
+        if (e.key === 'Escape') {
+          clearInterval(interval);
+          await win.close();
+        }
+      });
+    }
+  </script>
+</body>
+</html>

@@ -40,6 +40,13 @@ fn main() {
     println!("cargo:rustc-env=APPICON_BIN={}", icon_bin.display());
     println!("cargo:rerun-if-changed={icon_src}");
 
+    // Window bounds helper (CGWindowListCopyWindowInfo → app,title,x,y,w,h).
+    let wb_src = "swift/winbounds.swift";
+    let wb_bin = Path::new(&out_dir).join("winbounds");
+    swiftc(wb_src, &wb_bin, "macosx11.0");
+    println!("cargo:rustc-env=WINBOUNDS_BIN={}", wb_bin.display());
+    println!("cargo:rerun-if-changed={wb_src}");
+
     tauri_build::build();
 }
 
