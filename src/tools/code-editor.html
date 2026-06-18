@@ -31,6 +31,7 @@
     flex: 0 0 auto;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     padding: 8px 12px;
     border-bottom: 1px solid var(--hairline);
@@ -247,14 +248,20 @@
 </head>
 <body>
   <div id="toolbar">
-    <button class="btn" id="open"><span class="mi">folder_open</span>Open</button>
-    <button class="btn btn-primary" id="save"><span class="mi">save</span>Save</button>
-    <button class="btn btn-secondary" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span>Refresh</button>
-    <button class="btn btn-secondary" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
-    <button class="btn btn-secondary" id="wrap-btn"><span class="mi">wrap_text</span>Wrap</button>
-    <button class="btn" id="preview-btn"><span class="mi">open_in_new</span>Preview</button>
-    <span id="dirty" title="Unsaved changes"></span>
-    <span class="spacer"></span>
+    <div>
+        <button class="btn" id="open"><span class="mi">folder_open</span>Open</button>
+        <button class="btn btn-primary" id="save"><span class="mi">save</span>Save</button>
+    </div>
+    <div>
+        <button class="btn btn-secondary" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
+        <button class="btn btn-secondary" id="wrap-btn"><span class="mi">wrap_text</span>Wrap</button>
+    </div>
+    <div>
+        <button class="btn btn-secondary" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span>Refresh</button>
+        <button class="btn btn-primary" id="preview-btn"><span class="mi">open_in_new</span>Preview</button>
+    </div>
+
+
 
   </div>
 
@@ -269,7 +276,11 @@
     <div id="editor-col">
        <div id="file-info">
            <span id="filename">No file</span>
-           <span id="diff-status"></span>
+           <div>
+            <span id="dirty" title="Unsaved changes"></span>
+            <span class="spacer"></span>
+            <span id="diff-status"></span>
+           </div>
        </div>
       <div id="editor">
         <div id="gutter"></div>
@@ -313,6 +324,7 @@ const filenameEl = $("filename"), dirtyEl = $("dirty"), diffStatus = $("diff-sta
 let currentPath = null;
 let changedLines = new Set();   // 1-based line numbers (new file) marked as added/changed
 let deletedAt = new Set();      // lines where preceding content was deleted (triangle marker)
+let prettifySnapshot = null;    // { before, after } for one-level Prettify undo
 let dirty = false;
 
 // ---------- file open / save ----------
@@ -384,6 +396,9 @@ function prettify() {
     else if (ext() === "js" || ext() === "mjs") out = window.js_beautify(code.value, opts);
     else out = window.html_beautify(code.value, opts);
   } catch (e) { console.error(e); return; }
+  // Fast whole-value replace + a one-level snapshot so Cmd+Z can revert the
+  // Prettify (execCommand-based replace is too slow on large files).
+  prettifySnapshot = { before: code.value, after: out };
   code.value = out;
   setDirty(true);
   render(); paint();
@@ -756,7 +771,16 @@ inspector.addEventListener("click", (e) => {
 
 // Cmd+S to save.
 window.addEventListener("keydown", (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); saveFile(); }
+  if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); saveFile(); return; }
+  // Cmd+Z right after a Prettify (nothing typed since) reverts it; otherwise
+  // let the textarea's native undo handle it.
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "z" &&
+      prettifySnapshot && code.value === prettifySnapshot.after) {
+    e.preventDefault();
+    code.value = prettifySnapshot.before;
+    prettifySnapshot = null;
+    setDirty(true); render(); paint(); persist();
+  }
 });
 
 // Restore the previous session (file + unsaved text) if there is one, so a
