@@ -3091,6 +3091,13 @@ async fn pick_text_file(app: AppHandle) -> Result<Option<String>, String> {
     }
 }
 
+/// Open the Code Editor's companion preview window (a separate tool window that
+/// renders the HTML the editor pushes to it over Tauri events).
+#[tauri::command]
+fn open_code_preview(app: AppHandle) {
+    open_tool_window(&app, "tools/code-preview.html");
+}
+
 /// Read a UTF-8 text file by absolute path. Used by the Code Editor tool.
 #[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
@@ -4132,6 +4139,7 @@ pub fn run() {
             git_get_draft,
             git_set_draft,
             pick_text_file,
+            open_code_preview,
             read_text_file,
             write_text_file,
             git_diff_file

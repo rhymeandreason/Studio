@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Preview</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #fff; }
+  #frame { width: 100%; height: 100%; border: 0; display: block; }
+  #empty {
+    position: absolute; inset: 0; display: flex;
+    align-items: center; justify-content: center;
+    font: 13px -apple-system, system-ui, sans-serif; color: #999;
+  }
+</style>
+</head>
+<body>
+  <div id="empty">Waiting for the editor…</div>
+  <iframe id="frame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+
+<script type="module">
+const { event } = window.__TAURI__;
+const frame = document.getElementById("frame");
+const empty = document.getElementById("empty");
+
+let overlay = null;
+let pendingPath = null;   // highlight requested before the frame finished loading
+
+frame.addEventListener("load", () => {
+  overlay = null;         // recreated lazily on next highlight
+  if (pendingPath) { highlight(pendingPath); pendingPath = null; }
+});
+
+// Register listeners and only announce readiness once they're actually
+// attached on the backend — otherwise the editor's reply can race ahead of
+// the listen() registration and the first push is lost.
+(async () => {
+  await event.listen("ce:html", (e) => {
+    empty.style.display = "none";
+    frame.srcdoc = e.payload || "";
+  });
+  await event.listen("ce:highlight", (e) => {
+    const doc = frame.contentDocument;
+    // If the frame is still parsing a fresh srcdoc, defer until load.
+    if (!doc || !doc.body) { pendingPath = e.payload; return; }
+    highlight(e.payload);
+  });
+  event.emit("ce:ready");
+})();
+
+function ensureOverlay() {
+  const doc = frame.contentDocument;
+  if (overlay && overlay.ownerDocument === doc) return overlay;
+  overlay = doc.createElement("div");
+  Object.assign(overlay.style, {
+    position: "fixed", pointerEvents: "none", zIndex: 2147483647,
+    background: "rgba(110,97,84,0.18)", outline: "1px solid #6e6154",
+    display: "none", transition: "all 0.08s ease",
+  });
+  doc.body.appendChild(overlay);
+  return overlay;
+}
+
+function highlight(path) {
+  const doc = frame.contentDocument;
+  if (!doc || !doc.body) return;
+  let el = doc.body;
+  for (const i of path) {
+    if (!el.children[i]) return;
+    el = el.children[i];
+  }
+  const o = ensureOverlay();
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  const r = el.getBoundingClientRect();
+  Object.assign(o.style, {
+    display: "block",
+    top: r.top + "px", left: r.left + "px",
+    width: r.width + "px", height: r.height + "px",
+  });
+}
+
+// Tell the editor we're going away so it can stop emitting.
+window.addEventListener("beforeunload", () => { event.emit("ce:closed"); });
+
+import("../devinspect.js").then((m) => m.initDevInspect()).catch(() => {});
+</script>
+</body>
+</html>
