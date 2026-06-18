@@ -1061,23 +1061,24 @@ function revealElementSource(el) {
     return code.value.slice(idx, gt < 0 ? idx + 300 : gt + 1);
   };
 
-  // Prefer an unambiguous match by id, then by all classes; otherwise fall
-  // back to the DOM ordinal, clamped (DOM may have more nodes than the source
-  // has literal tags — script-created or auto-inserted elements).
-  let pick = null;
-  if (el.id) {
-    pick = at.find((i) => new RegExp("\\bid\\s*=\\s*['\"]?" + escapeRe(el.id) + "['\"]?").test(openTag(i)));
-  }
-  if (pick == null && el.classList.length) {
-    const cls = [...el.classList];
-    pick = at.find((i) => { const t = openTag(i); return cls.every((c) => new RegExp("\\b" + escapeRe(c) + "\\b").test(t)); });
-  }
-  if (pick == null) {
-    const same = [...parser.contentDocument.getElementsByTagName(tag)];
-    let ord = same.indexOf(el);
-    if (ord < 0) ord = 0;
-    pick = at[Math.min(ord, at.length - 1)];
-  }
+  const id = el.id;
+  const cls = [...el.classList];
+  // Does a source opening tag carry this element's id + every class?
+  const matchesSig = (t) =>
+    (!id || new RegExp("\\bid\\s*=\\s*['\"]?" + escapeRe(id) + "(['\"\\s>]|$)").test(t)) &&
+    cls.every((c) => new RegExp("class\\s*=\\s*['\"][^'\"]*\\b" + escapeRe(c) + "\\b").test(t));
+
+  // Source occurrences matching the element's id+classes (all of them if it has
+  // neither). Among the DOM elements with the *same* signature, find this one's
+  // position, then pick that occurrence — resolves duplicates to the right one.
+  const cands = at.filter((i) => matchesSig(openTag(i)));
+  const sameSig = (e) =>
+    e.id === id && e.classList.length === cls.length && cls.every((c) => e.classList.contains(c));
+  const peers = [...parser.contentDocument.getElementsByTagName(tag)].filter(sameSig);
+  const ord = Math.max(0, peers.indexOf(el));
+
+  const pool = cands.length ? cands : at;
+  const pick = pool[Math.min(ord, pool.length - 1)];
 
   const gt = code.value.indexOf(">", pick);
   revealRange(pick, gt >= 0 ? gt - pick + 1 : tag.length + 1);
