@@ -69,13 +69,14 @@ function pathOf(el) {
   event.emit("ce:ready");
 })();
 
+//highlight selected item in cobalt blue
 function ensureOverlay() {
   const doc = frame.contentDocument;
   if (overlay && overlay.ownerDocument === doc) return overlay;
   overlay = doc.createElement("div");
   Object.assign(overlay.style, {
     position: "fixed", pointerEvents: "none", zIndex: 2147483647,
-    background: "rgba(110,97,84,0.18)", outline: "1px solid #6e6154",
+    background: "rgba(0,71,171,0.16)", outline: "1px solid blue",
     display: "none", transition: "all 0.08s ease",
   });
   doc.body.appendChild(overlay);
