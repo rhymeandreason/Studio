@@ -24,7 +24,8 @@ const { event } = window.__TAURI__;
 const frame = document.getElementById("frame");
 const empty = document.getElementById("empty");
 
-let overlay = null;
+let overlay = null;       // click-selection box (clay)
+let hoverEl = null;       // hover outline (bright)
 let pendingPath = null;   // highlight requested before the frame finished loading
 
 frame.addEventListener("load", () => {
@@ -46,6 +47,7 @@ frame.addEventListener("load", () => {
     if (!doc || !doc.body) { pendingPath = e.payload; return; }
     highlight(e.payload);
   });
+  await event.listen("ce:hover", (e) => hover(e.payload));
   event.emit("ce:ready");
 })();
 
@@ -62,22 +64,52 @@ function ensureOverlay() {
   return overlay;
 }
 
-function highlight(path) {
+function resolvePath(path) {
   const doc = frame.contentDocument;
-  if (!doc || !doc.body) return;
+  if (!doc || !doc.body) return null;
   let el = doc.body;
   for (const i of path) {
-    if (!el.children[i]) return;
+    if (!el.children[i]) return null;
     el = el.children[i];
   }
-  const o = ensureOverlay();
-  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  return el;
+}
+
+function boxOver(box, el) {
   const r = el.getBoundingClientRect();
-  Object.assign(o.style, {
+  Object.assign(box.style, {
     display: "block",
     top: r.top + "px", left: r.left + "px",
     width: r.width + "px", height: r.height + "px",
   });
+}
+
+function highlight(path) {
+  const el = resolvePath(path);
+  if (!el) return;
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  boxOver(ensureOverlay(), el);
+}
+
+// Bright, transient outline driven by hovering the editor's DOM tree.
+function ensureHover() {
+  const doc = frame.contentDocument;
+  if (hoverEl && hoverEl.ownerDocument === doc) return hoverEl;
+  hoverEl = doc.createElement("div");
+  Object.assign(hoverEl.style, {
+    position: "fixed", pointerEvents: "none", zIndex: 2147483647,
+    outline: "2px solid #00e5ff", outlineOffset: "-1px",
+    background: "rgba(0,229,255,0.12)", display: "none",
+  });
+  doc.body.appendChild(hoverEl);
+  return hoverEl;
+}
+
+function hover(path) {
+  if (!path) { if (hoverEl) hoverEl.style.display = "none"; return; }
+  const el = resolvePath(path);
+  if (!el) return;
+  boxOver(ensureHover(), el);
 }
 
 // Tell the editor we're going away so it can stop emitting.

@@ -148,7 +148,12 @@
     z-index: 0;
     overflow: hidden;
   }
-  #hl .hline { height: var(--line-h); }
+  #hl .hline { min-height: var(--line-h); }
+  /* Soft-wrap: lines flow instead of scrolling horizontally. The highlight
+     layer carries the (transparent) line text so it wraps identically; gutter
+     row heights are synced to it in JS. */
+  body.soft-wrap #code, body.soft-wrap #hl { white-space: pre-wrap; word-break: break-word; overflow-x: hidden; }
+  .btn.active { background: var(--accent-soft); color: var(--text); }
   #hl .hline.chg { background: var(--add-bg); box-shadow: -12px 0 0 var(--add-bg), 9999px 0 0 var(--add-bg); }
   #code {
     z-index: 1;
@@ -210,6 +215,7 @@
     <button class="btn" id="open"><span class="mi">folder_open</span>Open</button>
     <button class="btn" id="save"><span class="mi">save</span>Save</button>
     <button class="btn" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
+    <button class="btn" id="wrap-btn"><span class="mi">wrap_text</span>Wrap</button>
     <button class="btn" id="preview-btn"><span class="mi">open_in_new</span>Preview</button>
     <span id="dirty" title="Unsaved changes"></span>
     <span class="spacer"></span>
@@ -340,17 +346,30 @@ code.addEventListener("scroll", syncScroll);
 function lineCount() { return code.value.split("\n").length; }
 
 function paint() {
-  const n = lineCount();
+  const lines = code.value.split("\n");
+  const n = lines.length;
   // gutter
   let g = "";
   for (let i = 1; i <= n; i++) g += `<div class="gl${changedLines.has(i) ? " chg" : ""}">${i}</div>`;
   gutter.innerHTML = g;
-  // highlight layer
+  // highlight layer — carries the transparent line text so it wraps exactly
+  // like the textarea when soft-wrap is on.
   let h = "";
-  for (let i = 1; i <= n; i++) h += `<div class="hline${changedLines.has(i) ? " chg" : ""}"></div>`;
+  for (let i = 1; i <= n; i++) h += `<div class="hline${changedLines.has(i) ? " chg" : ""}">${esc(lines[i - 1]) || "&#8203;"}</div>`;
   hl.innerHTML = h;
+  syncWrap();
   paintMinimap(n);
   syncScroll();
+}
+
+// When wrapping, match each gutter row's height to its (possibly multi-row)
+// highlight line so numbers and change-bars stay aligned.
+function syncWrap() {
+  const on = document.body.classList.contains("soft-wrap");
+  const gls = gutter.children, hls = hl.children;
+  for (let i = 0; i < gls.length; i++) {
+    gls[i].style.height = on ? hls[i].offsetHeight + "px" : "";
+  }
 }
 
 function paintMinimap(n) {
@@ -449,6 +468,8 @@ function renderNode(el) {
   if (el.classList.length) label += `<span class="tcls"> .${[...el.classList].join(".")}</span>`;
   tag.innerHTML = label;
   tag.addEventListener("click", () => selectElement(el, tag));
+  tag.addEventListener("mouseenter", () => { if (evt) evt.emit("ce:hover", elPath(el)); });
+  tag.addEventListener("mouseleave", () => { if (evt) evt.emit("ce:hover", null); });
   wrap.appendChild(tag);
 
   const kids = [...el.children];
@@ -479,6 +500,15 @@ function selectElement(el, tagSpan) {
   showInspector(el);
   if (evt) evt.emit("ce:highlight", elPath(el));   // highlight in preview window
 }
+
+// ---------- soft wrap ----------
+$("wrap-btn").addEventListener("click", () => {
+  const on = document.body.classList.toggle("soft-wrap");
+  $("wrap-btn").classList.toggle("active", on);
+  code.setAttribute("wrap", on ? "soft" : "off");  // attribute overrides CSS
+  paint();
+});
+window.addEventListener("resize", () => { if (document.body.classList.contains("soft-wrap")) paint(); });
 
 // ---------- preview window ----------
 let previewOpen = false;
