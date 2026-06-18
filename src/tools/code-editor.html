@@ -646,19 +646,38 @@ function revealRange(start, len) {
 // element's ordinal among same-tag elements (DOM order == source order).
 function revealElementSource(el) {
   const tag = el.tagName.toLowerCase();
-  const same = [...parser.contentDocument.getElementsByTagName(tag)];
-  const ord = same.indexOf(el);
-  if (ord < 0) return;
   const re = new RegExp("<" + escapeRe(tag) + "(?=[\\s/>])", "gi");
-  let m, i = 0;
-  while ((m = re.exec(code.value))) {
-    if (i === ord) {
-      const gt = code.value.indexOf(">", m.index);
-      revealRange(m.index, gt >= 0 ? gt - m.index + 1 : tag.length + 1);
-      return;
-    }
-    i++;
+  const at = [];
+  let m;
+  while ((m = re.exec(code.value))) at.push(m.index);
+  if (!at.length) return;
+
+  // The element's opening tag text in source, for matching by id/class.
+  const openTag = (idx) => {
+    const gt = code.value.indexOf(">", idx);
+    return code.value.slice(idx, gt < 0 ? idx + 300 : gt + 1);
+  };
+
+  // Prefer an unambiguous match by id, then by all classes; otherwise fall
+  // back to the DOM ordinal, clamped (DOM may have more nodes than the source
+  // has literal tags — script-created or auto-inserted elements).
+  let pick = null;
+  if (el.id) {
+    pick = at.find((i) => new RegExp("\\bid\\s*=\\s*['\"]?" + escapeRe(el.id) + "['\"]?").test(openTag(i)));
   }
+  if (pick == null && el.classList.length) {
+    const cls = [...el.classList];
+    pick = at.find((i) => { const t = openTag(i); return cls.every((c) => new RegExp("\\b" + escapeRe(c) + "\\b").test(t)); });
+  }
+  if (pick == null) {
+    const same = [...parser.contentDocument.getElementsByTagName(tag)];
+    let ord = same.indexOf(el);
+    if (ord < 0) ord = 0;
+    pick = at[Math.min(ord, at.length - 1)];
+  }
+
+  const gt = code.value.indexOf(">", pick);
+  revealRange(pick, gt >= 0 ? gt - pick + 1 : tag.length + 1);
 }
 
 // Find a class/id token or full selector text in the source (e.g. an inline
