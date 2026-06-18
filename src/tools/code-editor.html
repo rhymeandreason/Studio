@@ -307,6 +307,8 @@
 <body>
   <div id="toolbar">
     <div>
+        <button class="btn btn-icon" id="back-btn" title="Back" disabled><span class="mi">arrow_back</span></button>
+        <button class="btn btn-icon" id="forward-btn" title="Forward" disabled><span class="mi">arrow_forward</span></button>
         <button class="btn" id="open"><span class="mi">folder_open</span>Open</button>
         <button class="btn btn-primary" id="save"><span class="mi">save</span>Save</button>
     </div>
@@ -403,6 +405,15 @@ $("save").addEventListener("click", saveFile);
 $("refresh-btn").addEventListener("click", reloadFromDisk);
 $("prettify").addEventListener("click", prettify);
 
+// Back/Forward navigation history of opened file paths.
+let history = [], histIdx = -1;
+$("back-btn").addEventListener("click", () => { if (histIdx > 0) loadPath(history[--histIdx], false); });
+$("forward-btn").addEventListener("click", () => { if (histIdx < history.length - 1) loadPath(history[++histIdx], false); });
+function updateNav() {
+  $("back-btn").disabled = histIdx <= 0;
+  $("forward-btn").disabled = histIdx >= history.length - 1;
+}
+
 async function openFile() {
   if (invoke) {
     const path = await invoke("pick_text_file");
@@ -413,12 +424,18 @@ async function openFile() {
   }
 }
 
-// Load a specific file by absolute path (used by Open and by "Open in Studio
-// Code Editor" from a Git window).
-async function loadPath(path) {
+// Load a specific file by absolute path. `push` (default) records it in the
+// nav history; Back/Forward pass false so they don't re-record.
+async function loadPath(path, push = true) {
   if (!invoke) return;
   const text = await invoke("read_text_file", { path });
   currentPath = path;
+  if (push && history[histIdx] !== path) {
+    history = history.slice(0, histIdx + 1);   // drop forward entries
+    history.push(path);
+    histIdx = history.length - 1;
+  }
+  updateNav();
   loadText(text);
   await refreshDiff();
 }
@@ -694,8 +711,10 @@ function render() {
 function applyMode() {
   const md = isMarkdown();
   document.body.classList.toggle("is-markdown", md);
-  document.body.classList.remove("md-preview");            // start in Code view
-  $("view-toggle").innerHTML = `<span class="mi">visibility</span>Preview`;
+  document.body.classList.toggle("md-preview", md);        // Markdown opens in Preview
+  $("view-toggle").innerHTML = md
+    ? `<span class="mi">code</span>Code`
+    : `<span class="mi">visibility</span>Preview`;
 }
 
 // Code/Preview toggle (Markdown only) — keeps scroll position by syncing to the
@@ -714,6 +733,40 @@ $("view-toggle").addEventListener("click", () => {
   });
 });
 function inPreview() { return document.body.classList.contains("md-preview"); }
+
+// Clicking a link in the rendered Markdown: in-page anchors scroll; relative
+// paths open that file in this editor; external URLs are left alone.
+mdView.addEventListener("click", (e) => {
+  const a = e.target.closest("a");
+  if (!a) return;
+  const href = a.getAttribute("href") || "";
+  if (!href) return;
+  e.preventDefault();
+  if (href.startsWith("#")) {
+    const t = mdView.querySelector("#" + CSS.escape(decodeURIComponent(href.slice(1))));
+    if (t) mdView.scrollTo({ top: t.offsetTop, behavior: "smooth" });
+    return;
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) return;   // external scheme
+  if (!currentPath || !invoke) return;
+  const rel = decodeURIComponent(href.split("#")[0].split("?")[0]);
+  loadPath(resolveRelative(currentPath, rel)).catch(() => {
+    diffStatus.textContent = "can't open " + rel;
+  });
+});
+
+// Resolve a relative href against the current file's absolute path.
+function resolveRelative(base, rel) {
+  if (rel.startsWith("/")) return rel;
+  const dir = base.slice(0, base.lastIndexOf("/"));
+  const out = [];
+  for (const p of (dir + "/" + rel).split("/")) {
+    if (p === "" || p === ".") continue;
+    if (p === "..") out.pop();
+    else out.push(p);
+  }
+  return "/" + out.join("/");
+}
 
 function previewHeadings() { return mdView.querySelectorAll("h1, h2, h3, h4, h5, h6"); }
 
@@ -1015,6 +1068,7 @@ window.addEventListener("keydown", (e) => {
     code.value = s.value || "";
     filenameEl.textContent = "‎" + currentPath;
     setDirty(!!s.dirty);
+    history = [s.path]; histIdx = 0; updateNav();   // seed nav history
     applyMode();
     render();
     paint();
