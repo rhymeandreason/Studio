@@ -246,6 +246,35 @@
   .rsel.clk:hover { text-decoration: underline; }
   .rule .rdecl { color: var(--text-muted); padding-left: 12px; }
   .empty { color: var(--text-soft); }
+
+  /* Markdown mode: left column is a heading browser, not DOM + Styles. */
+  #sections-heading, #sections { display: none; }
+  body.is-markdown #dom-heading,
+  body.is-markdown #tree,
+  body.is-markdown #styles-heading,
+  body.is-markdown #inspector { display: none; }
+  body.is-markdown #sections-heading,
+  body.is-markdown #sections { display: block; }
+  #sections { flex: 1 1 auto; overflow: auto; padding: 6px 0 12px; font: var(--code-font); }
+  .sec {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    color: var(--text);
+    padding: 3px 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-radius: var(--radius-sm);
+  }
+  .sec:hover { background: var(--accent-ring); }
+  .sec.lvl1 { font-weight: 650; }
+  .sec.lvl2 { padding-left: 24px; }
+  .sec.lvl3 { padding-left: 36px; color: var(--text-muted); }
+  .sec.lvl4, .sec.lvl5, .sec.lvl6 { padding-left: 48px; color: var(--text-soft); }
 </style>
 </head>
 <body>
@@ -269,10 +298,13 @@
 
   <div id="main">
     <div id="tree-col">
-      <div class="col-head">DOM</div>
+      <div class="col-head" id="dom-heading">DOM</div>
       <div id="tree"><div class="empty" style="padding:8px 12px">Open an HTML file</div></div>
       <div class="col-head" id="styles-heading">Styles</div>
       <div id="inspector"><span class="empty">Select an element in the DOM tree.</span></div>
+      <!-- Markdown files show a heading browser here instead of DOM/Styles. -->
+      <div class="col-head" id="sections-heading">Sections</div>
+      <div id="sections"><span class="empty" style="padding:8px 12px">No headings</span></div>
     </div>
 
     <div id="editor-col">
@@ -323,6 +355,7 @@ if (TAURI) {
 const $ = (id) => document.getElementById(id);
 const code = $("code"), hl = $("hl"), gutter = $("gutter"), minimap = $("minimap");
 const treeEl = $("tree"), inspector = $("inspector"), parser = $("parser");
+const sectionsEl = $("sections");
 const filenameEl = $("filename"), dirtyEl = $("dirty"), diffStatus = $("diff-status");
 
 let currentPath = null;
@@ -370,6 +403,7 @@ function loadText(text) {
   setDirty(false);
   const base = currentPath ? currentPath.split("/").pop() : "untitled";
   filenameEl.textContent = "‎" + (currentPath || base);
+  applyMode();
   render();
   paint();
   persist();
@@ -493,6 +527,7 @@ function paint() {
   syncWrap();
   paintMinimap(n);
   syncScroll();
+  if (isMarkdown()) buildSections();
 }
 
 // When wrapping, match each gutter row's height to its (possibly multi-row)
@@ -616,6 +651,44 @@ function mdWrap(body) {
 function render() {
   parser.srcdoc = renderedHTML();
   pushPreview();
+}
+
+// ---------- Markdown section browser ----------
+// Toggle the left column between DOM/Styles (HTML) and the heading list (md).
+function applyMode() { document.body.classList.toggle("is-markdown", isMarkdown()); }
+
+// Parse ATX headings (#…######) from the source, skipping fenced code blocks.
+function buildSections() {
+  const lines = code.value.split("\n");
+  const items = [];
+  let inFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*(```|~~~)/.test(lines[i])) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    const m = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(lines[i]);
+    if (m) items.push({ level: m[1].length, text: m[2], line: i + 1 });
+  }
+  if (!items.length) {
+    sectionsEl.innerHTML = '<span class="empty" style="padding:8px 12px">No headings</span>';
+    return;
+  }
+  sectionsEl.innerHTML = "";
+  for (const it of items) {
+    const b = document.createElement("button");
+    b.className = "sec lvl" + it.level;
+    b.textContent = it.text;
+    b.title = it.text;
+    b.addEventListener("click", () => revealLine(it.line));
+    sectionsEl.append(b);
+  }
+}
+
+// Scroll the code panel to a 1-based source line and select it.
+function revealLine(line) {
+  let start = 0;
+  for (let i = 1; i < line; i++) start = code.value.indexOf("\n", start) + 1;
+  const end = code.value.indexOf("\n", start);
+  revealRange(start, (end < 0 ? code.value.length : end) - start);
 }
 
 // Build on load (after sync scripts) and again shortly after, to catch DOM
@@ -839,6 +912,7 @@ window.addEventListener("keydown", (e) => {
     code.value = s.value || "";
     filenameEl.textContent = "‎" + currentPath;
     setDirty(!!s.dirty);
+    applyMode();
     render();
     paint();
     refreshDiff();
