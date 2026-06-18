@@ -42,7 +42,7 @@
   #file-info{
       background:var(--surface);
       z-index:20;
-      padding:4.5px 8px;
+      padding:3px 8px;
       border-bottom: 1px solid var(--hairline);
       display: flex;
       justify-content: space-between;
@@ -55,6 +55,7 @@
     text-overflow: ellipsis;
     direction: rtl;          /* keep the basename visible when truncating */
     text-align: left;
+    margin-top:3px;
   }
   #dirty {
     width: 7px; height: 7px; border-radius: 50%;
@@ -80,6 +81,7 @@
     flex-direction: column;
     min-height: 0;
     background: var(--bg);
+    width:250px;
   }
   .col-head {
     flex: 0 0 auto;
@@ -184,7 +186,7 @@
   /* Soft-wrap: lines flow instead of scrolling horizontally. The highlight
      layer carries the (transparent) line text so it wraps identically; gutter
      row heights are synced to it in JS. */
-  body.soft-wrap #code, body.soft-wrap #hl { white-space: pre-wrap; word-break: break-word; overflow-x: hidden; }
+  body.soft-wrap #code, body.soft-wrap #hl { white-space: pre-wrap; word-break: break-word; }
   .btn.active { background: var(--accent-soft); color: var(--text); }
   #hl .hline.chg { background: var(--add-bg); box-shadow: -12px 0 0 var(--add-bg), 9999px 0 0 var(--add-bg); }
   #code {
