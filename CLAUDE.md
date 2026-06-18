@@ -41,8 +41,8 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
 - **Design system** (Runes — tokens, kit classes, `<studio-*>` components) —
   [docs/DESIGN.md](docs/DESIGN.md)
 - **Tools** (single-file HTML utilities in `src/tools/`, kit-styled;
-  `kit-gallery.html` is the living reference) — [docs/tools.md](docs/tools.md),
-  [docs/tools-dynamic-loading.md](docs/tools-dynamic-loading.md),
+  `kit-gallery.html` is the living reference) — **read [docs/tools.md](docs/tools.md)
+  before creating or editing any tool**; also [docs/tools-dynamic-loading.md](docs/tools-dynamic-loading.md),
   [docs/tool-ideas.md](docs/tool-ideas.md)
 - **Slides** (presentation builder: `presentation` + `theme` artifacts, shared
   renderer in `src/deck/`, Slides + Theme editor tools) — [docs/slides.md](docs/slides.md)
