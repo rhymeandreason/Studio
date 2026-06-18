@@ -34,7 +34,8 @@
     gap: 8px;
     padding: 8px 12px;
     border-bottom: 1px solid var(--hairline);
-    background: var(--surface);
+    background: var(--bg);
+    z-index:20;
   }
   #toolbar .spacer { flex: 1; }
   #filename {
@@ -113,7 +114,7 @@
   #gutter {
     flex: 0 0 auto;
     width: 46px;
-    overflow: hidden;
+    /* overflow clipping handled by #codebox */
     text-align: right;
     color: var(--text-soft);
     font: var(--code-font);
@@ -139,15 +140,20 @@
     border: 0;
     margin: 0;
     white-space: pre;
-    overflow: auto;
     tab-size: 2;
   }
   #hl {
     pointer-events: none;
-    color: transparent;
+    color: var(--text);
     z-index: 0;
-    overflow: hidden;
   }
+  /* Syntax token colors (Prism types), Runes palette. */
+  .tok-comment, .tok-prolog, .tok-doctype, .tok-cdata { color: #9aa0a6; font-style: italic; }
+  .tok-tag, .tok-keyword, .tok-atrule, .tok-selector, .tok-important, .tok-boolean, .tok-rule { color: #d6336c; }
+  .tok-attr-name, .tok-property, .tok-class-name, .tok-function, .tok-symbol { color: #1c7ed6; }
+  .tok-attr-value, .tok-string, .tok-template-string, .tok-char, .tok-regex, .tok-url { color: #2f9e44; }
+  .tok-number, .tok-unit, .tok-color, .tok-constant, .tok-entity, .tok-hexcode { color: #e8590c; }
+  .tok-punctuation, .tok-operator { color: #868e96; }
   #hl .hline { min-height: var(--line-h); }
   /* Soft-wrap: lines flow instead of scrolling horizontally. The highlight
      layer carries the (transparent) line text so it wraps identically; gutter
@@ -158,11 +164,12 @@
   #code {
     z-index: 1;
     background: transparent;
-    color: var(--text);
+    color: transparent;            /* text is drawn by #hl; caret stays visible */
     resize: none;
     outline: none;
     caret-color: var(--accent);
   }
+  #code::selection { background: var(--accent-ring); }
 
   /* minimap */
   #minimap {
@@ -256,6 +263,7 @@
 import "../vendor/beautify.js";        // window.js_beautify
 import "../vendor/beautify-css.js";    // window.css_beautify
 import "../vendor/beautify-html.js";   // window.html_beautify (needs the two above)
+import "../vendor/prism.js";           // window.Prism (markup + css + js)
 
 const TAURI = window.__TAURI__;
 const invoke = TAURI ? TAURI.core.invoke : null;
@@ -348,17 +356,61 @@ code.addEventListener("scroll", syncScroll);
 
 function lineCount() { return code.value.split("\n").length; }
 
+// ---------- syntax highlighting (Prism) ----------
+function grammar() {
+  const e = ext();
+  if (e === "css") return ["css", Prism.languages.css];
+  if (e === "js" || e === "mjs") return ["js", Prism.languages.javascript];
+  return ["markup", Prism.languages.markup];
+}
+
+// Flatten Prism's nested token stream into [cssClass, text] pairs.
+function flatten(tokens, parentType, out) {
+  for (const t of tokens) {
+    if (typeof t === "string") { out.push([parentType, t]); continue; }
+    const type = Array.isArray(t.alias) ? t.alias[0] : (t.alias || t.type);
+    if (Array.isArray(t.content)) flatten(t.content, type, out);
+    else if (typeof t.content === "string") out.push([type, t.content]);
+    else flatten([t.content], type, out);
+  }
+}
+
+// Highlight the whole document, then split the token stream into one HTML
+// string per source line (so the per-line diff/wrap layer keeps working).
+function highlightLines(text) {
+  let flat;
+  try {
+    const [, gram] = grammar();
+    flat = [];
+    flatten(Prism.tokenize(text, gram), "", flat);
+  } catch (e) {
+    return text.split("\n").map((l) => esc(l));   // fallback: plain
+  }
+  const out = [];
+  let cur = "";
+  for (const [type, txt] of flat) {
+    const parts = txt.split("\n");
+    for (let k = 0; k < parts.length; k++) {
+      if (k > 0) { out.push(cur); cur = ""; }
+      const piece = parts[k];
+      if (piece) cur += type ? `<span class="tok tok-${type}">${esc(piece)}</span>` : esc(piece);
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
 function paint() {
-  const lines = code.value.split("\n");
-  const n = lines.length;
+  const n = lineCount();
+  const hi = highlightLines(code.value);
   // gutter
   let g = "";
   for (let i = 1; i <= n; i++) g += `<div class="gl${changedLines.has(i) ? " chg" : ""}">${i}</div>`;
   gutter.innerHTML = g;
-  // highlight layer — carries the transparent line text so it wraps exactly
-  // like the textarea when soft-wrap is on.
+  // highlight layer — colored tokens; wraps exactly like the textarea so the
+  // diff row backgrounds and soft-wrap line heights stay aligned.
   let h = "";
-  for (let i = 1; i <= n; i++) h += `<div class="hline${changedLines.has(i) ? " chg" : ""}">${esc(lines[i - 1]) || "&#8203;"}</div>`;
+  for (let i = 1; i <= n; i++) h += `<div class="hline${changedLines.has(i) ? " chg" : ""}">${hi[i - 1] || "&#8203;"}</div>`;
   hl.innerHTML = h;
   syncWrap();
   paintMinimap(n);
@@ -392,7 +444,7 @@ function syncScroll() {
   // scrolling. Padding-top matches the textarea's, so they stay aligned.
   const y = -code.scrollTop;
   gutter.style.transform = `translateY(${y}px)`;
-  hl.style.transform = `translateY(${y}px)`;
+  hl.style.transform = `translate(${-code.scrollLeft}px, ${y}px)`;
   updateViewport();
 }
 
