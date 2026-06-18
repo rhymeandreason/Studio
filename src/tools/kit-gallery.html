@@ -54,17 +54,26 @@
     color: var(--text-muted);
     line-height: 1.5;
   }
-  .section-body { display: flex; flex-direction: column; gap: 20px; }
+  .section-body { display: flex; flex-direction: column; gap: 30px; }
 
   /* --- Component row within a section --- */
-  .comp { display: flex; flex-direction: column; gap: 6px; }
-  .comp-name {
+  .comp { display: flex; flex-direction: column; gap: 12px; }
+  .comp-name { display: flex; align-items: baseline; gap: 8px; }
+  .class-name {
+    font-family: var(--mono);
     font-size: 12px;
     color: var(--text-muted);
+background-color: var(--surface);
+padding:4px;
+border-radius: 2px;
   }
-  .comp-name.in-kit::after {
+  .class-name.in-kit::after {
     content: " ✓";
     color: var(--sage);
+  }
+  .css-values {
+    font-size: 11px;
+    color: var(--text-soft);
   }
   .comp-caption {
     font-size: 11px;
@@ -106,7 +115,7 @@
     </div>
     <div class="section-body">
       <div class="comp">
-        <div class="comp-name">Surfaces</div>
+        <div class="comp-name"><span class="class-name">Surfaces</span></div>
         <div class="token-grid">
           <div class="token-chip"><div class="token-chip__swatch" style="background:var(--bg);"></div><span class="token-chip__name">--bg</span></div>
           <div class="token-chip"><div class="token-chip__swatch" style="background:var(--surface);"></div><span class="token-chip__name">--surface</span></div>
@@ -117,7 +126,7 @@
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name">Text</div>
+        <div class="comp-name"><span class="class-name">Text</span></div>
         <div class="token-grid">
           <div class="token-chip"><div class="token-chip__swatch" style="background:var(--text);"></div><span class="token-chip__name">--text</span></div>
           <div class="token-chip"><div class="token-chip__swatch" style="background:var(--text-muted);"></div><span class="token-chip__name">--text-muted</span></div>
@@ -125,7 +134,7 @@
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name">Brand</div>
+        <div class="comp-name"><span class="class-name">Brand</span></div>
         <div class="token-grid">
           <div class="token-chip"><div class="token-chip__swatch" style="background:var(--accent);"></div><span class="token-chip__name">--accent</span></div>
           <div class="token-chip"><div class="token-chip__swatch" style="background:var(--accent-soft);"></div><span class="token-chip__name">--accent-soft</span></div>
@@ -146,17 +155,17 @@
     </div>
     <div class="section-body">
       <div class="comp">
-        <div class="comp-name">--sans · Futura</div>
+        <div class="comp-name"><span class="class-name">--sans</span><span class="css-values">Futura · UI labels, controls, body copy · 13px default</span></div>
         <div style="font-family:var(--sans); font-size:26px; line-height:1.1;">The quick brown fox</div>
         <div class="comp-caption">UI labels, controls, body copy · 13px default</div>
       </div>
       <div class="comp">
-        <div class="comp-name">--serif · Futura (display weight)</div>
+        <div class="comp-name"><span class="class-name">--serif</span><span class="css-values">Futura display weight · headings, titles, wordmark</span></div>
         <div style="font-family:var(--serif); font-size:26px; font-weight:600; line-height:1.1;">The quick brown fox</div>
         <div class="comp-caption">Headings, titles, wordmark</div>
       </div>
       <div class="comp">
-        <div class="comp-name">--mono · JetBrains Mono</div>
+        <div class="comp-name"><span class="class-name">--mono</span><span class="css-values">JetBrains Mono · tokens, values, code, status output</span></div>
         <div style="font-family:var(--mono); font-size:13px; line-height:1.6;">#2a2a28 · rgba(42, 42, 40, 0.1) · 0.13s cubic-bezier(0.2, 0, 0, 1)</div>
         <div class="comp-caption">Tokens, values, code, status output</div>
       </div>
@@ -171,23 +180,23 @@
     </div>
     <div class="section-body">
       <div class="comp">
-        <div class="comp-name">Project name · serif 22px 600 −0.01em</div>
+        <div class="comp-name"><span class="class-name">Project name</span><span class="css-values">serif 22px 600 −0.01em</span></div>
         <div style="font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-0.01em;">Ceramics Studio</div>
       </div>
       <div class="comp">
-        <div class="comp-name">Page title · serif 18px 500</div>
+        <div class="comp-name"><span class="class-name">Page title</span><span class="css-values">serif 18px 500</span></div>
         <div style="font-family:var(--serif); font-size:18px; font-weight:500;">Design System</div>
       </div>
       <div class="comp">
-        <div class="comp-name">Panel / section title · serif 17px 500</div>
+        <div class="comp-name"><span class="class-name">Panel / section title</span><span class="css-values">serif 17px 500</span></div>
         <div style="font-family:var(--serif); font-size:17px; font-weight:500;">Brand kits</div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.eyebrow · serif 12px 600 uppercase +0.14em</div>
+        <div class="comp-name"><span class="class-name in-kit">.eyebrow</span><span class="css-values">serif 12px 600 uppercase +0.14em</span></div>
         <div class="eyebrow">Projects</div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.label · sans 11px uppercase +0.06em</div>
+        <div class="comp-name"><span class="class-name in-kit">.label</span><span class="css-values">sans 11px uppercase +0.06em</span></div>
         <div class="label">Color tokens</div>
       </div>
     </div>
@@ -201,23 +210,23 @@
     </div>
     <div class="section-body">
       <div class="comp">
-        <div class="comp-name in-kit">.text-body · sans 13px 1.6lh · --text</div>
+        <div class="comp-name"><span class="class-name in-kit">.text-body</span><span class="css-values">sans 13px 1.6lh · --text</span></div>
         <div class="text-body" style="max-width:480px;">The quick brown fox jumps over the lazy dog. Studio uses Futura as its primary typeface across all UI surfaces and body copy.</div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.text-muted · sans 13px 1.6lh · --text-muted</div>
+        <div class="comp-name"><span class="class-name in-kit">.text-muted</span><span class="css-values">sans 13px 1.6lh · --text-muted</span></div>
         <div class="text-muted" style="max-width:480px;">Secondary descriptions, metadata, timestamps, and supporting text that shouldn't compete with primary content.</div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.text-sm · sans 11px · --text-muted</div>
+        <div class="comp-name"><span class="class-name in-kit">.text-sm</span><span class="css-values">sans 11px · --text-muted</span></div>
         <div class="text-sm">Caption text, file sizes, tooltips, comp names.</div>
       </div>
       <div class="comp">
-        <div class="comp-name">Note body · .text-body + letter-spacing −0.07px</div>
+        <div class="comp-name"><span class="class-name">Note body</span><span class="css-values">.text-body + letter-spacing −0.07px</span></div>
         <div class="text-body" style="letter-spacing:-0.07px; max-width:480px;">A quick note about the ceramics shoot. The studio light was too warm — try a cooler balance next time and pull back the fill.</div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.text-mono · mono 12px · --text-muted · filenames, paths, status</div>
+        <div class="comp-name"><span class="class-name in-kit">.text-mono</span><span class="css-values">mono 12px · --text-muted · filenames, paths, status</span></div>
         <div class="text-mono">artifacts/brand-kit/my-kit.json</div>
         <div style="font-family:var(--mono); font-size:11px; color:var(--text-muted); margin-top:4px;">/Users/mary/Projects/Ceramics/media/shoot-01.jpg</div>
       </div>
@@ -232,36 +241,36 @@
     </div>
     <div class="section-body">
       <div class="comp">
-        <div class="comp-name in-kit">.btn variants</div>
+        <div class="comp-name"><span class="class-name in-kit">.btn</span><span class="css-values">base button — extend with variants below</span></div>
         <div class="row">
-          <div class="stack"><span class="comp-name">.btn</span><button class="btn">Default</button></div>
-          <div class="stack"><span class="comp-name">.btn-primary</span><button class="btn btn-primary">Primary</button></div>
-          <div class="stack"><span class="comp-name">.btn-secondary</span><button class="btn btn-secondary">Secondary</button></div>
-          <div class="stack"><span class="comp-name">.btn-ghost</span><button class="btn btn-ghost">Ghost</button></div>
-          <div class="stack"><span class="comp-name">.btn-icon</span><button class="btn btn-icon"><span class="mi">add</span></button></div>
-          <div class="stack"><span class="comp-name">disabled</span><button class="btn" disabled>Disabled</button></div>
+          <div class="stack"><span class="class-name">.btn</span><button class="btn">Default</button></div>
+          <div class="stack"><span class="class-name">.btn-primary</span><button class="btn btn-primary">Primary</button></div>
+          <div class="stack"><span class="class-name">.btn-secondary</span><button class="btn btn-secondary">Secondary</button></div>
+          <div class="stack"><span class="class-name">.btn-ghost</span><button class="btn btn-ghost">Ghost</button></div>
+          <div class="stack"><span class="class-name">.btn-icon</span><button class="btn btn-icon"><span class="mi">add</span></button></div>
+          <div class="stack"><span class="class-name">disabled</span><button class="btn" disabled>Disabled</button></div>
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.btn-main — pill action button</div>
+        <div class="comp-name"><span class="class-name in-kit">.btn-main</span><span class="css-values">dark filled pill action button</span></div>
         <div class="row">
-          <div class="stack"><span class="comp-name">.btn-main</span><button class="btn-main">Save</button></div>
+          <div class="stack"><span class="class-name">.btn-main</span><button class="btn-main">Save</button></div>
 
         </div>
         <div class="row">
-            <div class="stack"><span class="comp-name">.btn-main--icon</span><button class="btn-main btn-main--icon"><span class="mi mi-sm">save</span></button></div>
+            <div class="stack"><span class="class-name">.btn-main--icon</span><button class="btn-main btn-main--icon"><span class="mi mi-sm">save</span></button></div>
         </div>
         <div class="comp-caption">Dark filled pill. --icon variant is ghost. .btn-launch is an alias.</div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.btn-add — dashed add button for toolbars</div>
+        <div class="comp-name"><span class="class-name in-kit">.btn-add</span><span class="css-values">dashed add button for toolbars</span></div>
         <div class="toolbar" style="margin:0;">
           <button class="btn-add"><span class="mi mi-sm">add</span>New item</button>
           <button class="btn-add" disabled><span class="mi mi-sm">add</span>Disabled</button>
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.btn-round — circular icon button</div>
+        <div class="comp-name"><span class="class-name in-kit">.btn-round</span><span class="css-values">circular ghost icon button</span></div>
         <div class="row">
           <button class="btn-round"><span class="mi mi-sm">text_fields</span></button>
           <button class="btn-round"><span class="mi mi-sm">more_horiz</span></button>
@@ -279,7 +288,7 @@
     </div>
     <div class="section-body">
       <div class="comp">
-        <div class="comp-name in-kit">.seg-toggle — icon-based view switcher</div>
+        <div class="comp-name"><span class="class-name in-kit">.seg-toggle</span><span class="css-values">icon-based view switcher</span></div>
         <div class="seg-toggle" id="seg-demo" style="width:fit-content;">
           <button class="seg-toggle__btn is-active"><span class="mi mi-sm">view_module</span></button>
           <button class="seg-toggle__btn"><span class="mi mi-sm">view_list</span></button>
@@ -287,7 +296,7 @@
         <div class="comp-caption">Active state uses --accent fill. From Notes view toggle.</div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.pill-tabs — text tab strip</div>
+        <div class="comp-name"><span class="class-name in-kit">.pill-tabs</span><span class="css-values">text tab strip</span></div>
         <div class="pill-tabs" id="pill-demo" style="width:fit-content;">
           <button class="pill-tab is-active">Recent</button>
           <button class="pill-tab">Name</button>
@@ -296,7 +305,7 @@
         <div class="comp-caption">Inset pill on --surface. From the media sort bar.</div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.dropdown — compact labelled select</div>
+        <div class="comp-name"><span class="class-name in-kit">.dropdown</span><span class="css-values">compact labelled select with floating menu</span></div>
         <div class="dropdown" id="drop-demo" style="width:fit-content;">
           <button class="dropdown__btn" id="drop-btn">
             <span class="dropdown__swatch" style="background:#a85a4a;"></span>
@@ -312,7 +321,7 @@
         <div class="comp-caption">Optional swatch. Checkmark on active item.</div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.menu — floating dropdown panel</div>
+        <div class="comp-name"><span class="class-name in-kit">.menu</span><span class="css-values">floating action panel</span></div>
         <div style="position:relative; height:118px;">
           <div class="menu" style="position:relative;top:0;right:auto;display:flex;">
             <button class="menu__item"><span class="mi mi-sm">edit</span>Edit</button>
@@ -323,7 +332,7 @@
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.field — text, select, textarea</div>
+        <div class="comp-name"><span class="class-name in-kit">.field</span><span class="css-values">text input, select, textarea</span></div>
         <div class="stack" style="max-width:260px;">
           <input class="field" placeholder="Text field" />
           <select class="field"><option>Styled native select</option><option>Option two</option></select>
@@ -331,13 +340,13 @@
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.range · styled range slider</div>
+        <div class="comp-name"><span class="class-name in-kit">.range</span><span class="css-values">styled range slider</span></div>
         <input class="range" type="range" min="0" max="100" value="50" style="max-width:260px;"
                oninput="document.getElementById('range-out').textContent = this.value" />
         <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted);" id="range-out">50</div>
       </div>
       <div class="comp">
-        <div class="comp-name">&lt;studio-color&gt; — Coloris color picker</div>
+        <div class="comp-name"><span class="class-name">&lt;studio-color&gt;</span><span class="css-values">Coloris-backed color picker · .value + input/change events</span></div>
         <div class="row">
           <studio-color id="color" value="#6e6154"></studio-color>
           <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted);" id="color-out">#6e6154</span>
@@ -354,7 +363,7 @@
     </div>
     <div class="section-body">
       <div class="comp">
-        <div class="comp-name in-kit">.card — elevated surface with border</div>
+        <div class="comp-name"><span class="class-name in-kit">.card</span><span class="css-values">elevated surface with border</span></div>
         <div class="row">
           <div class="card" style="padding:12px;cursor:pointer;font-size:13px;" onclick="this.classList.toggle('is-selected')">Default · click to select</div>
           <div class="card is-selected" style="padding:12px;cursor:pointer;font-size:13px;" onclick="this.classList.toggle('is-selected')">Selected</div>
@@ -362,12 +371,12 @@
         <div class="comp-caption">.is-selected adds accent border + ring.</div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.preview-card in .preview-grid</div>
+        <div class="comp-name"><span class="class-name in-kit">.preview-card</span><span class="css-values">in .preview-grid — preview area + labeled footer</span></div>
         <div class="preview-grid" id="preview-grid"></div>
         <div class="comp-caption">Preview area on top, labeled footer below. Click to select.</div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.swatch-strip — compact inline swatches</div>
+        <div class="comp-name"><span class="class-name in-kit">.swatch-strip</span><span class="css-values">compact inline color strip</span></div>
         <div class="swatch-strip" style="width:180px;">
           <div class="swatch-strip__item" style="background:#2a2a28;"></div>
           <div class="swatch-strip__item" style="background:#a85a4a;"></div>
@@ -377,7 +386,7 @@
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name in-kit">.swatch-grid / .swatch-chip — editable color chips</div>
+        <div class="comp-name"><span class="class-name in-kit">.swatch-grid / .swatch-chip</span><span class="css-values">editable color chips with name + hex</span></div>
         <div class="swatch-grid" id="swatch-grid"></div>
         <div class="comp-caption">Click swatch to open Coloris picker. Name is editable inline.</div>
       </div>
@@ -392,7 +401,7 @@
     </div>
     <div class="section-body">
       <div class="comp">
-        <div class="comp-name">Animations — click to trigger</div>
+        <div class="comp-name"><span class="class-name">enter() · enterStagger() · pop()</span><span class="css-values">click to trigger</span></div>
         <div class="row">
           <button class="btn" id="m-enter">enter()</button>
           <button class="btn" id="m-stagger">enterStagger()</button>
