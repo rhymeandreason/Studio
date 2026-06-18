@@ -104,6 +104,7 @@ const LIST_META = {
 // Code editors offered for the Repo card's "Open in" picker. Empty value =
 // Zed, the Rust-side default when `editor` is blank.
 const EDITOR_OPTIONS = [
+  { value: "Studio Code Editor", label: "Studio Code Editor" },
   { value: "", label: "Zed" },
   { value: "Atom", label: "Atom" },
   { value: "Visual Studio Code", label: "VS Code" },

@@ -192,6 +192,9 @@ struct SchedulesFile {
 #[derive(Default)]
 struct AppState {
     active: Mutex<Option<Project>>,
+    /// A file the Code Editor tool should load on launch (set when "Studio Code
+    /// Editor" is the chosen editor and a file is opened from a Git window).
+    pending_open: Mutex<Option<String>>,
 }
 
 const TRAY_ID: &str = "studio-tray";
@@ -3176,16 +3179,31 @@ fn git_undo(repo: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Open one changed file in the project's configured editor (blank = Zed).
+/// The sentinel `editor` value meaning "open in Studio's built-in Code Editor
+/// tool" instead of an external macOS app.
+const STUDIO_EDITOR: &str = "Studio Code Editor";
+
+/// Open one changed file in the project's configured editor (blank = Zed,
+/// `STUDIO_EDITOR` = the in-app Code Editor tool).
 #[tauri::command]
-fn git_open_file(app: AppHandle, repo: String, file: String) -> Result<(), String> {
+fn git_open_file(
+    app: AppHandle,
+    state: tauri::State<AppState>,
+    repo: String,
+    file: String,
+) -> Result<(), String> {
     let editor = read_git_windows(&app)
         .into_iter()
         .find(|w| w.repo == repo)
         .map(|w| w.editor)
         .unwrap_or_default();
-    let editor = if editor.is_empty() { "Zed" } else { &editor };
     let full = Path::new(&repo).join(&file);
+
+    if editor == STUDIO_EDITOR {
+        return open_in_code_editor(&app, &state, full.to_string_lossy().to_string());
+    }
+
+    let editor = if editor.is_empty() { "Zed" } else { &editor };
     Command::new("open")
         .arg("-a")
         .arg(editor)
@@ -3193,6 +3211,27 @@ fn git_open_file(app: AppHandle, repo: String, file: String) -> Result<(), Strin
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Open the Code Editor tool window and have it load `file`. The path is stashed
+/// in `pending_open` for the window to pull on launch (`take_pending_open`), and
+/// also emitted as `ce:open-file` for the already-open case.
+fn open_in_code_editor(
+    app: &AppHandle,
+    state: &tauri::State<AppState>,
+    file: String,
+) -> Result<(), String> {
+    *state.pending_open.lock().unwrap() = Some(file.clone());
+    open_tool_window(app, "tools/code-editor.html");
+    let _ = app.emit("ce:open-file", file);
+    Ok(())
+}
+
+/// The Code Editor tool calls this on launch to pick up a file it was asked to
+/// open (see `open_in_code_editor`). Clears the pending slot.
+#[tauri::command]
+fn take_pending_open(state: tauri::State<AppState>) -> Option<String> {
+    state.pending_open.lock().unwrap().take()
 }
 
 // --- Claude companion window -------------------------------------------
@@ -4138,6 +4177,7 @@ pub fn run() {
             git_open_file,
             git_get_draft,
             git_set_draft,
+            take_pending_open,
             pick_text_file,
             open_code_preview,
             read_text_file,
