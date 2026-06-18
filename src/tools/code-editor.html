@@ -408,7 +408,7 @@ let titleColor = "";
 async function applyTitleColor() {
   if (!invoke) return;
   titleColor = currentPath ? await invoke("git_color_for_path", { path: currentPath }) : "";
-  if (evt && previewOpen) evt.emit("ce:color", titleColor);
+  if (evt) evt.emit("ce:color", titleColor);
 }
 
 const code = $("code"), hl = $("hl"), gutter = $("gutter"), minimap = $("minimap");
@@ -490,6 +490,7 @@ async function saveFile() {
     await invoke("write_text_file", { path: currentPath, content: code.value });
     setDirty(false);
     persist();
+    pushPreview();              // ensure the preview reflects the saved content
     await refreshDiff();
   } else {
     const blob = new Blob([code.value], { type: "text/plain" });
@@ -994,8 +995,11 @@ if (evt) {
   evt.listen("ce:ready", () => { previewOpen = true; pushPreview(); evt.emit("ce:color", titleColor); });
   evt.listen("ce:closed", () => { previewOpen = false; });
 }
+// Emit regardless of the tracked open state: if the editor reloaded while the
+// preview stayed open, `previewOpen` is stale (no fresh ce:ready), so gating on
+// it would silently stop updates. Emitting to no listener is harmless.
 function pushPreview() {
-  if (evt && previewOpen) evt.emit("ce:html", renderedHTML());
+  if (evt) evt.emit("ce:html", renderedHTML());
 }
 
 function showInspector(el) {
