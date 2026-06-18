@@ -38,13 +38,20 @@
     z-index:20;
   }
   #toolbar .spacer { flex: 1; }
+  #file-info{
+      background:var(--surface);
+      z-index:20;
+      padding:4.5px 8px;
+      border-bottom: 1px solid var(--hairline);
+      display: flex;
+      justify-content: space-between;
+  }
   #filename {
     font: var(--code-font);
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 360px;
     direction: rtl;          /* keep the basename visible when truncating */
     text-align: left;
   }
@@ -216,11 +223,11 @@
     flex: 0 0 auto;
     max-height: 45%;
     overflow: auto;
-    background: var(--surface);
+    background: var(--bg);
     padding: 10px 12px;
     font: var(--code-font);
   }
-  #inspector .ins-sel { color: var(--accent); margin-bottom: 6px; }
+  #inspector .ins-sel { color: var(--accent); margin-bottom: 6px;}
   .chip {
     display: inline-block;
     padding: 1px 7px;
@@ -242,14 +249,13 @@
   <div id="toolbar">
     <button class="btn" id="open"><span class="mi">folder_open</span>Open</button>
     <button class="btn btn-primary" id="save"><span class="mi">save</span>Save</button>
-    <button class="btn" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span>Refresh</button>
-    <button class="btn" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
-    <button class="btn" id="wrap-btn"><span class="mi">wrap_text</span>Wrap</button>
+    <button class="btn btn-secondary" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span>Refresh</button>
+    <button class="btn btn-secondary" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
+    <button class="btn btn-secondary" id="wrap-btn"><span class="mi">wrap_text</span>Wrap</button>
     <button class="btn" id="preview-btn"><span class="mi">open_in_new</span>Preview</button>
     <span id="dirty" title="Unsaved changes"></span>
     <span class="spacer"></span>
-    <span id="diff-status"></span>
-    <span id="filename">No file</span>
+
   </div>
 
   <div id="main">
@@ -261,6 +267,10 @@
     </div>
 
     <div id="editor-col">
+       <div id="file-info">
+           <span id="filename">No file</span>
+           <span id="diff-status"></span>
+       </div>
       <div id="editor">
         <div id="gutter"></div>
         <div id="codebox">
