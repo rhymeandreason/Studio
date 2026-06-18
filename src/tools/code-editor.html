@@ -317,6 +317,7 @@ function loadText(text) {
   filenameEl.textContent = "‎" + (currentPath || base);
   render();
   paint();
+  persist();
 }
 
 async function saveFile() {
@@ -324,6 +325,7 @@ async function saveFile() {
   if (invoke) {
     await invoke("write_text_file", { path: currentPath, content: code.value });
     setDirty(false);
+    persist();
     await refreshDiff();
   } else {
     const blob = new Blob([code.value], { type: "text/plain" });
@@ -350,8 +352,15 @@ function prettify() {
 
 function setDirty(v) { dirty = v; dirtyEl.classList.toggle("on", v); }
 
+// Persist the open file + current text so a window reload (e.g. Tauri's dev
+// watcher reloads all webviews when a frontend file is saved) restores it
+// instead of coming back empty.
+function persist() {
+  try { localStorage.setItem("ce:session", JSON.stringify({ path: currentPath, value: code.value, dirty })); } catch {}
+}
+
 // ---------- editor: gutter + highlight + minimap ----------
-code.addEventListener("input", () => { setDirty(true); paint(); scheduleRender(); });
+code.addEventListener("input", () => { setDirty(true); paint(); persist(); scheduleRender(); });
 code.addEventListener("scroll", syncScroll);
 
 function lineCount() { return code.value.split("\n").length; }
@@ -702,7 +711,23 @@ window.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); saveFile(); }
 });
 
-paint();
+// Restore the previous session (file + unsaved text) if there is one, so a
+// window reload doesn't lose the open file. Falls back to empty otherwise.
+(function restore() {
+  let s;
+  try { s = JSON.parse(localStorage.getItem("ce:session") || "null"); } catch {}
+  if (s && s.path) {
+    currentPath = s.path;
+    code.value = s.value || "";
+    filenameEl.textContent = "‎" + currentPath;
+    setDirty(!!s.dirty);
+    render();
+    paint();
+    refreshDiff();
+  } else {
+    paint();
+  }
+})();
 import("../devinspect.js").then((m) => m.initDevInspect()).catch(() => {});
 </script>
 </body>
