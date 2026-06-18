@@ -12,8 +12,8 @@
   :root {
     --line-h: 19px;
     --code-font: 12px/var(--line-h) var(--mono);
-    --add-bg: rgba(111, 125, 106, 0.18);   /* sage tint for changed lines */
-    --add-bar: var(--sage);
+    --add-bg: rgba(20, 184, 166, 0.20);    /* bright teal tint for changed lines */
+    --add-bar: #14b8a6;
   }
 
   html, body { height: 100%; }
@@ -131,6 +131,16 @@
     width: 3px;
     background: var(--add-bar);
   }
+  /* Deletion: a small teal triangle pointing at the spot where lines were
+     removed (no added line to tint in the new file). */
+  #gutter .gl.del::before {
+    content: "";
+    position: absolute;
+    right: -10px; top: -4px;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #e5484d;
+  }
   #codebox { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
   #hl, #code {
     position: absolute;
@@ -224,6 +234,7 @@
   <div id="toolbar">
     <button class="btn" id="open"><span class="mi">folder_open</span>Open</button>
     <button class="btn" id="save"><span class="mi">save</span>Save</button>
+    <button class="btn" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span>Refresh</button>
     <button class="btn" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
     <button class="btn" id="wrap-btn"><span class="mi">wrap_text</span>Wrap</button>
     <button class="btn" id="preview-btn"><span class="mi">open_in_new</span>Preview</button>
@@ -283,11 +294,13 @@ const filenameEl = $("filename"), dirtyEl = $("dirty"), diffStatus = $("diff-sta
 
 let currentPath = null;
 let changedLines = new Set();   // 1-based line numbers (new file) marked as added/changed
+let deletedAt = new Set();      // lines where preceding content was deleted (triangle marker)
 let dirty = false;
 
 // ---------- file open / save ----------
 $("open").addEventListener("click", openFile);
 $("save").addEventListener("click", saveFile);
+$("refresh-btn").addEventListener("click", reloadFromDisk);
 $("prettify").addEventListener("click", prettify);
 
 async function openFile() {
@@ -333,6 +346,14 @@ async function saveFile() {
     a.href = URL.createObjectURL(blob); a.download = currentPath; a.click();
     setDirty(false);
   }
+}
+
+// Re-read the current file from disk (picks up external edits) and refresh diff.
+async function reloadFromDisk() {
+  if (!invoke || !currentPath) return;
+  const text = await invoke("read_text_file", { path: currentPath });
+  loadText(text);
+  await refreshDiff();
 }
 
 function ext() { return (currentPath || "").split(".").pop().toLowerCase(); }
@@ -414,7 +435,7 @@ function paint() {
   const hi = highlightLines(code.value);
   // gutter
   let g = "";
-  for (let i = 1; i <= n; i++) g += `<div class="gl${changedLines.has(i) ? " chg" : ""}">${i}</div>`;
+  for (let i = 1; i <= n; i++) g += `<div class="gl${changedLines.has(i) ? " chg" : ""}${deletedAt.has(i) ? " del" : ""}">${i}</div>`;
   gutter.innerHTML = g;
   // highlight layer — colored tokens; wraps exactly like the textarea so the
   // diff row backgrounds and soft-wrap line heights stay aligned.
@@ -473,12 +494,16 @@ minimap.addEventListener("click", (e) => {
 // ---------- git diff ----------
 async function refreshDiff() {
   changedLines = new Set();
+  deletedAt = new Set();
   diffStatus.textContent = "";
   if (!invoke || !currentPath) { paint(); return; }
   try {
     const diff = await invoke("git_diff_file", { path: currentPath });
     parseDiff(diff);
-    diffStatus.textContent = changedLines.size ? `${changedLines.size} changed` : "no changes";
+    const parts = [];
+    if (changedLines.size) parts.push(`${changedLines.size} changed`);
+    if (deletedAt.size) parts.push(`${deletedAt.size} deletion${deletedAt.size > 1 ? "s" : ""}`);
+    diffStatus.textContent = parts.join(", ") || "no changes";
   } catch (e) {
     diffStatus.textContent = "not in git";
   }
@@ -486,16 +511,21 @@ async function refreshDiff() {
 }
 
 function parseDiff(diff) {
-  let newLine = 0;
+  let newLine = 0, pendingDel = false;
   for (const line of diff.split("\n")) {
     const m = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-    if (m) { newLine = parseInt(m[1], 10); continue; }
+    if (m) { newLine = parseInt(m[1], 10); pendingDel = false; continue; }
     if (newLine === 0) continue;          // header lines before first hunk
-    if (line.startsWith("+")) { changedLines.add(newLine); newLine++; }
-    else if (line.startsWith("-")) { /* deletion: no new-file line */ }
+    if (line.startsWith("+")) { changedLines.add(newLine); newLine++; pendingDel = false; }
+    else if (line.startsWith("-")) { pendingDel = true; }   // deletion: marked on the next kept line
     else if (line.startsWith("\\")) { /* "No newline" marker */ }
-    else { newLine++; }                    // context line
+    else {                                 // context line
+      if (pendingDel) { deletedAt.add(newLine); pendingDel = false; }
+      newLine++;
+    }
   }
+  // Deletion at end of file: mark the last line.
+  if (pendingDel) deletedAt.add(Math.max(1, newLine - 1));
 }
 
 // ---------- DOM tree + inspector (offscreen parser iframe) ----------
