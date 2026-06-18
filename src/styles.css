@@ -62,8 +62,7 @@ body {
     color: var(--text);
 }
 
-/* Shared eyebrow label for structural titles */
-.eyebrow,
+/* App-specific eyebrow alias */
 .overview__title {
     font-family: var(--serif);
     font-size: 12px;
@@ -124,7 +123,7 @@ body {
     height: 44px;
     margin-right: 4px;
     border: none;
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     background: none;
     cursor: pointer;
 }
@@ -283,7 +282,7 @@ body {
 /* Highlighted as a drop target (e.g. dragging a media tile onto Notes). */
 .tab.is-drop-target {
     background: color-mix(in srgb, var(--accent) 16%, transparent);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     color: var(--text);
 }
 
@@ -478,7 +477,7 @@ body {
 .card__icon {
     width: 64px;
     height: 64px;
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     object-fit: cover;
     margin-bottom: 4px;
 }
@@ -1241,7 +1240,7 @@ textarea.notecard__title::placeholder {
     color: var(--text-muted);
     background: var(--bg);
     border: 1px solid var(--hairline);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 6px 10px;
     max-width: 100px;
     cursor: pointer;
@@ -1421,7 +1420,7 @@ textarea.notecard__title::placeholder {
     gap: 4px;
     background: var(--base, transparent);
     border: 1px solid var(--hairline);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 4px 6px 4px 8px;
     transition: border-color 0.15s;
 }
@@ -2052,7 +2051,7 @@ td.ntable__total-cell {
     z-index: 30;
     background: rgba(110, 97, 84, 0.1);
     border: 2px dashed var(--accent);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2070,7 +2069,7 @@ td.ntable__total-cell {
     color: var(--accent);
     background: var(--elevated);
     padding: 24px 32px;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
 }
 
@@ -2276,7 +2275,7 @@ td.ntable__total-cell {
 .ppmodal__card {
     background: var(--elevated);
     border: 1px solid var(--hairline);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 18px;
     width: 280px;
     box-shadow: var(--shadow-md);
@@ -2704,7 +2703,7 @@ td.ntable__total-cell {
 .modal__card {
     background: var(--elevated);
     border: 1px solid var(--hairline);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 22px;
     width: 340px;
     display: flex;

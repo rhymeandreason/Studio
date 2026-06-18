@@ -249,6 +249,22 @@ select.field {
     color: var(--text-muted);
 }
 
+.eyebrow {
+    font-family: var(--serif);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+/* ---- Text utilities ------------------------------------------------------- */
+
+.text-body  { font-family: var(--sans); font-size: 13px; line-height: 1.6; color: var(--text); }
+.text-muted { font-family: var(--sans); font-size: 13px; line-height: 1.6; color: var(--text-muted); }
+.text-sm    { font-family: var(--sans); font-size: 11px; color: var(--text-muted); }
+.text-mono  { font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
+
 /* ---- Preview card (artifact-card pattern) -------------------------------- */
 /* A card with a preview area on top and a labeled footer below.
  * Typically placed in a .preview-grid. */
@@ -457,7 +473,7 @@ select.field {
     color: var(--text-muted);
     background: var(--bg);
     border: 1px solid var(--hairline);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 6px 10px;
     max-width: 140px;
     cursor: pointer;

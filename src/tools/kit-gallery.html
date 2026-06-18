@@ -42,9 +42,9 @@
     border-top: 1px solid var(--hairline);
     align-items: start;
   }
-  .section-meta { display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }
+  .section-meta { display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
   .section-name {
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--text);
     letter-spacing: -0.01em;
@@ -59,8 +59,12 @@
   /* --- Component row within a section --- */
   .comp { display: flex; flex-direction: column; gap: 6px; }
   .comp-name {
-    font-size: 11px;
-    color: var(--text-soft);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .comp-name.in-kit::after {
+    content: " ✓";
+    color: var(--sage);
   }
   .comp-caption {
     font-size: 11px;
@@ -179,12 +183,43 @@
         <div style="font-family:var(--serif); font-size:17px; font-weight:500;">Brand kits</div>
       </div>
       <div class="comp">
-        <div class="comp-name">.eyebrow · serif 12px 600 uppercase +0.14em</div>
+        <div class="comp-name in-kit">.eyebrow · serif 12px 600 uppercase +0.14em</div>
         <div class="eyebrow">Projects</div>
       </div>
       <div class="comp">
-        <div class="comp-name">.label · sans 11px uppercase +0.06em</div>
+        <div class="comp-name in-kit">.label · sans 11px uppercase +0.06em</div>
         <div class="label">Color tokens</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Body text -->
+  <section>
+    <div class="section-meta">
+      <div class="section-name">Body text</div>
+      <div class="section-desc">Running copy, notes, descriptions.</div>
+    </div>
+    <div class="section-body">
+      <div class="comp">
+        <div class="comp-name in-kit">.text-body · sans 13px 1.6lh · --text</div>
+        <div class="text-body" style="max-width:480px;">The quick brown fox jumps over the lazy dog. Studio uses Futura as its primary typeface across all UI surfaces and body copy.</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name in-kit">.text-muted · sans 13px 1.6lh · --text-muted</div>
+        <div class="text-muted" style="max-width:480px;">Secondary descriptions, metadata, timestamps, and supporting text that shouldn't compete with primary content.</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name in-kit">.text-sm · sans 11px · --text-muted</div>
+        <div class="text-sm">Caption text, file sizes, tooltips, comp names.</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name">Note body · .text-body + letter-spacing −0.07px</div>
+        <div class="text-body" style="letter-spacing:-0.07px; max-width:480px;">A quick note about the ceramics shoot. The studio light was too warm — try a cooler balance next time and pull back the fill.</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name in-kit">.text-mono · mono 12px · --text-muted · filenames, paths, status</div>
+        <div class="text-mono">artifacts/brand-kit/my-kit.json</div>
+        <div style="font-family:var(--mono); font-size:11px; color:var(--text-muted); margin-top:4px;">/Users/mary/Projects/Ceramics/media/shoot-01.jpg</div>
       </div>
     </div>
   </section>
@@ -197,7 +232,7 @@
     </div>
     <div class="section-body">
       <div class="comp">
-        <div class="comp-name">.btn variants</div>
+        <div class="comp-name in-kit">.btn variants</div>
         <div class="row">
           <div class="stack"><span class="comp-name">.btn</span><button class="btn">Default</button></div>
           <div class="stack"><span class="comp-name">.btn-primary</span><button class="btn btn-primary">Primary</button></div>
@@ -208,7 +243,7 @@
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name">.btn-main — pill action button</div>
+        <div class="comp-name in-kit">.btn-main — pill action button</div>
         <div class="row">
           <div class="stack"><span class="comp-name">.btn-main</span><button class="btn-main">Save</button></div>
 
@@ -219,14 +254,14 @@
         <div class="comp-caption">Dark filled pill. --icon variant is ghost. .btn-launch is an alias.</div>
       </div>
       <div class="comp">
-        <div class="comp-name">.btn-add — dashed add button for toolbars</div>
+        <div class="comp-name in-kit">.btn-add — dashed add button for toolbars</div>
         <div class="toolbar" style="margin:0;">
           <button class="btn-add"><span class="mi mi-sm">add</span>New item</button>
           <button class="btn-add" disabled><span class="mi mi-sm">add</span>Disabled</button>
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name">.btn-round — circular icon button</div>
+        <div class="comp-name in-kit">.btn-round — circular icon button</div>
         <div class="row">
           <button class="btn-round"><span class="mi mi-sm">text_fields</span></button>
           <button class="btn-round"><span class="mi mi-sm">more_horiz</span></button>
@@ -244,7 +279,7 @@
     </div>
     <div class="section-body">
       <div class="comp">
-        <div class="comp-name">.seg-toggle — icon-based view switcher</div>
+        <div class="comp-name in-kit">.seg-toggle — icon-based view switcher</div>
         <div class="seg-toggle" id="seg-demo" style="width:fit-content;">
           <button class="seg-toggle__btn is-active"><span class="mi mi-sm">view_module</span></button>
           <button class="seg-toggle__btn"><span class="mi mi-sm">view_list</span></button>
@@ -252,7 +287,7 @@
         <div class="comp-caption">Active state uses --accent fill. From Notes view toggle.</div>
       </div>
       <div class="comp">
-        <div class="comp-name">.pill-tabs — text tab strip</div>
+        <div class="comp-name in-kit">.pill-tabs — text tab strip</div>
         <div class="pill-tabs" id="pill-demo" style="width:fit-content;">
           <button class="pill-tab is-active">Recent</button>
           <button class="pill-tab">Name</button>
@@ -261,7 +296,7 @@
         <div class="comp-caption">Inset pill on --surface. From the media sort bar.</div>
       </div>
       <div class="comp">
-        <div class="comp-name">.dropdown — compact labelled select</div>
+        <div class="comp-name in-kit">.dropdown — compact labelled select</div>
         <div class="dropdown" id="drop-demo" style="width:fit-content;">
           <button class="dropdown__btn" id="drop-btn">
             <span class="dropdown__swatch" style="background:#a85a4a;"></span>
@@ -277,7 +312,7 @@
         <div class="comp-caption">Optional swatch. Checkmark on active item.</div>
       </div>
       <div class="comp">
-        <div class="comp-name">.menu — floating dropdown panel</div>
+        <div class="comp-name in-kit">.menu — floating dropdown panel</div>
         <div style="position:relative; height:118px;">
           <div class="menu" style="position:relative;top:0;right:auto;display:flex;">
             <button class="menu__item"><span class="mi mi-sm">edit</span>Edit</button>
@@ -288,7 +323,7 @@
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name">.field — text, select, textarea</div>
+        <div class="comp-name in-kit">.field — text, select, textarea</div>
         <div class="stack" style="max-width:260px;">
           <input class="field" placeholder="Text field" />
           <select class="field"><option>Styled native select</option><option>Option two</option></select>
@@ -296,7 +331,7 @@
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name">.range</div>
+        <div class="comp-name in-kit">.range · styled range slider</div>
         <input class="range" type="range" min="0" max="100" value="50" style="max-width:260px;"
                oninput="document.getElementById('range-out').textContent = this.value" />
         <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted);" id="range-out">50</div>
@@ -319,7 +354,7 @@
     </div>
     <div class="section-body">
       <div class="comp">
-        <div class="comp-name">.card — elevated surface with border</div>
+        <div class="comp-name in-kit">.card — elevated surface with border</div>
         <div class="row">
           <div class="card" style="padding:12px;cursor:pointer;font-size:13px;" onclick="this.classList.toggle('is-selected')">Default · click to select</div>
           <div class="card is-selected" style="padding:12px;cursor:pointer;font-size:13px;" onclick="this.classList.toggle('is-selected')">Selected</div>
@@ -327,12 +362,12 @@
         <div class="comp-caption">.is-selected adds accent border + ring.</div>
       </div>
       <div class="comp">
-        <div class="comp-name">.preview-card in .preview-grid</div>
+        <div class="comp-name in-kit">.preview-card in .preview-grid</div>
         <div class="preview-grid" id="preview-grid"></div>
         <div class="comp-caption">Preview area on top, labeled footer below. Click to select.</div>
       </div>
       <div class="comp">
-        <div class="comp-name">.swatch-strip — compact inline swatches</div>
+        <div class="comp-name in-kit">.swatch-strip — compact inline swatches</div>
         <div class="swatch-strip" style="width:180px;">
           <div class="swatch-strip__item" style="background:#2a2a28;"></div>
           <div class="swatch-strip__item" style="background:#a85a4a;"></div>
@@ -342,7 +377,7 @@
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name">.swatch-grid / .swatch-chip — editable color chips</div>
+        <div class="comp-name in-kit">.swatch-grid / .swatch-chip — editable color chips</div>
         <div class="swatch-grid" id="swatch-grid"></div>
         <div class="comp-caption">Click swatch to open Coloris picker. Name is editable inline.</div>
       </div>
