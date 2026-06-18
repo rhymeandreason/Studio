@@ -275,6 +275,15 @@
   .sec.lvl2 { padding-left: 24px; }
   .sec.lvl3 { padding-left: 36px; color: var(--text-muted); }
   .sec.lvl4, .sec.lvl5, .sec.lvl6 { padding-left: 48px; color: var(--text-soft); }
+
+  /* Inline Markdown preview: hidden by default; the Code/Preview toggle and the
+     separate-window button only apply to Markdown. */
+  #inline-preview { display: none; flex: 1 1 auto; min-height: 0; width: 100%; border: 0; background: #fff; }
+  #view-toggle { display: none; }
+  body.is-markdown #view-toggle { display: inline-flex; }
+  body.is-markdown #preview-btn { display: none; }
+  body.md-preview #editor { display: none; }
+  body.md-preview #inline-preview { display: block; }
 </style>
 </head>
 <body>
@@ -289,6 +298,7 @@
     </div>
     <div>
         <button class="btn btn-secondary" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span>Refresh</button>
+        <button class="btn btn-secondary" id="view-toggle" title="Toggle code / preview"><span class="mi">visibility</span>Preview</button>
         <button class="btn btn-primary" id="preview-btn"><span class="mi">open_in_new</span>Preview</button>
     </div>
 
@@ -324,6 +334,9 @@
         </div>
         <div id="minimap"><div class="mm-view"></div></div>
       </div>
+      <!-- Inline rendered preview, shown in place of the code panel when a
+           Markdown file is in Preview mode. -->
+      <iframe id="inline-preview" sandbox="allow-same-origin"></iframe>
     </div>
   </div>
 
@@ -355,7 +368,7 @@ if (TAURI) {
 const $ = (id) => document.getElementById(id);
 const code = $("code"), hl = $("hl"), gutter = $("gutter"), minimap = $("minimap");
 const treeEl = $("tree"), inspector = $("inspector"), parser = $("parser");
-const sectionsEl = $("sections");
+const sectionsEl = $("sections"), inlinePreview = $("inline-preview");
 const filenameEl = $("filename"), dirtyEl = $("dirty"), diffStatus = $("diff-status");
 
 let currentPath = null;
@@ -649,13 +662,29 @@ function mdWrap(body) {
 // Re-parse into the offscreen iframe (rebuilds the tree) and push to the
 // preview window if it's open.
 function render() {
-  parser.srcdoc = renderedHTML();
+  const html = renderedHTML();
+  parser.srcdoc = html;
+  if (isMarkdown()) inlinePreview.srcdoc = html;   // keep inline preview current
   pushPreview();
 }
 
-// ---------- Markdown section browser ----------
+// ---------- Markdown section browser + inline preview ----------
 // Toggle the left column between DOM/Styles (HTML) and the heading list (md).
-function applyMode() { document.body.classList.toggle("is-markdown", isMarkdown()); }
+function applyMode() {
+  const md = isMarkdown();
+  document.body.classList.toggle("is-markdown", md);
+  document.body.classList.remove("md-preview");            // start in Code view
+  $("view-toggle").innerHTML = `<span class="mi">visibility</span>Preview`;
+}
+
+// Code/Preview toggle (Markdown only).
+$("view-toggle").addEventListener("click", () => {
+  const on = document.body.classList.toggle("md-preview");
+  $("view-toggle").innerHTML = on
+    ? `<span class="mi">code</span>Code`
+    : `<span class="mi">visibility</span>Preview`;
+});
+function inPreview() { return document.body.classList.contains("md-preview"); }
 
 // Parse ATX headings (#…######) from the source, skipping fenced code blocks.
 function buildSections() {
@@ -673,14 +702,25 @@ function buildSections() {
     return;
   }
   sectionsEl.innerHTML = "";
-  for (const it of items) {
+  items.forEach((it, idx) => {
     const b = document.createElement("button");
     b.className = "sec lvl" + it.level;
     b.textContent = it.text;
     b.title = it.text;
-    b.addEventListener("click", () => revealLine(it.line));
+    // In preview mode, scroll the rendered heading into view; otherwise jump to
+    // the source line.
+    b.addEventListener("click", () => inPreview() ? revealPreviewHeading(idx) : revealLine(it.line));
     sectionsEl.append(b);
-  }
+  });
+}
+
+// Scroll the inline preview to its idx-th heading (same order as the source
+// headings, since both come from the same Markdown).
+function revealPreviewHeading(idx) {
+  const doc = inlinePreview.contentDocument;
+  if (!doc) return;
+  const hs = doc.querySelectorAll("h1, h2, h3, h4, h5, h6");
+  if (hs[idx]) hs[idx].scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
 // Scroll the code panel to a 1-based source line and select it.
