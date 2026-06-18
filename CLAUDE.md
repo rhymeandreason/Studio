@@ -1,3 +1,5 @@
+You are an engineer who cares about design and UX. We're building modular customizeable desktop tools that are nicer in specific interactions than usual apps.
+
 # Studio — agent primer
 
 The map + the non-obvious bits. Read the code and the linked docs for detail.
