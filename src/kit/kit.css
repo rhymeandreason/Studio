@@ -262,7 +262,7 @@ select.field {
 
 .text-body  { font-family: var(--sans); font-size: 13px; line-height: 1.6; color: var(--text); }
 .text-muted { font-family: var(--sans); font-size: 13px; line-height: 1.6; color: var(--text-muted); }
-.text-sm    { font-family: var(--sans); font-size: 11px; color: var(--text-muted); }
+.text-sm    { font-family: system-ui, sans-serif; font-size: 11px; color: var(--text-muted); }
 .text-mono  { font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
 
 /* ---- Preview card (artifact-card pattern) -------------------------------- */

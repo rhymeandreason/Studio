@@ -72,6 +72,7 @@ border-radius: 2px;
     color: var(--sage);
   }
   .css-values {
+    font-family: system-ui, sans-serif;
     font-size: 11px;
     color: var(--text-soft);
   }
@@ -151,7 +152,7 @@ border-radius: 2px;
   <section>
     <div class="section-meta">
       <div class="section-name">Typography</div>
-      <div class="section-desc">Three typefaces. All accessed via CSS variables.</div>
+      <div class="section-desc">Four typefaces. Three accessed via CSS variables; system-ui used directly for captions and input text.</div>
     </div>
     <div class="section-body">
       <div class="comp">
@@ -168,6 +169,11 @@ border-radius: 2px;
         <div class="comp-name"><span class="class-name">--mono</span><span class="css-values">JetBrains Mono · tokens, values, code, status output</span></div>
         <div style="font-family:var(--mono); font-size:13px; line-height:1.6;">#2a2a28 · rgba(42, 42, 40, 0.1) · 0.13s cubic-bezier(0.2, 0, 0, 1)</div>
         <div class="comp-caption">Tokens, values, code, status output</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name"><span class="class-name">system-ui</span><span class="css-values">Input text, small captions, meta labels · used via .text-sm and directly on the Design System page</span></div>
+        <div style="font-family:system-ui, sans-serif; font-size:13px; line-height:1.6;">The quick brown fox jumps over the lazy dog.</div>
+        <div style="font-family:system-ui, sans-serif; font-size:11px; color:var(--text-muted); margin-top:4px;">Caption text, file sizes, tooltips, comp names.</div>
       </div>
     </div>
   </section>
@@ -218,7 +224,7 @@ border-radius: 2px;
         <div class="text-muted" style="max-width:480px;">Secondary descriptions, metadata, timestamps, and supporting text that shouldn't compete with primary content.</div>
       </div>
       <div class="comp">
-        <div class="comp-name"><span class="class-name in-kit">.text-sm</span><span class="css-values">sans 11px · --text-muted</span></div>
+        <div class="comp-name"><span class="class-name in-kit">.text-sm</span><span class="css-values">system-ui 11px · --text-muted</span></div>
         <div class="text-sm">Caption text, file sizes, tooltips, comp names.</div>
       </div>
       <div class="comp">
