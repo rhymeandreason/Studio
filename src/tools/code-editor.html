@@ -401,6 +401,16 @@ if (TAURI) {
 }
 
 const $ = (id) => document.getElementById(id);
+
+// Tint the title bar to match the Git-window color of the open file's repo
+// (independent of the active project), and mirror it to the preview window.
+let titleColor = "";
+async function applyTitleColor() {
+  if (!invoke) return;
+  titleColor = currentPath ? await invoke("git_color_for_path", { path: currentPath }) : "";
+  if (evt && previewOpen) evt.emit("ce:color", titleColor);
+}
+
 const code = $("code"), hl = $("hl"), gutter = $("gutter"), minimap = $("minimap");
 const treeEl = $("tree"), inspector = $("inspector"), parser = $("parser");
 const sectionsEl = $("sections"), mdView = $("md-view"), linksEl = $("links");
@@ -468,6 +478,7 @@ function loadText(text) {
   const base = currentPath ? currentPath.split("/").pop() : "untitled";
   filenameEl.textContent = "‎" + (currentPath || base);
   applyMode();
+  applyTitleColor();
   render();
   paint();
   persist();
@@ -978,9 +989,9 @@ window.addEventListener("resize", () => { if (document.body.classList.contains("
 
 // ---------- preview window ----------
 let previewOpen = false;
-$("preview-btn").addEventListener("click", () => { if (invoke) invoke("open_code_preview"); });
+$("preview-btn").addEventListener("click", () => { if (invoke) invoke("open_code_preview", { color: titleColor }); });
 if (evt) {
-  evt.listen("ce:ready", () => { previewOpen = true; pushPreview(); });
+  evt.listen("ce:ready", () => { previewOpen = true; pushPreview(); evt.emit("ce:color", titleColor); });
   evt.listen("ce:closed", () => { previewOpen = false; });
 }
 function pushPreview() {
@@ -1115,6 +1126,7 @@ window.addEventListener("keydown", (e) => {
     setDirty(!!s.dirty);
     history = [s.path]; histIdx = 0; updateNav();   // seed nav history
     applyMode();
+    applyTitleColor();
     render();
     paint();
     refreshDiff();

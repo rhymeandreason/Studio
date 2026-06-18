@@ -167,6 +167,58 @@ in an in-page drag strip. To apply to a tool (e.g. `my-tool.html`):
    Remove any top `padding` from `body` — the titlebar div provides the
    spacing instead. Run `cargo check` after the Rust edit.
 
+### Colored title bar style (Code Editor / Preview pattern)
+
+The native title bar is transparent, `background_color` provides the color, and
+the window title is the tool name rendered by macOS. The webview starts *below*
+the title bar — you cannot draw into that zone from HTML, so there is no in-page
+drag strip.
+
+**When to use:** tools that want a project-tinted chrome (e.g. matching the repo's
+Git window color) without a custom in-page header.
+
+**Key insight:** `background_color` on `WebviewWindowBuilder` must be set at
+window-creation time with the correct color — it cannot be updated later. So the
+color must be resolved in Rust *before* `build()` is called, and passed to the
+HTML as a `?color=` URL param so the page body matches it on first paint too.
+
+#### To apply this style to a new tool:
+
+1. Add `open_tool_window_with_color` call site in Rust, passing the color you
+   want (e.g. via `git_color_for_path` or a stored workspace color):
+
+   ```rust
+   // In your open_* function:
+   let color = git_color_for_path(app.clone(), file.clone());
+   open_tool_window_with_color(&app, "tools/my-tool.html", &color);
+   ```
+
+   `open_tool_window_with_color` (in `src-tauri/src/lib.rs`) sets
+   `TitleBarStyle::Transparent`, `background_color`, a non-empty title (derived
+   from the filename), and appends `?color=<hex>` to the URL.
+
+2. Keep the tool HTML free of any `#titlebar` div. The native title bar handles
+   the text and drag; the webview starts at the toolbar. No `cargo check` changes
+   needed beyond step 1.
+
+3. If the tool is opened by another tool (like Preview is opened by Code Editor),
+   accept a `color: Option<String>` parameter in the Rust command and forward it:
+
+   ```rust
+   #[tauri::command]
+   fn open_my_preview(app: AppHandle, color: Option<String>) {
+       match color.filter(|c| !c.is_empty()) {
+           Some(c) => open_tool_window_with_color(&app, "tools/my-preview.html", &c),
+           None    => open_tool_window(&app, "tools/my-preview.html"),
+       }
+   }
+   ```
+
+   Then pass the color from the calling tool's JS:
+   ```js
+   invoke("open_my_preview", { color: titleColor });
+   ```
+
 ## Dedicated tray icon + positioning
 
 A tool can get its own tray icon (next to Studio's) instead of living only in

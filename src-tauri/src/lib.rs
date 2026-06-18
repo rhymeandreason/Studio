@@ -334,6 +334,48 @@ fn open_tool_window(app: &AppHandle, path: &str) {
     open_tool_window_near(app, path, None);
 }
 
+fn open_tool_window_with_color(app: &AppHandle, path: &str, color: &str) {
+    if color.is_empty() {
+        open_tool_window_near(app, path, None);
+        return;
+    }
+    // Encode the color into the URL so the tool can apply it immediately on
+    // first paint (before any Tauri events fire), matching the git window pattern.
+    let filename = Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    let label = format!(
+        "tool-{}",
+        filename
+            .chars()
+            .map(|c| if c.is_alphanumeric() { c } else { '-' })
+            .collect::<String>()
+    );
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return;
+    }
+    let (r, g, b) = parse_hex(color);
+    let url = format!("tools/{}?color={}", filename, url_encode(color));
+    let title = Path::new(filename)
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .replace('-', " ")
+        .split_whitespace()
+        .map(|w| { let mut c = w.chars(); c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default() })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let _ = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
+        .title(title)
+        .inner_size(900.0, 640.0)
+        .title_bar_style(tauri::TitleBarStyle::Transparent)
+        .background_color(tauri::webview::Color(r, g, b, 0xff))
+        .build();
+}
+
 /// Open a tool window, optionally positioned just below a tray icon's rect
 /// (as reported by `TrayIconEvent::Click`).
 fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>) {
@@ -369,7 +411,9 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
     let Some(filename) = Path::new(path).file_name().and_then(|n| n.to_str()) else {
         return;
     };
-    let title = if filename == "daily-notes.html" || filename == "ram-overview.html" || filename == "kit-gallery.html" {
+    let title = if filename == "daily-notes.html" || filename == "ram-overview.html"
+        || filename == "kit-gallery.html"
+    {
         String::new()
     } else {
         Path::new(path)
@@ -411,6 +455,16 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
         builder = builder
             .title_bar_style(tauri::TitleBarStyle::Transparent)
             .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff));
+    }
+    // Code Editor + Preview: tint the title bar with the active project's Git
+    // window color (matching its companion Git window); paper bg if none.
+    if filename == "code-editor.html" || filename == "code-preview.html" {
+        let (r, g, b) = active_git_color_hex(app)
+            .map(|c| parse_hex(&c))
+            .unwrap_or((0xf7, 0xf5, 0xf0));
+        builder = builder
+            .title_bar_style(tauri::TitleBarStyle::Transparent)
+            .background_color(tauri::webview::Color(r, g, b, 0xff));
     }
 
     if let Ok(win) = builder.build() {
@@ -3114,8 +3168,54 @@ async fn pick_text_file(app: AppHandle) -> Result<Option<String>, String> {
 /// Open the Code Editor's companion preview window (a separate tool window that
 /// renders the HTML the editor pushes to it over Tauri events).
 #[tauri::command]
-fn open_code_preview(app: AppHandle) {
-    open_tool_window(&app, "tools/code-preview.html");
+fn open_code_preview(app: AppHandle, color: Option<String>) {
+    match color.filter(|c| !c.is_empty()) {
+        Some(c) => open_tool_window_with_color(&app, "tools/code-preview.html", &c),
+        None => open_tool_window(&app, "tools/code-preview.html"),
+    }
+}
+
+/// The active project's Git-window color (hex), used to tint the Code Editor /
+/// Preview title bars. Defaults to the Git window's own default bright when a
+/// project is active but unset; `None` when no project is active.
+fn active_git_color_hex(app: &AppHandle) -> Option<String> {
+    let project = app.state::<AppState>().active.lock().unwrap().clone()?;
+    let ws = read_workspace(project.path).ok()?;
+    let c = ws.git_color.trim().to_string();
+    Some(if c.is_empty() { "#ffd23f".to_string() } else { c })
+}
+
+/// Exposed to the Code Editor / Preview windows so they can tint their in-page
+/// title strip to match. Empty string when no project is active.
+#[tauri::command]
+fn active_git_color(app: AppHandle) -> String {
+    active_git_color_hex(&app).unwrap_or_default()
+}
+
+/// The Git-window color for whichever known repo contains `path` (longest repo
+/// match wins), independent of which project is active in the main window. Empty
+/// string if the file isn't under any repo that has a Git window. Used by the
+/// Code Editor to tint its title bar based on the open file.
+#[tauri::command]
+fn git_color_for_path(app: AppHandle, path: String) -> String {
+    let home = app.path().home_dir().ok();
+    let target = PathBuf::from(&path);
+    let mut best: Option<(usize, String)> = None;
+    for w in read_git_windows(&app) {
+        // Expand a leading "~" so repos stored as "~/Projects/x" still match.
+        let repo = match (&home, w.repo.strip_prefix("~/")) {
+            (Some(h), Some(rest)) => h.join(rest),
+            _ => PathBuf::from(&w.repo),
+        };
+        if target.starts_with(&repo) {
+            let len = repo.as_os_str().len();
+            if best.as_ref().map_or(true, |(l, _)| len > *l) {
+                let c = if w.color.trim().is_empty() { "#ffd23f".to_string() } else { w.color.clone() };
+                best = Some((len, c));
+            }
+        }
+    }
+    best.map(|(_, c)| c).unwrap_or_default()
 }
 
 /// Read a UTF-8 text file by absolute path. Used by the Code Editor tool.
@@ -3238,8 +3338,9 @@ fn open_in_code_editor(
     state: &tauri::State<AppState>,
     file: String,
 ) -> Result<(), String> {
+    let color = git_color_for_path(app.clone(), file.clone());
     *state.pending_open.lock().unwrap() = Some(file.clone());
-    open_tool_window(app, "tools/code-editor.html");
+    open_tool_window_with_color(app, "tools/code-editor.html", &color);
     let _ = app.emit("ce:open-file", file);
     Ok(())
 }
@@ -4195,6 +4296,8 @@ pub fn run() {
             git_get_draft,
             git_set_draft,
             take_pending_open,
+            active_git_color,
+            git_color_for_path,
             pick_text_file,
             open_code_preview,
             read_text_file,
