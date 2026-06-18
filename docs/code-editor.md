@@ -42,6 +42,9 @@ all kit-styled, all offline. See [tools.md](tools.md) for how tools load.
   it as long as nothing was typed since (normal typing-undo is the textarea's
   native undo).
 - **Wrap** — toggles soft wrapping; gutter row heights sync to wrapped lines.
+- **Back / Forward** — arrow buttons left of Open walk a navigation history of
+  opened files (`history`/`histIdx`; opening from a back-position drops forward
+  entries, like a browser). Seeded from the restored session.
 - **Session persistence** — the open path + unsaved text are saved to
   `localStorage` (`ce:session`) on load/edit/save and restored on launch, so a
   window reload (e.g. Tauri's dev watcher reloading webviews when a `src/` file
@@ -65,20 +68,26 @@ typographic stylesheet (`MD_CSS`). The git diff still operates on the raw
 Markdown source.
 
 Markdown files also swap the UI (toggled by a `body.is-markdown` class set in
-`applyMode()` on load/restore):
+`applyMode()` on load/restore; they **open in Preview mode** by default):
 
-- **Left column → section browser.** The DOM tree + Styles inspector are hidden;
-  `#sections` lists the ATX headings (`buildSections` parses `#`–`######`,
-  skipping fenced code, into `mdHeadings`), indented by level. Clicking a heading
-  scrolls the source line (Code view) or the rendered heading (Preview view).
+- **Left column → section + link browser.** The DOM tree + Styles inspector are
+  hidden. `#sections` lists the ATX headings (`buildSections` parses `#`–`######`,
+  skipping fenced code, into `mdHeadings`), indented by level — clicking scrolls
+  the source line (Code view) or the rendered heading (Preview view). Below it,
+  `#links` (`buildLinks`) lists the **relative-path files** linked from the
+  source, deduped and sorted `.md`-first; clicking opens the file.
 - **Inline preview + toggle.** A Code/Preview button (`#view-toggle`) swaps the
-  code panel for an in-window `#inline-preview` iframe (the separate-window
-  Preview button is hidden). `render()` keeps its `srcdoc` current.
+  code panel for an in-window `#md-view` **div** (not an iframe — display-toggled
+  iframes don't scroll reliably in WKWebView). `render()` fills it via `marked`
+  into a scoped `.md-body`. The offscreen parser and the separate preview window
+  still get full wrapped HTML (`renderedHTML()` / `mdWrap`).
+- **Clickable links.** In the preview, relative links open in the editor
+  (resolved by `resolveRelative` against the current path), in-page `#anchors`
+  scroll, external URLs are left alone.
 - **Scroll is preserved across the toggle** by syncing to the nearest preceding
   heading: capture the last heading at/above the current pane's top
   (`currentCodeSectionIdx` / `currentPreviewSectionIdx`), then after layout
-  scroll the other pane to it. Heading indices line up because both panes derive
-  from the same Markdown.
+  scroll the other pane to it (same-document `offsetTop`/`scrollTop`).
 
 For non-Markdown files the offscreen parser still gets the rendered source so the
 DOM tree works as usual.

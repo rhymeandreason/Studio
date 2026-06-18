@@ -254,8 +254,20 @@
   body.is-markdown #styles-heading,
   body.is-markdown #inspector { display: none; }
   body.is-markdown #sections-heading,
-  body.is-markdown #sections { display: block; }
+  body.is-markdown #sections,
+  body.is-markdown #links-heading,
+  body.is-markdown #links { display: block; }
+  #links-heading, #links { display: none; }
   #sections { flex: 1 1 auto; overflow: auto; padding: 6px 0 12px; font: var(--code-font); }
+  #links { flex: 0 1 auto; max-height: 40%; overflow: auto; padding: 6px 0 12px; font: var(--code-font); }
+  .lnk {
+    display: block; width: 100%; text-align: left; border: 0; background: none;
+    cursor: pointer; color: #1c6cd6; padding: 3px 12px 3px 30px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: var(--radius-sm);
+    position: relative;
+  }
+  .lnk:hover { background: var(--accent-ring); }
+  .lnk .mi { position: absolute; left: 9px; top: 3px; font-size: 15px; color: var(--text-soft); }
   .sec {
     display: block;
     width: 100%;
@@ -335,6 +347,8 @@
       <!-- Markdown files show a heading browser here instead of DOM/Styles. -->
       <div class="col-head" id="sections-heading">Sections</div>
       <div id="sections"><span class="empty" style="padding:8px 12px">No headings</span></div>
+      <div class="col-head" id="links-heading">Linked Files</div>
+      <div id="links"><span class="empty" style="padding:8px 12px">No links</span></div>
     </div>
 
     <div id="editor-col">
@@ -389,7 +403,7 @@ if (TAURI) {
 const $ = (id) => document.getElementById(id);
 const code = $("code"), hl = $("hl"), gutter = $("gutter"), minimap = $("minimap");
 const treeEl = $("tree"), inspector = $("inspector"), parser = $("parser");
-const sectionsEl = $("sections"), mdView = $("md-view");
+const sectionsEl = $("sections"), mdView = $("md-view"), linksEl = $("links");
 let mdHeadings = [];   // parsed ATX headings { level, text, line } for the section browser
 const filenameEl = $("filename"), dirtyEl = $("dirty"), diffStatus = $("diff-status");
 
@@ -577,7 +591,7 @@ function paint() {
   syncWrap();
   paintMinimap(n);
   syncScroll();
-  if (isMarkdown()) buildSections();
+  if (isMarkdown()) { buildSections(); buildLinks(); }
 }
 
 // When wrapping, match each gutter row's height to its (possibly multi-row)
@@ -845,6 +859,37 @@ function revealLine(line) {
   for (let i = 1; i < line; i++) start = code.value.indexOf("\n", start) + 1;
   const end = code.value.indexOf("\n", start);
   revealRange(start, (end < 0 ? code.value.length : end) - start);
+}
+
+// List the relative-path files linked from the Markdown source (inline links),
+// deduped, .md files first then alphabetical. Clicking opens the file.
+function buildLinks() {
+  const seen = new Set(), items = [];
+  for (const m of code.value.matchAll(/\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+[^)]*)?\)/g)) {
+    let target = m[1];
+    if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#") || target.startsWith("//")) continue;
+    target = target.split("#")[0].split("?")[0];
+    if (!target || seen.has(target)) continue;
+    seen.add(target);
+    items.push(target);
+  }
+  const isMd = (t) => /\.(md|markdown)$/i.test(t);
+  items.sort((a, b) => (isMd(b) - isMd(a)) || a.localeCompare(b));
+  if (!items.length) {
+    linksEl.innerHTML = '<span class="empty" style="padding:8px 12px">No links</span>';
+    return;
+  }
+  linksEl.innerHTML = "";
+  for (const t of items) {
+    const b = document.createElement("button");
+    b.className = "lnk";
+    b.title = t;
+    b.innerHTML = `<span class="mi">${isMd(t) ? "description" : "draft"}</span>${t.split("/").pop()}`;
+    b.addEventListener("click", () => {
+      if (currentPath) loadPath(resolveRelative(currentPath, t)).catch(() => { diffStatus.textContent = "can't open " + t; });
+    });
+    linksEl.append(b);
+  }
 }
 
 // Build on load (after sync scripts) and again shortly after, to catch DOM
