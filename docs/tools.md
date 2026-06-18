@@ -242,6 +242,52 @@ instead of requiring a restart.
 Start with (1); reach for (2) only when a tool's needs outgrow what a
 webview window can do.
 
+## Always-on-top / floating tools
+
+A tool can float above all other windows by calling `setAlwaysOnTop(true)` from
+JS — no Rust change needed:
+
+```js
+if (window.__TAURI__) {
+  const { getCurrentWindow } = window.__TAURI__.window;
+  getCurrentWindow().setAlwaysOnTop(true);
+  getCurrentWindow().setResizable(false);
+}
+```
+
+The `core:window:allow-set-always-on-top` permission is already granted to all
+`tool-*` windows in `src-tauri/capabilities/tools.json`.
+
+**Caveat:** always-on-top windows sit at `NSFloatingWindowLevel`, so they appear
+first in the macOS compositor's window Z-order even when another window has
+keyboard focus. Don't use AppleScript / Accessibility `first window` queries from
+a floating tool — you'll get the tool itself back. Use `winbounds` instead (see
+below).
+
+## Querying on-screen window bounds (`winbounds`)
+
+`src-tauri/swift/winbounds.swift` is a compiled Swift helper (built by `build.rs`,
+exposed as `WINBOUNDS_BIN`) that calls `CGWindowListCopyWindowInfo` and prints the
+topmost non-"Window Size" window as `AppName,Title,x,y,w,h` (compositor Z-order,
+frontmost first). The Tauri command `get_focused_window_bounds` wraps it.
+
+Use this instead of AppleScript when you need window positions/sizes from a
+floating tool — CGWindowListCopyWindowInfo reads directly from the compositor and
+isn't confused by window levels or key-window state.
+
+**Permissions:** `CGWindowListCopyWindowInfo` requires Screen Recording permission
+on macOS 10.15+ to return window *titles*. Bounds and app names are available
+without it.
+
+**Example** (`src/tools/window-size.html`) — polls every 500 ms, repositions
+itself above the frontmost window, closes on Esc:
+
+```js
+const result = await invoke('get_focused_window_bounds'); // "App,Title,x,y,w,h"
+const parts = result.split(',');
+const [x, y, w, h] = parts.slice(-4).map(Number);
+```
+
 ## Ideas
 
 For the design discussion on adding tools **without a rebuild** and giving tools explicit **categories**, see [docs/tools-dynamic-loading.md](tools-dynamic-loading.md). 

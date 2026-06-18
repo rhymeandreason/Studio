@@ -1,7 +1,6 @@
-You are an engineer who cares about design and UX. We're building modular customizeable desktop tools that are nicer in specific interactions than usual apps.
-
 # Studio — agent primer
 
+You are an engineer who cares about design and UX. We're building modular customizeable desktop tools that are nicer in specific interactions than usual apps.
 The map + the non-obvious bits. Read the code and the linked docs for detail.
 
 macOS menu-bar app for designer-developers. Each **project** = a folder under
@@ -19,7 +18,7 @@ non-destructive image editor), notes, workspace, and artifacts.
 - Vendored & offline (never CDN): `src/vendor/` — `marked`, `coloris`,
   `motion-one`, Material Symbols woff2.
 - Native Swift helpers via `build.rs`, run as subprocesses: `bgremove` (Vision),
-  `qlthumb`, `pbimage`. WebP via the `webp` crate; HEIC via `sips`.
+  `qlthumb`, `pbimage`, `winbounds` (CGWindowListCopyWindowInfo). WebP via the `webp` crate; HEIC via `sips`.
 
 ## Run
 `npm install` then `npm run tauri dev`. macOS 14+ (Vision). Menu-bar app, no Dock
@@ -42,8 +41,7 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
   [docs/DESIGN.md](docs/DESIGN.md)
 - **Tools** (single-file HTML utilities in `src/tools/`, kit-styled;
   `kit-gallery.html` is the living reference) — **read [docs/tools.md](docs/tools.md)
-  before creating or editing any tool**; also [docs/tools-dynamic-loading.md](docs/tools-dynamic-loading.md),
-  [docs/tool-ideas.md](docs/tool-ideas.md)
+  before creating or editing any tool**! future ideas: [docs/tools-dynamic-loading.md](docs/tools-dynamic-loading.md),
 - **Slides** (presentation builder: `presentation` + `theme` artifacts, shared
   renderer in `src/deck/`, Slides + Theme editor tools) — [docs/slides.md](docs/slides.md)
 - **Interaction model** (shared selection + keyboard) — `selection.js` /
