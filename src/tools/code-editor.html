@@ -206,6 +206,9 @@
   }
   .rule { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--hairline); }
   .rule .rsel { color: var(--sage); }
+  .clk { cursor: pointer; }
+  .chip.clk:hover { background: var(--accent); color: var(--elevated); }
+  .rsel.clk:hover { text-decoration: underline; }
   .rule .rdecl { color: var(--text-muted); padding-left: 12px; }
   .empty { color: var(--text-soft); }
 </style>
@@ -449,7 +452,9 @@ function render() {
 // that page scripts add asynchronously (DOMContentLoaded handlers, timers).
 parser.addEventListener("load", () => { buildTree(); setTimeout(buildTree, 120); });
 
+let nodeFor = new WeakMap();   // parser element -> its tree tag span
 function buildTree() {
+  nodeFor = new WeakMap();
   let doc;
   try { doc = parser.contentDocument; } catch { return; }
   if (!doc || !doc.body) { treeEl.innerHTML = '<div class="empty" style="padding:8px 12px">No DOM</div>'; return; }
@@ -467,6 +472,7 @@ function renderNode(el) {
   if (el.id) label += `<span class="tid"> #${el.id}</span>`;
   if (el.classList.length) label += `<span class="tcls"> .${[...el.classList].join(".")}</span>`;
   tag.innerHTML = label;
+  nodeFor.set(el, tag);
   tag.addEventListener("click", () => selectElement(el, tag));
   tag.addEventListener("mouseenter", () => { if (evt) evt.emit("ce:hover", elPath(el)); });
   tag.addEventListener("mouseleave", () => { if (evt) evt.emit("ce:hover", null); });
@@ -497,9 +503,25 @@ function elPath(el) {
 function selectElement(el, tagSpan) {
   treeEl.querySelectorAll(".tag.sel").forEach((t) => t.classList.remove("sel"));
   tagSpan.classList.add("sel");
+  tagSpan.scrollIntoView({ block: "nearest" });
   showInspector(el);
+  revealElementSource(el);                          // scroll code panel to its markup
   if (evt) evt.emit("ce:highlight", elPath(el));   // highlight in preview window
 }
+
+// Click in the preview window -> select the matching tree node here.
+function resolveParser(path) {
+  const doc = parser.contentDocument;
+  if (!doc || !doc.body) return null;
+  let el = doc.body;
+  for (const i of path) { if (!el.children[i]) return null; el = el.children[i]; }
+  return el;
+}
+if (evt) evt.listen("ce:select", (e) => {
+  const el = resolveParser(e.payload || []);
+  const tag = el && nodeFor.get(el);
+  if (tag) selectElement(el, tag);
+});
 
 // ---------- soft wrap ----------
 $("wrap-btn").addEventListener("click", () => {
@@ -527,11 +549,10 @@ function showInspector(el) {
   if (el.id) sel += "#" + el.id;
   let html = `<div class="ins-sel">${sel}${el.classList.length ? "." + [...el.classList].join(".") : ""}</div>`;
 
-  if (el.classList.length) {
-    html += [...el.classList].map((c) => `<span class="chip">.${c}</span>`).join("");
-  } else {
-    html += `<span class="empty">No classes</span>`;
-  }
+  const chips = [];
+  if (el.id) chips.push(`<span class="chip clk" data-find="#${el.id}">#${el.id}</span>`);
+  for (const c of el.classList) chips.push(`<span class="chip clk" data-find=".${c}">.${c}</span>`);
+  html += chips.length ? chips.join("") : `<span class="empty">No classes</span>`;
 
   // Matched CSS rules from the document's stylesheets.
   const matches = [];
@@ -547,13 +568,63 @@ function showInspector(el) {
   if (matches.length) {
     for (const rule of matches) {
       const decls = [...rule.style].map((p) => `${p}: ${rule.style.getPropertyValue(p)};`).join("\n");
-      html += `<div class="rule"><div class="rsel">${rule.selectorText} {</div><div class="rdecl">${esc(decls)}</div><div class="rsel">}</div></div>`;
+      html += `<div class="rule"><div class="rsel clk" data-find="${esc(rule.selectorText)}">${esc(rule.selectorText)} {</div><div class="rdecl">${esc(decls)}</div><div class="rsel">}</div></div>`;
     }
   }
   inspector.innerHTML = html;
 }
 
 function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>"); }
+
+// ---------- scroll the code panel to source ----------
+function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+// Scroll the textarea so [start, start+len) is centered, and select it. Uses the
+// highlight layer's row offset so it's correct in soft-wrap mode too.
+function revealRange(start, len) {
+  code.focus();
+  code.setSelectionRange(start, start + len);
+  const line = code.value.slice(0, start).split("\n").length;
+  const row = hl.children[line - 1];
+  if (row) code.scrollTop = Math.max(0, row.offsetTop - code.clientHeight / 2 + row.offsetHeight / 2);
+  syncScroll();
+}
+
+// Find an element's opening tag in the source: the Nth `<tag`, where N is the
+// element's ordinal among same-tag elements (DOM order == source order).
+function revealElementSource(el) {
+  const tag = el.tagName.toLowerCase();
+  const same = [...parser.contentDocument.getElementsByTagName(tag)];
+  const ord = same.indexOf(el);
+  if (ord < 0) return;
+  const re = new RegExp("<" + escapeRe(tag) + "(?=[\\s/>])", "gi");
+  let m, i = 0;
+  while ((m = re.exec(code.value))) {
+    if (i === ord) {
+      const gt = code.value.indexOf(">", m.index);
+      revealRange(m.index, gt >= 0 ? gt - m.index + 1 : tag.length + 1);
+      return;
+    }
+    i++;
+  }
+}
+
+// Find a class/id token or full selector text in the source (e.g. an inline
+// <style> block) and scroll to it.
+function findInSource(token) {
+  if (/^[.#]/.test(token)) {
+    const m = new RegExp(escapeRe(token) + "(?![\\w-])").exec(code.value);
+    if (m) revealRange(m.index, m[0].length);
+  } else {
+    const idx = code.value.indexOf(token);
+    if (idx >= 0) revealRange(idx, token.length);
+  }
+}
+
+inspector.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-find]");
+  if (t) findInSource(t.dataset.find);
+});
 
 // Cmd+S to save.
 window.addEventListener("keydown", (e) => {

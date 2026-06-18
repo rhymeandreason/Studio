@@ -31,7 +31,25 @@ let pendingPath = null;   // highlight requested before the frame finished loadi
 frame.addEventListener("load", () => {
   overlay = null;         // recreated lazily on next highlight
   if (pendingPath) { highlight(pendingPath); pendingPath = null; }
+  // Click an element to select it in the editor's DOM tree. Capture phase +
+  // suppress default so it doesn't trigger the page's own click handlers.
+  const doc = frame.contentDocument;
+  if (doc) doc.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    event.emit("ce:select", pathOf(e.target));
+  }, true);
 });
+
+function pathOf(el) {
+  const doc = frame.contentDocument;
+  const p = [];
+  while (el && el !== doc.body && el.parentElement) {
+    p.push([...el.parentElement.children].indexOf(el));
+    el = el.parentElement;
+  }
+  return p.reverse();
+}
 
 // Register listeners and only announce readiness once they're actually
 // attached on the backend — otherwise the editor's reply can race ahead of
@@ -87,7 +105,6 @@ function boxOver(box, el) {
 function highlight(path) {
   const el = resolvePath(path);
   if (!el) return;
-  el.scrollIntoView({ block: "center", behavior: "smooth" });
   boxOver(ensureOverlay(), el);
 }
 
