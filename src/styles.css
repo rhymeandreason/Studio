@@ -62,15 +62,6 @@ body {
     color: var(--text);
 }
 
-/* App-specific eyebrow alias */
-.overview__title {
-    font-family: var(--serif);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-}
 
 /* Active-project header */
 .projhead {
