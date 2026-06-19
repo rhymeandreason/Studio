@@ -412,7 +412,7 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
         return;
     };
     let title = if filename == "daily-notes.html" || filename == "ram-overview.html"
-        || filename == "kit-gallery.html"
+        || filename == "kit-gallery.html" || filename == "file-directory.html"
     {
         String::new()
     } else {
@@ -427,6 +427,8 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
         (300.0, 600.0)
     } else if filename == "ram-overview.html" {
         (380.0, 440.0)
+    } else if filename == "file-directory.html" {
+        (350.0, 640.0)
     } else {
         (900.0, 640.0)
     };
@@ -452,6 +454,11 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
             .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff));
     }
     if filename == "kit-gallery.html" {
+        builder = builder
+            .title_bar_style(tauri::TitleBarStyle::Transparent)
+            .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff));
+    }
+    if filename == "file-directory.html" {
         builder = builder
             .title_bar_style(tauri::TitleBarStyle::Transparent)
             .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff));
