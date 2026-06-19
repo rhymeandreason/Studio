@@ -3016,12 +3016,14 @@ fn open_git_pulse(app: AppHandle, repo: String) {
         return;
     }
     let url = format!("tools/git-pulse.html?repo={}", url_encode(&repo));
-    if let Ok(builder) = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
-        .title("Git Pulse")
+    if let Ok(win) = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
+        .title("")
         .inner_size(820.0, 600.0)
+        .title_bar_style(tauri::TitleBarStyle::Transparent)
+        .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff))
         .build()
     {
-        let _ = builder.show();
+        let _ = win.show();
     }
 }
 

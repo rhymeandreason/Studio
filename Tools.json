@@ -5,7 +5,6 @@
   { "file": "brand-explorer.html", "name": "Brand Explorer" },
   { "file": "slides.html", "name": "Slides" },
   { "file": "theme-editor.html", "name": "Theme Editor" },
-  { "file": "git-pulse.html", "name": "Git Pulse" },
-  { "file": "code-editor.html", "name": "Code Editor" },
+{ "file": "code-editor.html", "name": "Code Editor" },
   { "file": "window-size.html", "name": "Window Size" }
 ]
