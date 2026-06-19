@@ -8,28 +8,27 @@ window but are still useful to have one click away.
 
 ## Using the design-system kit
 
-Tools should look like Studio without re-inventing primitives. The shared kit
-lives in [`src/kit/`](../src/kit) and is built on the tokens in `src/tokens.css`:
+Every tool must link these in `<head>`, in order:
 
 ```html
-<link rel="stylesheet" href="../tokens.css" />   <!-- Runes tokens + icon font -->
-<link rel="stylesheet" href="../kit/kit.css" />   <!-- .btn / .field / .card / … -->
-<script type="module" src="../kit/components.js"></script>  <!-- <studio-*> elements -->
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<script type="module" src="../kit/components.js"></script>
 ```
 
-- **`kit.css`** — component classes: `.btn` (`.btn-primary`/`.btn-ghost`/
-  `.btn-icon`), `.field` (text, number, styled-native `<select>`, textarea),
-  `.range`, `.card`, `.label`, `.title-strip`.
-- **`components.js`** — custom elements with a native-like contract (`.value` +
-  `input`/`change`). First one: `<studio-color>` (Coloris-backed color field).
-- **`motion.js`** — `import { enter, exit, enterStagger, pop } from
-  "../kit/motion.js"` for consistent animation (reads the `--dur-*`/`--ease-*`
-  tokens; wraps the vendored Motion One).
+Then a local `<style>` for tool-specific overrides only — never rewrite what kit already provides. Endeavor to use the kit styles. Don't make override styles that are only a little different.
 
-[`kit-gallery.html`](../src/tools/kit-gallery.html) is the living styleguide —
-open it (Tools → Kit Gallery) to see every class/component in use. For the
-broader design-system plan (vendored libs, `<studio-*>` roadmap, host-injected
-kit), see [tools-dynamic-loading.md](tools-dynamic-loading.md).
+**Kit classes:** `.btn` / `.btn-primary` / `.btn-ghost` / `.btn-icon` · `.field` (input, select, textarea) · `.range` · `.card` · `.label` · `.eyebrow` · `.title-strip` · `.text-body` / `.text-muted` / `.text-sm` / `.text-mono`
+
+**Components:** `<studio-color>` — Coloris color picker with `.value` + `input`/`change` events.
+
+**Motion:** `import { enter, exit, enterStagger, pop } from "../kit/motion.js"`
+
+**Tokens over hardcoding:** use `var(--space-*)`, `var(--bg)`, `var(--surface)`, `var(--ink)`, `var(--radius)` etc. — never hardcode colors, spacing, or border-radius.
+
+**Icons:** `<span class="material-symbols-rounded">icon_name</span>` (font loaded by `tokens.css`).
+
+[`kit-gallery.html`](../src/tools/kit-gallery.html) (Tools → Design System) is the living reference. 
 
 ## How it works
 
