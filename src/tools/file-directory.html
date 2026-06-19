@@ -369,8 +369,9 @@
         if (isOpen) {
           node.classList.remove('open');
           icon.innerHTML = `<span class="mi">${iconFor(entry, false)}</span>`;
+          // Keep childrenEl cached (just detach) so reopening doesn't refetch
+          // and doesn't trip over a stale `loaded` flag with no element to show.
           if (childrenEl) childrenEl.remove();
-          childrenEl = null;
           if (!isRoot) {
             expandedSet.delete(entry.path);
             saveExpanded();
