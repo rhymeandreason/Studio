@@ -98,9 +98,9 @@ button in the project header or the all-projects overview
 (`#schedules-btn`/`#overview-schedules-btn` in the main `index.html`), or the
 "🗓 Scheduled Tasks" entry in the tray menu's Tools section (`open_schedules`
 in `build_tray_menu`) — all calling `open_schedules_window` in `lib.rs`. It's
-a separate Tauri window — like the
-Claude companion window — so it stays open and reachable while you work in
-any project/tab. On open it calls `read_schedules` (the global store) +
+a separate Tauri window — like the Claude companion window — so it stays open
+and reachable while you work in any project/tab. On open it calls
+`read_schedules` (the global store) +
 `list_projects` (to populate each task's project dropdown) and renders the
 slots that have tasks (`buildSlotGroup`/`buildScheduleRow` in `schedules.js`).
 
@@ -131,8 +131,8 @@ The store holds:
   - `projectPath` — folder the run uses as its working dir and output
     location, picked via a per-task dropdown; blank = **"Global"**, the
     `~/Projects` root.
-  - `slot` — `0`–`2`, index into `slots`; sets the task's timing and which
-    group it's rendered under.
+  - `slot` — `0`..`SLOT_COUNT`, index into `slots`; sets the task's timing and
+    which group it's rendered under.
   - `enabled` — toggled via the pill switch.
   - `model` — passed as `claude --model`; defaults to `"haiku"`.
   - `outputFile` — markdown file (relative to the task's project folder) the
@@ -232,8 +232,3 @@ The ▶ "Run now" button calls `run_schedule_now` (same execution path, but
 doesn't touch `lastRun`'s once-a-day dedupe) for testing a task without
 waiting for its scheduled time.
 
-## Ideas / open questions for expansion
-
-- Multiple repos per project (currently singleton)?
-- Per-card notes/labels?
-- Quick-launch subsets (e.g. launch only the repo + editor, skip apps)?
