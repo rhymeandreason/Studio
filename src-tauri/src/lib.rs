@@ -3448,6 +3448,18 @@ fn take_pending_open(state: tauri::State<AppState>) -> Option<String> {
     state.pending_open.lock().unwrap().take()
 }
 
+/// Open an arbitrary file in the Code Editor tool window — the generic entry
+/// point `git_open_file` wraps for repo files (e.g. used by the File
+/// Directory tool for non-artifact files outside a git repo's editor pref).
+#[tauri::command]
+fn open_file_in_code_editor(
+    app: AppHandle,
+    state: tauri::State<AppState>,
+    file: String,
+) -> Result<(), String> {
+    open_in_code_editor(&app, &state, file)
+}
+
 // --- Claude companion window -------------------------------------------
 
 /// The directory Claude runs in for a project, by mode (the chat's cwd dropdown):
@@ -4390,6 +4402,7 @@ pub fn run() {
             git_commit,
             git_undo,
             git_open_file,
+            open_file_in_code_editor,
             git_get_draft,
             git_set_draft,
             take_pending_open,

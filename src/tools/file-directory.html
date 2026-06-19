@@ -183,6 +183,21 @@
       return m ? m[1] : null;
     }
 
+    // Extensions that aren't useful to open as text in the Code Editor —
+    // these fall back to revealing in Finder instead.
+    const NON_CODE_EXT = new Set([
+      'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic', 'ico',
+      'mp4', 'mov', 'webm', 'avi',
+      'mp3', 'wav', 'aiff', 'm4a',
+      'woff', 'woff2', 'ttf', 'otf',
+      'zip', 'tar', 'gz', 'pdf',
+    ]);
+
+    function isCodeFile(name) {
+      const ext = name.split('.').pop().toLowerCase();
+      return !NON_CODE_EXT.has(ext);
+    }
+
     function iconFor(entry, open) {
       if (entry.is_dir) return open ? 'folder_open' : 'folder';
       const kind = artifactKind(entry.path);
@@ -202,7 +217,11 @@
       const isArtifact = !entry.is_dir && !!artifactKind(entry.path);
       const node = document.createElement('div');
       node.className = 'node ' + (entry.is_dir ? 'dir' : 'file') + (isArtifact ? ' artifact' : '');
-      if (isArtifact) node.title = 'Open in ' + ARTIFACT_EDITOR[artifactKind(entry.path)].replace('.html', '');
+      if (isArtifact) {
+        node.title = 'Open in ' + ARTIFACT_EDITOR[artifactKind(entry.path)].replace('.html', '');
+      } else if (!entry.is_dir && isCodeFile(entry.name)) {
+        node.title = 'Open in Code Editor';
+      }
 
       const twirl = document.createElement('span');
       twirl.className = 'twirl';
@@ -235,6 +254,8 @@
               file: editor,
               query: 'artifact=' + encodeURIComponent(entry.path),
             }).catch(() => {});
+          } else if (isCodeFile(entry.name)) {
+            invoke('open_file_in_code_editor', { file: entry.path }).catch(() => {});
           } else {
             invoke('reveal_in_finder', { path: entry.path }).catch(() => {});
           }
