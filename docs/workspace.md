@@ -36,6 +36,11 @@ multi-select via click/Cmd-click/Shift-click, arrow keys to move focus,
 Enter to open the item's value (`open` / `open -a` for apps), Delete/Backspace
 to remove.
 
+## Repo card: Git actions
+
+Two buttons: **Open** (Git window) and **Pulse** (`src/tools/git-pulse.html` —
+dot-graph of this week's commits, one dot per commit, hover for message).
+
 ## Repo card: editor picker
 
 The repo card has an `<select class="ws-item__editor">` ("open in") with
@@ -55,30 +60,6 @@ which (in order): opens URLs + Figma via `open`, opens the repo in the chosen
 editor, opens the Claude terminal (if `claude.mode === "terminal"`), and opens
 any apps/files/folders.
 
-## Memory display
-
-The project header (top right, `#projhead-memory`) shows up to four lines,
-polled every 5s via the `get_memory_stats` Tauri command:
-- **Memory** — total system memory in use vs. installed, in GB (from
-  `vm_stat` active+wired+compressed pages / `sysctl hw.memsize`).
-- **Studio app** — Studio's own RSS via `ps -o rss=`.
-- **Swap used** — current swap usage in MB, from `sysctl vm.swapusage` (no
-  "total" — swap's total is a dynamic file size, not a meaningful ceiling).
-  This is the "should I quit something?" signal — macOS keeps memory busy with
-  disk cache even under no pressure, so memory-used alone is a poor proxy.
-  Rising swap usage means real pressure.
-- **Dev server** — RSS of the `tauri dev` watcher process (via `pgrep -f
-  "tauri dev"`), hidden when not running (e.g. in a production build). There's
-  no separate Vite/localhost server in this app — Tauri serves `frontendDist`
-  directly.
-
-Clicking the memory block opens `#memory-modal`, which re-fetches
-`get_memory_stats` plus `get_top_processes` — the top 10 **apps** by summed
-RSS (via `ps -axo rss=,comm=`, grouped by `.app` bundle so e.g. all of Chrome's
-helper/renderer/GPU processes collapse into one "Google Chrome (12)" entry).
-This is meant to surface background apps/processes the user might not realize
-are running.
-
 ## Tab pinning
 
 The pin button (`#tab-pin`) toggles `wsPinnedTab` via `togglePinnedTab()` /
@@ -87,148 +68,51 @@ The pin button (`#tab-pin`) toggles `wsPinnedTab` via `togglePinnedTab()` /
 
 ## Scheduled tasks
 
-Scheduled tasks have their own standalone window (`src/schedules/`:
-`index.html` + `schedules.css` + `schedules.js`), opened via the "Schedules"
-button in the project header or the all-projects overview
-(`#schedules-btn`/`#overview-schedules-btn` in the main `index.html`), or the
-"🗓 Scheduled Tasks" entry in the tray menu's Tools section (`open_schedules`
-in `build_tray_menu`) — all calling `open_schedules_window` in `lib.rs`. It's
-a separate Tauri window — like the
-Claude companion window — so it stays open and reachable while you work in
-any project/tab. On open it calls `read_schedules` (the global store) +
-`list_projects` (to populate each task's project dropdown) and renders the
-slots that have tasks (`buildSlotGroup`/`buildScheduleRow` in `schedules.js`).
+Recurring `claude -p` tasks, edited in a standalone window (`src/schedules/`),
+opened by `open_schedules_window` from three places: the project-header and
+overview "Schedules" buttons (`#schedules-btn`/`#overview-schedules-btn`) and
+the tray Tools entry (`open_schedules` in `build_tray_menu`).
 
-Schedules are **global**, not per-project: a single store
-(`SchedulesFile` in `lib.rs`, `schedules.json` in the app config dir) holds
-the slots plus every task, read/written via `read_schedules` /
-`save_schedules`. On first read the store is migrated from the old
-per-project `Workspace::schedules` (each task tagged with its project path),
-then `workspace.json`'s `schedules`/`scheduleSlots` are no longer used.
+**Global store, not per-project.** Everything lives in one `schedules.json`
+(app config dir), `SchedulesFile` in `lib.rs`, via `read_schedules` /
+`save_schedules`. Shape and defaults are in the structs; the non-obvious parts:
 
-**Timing lives on the slot, not the task.** There are `SLOT_COUNT` (= 2)
-shared slots; each (`SlotDef`) is a `time` + `days` pair, both edited in the
-slot's header (an `<input type="time">` plus the 7 day toggles), and all
-tasks in that slot share them. Both slots always render, each with its own
-"+ Task" button that adds a task to that slot (a task's slot is fixed at
-creation — there's no per-task slot picker). An empty slot still shows its
-header (so you can add to it) but contributes nothing to the wake schedule.
-The store holds:
+- **Timing is on the slot, not the task.** There are `SLOT_COUNT` (= 2)
+  `SlotDef`s (`time` + `days`); tasks just carry a `slot` index and inherit
+  its timing. A blank task `projectPath` = "Global" (the `~/Projects` root).
+- Both slots always render (each with its own "+ Task"); an empty slot still
+  shows so you can add to it but contributes nothing to the wake schedule.
+- Migrations run on read: per-project `Workspace::schedules` → the store once;
+  `SlotDef` also deserializes the old bare-`"HH:MM"` form, `migrate_slot_days`
+  folds legacy per-task days into the slot, and `migrate_slot_count` coerces an
+  old 3-slot file down to `SLOT_COUNT`.
 
-- `slots` — array of `SLOT_COUNT` `SlotDef`s, each `{ time, days }`. `time`
-  is `"HH:MM"` (default `["09:00", "17:00"]`); `days` is `0`(Sun)–`6`(Sat),
-  empty = every day. Both are read by the scheduler/wake logic. (Reads also
-  accept the old bare-`"HH:MM"`-string form, and `migrate_slot_count` coerces
-  an old 3-slot file down to `SLOT_COUNT`, reindexing tasks so none are
-  orphaned.)
-- `tasks` — array of tasks (`ScheduledTask` in `lib.rs`):
-  - `prompt` — text passed to `claude -p`.
-  - `projectPath` — folder the run uses as its working dir and output
-    location, picked via a per-task dropdown; blank = **"Global"**, the
-    `~/Projects` root.
-  - `slot` — `0`–`2`, index into `slots`; sets the task's timing and which
-    group it's rendered under.
-  - `enabled` — toggled via the pill switch.
-  - `model` — passed as `claude --model`; defaults to `"haiku"`.
-  - `outputFile` — markdown file (relative to the task's project folder) the
-    result is written to, overwritten each run; blank = `"Scheduled
-    Output.md"`, `.md` appended if missing.
-  - `lastRun` — `"YYYY-MM-DD"`, used by the scheduler to avoid firing twice in
-    one day.
-  - `lastRunAt` / `lastRunOk` — timestamp and success flag of the last run
-    (scheduled or manual), shown as `✓ Last ran …` / `✗ Last ran …`.
+### The one admin-password step
 
-### Saving the wake schedule
+Edits autosave silently. The only thing needing the admin password is
+`update_wake_schedule` (sets `pmset schedule wake` via `osascript … with
+administrator privileges`), gated so it prompts **only when the wake times
+change** — i.e. the `time`+`days` of slots that have an enabled task. This
+signature is checked twice: the frontend `refreshDirty()`/`wakeSignature()` vs
+`appliedSignature` decides whether the "Save schedule" button (`#schedules-save`)
+even shows, and the backend re-checks against `wake-signature.txt` so a stray
+click still won't prompt. The cache is written only on a successful prompt
+(cancel → retried next save).
 
-Every edit debounce-saves to the global store via `save_schedules` in the
-background — it does **not** touch the system wake schedule or prompt for the
-admin password. The window header has a "Saved" / "Save schedule" button
-(`#schedules-save`) that triggers that step. It appears (disabled "Saved" →
-black "Save schedule") only when the **wake signature** changes: after each
-edit `refreshDirty()` recomputes `wakeSignature()` (the JS mirror of the
-backend's `wake_signature` — the `time` + sorted `days` of each slot with at
-least one enabled task) and compares it to `appliedSignature` (what's
-currently applied; set on load and after each successful save). So changing a
-prompt/model/output/project, or editing a slot nobody uses, never lights the
-button; only a real change to the wake times does — and reverting back to the
-applied state clears it again. Clicking it flushes the pending save and calls
-`update_wake_schedule` once (see below), then returns to "Saved".
-
-`update_wake_schedule` re-checks the same way on the backend: it compares the
-signature to the last applied one cached in `wake-signature.txt` (app config
-dir) and returns early without running `pmset` or prompting if they match. So
-even if the button is clicked, the password prompt only fires when the wake
-times genuinely changed. The
-signature is recorded only on a successful prompt, so a cancelled dialog is
-retried on the next save.
+`pmset schedule cancelall` clears *all* system wake events (single-user-only),
+and the list is capped at 3 (`compute_wake_times`), so this assumes few slots.
+After each run `roll_wake_schedule` re-applies via `sudo -n` to extend the
+schedule without prompting — works only while the password timestamp is cached;
+for indefinite operation grant passwordless sudo for `/usr/bin/pmset schedule *`.
 
 ### Execution
 
-Studio relies entirely on the `pmset` wake schedule (below) to run tasks
-while asleep — it does not keep the Mac awake. Studio still needs to be
-running (even just in the menu bar) for the scheduler loop to fire a task:
-the `pmset` wake brings the Mac up at the task time, and the loop catches it
-within ~30s. If Studio is quit, or the Mac is asleep with no wake scheduled
-(never saved, or the wake list expired), missed runs are skipped, not
-backfilled.
+No `caffeinate` — waking is entirely on `pmset`. `start_scheduler` loops every
+30s, firing any enabled task whose slot matches now and hasn't run today, as
+`claude -p … --permission-mode bypassPermissions` (headless, no one to approve
+prompts) in `claude_cwd(projectPath)`. Output (stdout, or stderr on failure)
+overwrites `<project>/<outputFile>`; `lastRun*` are saved back and a
+`"schedule-ran"` event updates an open project's UI. Studio must be running for
+the loop to fire; missed runs aren't backfilled. ▶ "Run now"
+(`run_schedule_now`) is the same path minus the once-a-day dedupe.
 
-### Waking the Mac (e.g. for an early-morning task)
-
-For a task to run while the Mac is asleep, it has to be woken first. Clicking
-"Save schedule" (see above) calls `update_wake_schedule`, which:
-
-1. Scans each slot that has an enabled task and finds its next occurrence
-   (today..+7 days, respecting the slot's `days`).
-2. Runs `pmset schedule cancelall && pmset schedule wake "MM/dd/yy HH:MM:SS"`
-   (one `wake` per distinct upcoming time, deduped and capped at **3 wake
-   events** in `compute_wake_times` — `pmset` only holds a handful) via
-   `osascript ... with administrator privileges` — macOS prompts for the
-   admin password at this point, while you're present making the edit.
-
-`pmset schedule cancelall` clears *all* scheduled sleep/wake/poweron events
-system-wide (not just Studio's), so this is single-user-only behavior.
-
-Because the wake list is capped at 3 events, a single daily slot covers the
-next 3 days; with both slots in use at different times, fewer days are
-covered. To keep a daily slot
-self-renewing, `run_scheduled_task` calls `roll_wake_schedule` after each run,
-which recomputes the same schedule and applies it via `sudo -n` (non-interactive)
-— if the admin-password timestamp from the last `update_wake_schedule` prompt
-is still cached, this silently extends the schedule another day; if it's
-expired, it silently does nothing (the schedule just stops extending until you
-next edit a task). For truly indefinite, prompt-free operation, grant
-passwordless sudo for `pmset` (e.g. an `/etc/sudoers.d/` entry scoped to
-`/usr/bin/pmset schedule *`).
-
-A background loop (`start_scheduler`, started in `setup`) wakes every 30s,
-scans the global schedules store, and fires any enabled task whose slot's
-`time`/`days` match now and that hasn't run today. Firing runs (in
-`run_scheduled_task`):
-
-```
-claude -p <prompt> --permission-mode bypassPermissions [--model <model>]
-```
-
-in the task's `projectPath` (`claude_cwd`, same resolution as the Claude
-companion window; blank `projectPath` runs in the `~/Projects` root), with
-`PATH` resolved via `claude_path()` (login-shell
-PATH, since GUI apps don't inherit nvm/homebrew). `bypassPermissions` is used
-because headless runs have no one to approve tool prompts — keep scheduled
-prompts to things you're comfortable running unattended.
-
-The result (stdout on success, stderr on failure) is written to
-`<project>/<outputFile>` as `# Scheduled task — <timestamp>` +
-`**Output:**`/`**Error:**` + the text (no prompt echoed). `lastRunAt`/
-`lastRunOk` are persisted back to the global store, and a `"schedule-ran"`
-event (`{ projectPath, taskId, ok, output, outputFile, lastRunAt }`) is
-emitted so an open project's UI updates live.
-
-The ▶ "Run now" button calls `run_schedule_now` (same execution path, but
-doesn't touch `lastRun`'s once-a-day dedupe) for testing a task without
-waiting for its scheduled time.
-
-## Ideas / open questions for expansion
-
-- Multiple repos per project (currently singleton)?
-- Per-card notes/labels?
-- Quick-launch subsets (e.g. launch only the repo + editor, skip apps)?

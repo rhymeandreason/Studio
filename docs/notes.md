@@ -1,24 +1,11 @@
 # Notes
 
-Stored in `notes.json` per project; `state.notesData` is the in-memory store,
-`renderNotes()` fully re-renders the bento grid from it. Note kinds: `text` /
-`checklist` / `table` / `image`.
+`notes.json` per project; `state.notesData` in memory, `renderNotes()` fully re-renders. Kinds: `text` / `checklist` / `table` / `image`.
 
-Image notes store a project-relative `src` (`notes/<id>.<ext>` for note-owned
-assets, or `media/…` referenced in place) — never inline base64.
+**Images:** Image notes use `note.src`; text notes can have one optional `note.image` (both project-relative `notes/<id>.<ext>`, never base64). `note.imageW`/`imageH` reserve aspect ratio. Paste (Cmd+V) into a focused text note textarea to attach above the body; hover to reveal ×. Deletion cleans up the asset.
 
-Per-note styling (theme/fonts/span) is applied as scoped CSS variables on the
-card; the project-wide font preference is `notesData.font`/`fontSize` via
-`--notes-font`/`--notes-font-size` on `#notes-list`.
+**Styling:** Per-note theme/font/span as scoped CSS variables on the card; project-wide font via `--notes-font`/`--notes-font-size` on `#notes-list`. `notesData.viewMode` (`"bento"` or `"days"`) is persisted.
 
-`notesData.viewMode` (`"bento"` or `"days"`) is also persisted per project —
-toggled via the `#notes-view-toggle` buttons.
+**Layout:** `layoutBento()` measures card heights and sets row-spans — re-pack on any height change, and after the panel becomes visible (hidden elements measure 0).
 
-The grid is a **bento layout** — `layoutBento()` measures card heights and
-sets row-spans, so re-pack on any height change (and after a panel becomes
-visible — hidden elements measure as 0).
-
-**Copy/paste:** Notes copy/paste carries a Studio-native payload via an
-**app-cache sidecar file** (`set_note_clipboard`/`get_note_clipboard`) keyed
-to the degraded clipboard text — WebKit strips custom HTML on clipboard
-write, so an HTML flavor can't carry it.
+**Copy/paste:** Studio-native payload via app-cache sidecar (`set_note_clipboard`/`get_note_clipboard`) keyed to clipboard text — WebKit strips custom HTML flavors.

@@ -323,9 +323,11 @@ async function selectOnly(item) {
 
   if (editItem && editItem.path !== item.path) await flushEditSave();
   document.getElementById("side-name").textContent = item.name;
-  document.getElementById("media-side").hidden = false;
-  document.getElementById("app-right").hidden = false;
-  invoke("set_window_width", { width: Math.max(window.innerWidth, 1220) });
+  if (editorSidebarEnabled) {
+    document.getElementById("media-side").hidden = false;
+    document.getElementById("app-right").hidden = false;
+    invoke("set_window_width", { width: Math.max(window.innerWidth, 1220) });
+  }
 
   moveEditor(document.getElementById("media-side-editor"));
   await loadEditor(item);
@@ -1001,6 +1003,8 @@ async function initDragDrop() {
 
 // --- Image editor (non-destructive, sidecar-backed) ------------------------
 
+let editorSidebarEnabled = false;
+state.editorSidebarEnabled = false;
 let editItem = null; // the MediaItem being edited
 // Three tiers of the edit source, all of the *original* pixels (edits are
 // applied on top via the shader). The editor renders from the smallest one
@@ -1199,14 +1203,23 @@ function onCropPointerUp() {
 }
 
 function highlightAspect(R) {
+  const noCrop = editState.crop === null;
   document.querySelectorAll("[data-aspect]").forEach((b) => {
-    const v = b.dataset.aspect === "free" ? null : Number(b.dataset.aspect);
-    b.classList.toggle("is-active", v === R);
+    if (b.dataset.aspect === "none") {
+      b.classList.toggle("is-active", noCrop);
+    } else {
+      const v = b.dataset.aspect === "free" ? null : Number(b.dataset.aspect);
+      b.classList.toggle("is-active", !noCrop && v === R);
+    }
   });
+  document.getElementById("crop").style.display = noCrop ? "none" : "";
 }
 
 function applyAspect(R) {
   editState.cropAspect = R;
+  if (!editState.crop) {
+    editState.crop = { x: 0, y: 0, w: 1, h: 1 };
+  }
   if (R) {
     const canvas = document.getElementById("editor-canvas");
     const cw = canvas.width;
@@ -2485,7 +2498,7 @@ function initEditor() {
       `${editState.straighten}°`;
     apply();
   });
-  document.getElementById("ed-reset").addEventListener("click", () => {
+  document.getElementById("m-reset").addEventListener("click", () => {
     editState = defaultEdits();
     syncEditorControls();
     apply();
@@ -2498,13 +2511,14 @@ function initEditor() {
   document
     .querySelectorAll("[data-aspect]")
     .forEach((b) =>
-      b.addEventListener("click", () =>
-        applyAspect(
-          b.dataset.aspect === "free" ? null : Number(b.dataset.aspect),
-        ),
-      ),
+      b.addEventListener("click", () => {
+        if (b.dataset.aspect === "none") {
+          resetCrop();
+        } else {
+          applyAspect(b.dataset.aspect === "free" ? null : Number(b.dataset.aspect));
+        }
+      }),
     );
-  document.getElementById("ed-cropreset").addEventListener("click", resetCrop);
 
   // Copy / paste adjustments live in the side "More" menu (wired in initMedia).
   loadCopiedEdits();
@@ -2518,12 +2532,31 @@ window.addEventListener("resize", () => {
   if (document.getElementById("notes-list")) scheduleBentoLayout();
 });
 
+function setEditorSidebar(enabled) {
+  editorSidebarEnabled = enabled;
+  state.editorSidebarEnabled = enabled;
+  const btn = document.getElementById("media-editor-toggle");
+  btn.classList.toggle("is-active", enabled);
+  if (!enabled && state.activeItem) {
+    document.getElementById("media-side").hidden = true;
+    document.getElementById("app-right").hidden = true;
+    invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+  } else if (enabled && state.activeItem) {
+    document.getElementById("media-side").hidden = false;
+    document.getElementById("app-right").hidden = false;
+    invoke("set_window_width", { width: Math.max(window.innerWidth, 1220) });
+  }
+}
+
 function initMedia() {
   initEditor();
   initWebExport();
   initRemoveBg();
   initExtend();
   initGenerate();
+  document.getElementById("media-editor-toggle").addEventListener("click", () =>
+    setEditorSidebar(!editorSidebarEnabled)
+  );
   document.getElementById("sel-paste").addEventListener("click", batchPaste);
   document
     .getElementById("sel-clear")
@@ -2571,7 +2604,7 @@ function initMedia() {
   // the selection. The batch bar and the editor side column keep their clicks.
   installOffClickDeselect({
     panel: "media",
-    keep: [".mediatile", ".selbar", ".media-side"],
+    keep: [".mediatile", ".selbar", ".media-side", ".media-toolbar"],
     hasSelection: () => mediaSelection.size(),
     clear: clearSelection,
   });
@@ -2592,7 +2625,8 @@ function initMedia() {
     Enter: activateSelectedMedia,
     Escape: () => (lbOpen() ? closeLightbox() : clearSelection()),
     "Mod+c": () => {
-      if (editorActive()) copyAdjustments();
+      if (editorActive() && editorSidebarEnabled) copyAdjustments();
+      else if (state.activeItem || mediaSelection.size()) copyMediaImage();
     },
     "Mod+Shift+c": copyMediaImage,
     "Mod+v": () => {

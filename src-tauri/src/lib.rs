@@ -3003,6 +3003,31 @@ fn open_git_window(
 }
 
 #[tauri::command]
+fn open_git_pulse(app: AppHandle, repo: String) {
+    // Unique label per repo so each repo gets its own pulse window.
+    let slug: String = repo
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect();
+    let label = format!("tool-git-pulse-{}", &slug[slug.len().saturating_sub(40)..]);
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return;
+    }
+    let url = format!("tools/git-pulse.html?repo={}", url_encode(&repo));
+    if let Ok(win) = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
+        .title("")
+        .inner_size(820.0, 600.0)
+        .title_bar_style(tauri::TitleBarStyle::Transparent)
+        .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff))
+        .build()
+    {
+        let _ = win.show();
+    }
+}
+
+#[tauri::command]
 fn git_get_draft(app: AppHandle, repo: String) -> String {
     read_git_windows(&app)
         .into_iter()
@@ -3302,6 +3327,24 @@ const STUDIO_EDITOR: &str = "Studio Code Editor";
 
 /// Open one changed file in the project's configured editor (blank = Zed,
 /// `STUDIO_EDITOR` = the in-app Code Editor tool).
+#[tauri::command]
+fn git_log_week(repo: String) -> Result<String, String> {
+    let out = Command::new("git")
+        .args([
+            "-C", &repo,
+            "log",
+            "--since=7 days ago",
+            "--format=%H%x1f%h%x1f%s%x1f%an%x1f%ad%x1f%ai",
+            "--date=format:%a %b %d %H:%M",
+        ])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
 #[tauri::command]
 fn git_open_file(
     app: AppHandle,
@@ -4303,6 +4346,8 @@ pub fn run() {
             read_text_file,
             write_text_file,
             git_diff_file,
+            git_log_week,
+            open_git_pulse,
             get_focused_window_bounds
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.

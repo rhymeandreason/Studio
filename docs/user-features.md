@@ -59,10 +59,11 @@ A quick tour of what Studio can do.
 - Exports and artifacts save straight into your active project's folder.
 
 ## Scheduled tasks
-- Schedule Claude Code tasks to run automatically at set times, each with its
-  own project.
-- Studio keeps the Mac awake while open and wakes it ahead of upcoming runs so
-  they fire reliably.
+- Schedule Claude Code tasks to run automatically, grouped into two shared time
+  slots; each task picks the project it runs in (or "Global"). Open it from the
+  tray menu's Tools section or the Schedules button.
+- Saving the schedule wakes the Mac ahead of upcoming runs (one admin-password
+  prompt) so they fire even while it's asleep.
 
 ## System info
 - Live memory, swap, and dev-server usage in the project header, with a

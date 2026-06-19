@@ -407,7 +407,17 @@ export function addRow(list, value = "") {
       if (!repo) return;
       invoke("open_git_window", { repo, color: wsGitColor, editor: wsEditor });
     });
-    gitGroup.append(gitLabel, swatches, gitBtn);
+    const pulseBtn = document.createElement("button");
+    pulseBtn.type = "button";
+    pulseBtn.className = "ws-repo__git";
+    pulseBtn.innerHTML = `${mi("bar_chart")}Pulse`;
+    pulseBtn.title = "Open Git Pulse for this repo";
+    pulseBtn.addEventListener("click", () => {
+      const repo = input.value.trim();
+      if (!repo) return;
+      invoke("open_git_pulse", { repo });
+    });
+    gitGroup.append(gitLabel, swatches, gitBtn, pulseBtn);
 
     footer.append(editorGroup, gitGroup);
     card.append(footer);

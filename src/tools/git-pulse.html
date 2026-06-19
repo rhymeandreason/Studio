@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git Pulse</title>
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<style>
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .titlebar {
+    height: 52px;
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 10px;
+    padding-left: 20px;
+    border-bottom: 1px solid var(--hairline);
+    flex-shrink: 0;
+    -webkit-app-region: drag;
+  }
+  .titlebar h1 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  #stats-bar {
+    display: flex;
+    gap: 24px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--hairline);
+    flex-shrink: 0;
+  }
+  .stat { font-size: 11px; color: var(--text-muted); }
+  .stat-val {
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+  }
+
+  #scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 20px 24px;
+  }
+
+  .day-section { margin-bottom: 20px; }
+  .day-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .day-row .label {
+    width: 84px;
+    flex-shrink: 0;
+  }
+  .dots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: default;
+    transition: transform var(--dur-fast) var(--ease-standard),
+                opacity  var(--dur-fast) var(--ease-standard);
+    flex-shrink: 0;
+  }
+  .dot:hover { transform: scale(1.6); opacity: 0.7; }
+
+  #tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--border);
+    color: var(--bg);
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    max-width: 320px;
+    z-index: 100;
+    display: none;
+  }
+  #tooltip strong { display: block; margin-bottom: 2px; }
+  #tooltip .tip-hash {
+    font-family: var(--mono);
+    font-size: 10px;
+    opacity: 0.5;
+  }
+
+  #empty {
+    display: none;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<div class="titlebar" data-tauri-drag-region>
+  <h1>Git Pulse</h1>
+</div>
+
+<div id="stats-bar">
+  <div class="stat"><span class="stat-val" id="s-total">—</span>commits</div>
+  <div class="stat"><span class="stat-val" id="s-days">—</span>days active</div>
+  <div class="stat"><span class="stat-val" id="s-streak">—</span>day streak</div>
+</div>
+
+<div id="scroll-area"></div>
+<div id="empty">No commits found in the last 7 days.</div>
+<div id="tooltip"></div>
+
+<script type="module">
+const invoke = window.__TAURI__?.core?.invoke;
+
+const scrollArea = document.getElementById('scroll-area');
+const empty      = document.getElementById('empty');
+const tooltip    = document.getElementById('tooltip');
+
+function repoFromUrl() {
+  return new URLSearchParams(location.search).get('repo') || '';
+}
+
+function parseLog(raw) {
+  return raw.trim().split('\n').filter(Boolean).map(line => {
+    const [hash, short, subject, author, date, iso] = line.split('\x1f');
+    return { hash, short, subject, author, date, iso };
+  });
+}
+
+function groupByDay(commits) {
+  const map = new Map();
+  for (const c of commits) {
+    const day = c.iso ? c.iso.slice(0, 10) : 'unknown';
+    if (!map.has(day)) map.set(day, []);
+    map.get(day).push(c);
+  }
+  return map;
+}
+
+function dayLabel(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = Math.round((today - d) / 86400000);
+  const full = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return full[d.getDay()] + ' ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function streak(days) {
+  if (!days.length) return 0;
+  const today = new Date(); today.setHours(0,0,0,0);
+  let count = 0, cursor = new Date(today);
+  for (const d of days) {
+    const dd = new Date(d + 'T00:00:00');
+    const diff = Math.round((cursor - dd) / 86400000);
+    if (diff === 0 || diff === 1) { count++; cursor = dd; } else break;
+  }
+  return count;
+}
+
+function render(commits) {
+  scrollArea.innerHTML = '';
+  empty.style.display = 'none';
+
+  if (!commits.length) {
+    empty.style.display = 'flex';
+    document.getElementById('s-total').textContent = '0';
+    document.getElementById('s-days').textContent = '0';
+    document.getElementById('s-streak').textContent = '0';
+    return;
+  }
+
+  const byDay = groupByDay(commits);
+  const sortedDays = [...byDay.keys()].sort((a,b) => b.localeCompare(a));
+
+  document.getElementById('s-total').textContent = commits.length;
+  document.getElementById('s-days').textContent = sortedDays.length;
+  document.getElementById('s-streak').textContent = streak(sortedDays);
+
+  for (const day of sortedDays) {
+    const section = document.createElement('div');
+    section.className = 'day-section';
+
+    const row = document.createElement('div');
+    row.className = 'day-row';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'label';
+    lbl.textContent = dayLabel(day);
+    row.appendChild(lbl);
+
+    const dots = document.createElement('div');
+    dots.className = 'dots';
+
+    for (const c of byDay.get(day)) {
+      const dot = document.createElement('div');
+      dot.className = 'dot';
+      dot.addEventListener('mouseenter', e => showTooltip(e, c));
+      dot.addEventListener('mousemove',  e => moveTooltip(e));
+      dot.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+      dots.appendChild(dot);
+    }
+
+    row.appendChild(dots);
+    section.appendChild(row);
+    scrollArea.appendChild(section);
+  }
+}
+
+function showTooltip(e, c) {
+  const timeMatch = c.date ? c.date.match(/(\d{2}:\d{2})/) : null;
+  const time = timeMatch ? timeMatch[1] : '';
+  tooltip.innerHTML = `<strong>${esc(c.subject || '')}</strong>${esc(time)}&ensp;<span class="tip-hash">${esc(c.short || '')}</span>`;
+  tooltip.style.display = 'block';
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  tooltip.style.left = Math.min(e.clientX + 14, window.innerWidth - 340) + 'px';
+  tooltip.style.top  = Math.max(0, e.clientY - 10) + 'px';
+}
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function load(repo) {
+  try {
+    const raw = await invoke('git_log_week', { repo });
+    render(parseLog(raw));
+  } catch (err) {
+    scrollArea.innerHTML = `<p class="text-muted" style="padding:20px 0">${esc(String(err))}</p>`;
+    empty.style.display = 'none';
+  }
+}
+
+if (invoke) {
+  const r = repoFromUrl();
+  if (r) load(r);
+} else {
+  repoInput.value = '~/Projects/demo';
+  render([
+    { hash:'abc1234567890', short:'abc1234', subject:'feat: add commit pulse visualization', author:'Mary Huang', date:'Wed Jun 18 14:32', iso:'2026-06-18 14:32:00 +0000' },
+    { hash:'def2345678901', short:'def2345', subject:'fix: resolve toolbar overlap on small screens', author:'Mary Huang', date:'Wed Jun 18 10:05', iso:'2026-06-18 10:05:00 +0000' },
+    { hash:'ghi3456789012', short:'ghi3456', subject:'docs: tighten media.md', author:'Mary Huang', date:'Tue Jun 17 16:48', iso:'2026-06-17 16:48:00 +0000' },
+    { hash:'jkl4567890123', short:'jkl4567', subject:'refactor: simplify state handling', author:'Mary Huang', date:'Tue Jun 17 09:22', iso:'2026-06-17 09:22:00 +0000' },
+    { hash:'mno5678901234', short:'mno5678', subject:'chore: update dependencies', author:'Mary Huang', date:'Mon Jun 16 15:11', iso:'2026-06-16 15:11:00 +0000' },
+  ]);
+}
+</script>
+</body>
+</html>
