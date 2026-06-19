@@ -2602,7 +2602,7 @@ function initMedia() {
   // the selection. The batch bar and the editor side column keep their clicks.
   installOffClickDeselect({
     panel: "media",
-    keep: [".mediatile", ".selbar", ".media-side"],
+    keep: [".mediatile", ".selbar", ".media-side", ".media-toolbar"],
     hasSelection: () => mediaSelection.size(),
     clear: clearSelection,
   });
