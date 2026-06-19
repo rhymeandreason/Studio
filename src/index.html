@@ -298,7 +298,7 @@
                     <div class="editor__canvas-wrap" id="editor-canvas-wrap">
                         <div class="canvasstack" id="canvasstack">
                             <canvas id="editor-canvas"></canvas>
-                            <div class="crop" id="crop">
+                            <div class="crop" id="crop" style="display:none">
                                 <span class="crop__h" data-h="nw"></span>
                                 <span class="crop__h" data-h="ne"></span>
                                 <span class="crop__h" data-h="sw"></span>
@@ -352,6 +352,9 @@
                             <div class="editgroup">
                                 <span class="editgroup__label">Crop</span>
                                 <div class="editbtns editbtns--wrap">
+                                    <button class="chip" data-aspect="none">
+                                        None
+                                    </button>
                                     <button class="chip" data-aspect="free">
                                         Free
                                     </button>
@@ -365,13 +368,6 @@
                                         4:5
                                     </button>
                                 </div>
-                                <button
-                                    class="chip chip--reset"
-                                    id="ed-cropreset"
-                                >
-                                    <span class="mi mi-sm">crop_free</span>Reset
-                                    crop
-                                </button>
                             </div>
 
                             <div class="editgroup">

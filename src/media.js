@@ -1199,14 +1199,23 @@ function onCropPointerUp() {
 }
 
 function highlightAspect(R) {
+  const noCrop = editState.crop === null;
   document.querySelectorAll("[data-aspect]").forEach((b) => {
-    const v = b.dataset.aspect === "free" ? null : Number(b.dataset.aspect);
-    b.classList.toggle("is-active", v === R);
+    if (b.dataset.aspect === "none") {
+      b.classList.toggle("is-active", noCrop);
+    } else {
+      const v = b.dataset.aspect === "free" ? null : Number(b.dataset.aspect);
+      b.classList.toggle("is-active", !noCrop && v === R);
+    }
   });
+  document.getElementById("crop").style.display = noCrop ? "none" : "";
 }
 
 function applyAspect(R) {
   editState.cropAspect = R;
+  if (!editState.crop) {
+    editState.crop = { x: 0, y: 0, w: 1, h: 1 };
+  }
   if (R) {
     const canvas = document.getElementById("editor-canvas");
     const cw = canvas.width;
@@ -2498,13 +2507,14 @@ function initEditor() {
   document
     .querySelectorAll("[data-aspect]")
     .forEach((b) =>
-      b.addEventListener("click", () =>
-        applyAspect(
-          b.dataset.aspect === "free" ? null : Number(b.dataset.aspect),
-        ),
-      ),
+      b.addEventListener("click", () => {
+        if (b.dataset.aspect === "none") {
+          resetCrop();
+        } else {
+          applyAspect(b.dataset.aspect === "free" ? null : Number(b.dataset.aspect));
+        }
+      }),
     );
-  document.getElementById("ed-cropreset").addEventListener("click", resetCrop);
 
   // Copy / paste adjustments live in the side "More" menu (wired in initMedia).
   loadCopiedEdits();
