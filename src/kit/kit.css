@@ -222,6 +222,81 @@ select.field {
     box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
+/* ---- Tabs ----------------------------------------------------------------- */
+
+/*
+ * Usage:
+ *   <div class="tabs">
+ *     <button class="tab is-active"><span class="mi">image</span>Media</button>
+ *     <button class="tab">Notes</button>
+ *     <button class="tab-pin" title="Pin"><span class="mi">push_pin</span></button>
+ *   </div>
+ *
+ * .tab-pin — icon button that right-aligns via margin-left:auto.
+ *   Add .is-active to fill the pin icon with accent.
+ * .tab.is-drop-target — accent tint when a drag hovers the tab.
+ */
+.tabs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-top: 16px;
+}
+.tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 9px 14px;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition:
+        color 0.15s,
+        border-color 0.15s;
+}
+.tab .mi {
+    font-size: 17px;
+}
+.tab:hover {
+    color: var(--text);
+}
+.tab.is-active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+}
+.tab.is-drop-target {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+}
+.tab-pin {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--text-soft);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+}
+.tab-pin:hover {
+    color: var(--text-muted);
+    background: var(--hairline);
+}
+.tab-pin.is-active .mi {
+    font-variation-settings: "FILL" 1, "wght" 300, "GRAD" 0, "opsz" 24;
+    color: var(--accent);
+}
+
 /* ---- Toolbar ------------------------------------------------------------- */
 
 /* A flex row for btn-add / action buttons above a panel. */
