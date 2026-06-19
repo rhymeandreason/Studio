@@ -34,10 +34,6 @@
       -webkit-app-region: drag;
     }
 
-    #titlebar .page-title {
-      font-size: 13px;
-      font-weight: 600;
-    }
 
     #empty {
       padding: 16px 14px;
@@ -98,10 +94,6 @@
     }
 
     .group-label {
-      font-size: 10px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--text-soft);
       padding: 4px 6px 3px;
     }
 
@@ -172,6 +164,10 @@
       text-overflow: ellipsis;
       cursor: pointer;
     }
+
+.node.file {
+max-width:350px;
+}
 
     .node.file .name {
       color: var(--text-muted);
@@ -417,7 +413,7 @@
 
       if (label) {
         const groupLabel = document.createElement('div');
-        groupLabel.className = 'group-label';
+        groupLabel.className = 'group-label label';
         groupLabel.textContent = label;
         group.appendChild(groupLabel);
       }
