@@ -18,7 +18,7 @@ Every tool must link these in `<head>`, in order:
 
 Then a local `<style>` for tool-specific overrides only — never rewrite what kit already provides. Endeavor to use the kit styles. Don't make override styles that are only a little different.
 
-**Kit classes:** `.btn` / `.btn-primary` / `.btn-ghost` / `.btn-icon` · `.field` (input, select, textarea) · `.range` · `.card` · `.label` · `.eyebrow` · `.title-strip` · `.text-body` / `.text-muted` / `.text-sm` / `.text-mono`
+**Kit classes:** `.btn` / `.btn-primary` / `.btn-ghost` / `.btn-icon` · `.field` (input, select, textarea) · `.range` · `.card` · `.label` · `.eyebrow` · `.title-strip` · `.text-body` / `.text-muted` / `.text-xs` / `.text-mono`
 
 **Components:** `<studio-color>` — Coloris color picker with `.value` + `input`/`change` events.
 

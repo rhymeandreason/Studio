@@ -1806,8 +1806,6 @@ td.ntable__total-cell {
 
 .mediatile__name {
     display: block;
-    font-size: 11.5px;
-    color: var(--text-muted);
     text-align: left;
     overflow-wrap: break-word;
     word-break: break-word;
@@ -1836,7 +1834,6 @@ td.ntable__total-cell {
 
 .mediatile__meta {
     display: block;
-    font-size: 10.5px;
     color: var(--text-soft);
     opacity: 0.7;
     text-align: left;

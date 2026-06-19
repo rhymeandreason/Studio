@@ -12,7 +12,7 @@ Current components: `<studio-color>`, `<studio-swatch>`. Full attribute/event do
 
 **Radius scale:** `--radius-sm` (6px) · `--radius` (10px) · `--radius-lg` (12px). Use these — don't hardcode px values.
 
-**Text utilities** (in `kit.css`): `.text-body`, `.text-muted`, `.text-sm`, `.text-mono` — cover the four most common text patterns. `.label` and `.eyebrow` are also in kit for structural labels.
+**Text utilities** (in `kit.css`): `.text-body`, `.text-muted`, `.text-xs`, `.text-mono` — cover the four most common text patterns. `.label` and `.eyebrow` are also in kit for structural labels.
 
 **`src/tools/kit-gallery.html`** (Tools → Design System) is the living reference for every token and class. Items with a ✓ are available as kit classes.
 

@@ -613,7 +613,7 @@ function buildMediaTile(item, edited) {
   thumb.append(img);
 
   tile.append(thumb);
-  const nameEl = el("span", "mediatile__name", { textContent: item.name });
+  const nameEl = el("span", "mediatile__name text-s", { textContent: item.name });
   nameEl.addEventListener("click", (e) => {
     e.stopPropagation();
     startRename(tile, nameEl, item);
@@ -627,7 +627,7 @@ function buildMediaTile(item, edited) {
     metaParts.push(kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.round(kb)} KB`);
   }
   if (metaParts.length)
-    tile.append(el("span", "mediatile__meta", { textContent: metaParts.join("  ·  ") }));
+    tile.append(el("span", "mediatile__meta text-xs", { textContent: metaParts.join("  ·  ") }));
 
   if (mediaSelection.has(item.path)) tile.classList.add("is-selected");
 
