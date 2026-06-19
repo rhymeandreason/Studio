@@ -659,9 +659,11 @@ function deleteNotesSelection() {
   if (!ids.size) return;
   // Delete note-owned image assets (under notes/); shared media/ files are left.
   for (const n of state.notesData.notes) {
-    if (ids.has(n.id) && n.kind === "image" && n.src && state.notesProjectPath) {
+    if (!ids.has(n.id) || !state.notesProjectPath) continue;
+    if (n.kind === "image" && n.src)
       invoke("delete_note_asset", { projectPath: state.notesProjectPath, src: n.src });
-    }
+    if (n.kind === "text" && n.image)
+      invoke("delete_note_asset", { projectPath: state.notesProjectPath, src: n.image });
   }
   state.notesData.notes = state.notesData.notes.filter((n) => !ids.has(n.id));
   notesSelection.clear();
@@ -1323,6 +1325,35 @@ function buildTextNote(note) {
 
   if (!Array.isArray(note.links)) note.links = [];
 
+  // Attached image (above text).
+  const renderAttachedImage = () => {
+    const existing = card.querySelector(".notecard__attached-image-wrap");
+    if (existing) existing.remove();
+    if (!note.image) return;
+    const wrap = el("div", "notecard__attached-image-wrap");
+    const img = el("img", "notecard__image", { alt: "" });
+    img.src = noteImageUrl(note.image);
+    if (note.imageW && note.imageH)
+      img.style.aspectRatio = `${note.imageW} / ${note.imageH}`;
+    img.addEventListener("load", () => scheduleBentoLayout());
+    const removeBtn = el("button", "notecard__image-remove", { title: "Remove image" });
+    removeBtn.textContent = "×";
+    removeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (state.notesProjectPath && note.image)
+        invoke("delete_note_asset", { projectPath: state.notesProjectPath, src: note.image });
+      note.image = null;
+      note.imageW = null;
+      note.imageH = null;
+      renderAttachedImage();
+      scheduleBentoLayout();
+      scheduleNotesSave();
+    });
+    wrap.append(img, removeBtn);
+    const textarea = card.querySelector(".notecard__textarea");
+    card.insertBefore(wrap, textarea);
+  };
+
   const textarea = el("textarea", "notecard__textarea", {
     placeholder: "Write something…",
   });
@@ -1338,9 +1369,31 @@ function buildTextNote(note) {
     scheduleBentoLayout();
     scheduleNotesSave();
   });
+
+  // Paste inside textarea: attach image to this note instead of creating a new one.
+  textarea.addEventListener("paste", async (e) => {
+    if (!state.notesProjectPath) return;
+    try {
+      const src = await invoke("paste_note_image", { projectPath: state.notesProjectPath });
+      const { w, h } = await imageDims(`${state.notesProjectPath}/${src}`);
+      // Remove previous image asset if there was one.
+      if (note.image)
+        invoke("delete_note_asset", { projectPath: state.notesProjectPath, src: note.image });
+      note.image = src;
+      note.imageW = w;
+      note.imageH = h;
+      renderAttachedImage();
+      scheduleBentoLayout();
+      scheduleNotesSave();
+    } catch (_) {
+      // No image in clipboard — let default text paste proceed.
+    }
+  });
+
   requestAnimationFrame(resizeTextarea);
 
   card.append(textarea);
+  renderAttachedImage();
   const links = buildNoteLinks(note, textarea, {
     getText: () => note.body,
     setText: (v) => {
