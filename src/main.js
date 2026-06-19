@@ -213,7 +213,7 @@ function onProjectPointerUp() {
   if (to == null) return;
 
   const grid = document.getElementById("overview-grid");
-  const order = [...grid.querySelectorAll(".card")].map((c) => c.dataset.path);
+  const order = [...grid.querySelectorAll(".project-card")].map((c) => c.dataset.path);
   const from = order.indexOf(drag.p.path);
   if (from === -1) return;
   order.splice(from, 1);
@@ -228,7 +228,7 @@ function onProjectPointerUp() {
 
 // Vertical drop indicator between cards in a uniform grid (shared by Projects).
 function computeCardDrop(grid, x, y) {
-  const cards = [...grid.querySelectorAll(".card")];
+  const cards = [...grid.querySelectorAll(".project-card")];
   if (!cards.length) return { index: 0, card: null, after: false };
   let rowHit;
   for (let i = 0; i < cards.length; i++) {
@@ -295,7 +295,7 @@ async function setSelectedProjectIcon() {
 function repaintProjectsSelection() {
   document
     .getElementById("overview-grid")
-    ?.querySelectorAll(".card")
+    ?.querySelectorAll(".project-card")
     .forEach((c) =>
       c.classList.toggle("is-selected", projectsSelection.has(c.dataset.path)),
     );
@@ -349,7 +349,7 @@ function moveProjectsSelection(dir) {
   idx = Math.max(0, Math.min(idx, paths.length - 1));
   projectsSelection.set(paths[idx]);
   grid
-    .querySelector(`.card[data-path="${CSS.escape(paths[idx])}"]`)
+    .querySelector(`.project-card[data-path="${CSS.escape(paths[idx])}"]`)
     ?.scrollIntoView({ block: "nearest" });
 }
 
@@ -383,7 +383,7 @@ async function showOverview() {
   } else {
     for (const p of projects) {
       const card = document.createElement("div");
-      card.className = "card";
+      card.className = "project-card card";
       card.dataset.path = p.path;
       if (projectsSelection.has(p.path)) card.classList.add("is-selected");
 
@@ -454,7 +454,7 @@ async function showOverview() {
   if (!overviewEl.__deselectInit) {
     overviewEl.__deselectInit = true;
     overviewEl.addEventListener("click", (e) => {
-      if (!e.target.closest(".card")) projectsSelection.clear();
+      if (!e.target.closest(".project-card")) projectsSelection.clear();
     });
   }
 
