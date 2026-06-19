@@ -5,19 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Git Pulse</title>
 <link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
 <style>
-  :root {
-    --bg: #f7f5f0;
-    --surface: #efece5;
-    --border: #2a2a28;
-    --hairline: rgba(42, 42, 40, 0.12);
-    --text: #2a2a28;
-    --text-muted: #8a8678;
-    --mono: "SF Mono", Menlo, monospace;
-    --sans: "Futura", "Futura PT", system-ui, sans-serif;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
   body {
     font-family: var(--sans);
     background: var(--bg);
@@ -31,19 +20,21 @@
   #header {
     padding: 28px 20px 14px;
     display: flex;
-    align-items: baseline;
-    gap: 12px;
+    align-items: center;
+    gap: 10px;
     border-bottom: 1px solid var(--hairline);
     flex-shrink: 0;
   }
   #header h1 {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
+    flex-shrink: 0;
   }
   #repo-path {
     flex: 1;
+    min-width: 0;
     font-family: var(--mono);
     font-size: 11px;
     color: var(--text-muted);
@@ -52,24 +43,8 @@
     outline: none;
     border-bottom: 1px solid var(--hairline);
     padding: 2px 4px;
-    min-width: 0;
   }
-  #repo-path:focus { border-bottom-color: var(--border); }
-  #load-btn {
-    font-family: var(--sans);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    background: var(--border);
-    color: var(--bg);
-    border: none;
-    padding: 4px 10px;
-    cursor: pointer;
-    border-radius: 2px;
-    flex-shrink: 0;
-  }
-  #load-btn:hover { opacity: 0.85; }
+  #repo-path:focus { border-bottom-color: var(--accent); }
 
   #stats-bar {
     display: flex;
@@ -78,8 +53,14 @@
     border-bottom: 1px solid var(--hairline);
     flex-shrink: 0;
   }
-  .stat { font-size: 11px; }
-  .stat-val { font-weight: 700; font-size: 20px; display: block; }
+  .stat { font-size: 11px; color: var(--text-muted); }
+  .stat-val {
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+  }
 
   #scroll-area {
     flex: 1;
@@ -87,19 +68,14 @@
     padding: 20px 20px 24px;
   }
 
-  .day-section { margin-bottom: 24px; }
+  .day-section { margin-bottom: 20px; }
   .day-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
   }
-  .day-label {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    width: 90px;
+  .day-row .label {
+    width: 84px;
     flex-shrink: 0;
   }
   .dots {
@@ -112,30 +88,34 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: var(--border);
+    background: var(--accent);
     cursor: default;
-    transition: transform 0.1s, opacity 0.1s;
+    transition: transform var(--dur-fast) var(--ease-standard),
+                opacity  var(--dur-fast) var(--ease-standard);
     flex-shrink: 0;
   }
-  .dot:hover {
-    transform: scale(1.5);
-    opacity: 0.7;
-  }
+  .dot:hover { transform: scale(1.6); opacity: 0.7; }
 
   #tooltip {
     position: fixed;
     pointer-events: none;
     background: var(--border);
     color: var(--bg);
-    font-size: 11px;
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.5;
     padding: 6px 10px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     max-width: 320px;
     z-index: 100;
     display: none;
-    line-height: 1.5;
   }
-  #tooltip strong { display: block; font-size: 12px; margin-bottom: 2px; }
+  #tooltip strong { display: block; margin-bottom: 2px; }
+  #tooltip .tip-hash {
+    font-family: var(--mono);
+    font-size: 10px;
+    opacity: 0.5;
+  }
 
   #empty {
     display: none;
@@ -152,7 +132,7 @@
 <div id="header">
   <h1>Git Pulse</h1>
   <input id="repo-path" type="text" placeholder="repo path…" spellcheck="false" />
-  <button id="load-btn">Load</button>
+  <button id="load-btn" class="btn btn-primary">Load</button>
 </div>
 
 <div id="stats-bar">
@@ -168,11 +148,11 @@
 <script type="module">
 const invoke = window.__TAURI__?.core?.invoke;
 
-const repoInput = document.getElementById('repo-path');
-const loadBtn   = document.getElementById('load-btn');
+const repoInput  = document.getElementById('repo-path');
+const loadBtn    = document.getElementById('load-btn');
 const scrollArea = document.getElementById('scroll-area');
-const empty     = document.getElementById('empty');
-const tooltip   = document.getElementById('tooltip');
+const empty      = document.getElementById('empty');
+const tooltip    = document.getElementById('tooltip');
 
 function repoFromUrl() {
   return new URLSearchParams(location.search).get('repo') || '';
@@ -243,10 +223,10 @@ function render(commits) {
     const row = document.createElement('div');
     row.className = 'day-row';
 
-    const label = document.createElement('div');
-    label.className = 'day-label';
-    label.textContent = dayLabel(day);
-    row.appendChild(label);
+    const lbl = document.createElement('div');
+    lbl.className = 'label';
+    lbl.textContent = dayLabel(day);
+    row.appendChild(lbl);
 
     const dots = document.createElement('div');
     dots.className = 'dots';
@@ -269,7 +249,7 @@ function render(commits) {
 function showTooltip(e, c) {
   const timeMatch = c.date ? c.date.match(/(\d{2}:\d{2})/) : null;
   const time = timeMatch ? timeMatch[1] : '';
-  tooltip.innerHTML = `<strong>${escHtml(c.subject || '')}</strong>${escHtml(time)}  <span style="opacity:.5;font-family:var(--mono)">${escHtml(c.short || '')}</span>`;
+  tooltip.innerHTML = `<strong>${esc(c.subject || '')}</strong>${esc(time)}&ensp;<span class="tip-hash">${esc(c.short || '')}</span>`;
   tooltip.style.display = 'block';
   moveTooltip(e);
 }
@@ -277,7 +257,7 @@ function moveTooltip(e) {
   tooltip.style.left = Math.min(e.clientX + 14, window.innerWidth - 340) + 'px';
   tooltip.style.top  = Math.max(0, e.clientY - 10) + 'px';
 }
-function escHtml(s) {
+function esc(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
@@ -290,7 +270,7 @@ async function load() {
     const raw = await invoke('git_log_week', { repo });
     render(parseLog(raw));
   } catch (err) {
-    scrollArea.innerHTML = `<div style="color:var(--text-muted);font-size:12px;padding:20px 0">${escHtml(String(err))}</div>`;
+    scrollArea.innerHTML = `<p class="text-muted" style="padding:20px 0">${esc(String(err))}</p>`;
     empty.style.display = 'none';
   } finally {
     loadBtn.textContent = 'Load';
