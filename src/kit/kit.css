@@ -715,6 +715,55 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
     border-color: var(--text);
 }
 
+/* ---- Toggle switch ------------------------------------------------------- */
+
+/*
+ * Usage:
+ *   <label class="toggle-button">
+ *     <input type="checkbox" />
+ *     <span class="toggle-button__track"><span class="toggle-button__thumb"></span></span>
+ *   </label>
+ */
+.toggle-button {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+}
+.toggle-button input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+.toggle-button__track {
+    display: inline-block;
+    width: 26px;
+    height: 15px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    transition: background 0.15s, border-color 0.15s;
+    position: relative;
+}
+.toggle-button__thumb {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--text-soft);
+    transition: transform 0.15s, background 0.15s;
+}
+.toggle-button input:checked + .toggle-button__track {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.toggle-button input:checked + .toggle-button__track .toggle-button__thumb {
+    transform: translateX(11px);
+    background: var(--elevated);
+}
+
 /* Filled variant — accent fill, white icon. Used for primary actions (send, submit). */
 .btn-round-filled {
     background: var(--accent);
