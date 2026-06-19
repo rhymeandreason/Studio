@@ -128,6 +128,8 @@
     }
 
     .node .name {
+      flex: 1 1 auto;
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       cursor: pointer;
@@ -135,6 +137,33 @@
 
     .node.file .name {
       color: var(--text-muted);
+    }
+
+    .node .open-browser {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border: none;
+      background: none;
+      color: var(--text-soft);
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.12s;
+    }
+
+    .node:hover .open-browser {
+      opacity: 1;
+    }
+
+    .node .open-browser:hover {
+      color: var(--accent);
+    }
+
+    .node .open-browser .mi {
+      font-size: 14px;
     }
 
     .children {
@@ -239,6 +268,19 @@
       name.className = 'name';
       name.textContent = entry.name;
       node.appendChild(name);
+
+      const isHtml = !entry.is_dir && entry.name.toLowerCase().endsWith('.html');
+      if (isHtml) {
+        const browserBtn = document.createElement('button');
+        browserBtn.className = 'open-browser';
+        browserBtn.title = 'Open in browser';
+        browserBtn.innerHTML = '<span class="mi">open_in_new</span>';
+        browserBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          invoke('open_path', { path: entry.path }).catch(() => {});
+        });
+        node.appendChild(browserBtn);
+      }
 
       row.appendChild(node);
 
