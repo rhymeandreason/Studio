@@ -223,8 +223,16 @@ class StudioToggle extends HTMLElement {
         this._input = document.createElement("input");
         this._input.type = "checkbox";
         this._input.checked = this.hasAttribute("checked");
-        this._input.addEventListener("input", () => this.dispatchEvent(new Event("input", { bubbles: true })));
-        this._input.addEventListener("change", () => this.dispatchEvent(new Event("change", { bubbles: true })));
+        this._input.addEventListener("input", (e) => { e.stopPropagation(); this.dispatchEvent(new Event("input", { bubbles: true })); });
+        this._input.addEventListener("change", (e) => { e.stopPropagation(); this.dispatchEvent(new Event("change", { bubbles: true })); });
+
+        // Host is not a <label>, so clicks on the track won't natively toggle
+        // the input — do it manually.
+        this.addEventListener("click", (e) => {
+            if (e.target === this._input) return;
+            this._input.checked = !this._input.checked;
+            this._input.dispatchEvent(new Event("change"));
+        });
 
         const track = document.createElement("span");
         track.className = "toggle-button__track";
