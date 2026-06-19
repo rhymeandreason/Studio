@@ -278,7 +278,30 @@
       return 'draft';
     }
 
-    async function buildNode(entry) {
+    // Remembers which folders are expanded, per project, across reloads.
+    const EXPANDED_STORE_KEY = 'studio-file-directory-expanded';
+    let currentProjectPath = null;
+    let expandedSet = new Set();
+
+    function loadExpanded(projectPath) {
+      try {
+        const store = JSON.parse(localStorage.getItem(EXPANDED_STORE_KEY)) || {};
+        return new Set(store[projectPath] || []);
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveExpanded() {
+      if (!currentProjectPath) return;
+      try {
+        const store = JSON.parse(localStorage.getItem(EXPANDED_STORE_KEY)) || {};
+        store[currentProjectPath] = [...expandedSet];
+        localStorage.setItem(EXPANDED_STORE_KEY, JSON.stringify(store));
+      } catch {}
+    }
+
+    async function buildNode(entry, isRoot = false) {
       const row = document.createElement('div');
       row.className = 'row';
 
@@ -348,10 +371,18 @@
           icon.innerHTML = `<span class="mi">${iconFor(entry, false)}</span>`;
           if (childrenEl) childrenEl.remove();
           childrenEl = null;
+          if (!isRoot) {
+            expandedSet.delete(entry.path);
+            saveExpanded();
+          }
           return;
         }
         node.classList.add('open');
         icon.innerHTML = `<span class="mi">${iconFor(entry, true)}</span>`;
+        if (!isRoot) {
+          expandedSet.add(entry.path);
+          saveExpanded();
+        }
         if (!loaded) {
           loaded = true;
           try {
@@ -372,6 +403,10 @@
       twirl.addEventListener('click', toggle);
       name.addEventListener('click', toggle);
 
+      if (!isRoot && entry.is_dir && expandedSet.has(entry.path)) {
+        await toggle();
+      }
+
       return row;
     }
 
@@ -389,7 +424,7 @@
       try {
         const entries = await invoke('list_dir', { path });
         const rootEntry = { name: path.split('/').filter(Boolean).pop() || path, path, is_dir: true };
-        const rootRow = await buildNode(rootEntry);
+        const rootRow = await buildNode(rootEntry, true);
         group.appendChild(rootRow);
         // Auto-expand the root so its contents are visible immediately.
         rootRow.querySelector('.node').click();
@@ -455,6 +490,9 @@
       picker.hidden = true;
       tree.hidden = false;
       tree.innerHTML = '';
+
+      currentProjectPath = project.path;
+      expandedSet = loadExpanded(project.path);
 
       const workspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
 
