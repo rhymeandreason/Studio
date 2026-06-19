@@ -277,6 +277,30 @@ border-radius: 2px;
         </div>
         <div class="comp-caption">Hairline border, no fill. Used in Notes toolbar and Lightbox.</div>
       </div>
+      <div class="comp">
+        <div class="comp-name"><span class="class-name in-kit">.chip</span><span class="css-values">pill toggle button</span></div>
+        <div class="row" style="flex-wrap:wrap;gap:6px;">
+          <button class="chip">Free</button>
+          <button class="chip is-active">16:9</button>
+          <button class="chip">1:1</button>
+          <button class="chip">4:3</button>
+          <button class="chip" disabled>Disabled</button>
+        </div>
+        <div class="comp-caption">Pill-shaped option toggle. <code>.is-active</code> fills with accent. <code>.chip--reset</code> self-aligns for reset actions alongside a chip group.</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name"><span class="class-name in-kit">.editgroup / .editbtns / .iconbtn</span><span class="css-values">labeled control section with icon button row</span></div>
+        <div class="editgroup" style="max-width:200px;">
+          <span class="editgroup__label">Rotate <em>0°</em></span>
+          <div class="editbtns">
+            <button class="iconbtn"><span class="mi">rotate_left</span></button>
+            <button class="iconbtn"><span class="mi">rotate_right</span></button>
+            <button class="iconbtn"><span class="mi">flip</span></button>
+            <button class="iconbtn"><span class="mi" style="transform:scaleX(-1)">flip</span></button>
+          </div>
+        </div>
+        <div class="comp-caption"><code>.editgroup</code> wraps a <code>.editgroup__label</code> and one or more <code>.editbtns</code> rows. Wrap a live value in <code>&lt;em&gt;</code> inside the label for contrast. <code>.iconbtn</code> fills available width equally (<code>flex: 1 1 0</code>). Add <code>.editbtns--wrap</code> for wrapping chip groups.</div>
+      </div>
     </div>
   </section>
 
