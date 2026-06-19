@@ -1831,6 +1831,12 @@ td.ntable__total-cell {
     box-shadow: var(--shadow-sm);
 }
 
+.media-toolbar .btn-ghost.is-active {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--text);
+}
+
 .media-toolbar .btn-ghost {
     display: inline-flex;
     align-items: center;

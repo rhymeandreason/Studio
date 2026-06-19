@@ -323,9 +323,11 @@ async function selectOnly(item) {
 
   if (editItem && editItem.path !== item.path) await flushEditSave();
   document.getElementById("side-name").textContent = item.name;
-  document.getElementById("media-side").hidden = false;
-  document.getElementById("app-right").hidden = false;
-  invoke("set_window_width", { width: Math.max(window.innerWidth, 1220) });
+  if (editorSidebarEnabled) {
+    document.getElementById("media-side").hidden = false;
+    document.getElementById("app-right").hidden = false;
+    invoke("set_window_width", { width: Math.max(window.innerWidth, 1220) });
+  }
 
   moveEditor(document.getElementById("media-side-editor"));
   await loadEditor(item);
@@ -1001,6 +1003,7 @@ async function initDragDrop() {
 
 // --- Image editor (non-destructive, sidecar-backed) ------------------------
 
+let editorSidebarEnabled = false;
 let editItem = null; // the MediaItem being edited
 // Three tiers of the edit source, all of the *original* pixels (edits are
 // applied on top via the shader). The editor renders from the smallest one
@@ -2528,12 +2531,30 @@ window.addEventListener("resize", () => {
   if (document.getElementById("notes-list")) scheduleBentoLayout();
 });
 
+function setEditorSidebar(enabled) {
+  editorSidebarEnabled = enabled;
+  const btn = document.getElementById("media-editor-toggle");
+  btn.classList.toggle("is-active", enabled);
+  if (!enabled && state.activeItem) {
+    document.getElementById("media-side").hidden = true;
+    document.getElementById("app-right").hidden = true;
+    invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+  } else if (enabled && state.activeItem) {
+    document.getElementById("media-side").hidden = false;
+    document.getElementById("app-right").hidden = false;
+    invoke("set_window_width", { width: Math.max(window.innerWidth, 1220) });
+  }
+}
+
 function initMedia() {
   initEditor();
   initWebExport();
   initRemoveBg();
   initExtend();
   initGenerate();
+  document.getElementById("media-editor-toggle").addEventListener("click", () =>
+    setEditorSidebar(!editorSidebarEnabled)
+  );
   document.getElementById("sel-paste").addEventListener("click", batchPaste);
   document
     .getElementById("sel-clear")
