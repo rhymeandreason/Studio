@@ -423,6 +423,10 @@ max-width:350px;
 
       twirl.addEventListener('click', toggle);
       name.addEventListener('click', toggle);
+      // Exposed so buildRoot can force-open the root directly — a synthetic
+      // click() on .node wouldn't reach the listeners above, which live on
+      // its twirl/name children, not .node itself.
+      row._toggle = toggle;
 
       if (!isRoot && entry.is_dir && expandedSet.has(entry.path)) {
         await toggle();
@@ -448,7 +452,7 @@ max-width:350px;
         const rootRow = await buildNode(rootEntry, true);
         group.appendChild(rootRow);
         // Auto-expand the root so its contents are visible immediately.
-        rootRow.querySelector('.node').click();
+        await rootRow._toggle();
       } catch {
         const err = document.createElement('div');
         err.className = 'node file';
