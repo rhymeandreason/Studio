@@ -60,6 +60,7 @@
 .btn-ghost {
     border-color: transparent;
     background: transparent;
+    border-radius: var(--radius-sm);
 }
 .btn-ghost:hover {
     background: var(--surface);
@@ -427,7 +428,7 @@ select.field {
     border-radius: var(--radius-sm);
     color: var(--text);
     font-family: var(--sans);
-    font-size: 14px;
+    font-size: 15px;
     letter-spacing:2%;
     text-align: left;
     white-space: nowrap;

@@ -203,6 +203,7 @@ body {
     color: var(--text-muted);
     font-family: var(--sans);
     font-size: 14px;
+    letter-spacing:2%;
     font-weight: 500;
     padding: 9px 14px;
     border-bottom: 2px solid transparent;
@@ -1964,7 +1965,8 @@ td.ntable__total-cell {
     background: var(--elevated);
     color: var(--text-muted);
     font-family: var(--sans);
-    font-size: 13px;
+    font-size: 14px;
+    letter-spacing: 2%;
     cursor: pointer;
     transition:
         color 0.15s,
