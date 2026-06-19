@@ -2067,6 +2067,10 @@ function initNotes() {
     const width = entries[0].contentRect.width;
     notesList.classList.toggle("is-medium", width > 600);
     notesList.classList.toggle("is-wide", width > 1140);
+    // Column count may have just changed — re-clamp each card's
+    // grid-column span (layoutBento) so it doesn't overflow into implicit
+    // tracks, which is what breaks the mosaic when narrowing.
+    scheduleBentoLayout();
   }).observe(notesList);
 }
 
