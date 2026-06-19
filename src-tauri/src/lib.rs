@@ -3333,6 +3333,7 @@ fn git_log_week(repo: String) -> Result<String, String> {
         .args([
             "-C", &repo,
             "log",
+            "--all",
             "--since=7 days ago",
             "--format=%H%x1f%h%x1f%s%x1f%an%x1f%ad%x1f%ai",
             "--date=format:%a %b %d %H:%M",
