@@ -46,6 +46,13 @@ export function initClaudeButton() {
   });
 }
 
+export function initFileDirectoryButton() {
+  const btn = document.getElementById("file-directory-btn");
+  btn.addEventListener("click", () => {
+    invoke("open_tool", { file: "file-directory.html", query: null });
+  });
+}
+
 export function initLaunch() {
   const btn = document.getElementById("launch-btn");
   btn.addEventListener("click", async () => {

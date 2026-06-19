@@ -21,6 +21,7 @@ import {
 import {
   initLaunch,
   initClaudeButton,
+  initFileDirectoryButton,
   initSpriteBadge,
   initWorkspaceForm,
   loadWorkspace,
@@ -2067,6 +2068,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   initAllProjectsButton();
   initLaunch();
   initClaudeButton();
+  initFileDirectoryButton();
   initSpriteBadge();
   initWorkspaceForm();
   initNotes();

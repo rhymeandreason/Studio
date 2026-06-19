@@ -45,6 +45,44 @@
       font-size: 12px;
     }
 
+    #project-picker {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 6px 8px 14px;
+    }
+
+    #project-picker .hint {
+      padding: 8px 6px 10px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .proj-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 12.5px;
+    }
+
+    .proj-item:hover {
+      background: var(--surface);
+    }
+
+    .proj-item .mi {
+      font-size: 16px;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .proj-item .name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     #tree {
       flex: 1 1 auto;
       overflow-y: auto;
@@ -184,6 +222,7 @@
   <div id="titlebar" data-tauri-drag-region>
     <div class="page-title">File Directory</div>
   </div>
+  <div id="project-picker" hidden></div>
   <div id="tree"></div>
 
   <script>
@@ -362,16 +401,54 @@
       return group;
     }
 
+    const picker = document.getElementById('project-picker');
+
+    async function showProjectPicker() {
+      tree.hidden = true;
+      tree.innerHTML = '';
+      picker.hidden = false;
+      picker.innerHTML = '';
+
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = 'No active Studio project — pick one:';
+      picker.appendChild(hint);
+
+      let projects = [];
+      try {
+        projects = await invoke('list_projects');
+      } catch {}
+
+      if (!projects.length) {
+        const empty = document.createElement('div');
+        empty.id = 'empty';
+        empty.textContent = 'No projects found.';
+        picker.appendChild(empty);
+        return;
+      }
+
+      for (const p of projects) {
+        const item = document.createElement('div');
+        item.className = 'proj-item';
+        item.innerHTML = `<span class="mi">folder</span><span class="name">${p.name}</span>`;
+        item.addEventListener('click', async () => {
+          await invoke('open_project', { path: p.path }).catch(() => {});
+          main();
+        });
+        picker.appendChild(item);
+      }
+    }
+
     async function main() {
       const project = await invoke('get_active_project').catch(() => null);
       if (!project) {
-        tree.innerHTML = '';
-        const empty = document.createElement('div');
-        empty.id = 'empty';
-        empty.textContent = 'No active Studio project.';
-        tree.appendChild(empty);
+        await showProjectPicker();
         return;
       }
+
+      picker.hidden = true;
+      tree.hidden = false;
+      tree.innerHTML = '';
 
       const workspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
 
@@ -386,6 +463,10 @@
     }
 
     main();
+
+    if (window.__TAURI__ && window.__TAURI__.event) {
+      window.__TAURI__.event.listen('project-activated', () => main());
+    }
   </script>
   <script type="module">
     import { initDevInspect } from "../devinspect.js";
