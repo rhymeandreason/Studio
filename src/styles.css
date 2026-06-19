@@ -881,15 +881,14 @@ select.field__input {
     --notes-font: system-ui;
     padding-bottom: 100px;
 }
-@container (width > 600px){
-  .notes-list{
-    grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
-  }
+/* Width tiers are driven by a ResizeObserver (main.js) toggling these
+ * classes directly, rather than a CSS container query — WKWebView doesn't
+ * reliably re-evaluate @container during a live window resize. */
+.notes-list.is-medium{
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
 }
-@container (width > 1140px){
-  .notes-list{
-    grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
-  }
+.notes-list.is-wide{
+  grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
 }
 
 .notes-toolbar {

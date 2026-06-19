@@ -2058,6 +2058,16 @@ function initNotes() {
 
   // Notes Mod+v paste is a Phase 2 feature (interaction-spec §7.2) — not yet
   // wired into panelKeymaps.notes.
+
+  // Drive the grid's width tiers (1 / 300px / 380px columns) from an
+  // observed pixel width instead of a CSS container query — WKWebView
+  // doesn't reliably re-run @container during a live window resize.
+  const notesList = document.getElementById("notes-list");
+  new ResizeObserver((entries) => {
+    const width = entries[0].contentRect.width;
+    notesList.classList.toggle("is-medium", width > 600);
+    notesList.classList.toggle("is-wide", width > 1140);
+  }).observe(notesList);
 }
 
 // --- Boot ------------------------------------------------------------------
