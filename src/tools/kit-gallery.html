@@ -346,11 +346,12 @@ border-radius: 2px;
         <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted);" id="range-out">50</div>
       </div>
       <div class="comp">
-        <div class="comp-name"><span class="class-name">&lt;studio-color&gt;</span><span class="css-values">Coloris-backed color picker · .value + input/change events</span></div>
+        <div class="comp-name"><span class="class-name">&lt;studio-color&gt;</span><span class="css-values">Coloris-backed color picker</span></div>
         <div class="row">
           <studio-color id="color" value="#6e6154"></studio-color>
           <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted);" id="color-out">#6e6154</span>
         </div>
+        <div class="comp-caption">Attrs: <code>value</code> (hex), <code>disabled</code>. Props: <code>.value</code> (get/set). Events: <code>input</code>, <code>change</code>. Light DOM — Coloris is document-global.</div>
       </div>
     </div>
   </section>
@@ -386,9 +387,9 @@ border-radius: 2px;
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name"><span class="class-name in-kit">.swatch-grid / .swatch-chip</span><span class="css-values">editable color chips with name + hex</span></div>
+        <div class="comp-name"><span class="class-name in-kit">.swatch-grid / &lt;studio-swatch&gt;</span><span class="css-values">color chip with label and hex</span></div>
         <div class="swatch-grid" id="swatch-grid"></div>
-        <div class="comp-caption">Click swatch to open Coloris picker. Name is editable inline.</div>
+        <div class="comp-caption">Attrs: <code>value</code> (hex), <code>name</code> (label), <code>deletable</code> (shows × button), <code>name-editable</code> (label becomes input), <code>picker="below"</code> (picker opens below chip; default above). Props: <code>.value</code>, <code>.name</code>. Events: <code>input</code>/<code>change</code> (color), <code>nameinput</code> (name edited), <code>delete</code> (× clicked). Wrap in <code>.swatch-grid</code>.</div>
       </div>
     </div>
   </section>
@@ -482,14 +483,11 @@ border-radius: 2px;
     ];
     const grid = document.getElementById("swatch-grid");
     for (const c of swatchColors) {
-      const chip = document.createElement("div");
-      chip.className = "swatch-chip";
-      chip.innerHTML = `
-        <div class="swatch-chip__block" style="background:${c.value};"></div>
-        <input class="swatch-chip__name" value="${c.name}" />
-        <div class="swatch-chip__hex">${c.value}</div>
-        <button class="swatch-chip__del" title="Remove">×</button>
-      `;
+      const chip = document.createElement("studio-swatch");
+      chip.setAttribute("value", c.value);
+      chip.setAttribute("name", c.name);
+      chip.setAttribute("deletable", "");
+      chip.setAttribute("name-editable", "");
       grid.appendChild(chip);
     }
 

@@ -8,7 +8,7 @@
 
 **When to add a component vs. a class:** CSS class if it's purely visual; Web Component only if it needs encapsulated JS behavior.
 
-Current component: `<studio-color>` — a Coloris-backed color picker. Light DOM (not Shadow DOM) because Coloris is document-global and binds via `[data-coloris]` delegation.
+Current components: `<studio-color>`, `<studio-swatch>`. Full attribute/event docs are in [`kit-gallery.html`](../src/tools/kit-gallery.html) (Tools → Design System) next to each component demo.
 
 **Radius scale:** `--radius-sm` (6px) · `--radius` (10px) · `--radius-lg` (12px). Use these — don't hardcode px values.
 
@@ -29,6 +29,18 @@ Current component: `<studio-color>` — a Coloris-backed color picker. Light DOM
 3. Add a demo to `kit-gallery.html` and document it here in `DESIGN.md`.
 
 No build step — just edit the files and reload.
+
+## Promoting an existing pattern to a kit component
+
+When the same DOM structure is being built by hand in multiple tools, move it into the kit:
+
+1. **Audit call sites** — find every place that builds the pattern (`grep` for the class name). Note what varies between them (attributes, behaviors, event wiring).
+2. **Consolidate CSS into `kit.css`** — move any styles that lived in local `<style>` blocks into `kit.css`. Remove the local copies.
+3. **Write the Web Component in `components.js`** — light DOM, using the same CSS classes from kit.css. Accept the variations as attributes (`deletable`, `picker="below"`, etc.). Emit named events (`input`, `change`, `delete`, `nameinput`) rather than accepting callbacks.
+4. **Replace call sites** — swap the manual DOM construction for `document.createElement("studio-*")` + `setAttribute` + `addEventListener`. Each call site should shrink significantly.
+5. **Remove dead code** — delete any helper functions that existed only to build the old pattern (e.g. `initColoris()` after Coloris init moved into `connectedCallback`).
+6. **Update `kit-gallery.html`** — replace the hand-built demo with the new element.
+7. **Document in `DESIGN.md`** — add the component to the current components list with its attributes and events.
 
 ## Tool usage
 

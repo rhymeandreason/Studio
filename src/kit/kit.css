@@ -340,6 +340,19 @@ select.field {
     gap: 4px;
     position: relative;
 }
+.swatch-chip__trigger {
+    position: absolute;
+    top: 0;
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    height: 0;
+}
+/* picker="below" — move trigger to bottom edge so Coloris opens below the chip */
+studio-swatch[picker="below"] .swatch-chip__trigger {
+    top: auto;
+    bottom: 0;
+}
 .swatch-chip__block {
     width: 56px;
     height: 56px;

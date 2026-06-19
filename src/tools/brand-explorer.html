@@ -89,14 +89,6 @@
   #heading-sample { font-size: 26px; line-height: 1.15; }
   #body-sample { font-size: 14px; line-height: 1.5; }
 
-  /* Hidden Coloris trigger input (brand-explorer specific) */
-  .swatch-chip__trigger {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-    width: 0;
-    height: 0;
-  }
 
   .status { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-height: 14px; }
 </style>
@@ -367,55 +359,16 @@
     function renderPalette() {
       paletteEl.innerHTML = "";
       state.colors.forEach((c, i) => {
-        const chip = document.createElement("div");
-        chip.className = "swatch-chip";
-
-        // Hidden input Coloris binds to.
-        const trigger = document.createElement("input");
-        trigger.type = "text";
-        trigger.className = "swatch-chip__trigger";
-        trigger.setAttribute("data-coloris", "");
-        trigger.value = c.value;
-        trigger.addEventListener("input", () => {
-          state.colors[i].value = trigger.value;
-          block.style.background = trigger.value;
-          hex.textContent = trigger.value;
-        });
-
-        const block = document.createElement("div");
-        block.className = "swatch-chip__block";
-        block.style.background = c.value;
-        block.onclick = () => trigger.click();
-
-        const nameEl = document.createElement("input");
-        nameEl.className = "swatch-chip__name";
-        nameEl.value = c.name;
-        nameEl.title = c.name;
-        nameEl.oninput = () => (state.colors[i].name = nameEl.value);
-
-        const hex = document.createElement("div");
-        hex.className = "swatch-chip__hex";
-        hex.textContent = c.value;
-
-        const del = document.createElement("button");
-        del.className = "swatch-chip__del";
-        del.title = "Remove";
-        del.textContent = "×";
-        del.onclick = () => { state.colors.splice(i, 1); renderPalette(); };
-
-        chip.append(trigger, block, nameEl, hex, del);
+        const chip = document.createElement("studio-swatch");
+        chip.setAttribute("value", c.value);
+        chip.setAttribute("name", c.name);
+        chip.setAttribute("deletable", "");
+        chip.setAttribute("name-editable", "");
+        chip.addEventListener("input", () => { state.colors[i].value = chip.value; });
+        chip.addEventListener("nameinput", () => { state.colors[i].name = chip.name; });
+        chip.addEventListener("delete", () => { state.colors.splice(i, 1); renderPalette(); });
         paletteEl.appendChild(chip);
       });
-    }
-
-    // Ensure Coloris is initialized (delegated mode picks up [data-coloris] inputs).
-    // We no longer use <studio-color> in the palette, so boot it manually via a
-    // transient element whose connectedCallback fires ensureColoris() internally.
-    function initColoris() {
-      const sc = document.createElement("studio-color");
-      sc.style.display = "none";
-      document.body.appendChild(sc);
-      requestAnimationFrame(() => sc.remove());
     }
 
     document.getElementById("add-color").onclick = () => {
@@ -515,7 +468,6 @@
           statusEl.textContent = "Couldn't load artifact: " + e;
         }
       }
-      initColoris();
       initWeightSelects();
       renderList();
       renderRoles();

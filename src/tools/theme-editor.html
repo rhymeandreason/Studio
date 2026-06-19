@@ -38,8 +38,7 @@
   .ctl select.field { height: 28px; padding: 0 22px 0 8px; font-size: 12px; width: auto; }
   .ctl input.field { height: 28px; padding: 0 6px; font-size: 12px; width: 56px; }
   .divider { width: 1px; align-self: stretch; background: var(--hairline-strong); margin: -2px 2px; }
-  .swatch-chip__name { text-align: center; }
-  .swatch-chip__trigger { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+
 
   .preview-grid { flex: 1; overflow-y: auto; padding: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; align-content: start; }
   .preview-tile { display: flex; flex-direction: column; gap: 6px; }
@@ -240,19 +239,13 @@
       }
       const colors = document.getElementById("colors"); colors.innerHTML = "";
       for (const [key, label] of COLOR_ROLES) {
-        const chip = document.createElement("div"); chip.className = "swatch-chip";
-        const trigger = document.createElement("input"); trigger.type = "text";
-        trigger.className = "swatch-chip__trigger";
-        trigger.setAttribute("data-coloris",""); trigger.value = theme.colors[key];
-        const block = document.createElement("div"); block.className = "swatch-chip__block"; block.style.background = theme.colors[key];
-        block.onclick = () => trigger.click();
-        const nameEl = document.createElement("div"); nameEl.className = "swatch-chip__name"; nameEl.textContent = label;
-        const hex = document.createElement("div"); hex.className = "swatch-chip__hex"; hex.textContent = theme.colors[key];
-        trigger.addEventListener("input", () => { theme.colors[key] = trigger.value; block.style.background = trigger.value; hex.textContent = trigger.value; renderPreview(); });
-        chip.append(block, trigger, nameEl, hex); colors.appendChild(chip);
+        const chip = document.createElement("studio-swatch");
+        chip.setAttribute("value", theme.colors[key]);
+        chip.setAttribute("name", label);
+        chip.setAttribute("picker", "below");
+        chip.addEventListener("input", () => { theme.colors[key] = chip.value; renderPreview(); });
+        colors.appendChild(chip);
       }
-      const sc = document.createElement("studio-color"); sc.style.display = "none";
-      document.body.appendChild(sc); requestAnimationFrame(() => sc.remove());
 
       const hs = document.getElementById("heading-size"), bs = document.getElementById("body-size");
       hs.value = theme.headingSize; bs.value = theme.bodySize;
