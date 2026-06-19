@@ -116,35 +116,6 @@
     flex: 0 0 auto;
 }
 
-/* Square toggle button that inverts when the sidebar is open */
-.claude-toggle-btn {
-    -webkit-app-region: no-drag;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 1px solid var(--hairline-strong, var(--hairline));
-    border:0px;
-    border-radius: 7px;
-    background: var(--surface);
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
-}
-
-.claude-toggle-btn:hover {
-    color: var(--text);
-    border-color: var(--text-soft);
-}
-
-.claude-toggle-btn.is-active {
-    //background: var(--text);
-    border-color: var(--text);
-    color: var(--text);
-}
-
 .claude-tabs {
     display: flex;
     align-items: stretch;

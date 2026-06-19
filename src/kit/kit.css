@@ -91,6 +91,30 @@ body {
     padding: 0;
 }
 
+/* Sidebar toggle — 28px ghost icon button for toggling a panel.
+ * Add .is-active when the panel is open. */
+.btn-icon-s {
+    -webkit-app-region: no-drag;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+.btn-icon-s:hover {
+    color: var(--text);
+}
+.btn-icon-s.is-active {
+    color: var(--text);
+}
+
 /* Add — dashed "add something" button for toolbars. */
 .btn-add {
     display: inline-flex;
