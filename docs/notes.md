@@ -7,6 +7,13 @@ Stored in `notes.json` per project; `state.notesData` is the in-memory store,
 Image notes store a project-relative `src` (`notes/<id>.<ext>` for note-owned
 assets, or `media/…` referenced in place) — never inline base64.
 
+Text notes can have one optional attached image stored as `note.image`
+(project-relative path, same `notes/<id>.<ext>` convention). `note.imageW` /
+`note.imageH` hold the natural pixel size for aspect-ratio reservation.
+Paste an image while the note's textarea is focused (Cmd+V) to attach it;
+it appears above the body text. Hover the image to reveal an × remove button.
+Deleting the note also deletes the asset via `delete_note_asset`.
+
 Per-note styling (theme/fonts/span) is applied as scoped CSS variables on the
 card; the project-wide font preference is `notesData.font`/`fontSize` via
 `--notes-font`/`--notes-font-size` on `#notes-list`.
