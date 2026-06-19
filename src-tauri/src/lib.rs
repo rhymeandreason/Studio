@@ -1082,11 +1082,29 @@ fn open_tool(app: AppHandle, file: String, query: Option<String>) {
         .and_then(|n| n.to_str())
         .unwrap_or("Tool")
         .to_string();
-    let _ = WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url.into()))
-        .title(title)
-        .inner_size(900.0, 640.0)
-        .min_inner_size(420.0, 360.0)
-        .build();
+
+    let (width, height) = if file == "file-directory.html" {
+        (350.0, 640.0)
+    } else {
+        (900.0, 640.0)
+    };
+
+    let mut builder = WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url.into()))
+        .inner_size(width, height)
+        .min_inner_size(280.0, 320.0);
+
+    if file == "file-directory.html" {
+        // Minimal window style: empty native title + paper-tinted transparent
+        // title bar, so the page's own drag strip owns the whole window.
+        builder = builder
+            .title("")
+            .title_bar_style(tauri::TitleBarStyle::Transparent)
+            .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff));
+    } else {
+        builder = builder.title(title);
+    }
+
+    let _ = builder.build();
 }
 
 // Note: the artifact formats Claude writes to are documented in the
@@ -1172,6 +1190,40 @@ fn save_workspace(path: String, workspace: Workspace) -> Result<(), String> {
     let file = PathBuf::from(&path).join("workspace.json");
     let text = serde_json::to_string_pretty(&workspace).map_err(|e| e.to_string())?;
     std::fs::write(&file, text).map_err(|e| e.to_string())
+}
+
+/// One entry returned by `list_dir`.
+#[derive(Clone, Serialize)]
+struct DirEntry2 {
+    name: String,
+    path: String,
+    is_dir: bool,
+}
+
+/// Shallow listing of a folder's immediate children (dotfiles skipped),
+/// directories first then alphabetical. Used by the File Directory tool to
+/// lazily expand a folder tree without walking the whole filesystem.
+#[tauri::command]
+fn list_dir(path: String) -> Result<Vec<DirEntry2>, String> {
+    let mut entries: Vec<DirEntry2> = std::fs::read_dir(&path)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+        .map(|e| {
+            let is_dir = e.path().is_dir();
+            DirEntry2 {
+                name: e.file_name().to_string_lossy().to_string(),
+                path: e.path().to_string_lossy().to_string(),
+                is_dir,
+            }
+        })
+        .collect();
+    entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+    });
+    Ok(entries)
 }
 
 // ── Video edits ─────────────────────────────────────────────────────────────
@@ -4278,6 +4330,7 @@ pub fn run() {
             create_project,
             read_workspace,
             save_workspace,
+            list_dir,
             list_videos,
             read_video,
             write_video,

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Directory</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../kit/kit.css" />
+  <script type="module" src="../kit/components.js"></script>
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #titlebar {
+      height: 44px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: flex-end;
+      padding: 0 14px 8px;
+      -webkit-app-region: drag;
+    }
+
+    #titlebar .page-title {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    #empty {
+      padding: 16px 14px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    #tree {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 2px 8px 14px;
+    }
+
+    .group {
+      margin-top: 10px;
+    }
+
+    .group:first-child {
+      margin-top: 0;
+    }
+
+    .group-label {
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-soft);
+      padding: 4px 6px 3px;
+    }
+
+    .node {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 6px;
+      border-radius: var(--radius-sm);
+      cursor: default;
+      font-size: 12.5px;
+      line-height: 1.3;
+      white-space: nowrap;
+    }
+
+    .node:hover {
+      background: var(--surface);
+    }
+
+    .node .twirl {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-soft);
+      transition: transform 0.12s ease;
+      cursor: pointer;
+    }
+
+    .node.open .twirl {
+      transform: rotate(90deg);
+    }
+
+    .node .twirl .mi {
+      font-size: 14px;
+    }
+
+    .node .icon {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      color: var(--text-muted);
+    }
+
+    .node .icon .mi {
+      font-size: 16px;
+    }
+
+    .node.dir > .icon .mi {
+      color: var(--accent);
+    }
+
+    .node .name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+
+    .node.file .name {
+      color: var(--text-muted);
+    }
+
+    .children {
+      margin-left: 14px;
+      border-left: 1px solid var(--hairline);
+      padding-left: 0;
+    }
+
+    .row {
+      display: flex;
+      flex-direction: column;
+    }
+
+  </style>
+</head>
+
+<body>
+  <div id="titlebar" data-tauri-drag-region>
+    <div class="page-title">File Directory</div>
+  </div>
+  <div id="tree"></div>
+
+  <script>
+    const {
+      invoke
+    } = window.__TAURI__.core;
+
+    const tree = document.getElementById('tree');
+
+    function iconFor(name, isDir, open) {
+      if (isDir) return open ? 'folder_open' : 'folder';
+      const ext = name.split('.').pop().toLowerCase();
+      if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic'].includes(ext)) return 'image';
+      if (['mp4', 'mov', 'webm'].includes(ext)) return 'movie';
+      if (['json'].includes(ext)) return 'data_object';
+      if (['md', 'txt'].includes(ext)) return 'description';
+      return 'draft';
+    }
+
+    async function buildNode(entry) {
+      const row = document.createElement('div');
+      row.className = 'row';
+
+      const node = document.createElement('div');
+      node.className = 'node ' + (entry.is_dir ? 'dir' : 'file');
+
+      const twirl = document.createElement('span');
+      twirl.className = 'twirl';
+      if (entry.is_dir) {
+        twirl.innerHTML = '<span class="mi">chevron_right</span>';
+      }
+      node.appendChild(twirl);
+
+      const icon = document.createElement('span');
+      icon.className = 'icon';
+      icon.innerHTML = `<span class="mi">${iconFor(entry.name, entry.is_dir, false)}</span>`;
+      node.appendChild(icon);
+
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = entry.name;
+      node.appendChild(name);
+
+      row.appendChild(node);
+
+      let childrenEl = null;
+      let loaded = false;
+
+      async function toggle() {
+        if (!entry.is_dir) {
+          invoke('reveal_in_finder', { path: entry.path }).catch(() => {});
+          return;
+        }
+        const isOpen = node.classList.contains('open');
+        if (isOpen) {
+          node.classList.remove('open');
+          icon.innerHTML = `<span class="mi">${iconFor(entry.name, true, false)}</span>`;
+          if (childrenEl) childrenEl.remove();
+          childrenEl = null;
+          return;
+        }
+        node.classList.add('open');
+        icon.innerHTML = `<span class="mi">${iconFor(entry.name, true, true)}</span>`;
+        if (!loaded) {
+          loaded = true;
+          try {
+            const entries = await invoke('list_dir', { path: entry.path });
+            childrenEl = document.createElement('div');
+            childrenEl.className = 'children';
+            for (const child of entries) {
+              childrenEl.appendChild(await buildNode(child));
+            }
+          } catch {
+            childrenEl = document.createElement('div');
+            childrenEl.className = 'children';
+          }
+        }
+        row.appendChild(childrenEl);
+      }
+
+      twirl.addEventListener('click', toggle);
+      name.addEventListener('click', toggle);
+
+      return row;
+    }
+
+    async function buildRoot(label, path) {
+      const group = document.createElement('div');
+      group.className = 'group';
+
+      const groupLabel = document.createElement('div');
+      groupLabel.className = 'group-label';
+      groupLabel.textContent = label;
+      group.appendChild(groupLabel);
+
+      try {
+        const entries = await invoke('list_dir', { path });
+        const rootEntry = { name: path.split('/').filter(Boolean).pop() || path, path, is_dir: true };
+        const rootRow = await buildNode(rootEntry);
+        group.appendChild(rootRow);
+        // Auto-expand the root so its contents are visible immediately.
+        rootRow.querySelector('.node').click();
+      } catch {
+        const err = document.createElement('div');
+        err.className = 'node file';
+        err.textContent = `(couldn't read ${path})`;
+        group.appendChild(err);
+      }
+
+      return group;
+    }
+
+    async function main() {
+      const project = await invoke('get_active_project').catch(() => null);
+      if (!project) {
+        tree.innerHTML = '';
+        const empty = document.createElement('div');
+        empty.id = 'empty';
+        empty.textContent = 'No active Studio project.';
+        tree.appendChild(empty);
+        return;
+      }
+
+      const workspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
+
+      tree.appendChild(await buildRoot(project.name, project.path));
+
+      if (workspace.repo) {
+        tree.appendChild(await buildRoot('Repo', workspace.repo));
+      }
+      for (const folder of workspace.folders || []) {
+        tree.appendChild(await buildRoot('Folder', folder));
+      }
+    }
+
+    main();
+  </script>
+  <script type="module">
+    import { initDevInspect } from "../devinspect.js";
+    initDevInspect();
+  </script>
+</body>
+
+</html>
