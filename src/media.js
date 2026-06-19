@@ -2623,7 +2623,8 @@ function initMedia() {
     Enter: activateSelectedMedia,
     Escape: () => (lbOpen() ? closeLightbox() : clearSelection()),
     "Mod+c": () => {
-      if (editorActive()) copyAdjustments();
+      if (editorActive() && editorSidebarEnabled) copyAdjustments();
+      else if (state.activeItem || mediaSelection.size()) copyMediaImage();
     },
     "Mod+Shift+c": copyMediaImage,
     "Mod+v": () => {
