@@ -30,8 +30,16 @@
       flex-shrink: 0;
       display: flex;
       align-items: flex-end;
+      justify-content: space-between;
       padding: 0 14px 8px;
       -webkit-app-region: drag;
+    }
+
+    /* Toggled on by #text-scale-toggle — scales the whole window (text,
+     * icons, spacing) rather than just bumping font-size, since leaving
+     * paddings/line-heights fixed while only enlarging text looks cramped. */
+    body.text-large {
+      zoom: 1.5;
     }
 
 
@@ -217,6 +225,7 @@ max-width:350px;
 <body>
   <div id="titlebar" data-tauri-drag-region>
     <div class="page-title" id="page-title">File Directory</div>
+    <studio-toggle id="text-scale-toggle" title="Larger text"></studio-toggle>
   </div>
   <div id="project-picker" hidden></div>
   <div id="tree"></div>
@@ -227,6 +236,21 @@ max-width:350px;
     } = window.__TAURI__.core;
 
     const tree = document.getElementById('tree');
+
+    // Larger-text toggle — persisted across launches (not per-project, it's
+    // a display preference). Wait for the custom element to upgrade before
+    // touching .checked — setting it any earlier would shadow the
+    // element's own getter/setter once it does upgrade.
+    const TEXT_SCALE_KEY = 'studio-file-directory-text-large';
+    customElements.whenDefined('studio-toggle').then(() => {
+      const textScaleToggle = document.getElementById('text-scale-toggle');
+      textScaleToggle.checked = localStorage.getItem(TEXT_SCALE_KEY) === '1';
+      document.body.classList.toggle('text-large', textScaleToggle.checked);
+      textScaleToggle.addEventListener('change', () => {
+        document.body.classList.toggle('text-large', textScaleToggle.checked);
+        localStorage.setItem(TEXT_SCALE_KEY, textScaleToggle.checked ? '1' : '0');
+      });
+    });
 
     // Editor tool + icon per artifact kind (artifacts/<kind>/<name>.json),
     // mirroring src/artifacts.js's EDITOR map.
