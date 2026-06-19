@@ -2059,19 +2059,24 @@ function initNotes() {
   // Notes Mod+v paste is a Phase 2 feature (interaction-spec §7.2) — not yet
   // wired into panelKeymaps.notes.
 
-  // Drive the grid's width tiers (1 / 300px / 380px columns) from an
-  // observed pixel width instead of a CSS container query — WKWebView
-  // doesn't reliably re-run @container during a live window resize.
+  // Drive the grid's width tiers (1 / 300px / 380px columns) from the
+  // window's own width — not a CSS container query (WKWebView doesn't
+  // reliably re-run @container during a live resize) and not the grid
+  // element's own contentRect (that's ~48px narrower than the window once
+  // .content's padding is subtracted, so the 600/1140 breakpoints wouldn't
+  // line up with where the window actually feels too narrow).
   const notesList = document.getElementById("notes-list");
-  new ResizeObserver((entries) => {
-    const width = entries[0].contentRect.width;
+  function updateNotesGridTier() {
+    const width = window.innerWidth;
     notesList.classList.toggle("is-medium", width > 600);
     notesList.classList.toggle("is-wide", width > 1140);
     // Column count may have just changed — re-clamp each card's
     // grid-column span (layoutBento) so it doesn't overflow into implicit
     // tracks, which is what breaks the mosaic when narrowing.
     scheduleBentoLayout();
-  }).observe(notesList);
+  }
+  updateNotesGridTier();
+  window.addEventListener("resize", updateNotesGridTier);
 }
 
 // --- Boot ------------------------------------------------------------------
