@@ -289,17 +289,34 @@ border-radius: 2px;
         <div class="comp-caption">Pill-shaped option toggle. <code>.is-active</code> fills with accent. <code>.chip--reset</code> self-aligns for reset actions alongside a chip group.</div>
       </div>
       <div class="comp">
-        <div class="comp-name"><span class="class-name in-kit">.editgroup / .editbtns / .iconbtn</span><span class="css-values">labeled control section with icon button row</span></div>
-        <div class="editgroup" style="max-width:200px;">
-          <span class="editgroup__label">Rotate <em>0°</em></span>
-          <div class="editbtns">
-            <button class="iconbtn"><span class="mi">rotate_left</span></button>
-            <button class="iconbtn"><span class="mi">rotate_right</span></button>
-            <button class="iconbtn"><span class="mi">flip</span></button>
-            <button class="iconbtn"><span class="mi" style="transform:scaleX(-1)">flip</span></button>
+        <div class="comp-name"><span class="class-name in-kit">.editsection / .editgroup / .editbtns / .iconbtn</span><span class="css-values">image editor control panel — complete example</span></div>
+        <div class="editsection" style="max-width:220px;">
+          <div class="editgroup">
+            <span class="editgroup__label">Rotate &amp; flip</span>
+            <div class="editbtns">
+              <button class="iconbtn" title="Rotate left"><span class="mi">rotate_left</span></button>
+              <button class="iconbtn" title="Rotate right"><span class="mi">rotate_right</span></button>
+              <button class="iconbtn" title="Flip horizontal"><span class="mi">flip</span></button>
+              <button class="iconbtn" title="Flip vertical"><span class="mi" style="transform:rotate(90deg)">flip</span></button>
+            </div>
+          </div>
+          <div class="editgroup">
+            <span class="editgroup__label">Crop</span>
+            <div class="editbtns editbtns--wrap">
+              <button class="chip">None</button>
+              <button class="chip is-active">Free</button>
+              <button class="chip">1:1</button>
+              <button class="chip">16:9</button>
+              <button class="chip">4:5</button>
+            </div>
+          </div>
+          <div class="editgroup">
+            <span class="editgroup__label">Straighten <em id="straighten-val">0°</em></span>
+            <input class="slider" type="range" min="-15" max="15" step="0.5" value="0"
+                   oninput="document.getElementById('straighten-val').textContent = this.value + '°'" />
           </div>
         </div>
-        <div class="comp-caption"><code>.editgroup</code> wraps a <code>.editgroup__label</code> and one or more <code>.editbtns</code> rows. Wrap a live value in <code>&lt;em&gt;</code> inside the label for contrast. <code>.iconbtn</code> fills available width equally (<code>flex: 1 1 0</code>). Add <code>.editbtns--wrap</code> for wrapping chip groups.</div>
+        <div class="comp-caption"><code>.editsection</code> is a rounded surface card grouping related <code>.editgroup</code> controls. Each <code>.editgroup</code> has a <code>.editgroup__label</code> (wrap live values in <code>&lt;em&gt;</code>) and an <code>.editbtns</code> row of <code>.iconbtn</code> or <code>.chip</code> buttons — or a <code>.slider</code> directly. <code>.editbtns--wrap</code> allows chips to wrap.</div>
       </div>
     </div>
   </section>
@@ -364,10 +381,21 @@ border-radius: 2px;
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name"><span class="class-name in-kit">.range</span><span class="css-values">styled range slider</span></div>
+        <div class="comp-name"><span class="class-name in-kit">.range</span><span class="css-values">styled range slider — prominent, 4px track</span></div>
         <input class="range" type="range" min="0" max="100" value="50" style="max-width:260px;"
                oninput="document.getElementById('range-out').textContent = this.value" />
         <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted);" id="range-out">50</div>
+      </div>
+      <div class="comp">
+        <div class="comp-name"><span class="class-name in-kit">.sliderrow / .slider</span><span class="css-values">labeled adjustment slider — compact, 3px track</span></div>
+        <div class="sliderrow" style="max-width:220px;">
+          <div class="sliderrow__head">
+            <span>Brightness</span><em class="sliderrow__val" id="sliderrow-out">0</em>
+          </div>
+          <input class="slider" type="range" min="-100" max="100" value="0"
+                 oninput="document.getElementById('sliderrow-out').textContent = this.value" />
+        </div>
+        <div class="comp-caption"><code>.sliderrow</code> wraps a <code>.sliderrow__head</code> (label + <code>.sliderrow__val</code> live value) and a <code>.slider</code> input. Use for tonal/adjustment controls; use <code>.range</code> for standalone prominent sliders.</div>
       </div>
       <div class="comp">
         <div class="comp-name"><span class="class-name">&lt;studio-color&gt;</span><span class="css-values">Coloris-backed color picker</span></div>

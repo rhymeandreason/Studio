@@ -686,6 +686,101 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
     border-color: var(--hairline-strong);
 }
 
+/* ---- Slider row (labeled range control) ---------------------------------- */
+
+/*
+ * A compact range input with a label + live value header.
+ *
+ * Usage:
+ *   <div class="sliderrow">
+ *     <div class="sliderrow__head">
+ *       <span>Brightness</span><em class="sliderrow__val">0</em>
+ *     </div>
+ *     <input class="slider" type="range" min="-100" max="100" value="0">
+ *   </div>
+ *
+ * .slider is a thinner track variant (3px, --hairline-strong fill) distinct
+ * from .range (4px, --accent-soft fill). Use .slider inside .sliderrow for
+ * tonal/adjustment controls; use .range for standalone prominent sliders.
+ */
+.sliderrow {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.sliderrow__head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+.sliderrow__val {
+    font-style: normal;
+    color: var(--text);
+}
+.slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 3px;
+    border-radius: 999px;
+    background: var(--hairline-strong);
+    outline: none;
+}
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--elevated);
+    box-shadow: var(--shadow-sm);
+}
+
+/* ---- Edit section + edit group ------------------------------------------- */
+
+/*
+ * .editsection — a rounded surface card grouping related .editgroup controls.
+ * .editgroup — a labeled sub-section with one or more .editbtns / .sliderrow rows.
+ * .editgroup__label — small muted label; wrap a live value in <em> for contrast.
+ * .editbtns — flex row of .iconbtn or .chip buttons.
+ * .editbtns--wrap — allows chips to wrap across multiple lines.
+ * .iconbtn — equal-width icon button that fills available space.
+ *
+ * Usage:
+ *   <div class="editsection">
+ *     <div class="editgroup">
+ *       <span class="editgroup__label">Rotate &amp; flip</span>
+ *       <div class="editbtns">
+ *         <button class="iconbtn"><span class="mi">rotate_left</span></button>
+ *         <button class="iconbtn"><span class="mi">rotate_right</span></button>
+ *       </div>
+ *     </div>
+ *     <div class="editgroup">
+ *       <span class="editgroup__label">Crop</span>
+ *       <div class="editbtns editbtns--wrap">
+ *         <button class="chip is-active">Free</button>
+ *         <button class="chip">1:1</button>
+ *       </div>
+ *     </div>
+ *     <div class="editgroup">
+ *       <span class="editgroup__label">Straighten <em id="val">0°</em></span>
+ *       <input class="slider" type="range" min="-15" max="15" value="0" />
+ *     </div>
+ *   </div>
+ */
+.editsection {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 16px;
+    padding-bottom: 24px;
+    background: var(--surface);
+    border-radius: var(--radius);
+}
+
 /* ---- Edit group (labeled control section + button row) ------------------- */
 
 /*
@@ -711,6 +806,7 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
     gap: 10px;
 }
 .editgroup__label {
+font-family: var(--sans);
     font-size: 11.5px;
     font-weight: 600;
     color: var(--text-muted);
