@@ -2497,7 +2497,7 @@ function initEditor() {
       `${editState.straighten}°`;
     apply();
   });
-  document.getElementById("ed-reset").addEventListener("click", () => {
+  document.getElementById("m-reset").addEventListener("click", () => {
     editState = defaultEdits();
     syncEditorControls();
     apply();
