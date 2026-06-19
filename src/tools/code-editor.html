@@ -680,7 +680,9 @@ function syncScroll() {
   const y = -code.scrollTop;
   gutter.style.transform = `translateY(${y}px)`;
   hl.style.transform = `translate(${-code.scrollLeft}px, ${y}px)`;
-  findLayer.style.transform = `translate(${-code.scrollLeft}px, ${y}px)`;
+  // Find marks are positioned from live text geometry (which already reflects
+  // #hl's transform), so the layer itself isn't transformed — recompute on scroll.
+  if (!findBar.hidden) renderFindMarks();
   updateViewport();
 }
 
@@ -1158,34 +1160,43 @@ const findBar = $("find-bar"), findInput = $("find-input"), findCount = $("find-
 const findLayer = $("find-layer");
 let findMatches = [], findIdx = -1;
 
-// Width of one monospace glyph, for placing match highlights by column.
-let _charW = 0;
-function charWidth() {
-  if (_charW) return _charW;
-  const s = document.createElement("span");
-  s.textContent = "0".repeat(50);
-  s.style.cssText = "position:absolute;visibility:hidden;white-space:pre;font:var(--code-font)";
-  document.body.appendChild(s);
-  _charW = s.getBoundingClientRect().width / 50;
-  s.remove();
-  return _charW;
+// A DOM Range over columns [c0, c1) within a rendered #hl line, walking its
+// token text nodes — so positions are exact (tabs, wrapping, any font).
+function rowRange(row, c0, c1) {
+  const r = document.createRange();
+  const walk = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+  let acc = 0, set0 = false, n;
+  while ((n = walk.nextNode())) {
+    const len = n.textContent.length;
+    if (!set0 && acc + len >= c0) { r.setStart(n, c0 - acc); set0 = true; }
+    if (set0 && acc + len >= c1) { r.setEnd(n, c1 - acc); return r; }
+    acc += len;
+  }
+  return null;
 }
 
-// Draw a highlight box over every match (current one emphasized).
+// Draw a highlight box over every match (current one emphasized), placed from
+// the live text geometry of the #hl layer.
 function renderFindMarks() {
   findLayer.innerHTML = "";
   if (findBar.hidden || !findMatches.length) return;
-  const len = findInput.value.length, cw = charWidth(), text = code.value;
+  const len = findInput.value.length, text = code.value;
+  const base = findLayer.getBoundingClientRect();
   findMatches.forEach((start, i) => {
     const lineStart = text.lastIndexOf("\n", start - 1) + 1;
     const line = text.slice(0, start).split("\n").length;
     const row = hl.children[line - 1];
     if (!row) return;
+    const r = rowRange(row, start - lineStart, start - lineStart + len);
+    if (!r) return;
+    const rect = r.getBoundingClientRect();
+    if (!rect.width && !rect.height) return;
     const m = document.createElement("div");
     m.className = "find-mark" + (i === findIdx ? " cur" : "");
-    m.style.top = row.offsetTop + "px";
-    m.style.left = 12 + (start - lineStart) * cw + "px";
-    m.style.width = len * cw + "px";
+    m.style.top = (rect.top - base.top) + "px";
+    m.style.left = (rect.left - base.left) + "px";
+    m.style.width = rect.width + "px";
+    m.style.height = rect.height + "px";
     findLayer.append(m);
   });
 }
