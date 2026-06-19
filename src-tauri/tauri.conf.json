@@ -14,7 +14,7 @@
         "title": "Studio",
         "width": 900,
         "height": 640,
-        "minWidth": 640,
+        "minWidth": 320,
         "minHeight": 480,
         "visible": false,
         "titleBarStyle": "Transparent",
