@@ -715,6 +715,22 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
     border-color: var(--text);
 }
 
+/* Filled variant — accent fill, white icon. Used for primary actions (send, submit). */
+.btn-round-filled {
+    background: var(--accent);
+    color: var(--elevated);
+    border-color: var(--accent);
+}
+.btn-round-filled:hover {
+    background: var(--text);
+    color: var(--elevated);
+    border-color: var(--text);
+}
+.btn-round-filled:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
 /* ---- Segmented toggle ---------------------------------------------------- */
 /* A pill-shaped container holding 2–4 icon buttons; one is active at a time.
  * Usage:
