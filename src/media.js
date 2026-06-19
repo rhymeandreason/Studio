@@ -1004,6 +1004,7 @@ async function initDragDrop() {
 // --- Image editor (non-destructive, sidecar-backed) ------------------------
 
 let editorSidebarEnabled = false;
+state.editorSidebarEnabled = false;
 let editItem = null; // the MediaItem being edited
 // Three tiers of the edit source, all of the *original* pixels (edits are
 // applied on top via the shader). The editor renders from the smallest one
@@ -2533,6 +2534,7 @@ window.addEventListener("resize", () => {
 
 function setEditorSidebar(enabled) {
   editorSidebarEnabled = enabled;
+  state.editorSidebarEnabled = enabled;
   const btn = document.getElementById("media-editor-toggle");
   btn.classList.toggle("is-active", enabled);
   if (!enabled && state.activeItem) {

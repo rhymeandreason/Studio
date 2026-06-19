@@ -512,7 +512,7 @@ export function selectTab(name) {
       document.getElementById("media-side").hidden = true;
       invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
     }
-  } else if (state.activeItem && mediaSelection.has(state.activeItem.path)) {
+  } else if (state.activeItem && mediaSelection.has(state.activeItem.path) && state.editorSidebarEnabled) {
     // Returning to media: re-open the editor column for the selection that
     // still owns it (it was only hidden, not torn down).
     const appRight = document.getElementById("app-right");
