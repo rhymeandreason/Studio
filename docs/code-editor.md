@@ -42,6 +42,11 @@ all kit-styled, all offline. See [tools.md](tools.md) for how tools load.
   it as long as nothing was typed since (normal typing-undo is the textarea's
   native undo).
 - **Wrap** — toggles soft wrapping; gutter row heights sync to wrapped lines.
+- **Find (Cmd+F)** — live search bar (Enter / Shift+Enter for next/prev, Esc to
+  close, `current/total` count). Matches are highlighted by a layer behind the
+  transparent textarea, positioned from real text geometry (a DOM Range's
+  `getBoundingClientRect()` over the `#hl` line, so it's exact with tabs/wrap)
+  and re-rendered on scroll. On a Markdown file it switches to Code view first.
 - **Back / Forward** — arrow buttons left of Open walk a navigation history of
   opened files (`history`/`histIdx`; opening from a back-position drops forward
   entries, like a browser). Seeded from the restored session.
