@@ -118,6 +118,15 @@
       color: var(--accent);
     }
 
+    .node.artifact > .icon .mi {
+      color: var(--accent);
+    }
+
+    .node.artifact .name {
+      color: var(--text);
+      cursor: pointer;
+    }
+
     .node .name {
       overflow: hidden;
       text-overflow: ellipsis;
@@ -155,9 +164,30 @@
 
     const tree = document.getElementById('tree');
 
-    function iconFor(name, isDir, open) {
-      if (isDir) return open ? 'folder_open' : 'folder';
-      const ext = name.split('.').pop().toLowerCase();
+    // Editor tool + icon per artifact kind (artifacts/<kind>/<name>.json),
+    // mirroring src/artifacts.js's EDITOR map.
+    const ARTIFACT_EDITOR = {
+      'brand-kit': 'brand-explorer.html',
+      'presentation': 'slides.html',
+      'theme': 'theme-editor.html',
+    };
+    const ARTIFACT_ICON = {
+      'brand-kit': 'palette',
+      'presentation': 'slideshow',
+      'theme': 'styles',
+    };
+
+    // artifacts/<kind>/<name>.json → kind, else null.
+    function artifactKind(path) {
+      const m = path.match(/\/artifacts\/([^/]+)\/[^/]+\.json$/);
+      return m ? m[1] : null;
+    }
+
+    function iconFor(entry, open) {
+      if (entry.is_dir) return open ? 'folder_open' : 'folder';
+      const kind = artifactKind(entry.path);
+      if (kind && ARTIFACT_ICON[kind]) return ARTIFACT_ICON[kind];
+      const ext = entry.name.split('.').pop().toLowerCase();
       if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic'].includes(ext)) return 'image';
       if (['mp4', 'mov', 'webm'].includes(ext)) return 'movie';
       if (['json'].includes(ext)) return 'data_object';
@@ -169,8 +199,10 @@
       const row = document.createElement('div');
       row.className = 'row';
 
+      const isArtifact = !entry.is_dir && !!artifactKind(entry.path);
       const node = document.createElement('div');
-      node.className = 'node ' + (entry.is_dir ? 'dir' : 'file');
+      node.className = 'node ' + (entry.is_dir ? 'dir' : 'file') + (isArtifact ? ' artifact' : '');
+      if (isArtifact) node.title = 'Open in ' + ARTIFACT_EDITOR[artifactKind(entry.path)].replace('.html', '');
 
       const twirl = document.createElement('span');
       twirl.className = 'twirl';
@@ -181,7 +213,7 @@
 
       const icon = document.createElement('span');
       icon.className = 'icon';
-      icon.innerHTML = `<span class="mi">${iconFor(entry.name, entry.is_dir, false)}</span>`;
+      icon.innerHTML = `<span class="mi">${iconFor(entry, false)}</span>`;
       node.appendChild(icon);
 
       const name = document.createElement('span');
@@ -196,19 +228,28 @@
 
       async function toggle() {
         if (!entry.is_dir) {
-          invoke('reveal_in_finder', { path: entry.path }).catch(() => {});
+          const kind = artifactKind(entry.path);
+          const editor = kind && ARTIFACT_EDITOR[kind];
+          if (editor) {
+            invoke('open_tool', {
+              file: editor,
+              query: 'artifact=' + encodeURIComponent(entry.path),
+            }).catch(() => {});
+          } else {
+            invoke('reveal_in_finder', { path: entry.path }).catch(() => {});
+          }
           return;
         }
         const isOpen = node.classList.contains('open');
         if (isOpen) {
           node.classList.remove('open');
-          icon.innerHTML = `<span class="mi">${iconFor(entry.name, true, false)}</span>`;
+          icon.innerHTML = `<span class="mi">${iconFor(entry, false)}</span>`;
           if (childrenEl) childrenEl.remove();
           childrenEl = null;
           return;
         }
         node.classList.add('open');
-        icon.innerHTML = `<span class="mi">${iconFor(entry.name, true, true)}</span>`;
+        icon.innerHTML = `<span class="mi">${iconFor(entry, true)}</span>`;
         if (!loaded) {
           loaded = true;
           try {
