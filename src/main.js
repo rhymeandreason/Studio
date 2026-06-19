@@ -1945,6 +1945,9 @@ function hideDropIndicator() {
 function layoutBento() {
   const listEl = document.getElementById("notes-list");
   if (!listEl || listEl.classList.contains("notes-list--days")) return;
+  // Below 450px the grid is replaced with a plain full-width stack — no
+  // spans/rows to compute.
+  if (listEl.classList.contains("is-stacked")) return;
 
   const style = getComputedStyle(listEl);
   // Clamp card spans to the actual column count so wide cards don't overflow.
@@ -2059,15 +2062,16 @@ function initNotes() {
   // Notes Mod+v paste is a Phase 2 feature (interaction-spec §7.2) — not yet
   // wired into panelKeymaps.notes.
 
-  // Drive the grid's width tiers (1 / 300px / 380px columns) from the
-  // window's own width — not a CSS container query (WKWebView doesn't
+  // Drive the grid's width tiers (stacked / 1 / 300px / 380px columns) from
+  // the window's own width — not a CSS container query (WKWebView doesn't
   // reliably re-run @container during a live resize) and not the grid
   // element's own contentRect (that's ~48px narrower than the window once
-  // .content's padding is subtracted, so the 600/1140 breakpoints wouldn't
-  // line up with where the window actually feels too narrow).
+  // .content's padding is subtracted, so the breakpoints wouldn't line up
+  // with where the window actually feels too narrow).
   const notesList = document.getElementById("notes-list");
   function updateNotesGridTier() {
     const width = window.innerWidth;
+    notesList.classList.toggle("is-stacked", width <= 450);
     notesList.classList.toggle("is-medium", width > 600);
     notesList.classList.toggle("is-wide", width > 1140);
     // Column count may have just changed — re-clamp each card's
