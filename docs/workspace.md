@@ -38,15 +38,8 @@ to remove.
 
 ## Repo card: Git actions
 
-The repo card's Git group has two buttons:
-
-- **Open** — opens the Git window (`open_git_window` Tauri command) with the
-  selected color and editor.
-- **Pulse** — opens the Git Pulse tool (`open_git_pulse` Tauri command), a
-  dot-graph of commits from the last 7 days. Each dot is one commit; hover for
-  the message, time, and short hash. The window is repo-specific (unique label),
-  so multiple repos can have pulse windows open simultaneously. The tool uses
-  the minimal window style (transparent title bar, in-page drag strip).
+Two buttons: **Open** (Git window) and **Pulse** (`src/tools/git-pulse.html` —
+dot-graph of this week's commits, one dot per commit, hover for message).
 
 ## Repo card: editor picker
 
