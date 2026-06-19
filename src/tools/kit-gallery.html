@@ -407,12 +407,12 @@ border-radius: 2px;
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name"><span class="class-name in-kit">.toggle-button</span><span class="css-values">checkbox toggle switch</span></div>
+        <div class="comp-name"><span class="class-name in-kit">&lt;studio-toggle&gt; / .toggle-button</span><span class="css-values">checkbox toggle switch</span></div>
         <div class="row">
-          <label class="toggle-button"><input type="checkbox" /><span class="toggle-button__track"><span class="toggle-button__thumb"></span></span></label>
-          <label class="toggle-button"><input type="checkbox" checked /><span class="toggle-button__track"><span class="toggle-button__thumb"></span></span></label>
+          <studio-toggle></studio-toggle>
+          <studio-toggle checked></studio-toggle>
         </div>
-        <div class="comp-caption">CSS-only toggle. Structure: <code>&lt;label class="toggle-button"&gt;&lt;input type="checkbox"&gt;&lt;span class="toggle-button__track"&gt;&lt;span class="toggle-button__thumb"&gt;</code></div>
+        <div class="comp-caption">Attrs: <code>checked</code> (boolean). Props: <code>.checked</code> (get/set). Events: <code>input</code>, <code>change</code>. Use <code>&lt;studio-toggle&gt;</code> in JS contexts; use <code>.toggle-button</code> CSS class directly for static HTML.</div>
       </div>
       <div class="comp">
         <div class="comp-name"><span class="class-name in-kit">.field</span><span class="css-values">text input, select, textarea</span></div>

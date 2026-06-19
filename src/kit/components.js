@@ -204,3 +204,43 @@ class StudioSwatch extends HTMLElement {
 }
 
 customElements.define("studio-swatch", StudioSwatch);
+
+/**
+ * <studio-toggle checked> — a toggle switch.
+ *
+ * Attrs: checked (boolean)
+ * Props: .checked (get/set)
+ * Events: input, change
+ */
+class StudioToggle extends HTMLElement {
+    static observedAttributes = ["checked"];
+
+    connectedCallback() {
+        if (this._built) return;
+        this._built = true;
+        this.classList.add("toggle-button");
+
+        this._input = document.createElement("input");
+        this._input.type = "checkbox";
+        this._input.checked = this.hasAttribute("checked");
+        this._input.addEventListener("input", () => this.dispatchEvent(new Event("input", { bubbles: true })));
+        this._input.addEventListener("change", () => this.dispatchEvent(new Event("change", { bubbles: true })));
+
+        const track = document.createElement("span");
+        track.className = "toggle-button__track";
+        const thumb = document.createElement("span");
+        thumb.className = "toggle-button__thumb";
+        track.appendChild(thumb);
+
+        this.append(this._input, track);
+    }
+
+    get checked() { return this._input ? this._input.checked : this.hasAttribute("checked"); }
+    set checked(v) { v ? this.setAttribute("checked", "") : this.removeAttribute("checked"); }
+
+    attributeChangedCallback(_name, _old, val) {
+        if (this._input) this._input.checked = val !== null;
+    }
+}
+
+customElements.define("studio-toggle", StudioToggle);

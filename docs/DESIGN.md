@@ -6,9 +6,9 @@
 2. **`src/kit/kit.css`** — Component classes built on tokens. No JS. Link after `tokens.css`.
 3. **`src/kit/components.js`** — `<studio-*>` Web Components for widgets that need JS behavior. Each exposes `.value` + emits `input`/`change` like a native form control.
 
-**When to add a component vs. a class:** CSS class if it's purely visual; Web Component only if it needs encapsulated JS behavior.
+**When to add a component vs. a class:** CSS class if it's purely visual; Web Component if it needs encapsulated JS behavior.
 
-Current components: `<studio-color>`, `<studio-swatch>`. Full attribute/event docs are in [`kit-gallery.html`](../src/tools/kit-gallery.html) (Tools → Design System) next to each component demo.
+Current components: `<studio-color>`, `<studio-swatch>`, `<studio-toggle>`. Full attribute/event docs are in [`kit-gallery.html`](../src/tools/kit-gallery.html) (Tools → Design System) next to each component demo.
 
 **Radius scale:** `--radius-sm` (6px) · `--radius` (10px) · `--radius-lg` (12px). Use these — don't hardcode px values.
 

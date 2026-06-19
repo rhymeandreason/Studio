@@ -2535,8 +2535,7 @@ window.addEventListener("resize", () => {
 function setEditorSidebar(enabled) {
   editorSidebarEnabled = enabled;
   state.editorSidebarEnabled = enabled;
-  const btn = document.getElementById("media-editor-toggle");
-  btn.classList.toggle("is-active", enabled);
+  document.getElementById("media-editor-toggle").checked = enabled;
   if (!enabled && state.activeItem) {
     document.getElementById("media-side").hidden = true;
     document.getElementById("app-right").hidden = true;
@@ -2554,8 +2553,8 @@ function initMedia() {
   initRemoveBg();
   initExtend();
   initGenerate();
-  document.getElementById("media-editor-toggle").addEventListener("click", () =>
-    setEditorSidebar(!editorSidebarEnabled)
+  document.getElementById("media-editor-toggle").addEventListener("change", (e) =>
+    setEditorSidebar(e.target.checked)
   );
   document.getElementById("sel-paste").addEventListener("click", batchPaste);
   document
