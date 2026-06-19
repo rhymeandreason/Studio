@@ -7,6 +7,16 @@
  * Convention for tool windows: link tokens.css, then kit.css, then your own
  * <style>. See docs/tools-dynamic-loading.md. */
 
+/* ---- Base ----------------------------------------------------------------- */
+
+body {
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+}
+
 /* ---- Buttons -------------------------------------------------------------- */
 
 .btn {
@@ -707,6 +717,7 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
     display: flex;
     flex-direction: column;
     gap: 6px;
+font-family:var(--sans);
 }
 .sliderrow__head {
     display: flex;
