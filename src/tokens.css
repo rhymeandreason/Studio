@@ -29,8 +29,8 @@
     --radius-sm: 6px;
     --radius: 10px;
     --radius-lg: 12px;
-    --sans: "Futura", "Futura PT", system-ui, sans-serif;
-    --serif: "Futura", "Futura PT", "Trebuchet MS", sans-serif;
+    --sans: "Futura PT", "Futura", system-ui, sans-serif;
+    --serif: "Futura PT", "Futura", "Trebuchet MS", sans-serif;
     --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
     /* Motion — shared durations/easings so animations feel consistent across

@@ -12,7 +12,7 @@ body {
     background: var(--bg);
     color: var(--text);
     font-family: var(--sans);
-    font-size: 14px;
+    font-size: 15px;
     letter-spacing: -0.005em;
     display: flex;
     flex-direction: row;
@@ -55,7 +55,7 @@ body {
 
 .titlebar__title {
     font-family: var(--serif);
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -65,7 +65,7 @@ body {
 /* App-specific eyebrow alias */
 .overview__title {
     font-family: var(--serif);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -108,7 +108,7 @@ body {
 
 .projhead__name {
     font-family: var(--serif);
-    font-size: 22px;
+    font-size: 23px;
     font-weight: 600;
     letter-spacing: -0.01em;
 }
@@ -155,7 +155,7 @@ body {
     background: var(--text);
     color: var(--bg);
     font-family: var(--sans);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     letter-spacing: -0.005em;
     padding: 9px 18px;
@@ -194,7 +194,7 @@ body {
     background: transparent;
     color: var(--text-muted);
     font-family: var(--sans);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     padding: 9px 18px;
     border: 1px solid var(--hairline-strong);
@@ -256,7 +256,7 @@ body {
     border: none;
     color: var(--text-muted);
     font-family: var(--sans);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     padding: 9px 14px;
     border-bottom: 2px solid transparent;
@@ -267,7 +267,7 @@ body {
 }
 
 .tab .mi {
-    font-size: 17px;
+    font-size: 18px;
 }
 
 .tab:hover {
@@ -317,18 +317,18 @@ body {
 }
 
 .empty__mark .mi {
-    font-size: 30px;
+    font-size: 32px;
 }
 
 .empty__headline {
     font-family: var(--serif);
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
     color: var(--text);
 }
 
 .empty__hint {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-muted);
 }
 
@@ -339,7 +339,7 @@ body {
 }
 
 .placeholder {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-muted);
 }
 
@@ -489,20 +489,20 @@ body {
     background: var(--surface);
     color: var(--text-muted);
     font-family: var(--serif);
-    font-size: 28px;
+    font-size: 30px;
     font-weight: 600;
     user-select: none;
 }
 
 .card__name {
     font-family: var(--serif);
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
 }
 
 .card__modified {
     margin-top: auto;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
 }
 
@@ -525,7 +525,7 @@ body {
 }
 
 .field__label {
-    font-size: 11.5px;
+    font-size: 12.5px;
     font-weight: 500;
     color: var(--text-muted);
 }
@@ -535,7 +535,7 @@ body {
     border: 1px solid var(--hairline);
     border-radius: var(--radius-sm);
     color: var(--text);
-    font-size: 14px;
+    font-size: 15px;
     font-family: var(--sans);
     padding: 0 12px;
     height: 38px;
@@ -588,7 +588,7 @@ select.field__input {
     color: var(--text-muted);
     cursor: pointer;
     font-family: var(--sans);
-    font-size: 12px;
+    font-size: 13px;
     padding: 0 12px;
     height: 38px;
     white-space: nowrap;
@@ -643,7 +643,7 @@ select.field__input {
 }
 
 .ws-item__type {
-    font-size: 11.5px;
+    font-size: 12.5px;
     font-weight: 500;
     color: var(--text-muted);
     flex: 1 1 auto;
@@ -672,7 +672,7 @@ select.field__input {
 }
 
 .ws-item__name {
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 600;
     color: var(--text);
     line-height: 1.3;
@@ -695,7 +695,7 @@ select.field__input {
 }
 
 .ws-item__input--path {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
 }
 
@@ -715,7 +715,7 @@ select.field__input {
     color: var(--text-muted);
     cursor: pointer;
     font-family: var(--sans);
-    font-size: 12px;
+    font-size: 13px;
     padding: 5px 10px;
     opacity: 0;
     transition:
@@ -771,7 +771,7 @@ select.field__input {
     color: var(--text-muted);
     cursor: pointer;
     font-family: var(--sans);
-    font-size: 12px;
+    font-size: 13px;
     padding: 8px 12px;
     white-space: nowrap;
     transition: color 0.15s, border-color 0.15s, background 0.15s;
@@ -805,7 +805,7 @@ select.field__input {
 }
 
 .ws-repo__glabel {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -819,7 +819,7 @@ select.field__input {
     color: var(--text);
     cursor: pointer;
     font-family: var(--sans);
-    font-size: 12px;
+    font-size: 13px;
     padding: 5px 8px;
 }
 
@@ -863,7 +863,7 @@ select.field__input {
     color: var(--on-accent, #fff);
     cursor: pointer;
     font-family: var(--sans);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     padding: 6px 12px;
     transition: filter 0.15s;
@@ -904,7 +904,7 @@ select.field__input {
     color: var(--text-muted);
     cursor: pointer;
     font-family: var(--sans);
-    font-size: 12.5px;
+    font-size: 13.5px;
     font-weight: 500;
     padding: 7px 12px;
     transition:
@@ -938,7 +938,7 @@ select.field__input {
 
 .ws__status,
 .notes-status {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
 }
 
@@ -1063,7 +1063,7 @@ select.field__input {
 .notes-day-header {
     flex: 1 0 100%;
     font-weight: 700;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-dim);
     margin: 36px 0 12px;
     padding-bottom: 6px;
@@ -1236,7 +1236,7 @@ textarea.notecard__title::placeholder {
     align-items: center;
     gap: 5px;
     font-family: var(--sans);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
     background: var(--bg);
     border: 1px solid var(--hairline);
@@ -1267,7 +1267,7 @@ textarea.notecard__title::placeholder {
 .notedrop__chev {
     margin-left: auto;
     flex: 0 0 auto;
-    font-size: 14px;
+    font-size: 15px;
     color: var(--text-soft);
 }
 
@@ -1329,7 +1329,7 @@ textarea.notecard__title::placeholder {
 .notecard__date {
     position: absolute;
     left: 0;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--note-body-color, var(--note-title-color, var(--text-soft)));
     opacity: var(--note-meta-opacity, 0.6);
     user-select: none;
@@ -1372,7 +1372,7 @@ textarea.notecard__title::placeholder {
     resize: none;
     width: 100%;
     outline: none;
-    font-size: 13px;
+    font-size: 14px;
     letter-spacing: -0.07px;
 }
 
@@ -1382,7 +1382,7 @@ textarea.notecard__title::placeholder {
 }
 
 .notecard__count {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
 }
 
@@ -1411,7 +1411,7 @@ textarea.notecard__title::placeholder {
     border-radius: 50%;
     color: #fff;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 15px;
     height: 20px;
     line-height: 1;
     opacity: 0;
@@ -1429,7 +1429,7 @@ textarea.notecard__title::placeholder {
     border: none;
     color: var(--note-body-color, var(--text-muted));
     font: inherit;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.5;
     overflow: hidden;
     padding: 0;
@@ -1470,7 +1470,7 @@ textarea.notecard__title::placeholder {
     padding: 2px 0;
     color: var(--text-muted);
     font: inherit;
-    font-size: 12px;
+    font-size: 13px;
     text-align: left;
     cursor: pointer;
     overflow: hidden;
@@ -1631,7 +1631,7 @@ textarea.notecard__title::placeholder {
     border: none;
     color: var(--note-body-color, var(--text));
     font-family: var(--sans);
-    font-size: 12px;
+    font-size: 13px;
     padding: 6px 8px;
     width: 100%;
     outline: none;
@@ -1656,7 +1656,7 @@ textarea.notecard__title::placeholder {
 }
 
 td.ntable__total-cell {
-    font-size: 11.5px;
+    font-size: 12.5px;
     font-weight: 600;
     color: var(--text-muted);
     padding: 5px 8px;
@@ -1763,7 +1763,7 @@ td.ntable__total-cell {
     border-radius: var(--radius-sm);
     color: var(--text);
     font-family: var(--sans);
-    font-size: 13px;
+    font-size: 14px;
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
@@ -1843,7 +1843,7 @@ td.ntable__total-cell {
     background: transparent;
     color: var(--text-muted);
     font-family: var(--sans);
-    font-size: 12px;
+    font-size: 13px;
     padding: 4px 12px;
     border-radius: 999px;
     cursor: pointer;
@@ -1873,7 +1873,7 @@ td.ntable__total-cell {
     align-items: center;
     gap: 5px;
     padding: 7px 14px;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 /* Generate dialog */
@@ -1894,7 +1894,7 @@ td.ntable__total-cell {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text);
 }
 
@@ -1960,7 +1960,7 @@ td.ntable__total-cell {
 
 .mediatile__name {
     display: block;
-    font-size: 11.5px;
+    font-size: 12.5px;
     color: var(--text-muted);
     text-align: left;
     overflow-wrap: break-word;
@@ -1971,7 +1971,7 @@ td.ntable__total-cell {
     display: block;
     width: 100%;
     /* Match .mediatile__name exactly */
-    font-size: 11.5px;
+    font-size: 12.5px;
     font-family: inherit;
     line-height: inherit;
     color: var(--text);
@@ -1990,7 +1990,7 @@ td.ntable__total-cell {
 
 .mediatile__meta {
     display: block;
-    font-size: 10.5px;
+    font-size: 11.5px;
     color: var(--text-soft);
     opacity: 0.7;
     text-align: left;
@@ -2004,7 +2004,7 @@ td.ntable__total-cell {
     position: absolute;
     top: 6px;
     left: 6px;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.06em;
     color: #fff;
@@ -2028,7 +2028,7 @@ td.ntable__total-cell {
 }
 
 .mediatile__kind .mi {
-    font-size: 34px;
+    font-size: 36px;
     color: #fff;
     filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.55));
 }
@@ -2059,7 +2059,7 @@ td.ntable__total-cell {
 }
 
 .selbar__count {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
 }
 
@@ -2073,7 +2073,7 @@ td.ntable__total-cell {
     align-items: center;
     gap: 5px;
     padding: 7px 12px;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .selbar .btn-ghost:disabled {
@@ -2101,7 +2101,7 @@ td.ntable__total-cell {
     align-items: center;
     gap: 10px;
     font-family: var(--serif);
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--accent);
     background: var(--elevated);
@@ -2111,7 +2111,7 @@ td.ntable__total-cell {
 }
 
 .dropzone__inner .mi {
-    font-size: 38px;
+    font-size: 40px;
 }
 
 /* Lightbox */
@@ -2154,7 +2154,7 @@ td.ntable__total-cell {
     align-items: center;
     gap: 5px;
     padding: 7px 12px;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .lightbox__stage {
@@ -2176,7 +2176,7 @@ td.ntable__total-cell {
 
 /* Image editor (in the lightbox) */
 .edit-status {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
     margin-right: 4px;
 }
@@ -2265,7 +2265,7 @@ td.ntable__total-cell {
     background: var(--elevated);
     color: var(--text-muted);
     font-family: var(--sans);
-    font-size: 12px;
+    font-size: 13px;
     cursor: pointer;
     transition:
         color 0.15s,
@@ -2323,7 +2323,7 @@ td.ntable__total-cell {
 
 .ppmodal__title {
     font-family: var(--serif);
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
 }
 
@@ -2337,7 +2337,7 @@ td.ntable__total-cell {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: 14px;
     cursor: pointer;
 }
 
@@ -2379,7 +2379,7 @@ td.ntable__total-cell {
 }
 
 .editgroup__label {
-    font-size: 11.5px;
+    font-size: 12.5px;
     font-weight: 600;
     color: var(--text-muted);
 }
@@ -2457,7 +2457,7 @@ td.ntable__total-cell {
 .sliderrow__head {
     display: flex;
     justify-content: space-between;
-    font-size: 11.5px;
+    font-size: 12.5px;
     color: var(--text-muted);
 }
 
@@ -2576,7 +2576,7 @@ td.ntable__total-cell {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
 }
 
@@ -2732,7 +2732,7 @@ td.ntable__total-cell {
 }
 
 .webexport__readout {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
     min-height: 16px;
 }
@@ -2766,19 +2766,19 @@ td.ntable__total-cell {
 
 .modal__title {
     font-family: var(--serif);
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 600;
     letter-spacing: -0.01em;
 }
 
 .modal__hint {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
     margin-top: -4px;
 }
 
 .modal__error {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--rose);
 }
 
@@ -2798,7 +2798,7 @@ td.ntable__total-cell {
 }
 .artifacts__title {
     font-family: var(--serif);
-    font-size: 17px;
+    font-size: 18px;
     font-weight: 500;
 }
 .artifacts__actions { display: flex; gap: 8px; }
@@ -2806,7 +2806,7 @@ td.ntable__total-cell {
 .btn-main--icon:hover { opacity: 1; color: var(--text); }
 .artifacts__empty { color: var(--text-muted); font-size: 13px; max-width: 42ch; }
 .artifacts__kind {
-    font-size: 11px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-muted);
