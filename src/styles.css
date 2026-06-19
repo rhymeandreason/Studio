@@ -379,17 +379,10 @@ body {
     flex-direction: column;
     gap: 6px;
     text-align: left;
-    background: var(--elevated);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius);
-    padding: 16px;
-    padding-bottom: 40px; /* room for trash button */
     min-height: 150px;
     cursor: pointer;
     color: var(--text);
     font-family: inherit;
-    box-shadow: var(--shadow-sm);
-    position: relative;
     transition:
         transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1),
         box-shadow 0.2s,
@@ -458,19 +451,10 @@ body {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 25%, transparent), var(--shadow-md);
 }
 
-.project-card.is-selected .card__icon--letter {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--bg);
-}
-
 .project-card.is-selected .card__trash {
     color: rgba(255, 255, 255, 0.6);
 }
 
-.card.is-selected .card__trash:hover {
-    color: var(--rose);
-    background: rgba(255, 255, 255, 0.1);
-}
 
 .card__icon {
     width: 64px;
