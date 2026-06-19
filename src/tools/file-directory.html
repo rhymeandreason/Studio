@@ -220,7 +220,7 @@
 
 <body>
   <div id="titlebar" data-tauri-drag-region>
-    <div class="page-title">File Directory</div>
+    <div class="page-title" id="page-title">File Directory</div>
   </div>
   <div id="project-picker" hidden></div>
   <div id="tree"></div>
@@ -379,10 +379,12 @@
       const group = document.createElement('div');
       group.className = 'group';
 
-      const groupLabel = document.createElement('div');
-      groupLabel.className = 'group-label';
-      groupLabel.textContent = label;
-      group.appendChild(groupLabel);
+      if (label) {
+        const groupLabel = document.createElement('div');
+        groupLabel.className = 'group-label';
+        groupLabel.textContent = label;
+        group.appendChild(groupLabel);
+      }
 
       try {
         const entries = await invoke('list_dir', { path });
@@ -439,20 +441,24 @@
       }
     }
 
+    const pageTitle = document.getElementById('page-title');
+
     async function main() {
       const project = await invoke('get_active_project').catch(() => null);
       if (!project) {
+        pageTitle.textContent = 'File Directory';
         await showProjectPicker();
         return;
       }
 
+      pageTitle.textContent = project.name;
       picker.hidden = true;
       tree.hidden = false;
       tree.innerHTML = '';
 
       const workspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
 
-      tree.appendChild(await buildRoot(project.name, project.path));
+      tree.appendChild(await buildRoot(null, project.path));
 
       if (workspace.repo) {
         tree.appendChild(await buildRoot('Repo', workspace.repo));
