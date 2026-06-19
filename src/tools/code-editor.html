@@ -117,7 +117,44 @@
   .twrap { padding-left: 14px; }
 
   /* editor (center) */
-  #editor-col { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+  #editor-col { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; position: relative; }
+
+  /* Find bar (Cmd+F) */
+  #find-bar {
+    position: absolute;
+    top: 6px; right: 24px;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    background: var(--elevated);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+  }
+  #find-bar[hidden] { display: none; }
+  #find-input {
+    border: 0; outline: none; background: transparent;
+    font: var(--code-font); color: var(--text);
+    width: 180px; padding: 2px 4px;
+  }
+  #find-count { font: var(--code-font); color: var(--text-soft); min-width: 44px; text-align: right; }
+
+  /* Find match highlight layer (between #hl and the textarea). */
+  #find-layer {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;                 /* behind the syntax text + transparent textarea */
+  }
+  .find-mark {
+    position: absolute;
+    height: var(--line-h);
+    background: rgba(255, 213, 0, 0.55);
+    border-radius: 2px;
+  }
+  .find-mark.cur { background: rgba(255, 145, 0, 0.85); outline: 1px solid #e8590c; }
   #editor {
     flex: 1 1 auto;
     display: flex;
@@ -173,7 +210,7 @@
   #hl {
     pointer-events: none;
     color: var(--text);
-    z-index: 0;
+    z-index: 1;
   }
   /* Syntax token colors (Prism types), bright colors. */
   .tok-comment, .tok-prolog, .tok-doctype, .tok-cdata { color: #9aa0a6; font-style: italic; }
@@ -190,7 +227,7 @@
   .btn.active { background: var(--accent-soft); color: var(--text); }
   #hl .hline.chg { background: var(--add-bg); box-shadow: -12px 0 0 var(--add-bg), 9999px 0 0 var(--add-bg); }
   #code {
-    z-index: 1;
+    z-index: 2;
     background: transparent;
     color: transparent;            /* text is drawn by #hl; caret stays visible */
     resize: none;
@@ -364,6 +401,7 @@
         <div id="gutter"></div>
         <div id="codebox">
           <div id="hl"></div>
+          <div id="find-layer"></div>
           <textarea id="code" spellcheck="false" wrap="off"></textarea>
         </div>
         <div id="minimap"><div class="mm-view"></div></div>
@@ -372,6 +410,14 @@
            Markdown file is in Preview mode. A plain scrollable div (not an
            iframe) so scrolling stays reliable across show/hide. -->
       <div id="md-view"></div>
+
+      <div id="find-bar" hidden>
+        <input id="find-input" type="text" placeholder="Find" spellcheck="false" />
+        <span id="find-count"></span>
+        <button class="btn btn-icon" id="find-prev" title="Previous (Shift+Enter)"><span class="mi">keyboard_arrow_up</span></button>
+        <button class="btn btn-icon" id="find-next" title="Next (Enter)"><span class="mi">keyboard_arrow_down</span></button>
+        <button class="btn btn-icon" id="find-close" title="Close (Esc)"><span class="mi">close</span></button>
+      </div>
     </div>
   </div>
 
@@ -634,6 +680,7 @@ function syncScroll() {
   const y = -code.scrollTop;
   gutter.style.transform = `translateY(${y}px)`;
   hl.style.transform = `translate(${-code.scrollLeft}px, ${y}px)`;
+  findLayer.style.transform = `translate(${-code.scrollLeft}px, ${y}px)`;
   updateViewport();
 }
 
@@ -1106,8 +1153,98 @@ inspector.addEventListener("click", (e) => {
 });
 
 // Cmd+S to save.
+// ---------- find (Cmd+F) ----------
+const findBar = $("find-bar"), findInput = $("find-input"), findCount = $("find-count");
+const findLayer = $("find-layer");
+let findMatches = [], findIdx = -1;
+
+// Width of one monospace glyph, for placing match highlights by column.
+let _charW = 0;
+function charWidth() {
+  if (_charW) return _charW;
+  const s = document.createElement("span");
+  s.textContent = "0".repeat(50);
+  s.style.cssText = "position:absolute;visibility:hidden;white-space:pre;font:var(--code-font)";
+  document.body.appendChild(s);
+  _charW = s.getBoundingClientRect().width / 50;
+  s.remove();
+  return _charW;
+}
+
+// Draw a highlight box over every match (current one emphasized).
+function renderFindMarks() {
+  findLayer.innerHTML = "";
+  if (findBar.hidden || !findMatches.length) return;
+  const len = findInput.value.length, cw = charWidth(), text = code.value;
+  findMatches.forEach((start, i) => {
+    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+    const line = text.slice(0, start).split("\n").length;
+    const row = hl.children[line - 1];
+    if (!row) return;
+    const m = document.createElement("div");
+    m.className = "find-mark" + (i === findIdx ? " cur" : "");
+    m.style.top = row.offsetTop + "px";
+    m.style.left = 12 + (start - lineStart) * cw + "px";
+    m.style.width = len * cw + "px";
+    findLayer.append(m);
+  });
+}
+
+function openFind() {
+  if (inPreview()) {                 // find operates on the source; leave preview
+    document.body.classList.remove("md-preview");
+    $("view-toggle").innerHTML = `<span class="mi">visibility</span>Preview`;
+  }
+  findBar.hidden = false;
+  const sel = code.value.slice(code.selectionStart, code.selectionEnd);
+  if (sel && !sel.includes("\n")) findInput.value = sel;
+  findInput.focus();
+  findInput.select();
+  runFind(code.selectionStart);
+}
+function closeFind() { findBar.hidden = true; renderFindMarks(); code.focus(); }
+
+// Recompute matches for the current query; select the one at/after `from`.
+function runFind(from = 0) {
+  const q = findInput.value;
+  findMatches = [];
+  if (q) {
+    const t = code.value.toLowerCase(), s = q.toLowerCase();
+    for (let i = t.indexOf(s); i !== -1; i = t.indexOf(s, i + Math.max(1, s.length))) findMatches.push(i);
+  }
+  if (!findMatches.length) { findIdx = -1; findCount.textContent = q ? "0/0" : ""; renderFindMarks(); return; }
+  findIdx = findMatches.findIndex((i) => i >= from);
+  if (findIdx < 0) findIdx = 0;
+  gotoMatch();
+}
+function stepFind(dir) {
+  if (!findMatches.length) return;
+  findIdx = (findIdx + dir + findMatches.length) % findMatches.length;
+  gotoMatch();
+}
+function gotoMatch() {
+  const start = findMatches[findIdx], len = findInput.value.length;
+  code.setSelectionRange(start, start + len);   // shown as a (gray) selection while the bar holds focus
+  const line = code.value.slice(0, start).split("\n").length;
+  const row = hl.children[line - 1];
+  if (row) code.scrollTop = Math.max(0, row.offsetTop - code.clientHeight / 2 + row.offsetHeight / 2);
+  syncScroll();
+  renderFindMarks();
+  findCount.textContent = `${findIdx + 1}/${findMatches.length}`;
+}
+
+findInput.addEventListener("input", () => runFind(code.selectionStart));
+findInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); stepFind(e.shiftKey ? -1 : 1); }
+  else if (e.key === "Escape") { e.preventDefault(); closeFind(); }
+});
+$("find-next").addEventListener("click", () => stepFind(1));
+$("find-prev").addEventListener("click", () => stepFind(-1));
+$("find-close").addEventListener("click", closeFind);
+
 window.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); saveFile(); return; }
+  if ((e.metaKey || e.ctrlKey) && e.key === "f") { e.preventDefault(); openFind(); return; }
   // Cmd+Z right after a Prettify (nothing typed since) reverts it; otherwise
   // let the textarea's native undo handle it.
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "z" &&
