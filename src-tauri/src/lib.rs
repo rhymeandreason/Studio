@@ -469,12 +469,13 @@ fn toggle_spotlight_window(app: &AppHandle) {
 
     let url = WebviewUrl::App("tools/spotlight.html".into());
     if let Ok(win) = WebviewWindowBuilder::new(app, "spotlight", url)
-        .inner_size(600.0, 420.0)
+        .inner_size(640.0, 460.0)
         .resizable(false)
         .decorations(false)
         .transparent(true)
         .always_on_top(true)
         .skip_taskbar(true)
+        .shadow(false)
         .center()
         .visible(false)
         .build()
