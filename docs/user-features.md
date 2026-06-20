@@ -12,6 +12,10 @@ A quick tour of what Studio can do.
 - One-click **Launch** opens everything at once (repo in your chosen editor,
   Figma, apps, files, folders, URLs).
 - Pin a tab (Workspace / Media / Notes) to open automatically for a project.
+- **Modes**: record the current window layout (which apps are open and where),
+  then replay it later with one click. Play reopens anything that's closed and
+  hides everything else, so you can snap back into a saved setup instantly.
+  Modes can be renamed and show when they were last saved.
 
 ## Notes
 - A bento-grid corkboard of notes: text, checklists, tables, and images.
@@ -54,7 +58,10 @@ A quick tour of what Studio can do.
 ## Tools
 - A dedicated wrench-icon tray dropdown of small single-purpose utilities,
   each in its own window — Brand Explorer, the Design System styleguide,
-  Bento Grid, Daily Notes, and the RAM overview.
+  Bento Grid, Daily Notes, File Directory, and the RAM overview.
+- **File Directory**: a vertical file tree for the active project. Opens code
+  files in the Code Editor, design artifacts in their matching Studio tool,
+  and plain HTML files in the browser; remembers which folders you had open.
 - They share Studio's look (the "Runes" design kit) and work fully offline.
 - Exports and artifacts save straight into your active project's folder.
 
