@@ -52,16 +52,16 @@ A quick tour of what Studio can do.
 - Select and copy text from the chat transcript.
 
 ## Tools
-- A tray menu of small single-purpose utilities, each in its own window —
-  Brand Explorer, the Design System styleguide, Bento Grid, Daily Notes, and
-  the RAM overview.
+- A dedicated wrench-icon tray dropdown of small single-purpose utilities,
+  each in its own window — Brand Explorer, the Design System styleguide,
+  Bento Grid, Daily Notes, and the RAM overview.
 - They share Studio's look (the "Runes" design kit) and work fully offline.
 - Exports and artifacts save straight into your active project's folder.
 
 ## Scheduled tasks
 - Schedule Claude Code tasks to run automatically, grouped into two shared time
   slots; each task picks the project it runs in (or "Global"). Open it from the
-  tray menu's Tools section or the Schedules button.
+  wrench-icon tray dropdown or the Schedules button.
 - Saving the schedule wakes the Mac ahead of upcoming runs (one admin-password
   prompt) so they fire even while it's asleep.
 
