@@ -1898,7 +1898,11 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
                 target.h.max(0) as u32,
             ));
         } else {
-            let _ = win.minimize();
+            // hide(), not minimize(): instant (no genie animation) and the
+            // same "hide, don't quit" semantics the close button already
+            // uses elsewhere — Play's un-hiding via show() above works the
+            // same either way.
+            let _ = win.hide();
         }
     }
 

@@ -66,13 +66,17 @@ window-layout snapshots, rendered as pill rows in `#ws-modes` by
   `mode.layout`, autosaved like the rest of the form.
 - **Play** → `invoke("apply_window_layout", { layout })`. Studio's own
   windows are restored directly through Tauri (`apply_window_layout` in
-  `lib.rs`) — matched by window label, not process name. Everything else
-  goes to `winlayout apply`, which moves/resizes/un-minimizes matching
-  windows (launching the app first if needed) and minimizes whatever's left.
-  Matching/minimizing *other* apps' windows uses the Accessibility API
-  (`AXUIElement`), which needs the user to grant Studio Accessibility
-  permission once (System Settings → Privacy & Security → Accessibility) —
-  until granted, AX calls are silent no-ops.
+  `lib.rs`) — matched by window label, not process name; anything not
+  matched gets `hide()`d (not `minimize()` — instant, no genie animation,
+  and the same "hide, don't quit" semantics the close button already uses
+  elsewhere). Everything else goes to `winlayout apply`, which
+  moves/resizes/un-minimizes matching windows (launching the app first if
+  needed) and minimizes whatever's left — other processes' windows don't
+  have an equivalent "hide" a parent app can toggle on them from outside,
+  so that path still minimizes. Matching/minimizing *other* apps' windows
+  uses the Accessibility API (`AXUIElement`), which needs the user to grant
+  Studio Accessibility permission once (System Settings → Privacy &
+  Security → Accessibility) — until granted, AX calls are silent no-ops.
 
   Matching a recorded window back to a live AX window during restore is by
   title, with a fallback to "first window of that app" when titles don't
