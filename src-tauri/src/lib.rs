@@ -128,6 +128,25 @@ struct WindowSnapshot {
     color: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     editor: Option<String>,
+    /// Tool-window-only (label starts with "tool-"): the `src/tools/*.html`
+    /// file + query string it was opened with, captured at record time from
+    /// `TOOL_WINDOWS` — needed to rebuild it if it's not open yet (e.g. a
+    /// fresh launch, before the user has opened that tool this session) since
+    /// its label alone (a hash of the query) can't be reversed back into one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tool_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tool_query: Option<String>,
+}
+
+/// label → (file, query) for every tool window opened this session (via
+/// `open_tool`), so a Workspace mode recorded while one was open can store
+/// enough to rebuild it later — even after a restart, since the label itself
+/// (`tool-{stem}-{hash(query)}`) can't be reversed back into a file/query.
+static TOOL_WINDOWS: OnceLock<Mutex<HashMap<String, (String, Option<String>)>>> = OnceLock::new();
+
+fn tool_windows_store() -> &'static Mutex<HashMap<String, (String, Option<String>)>> {
+    TOOL_WINDOWS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn default_schedule_model() -> String {
@@ -1129,6 +1148,10 @@ fn open_tool(app: AppHandle, file: String, query: Option<String>) {
         Some(q) => format!("tool-{stem}-{}", tool_hash(q)),
         None => format!("tool-{stem}"),
     };
+    tool_windows_store()
+        .lock()
+        .unwrap()
+        .insert(label.clone(), (file.clone(), q.clone()));
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.show();
         let _ = win.set_focus();
@@ -1779,6 +1802,7 @@ const STUDIO_APP: &str = "Studio";
 /// `apply_window_layout`'s doc comment for why that broke).
 fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
     let git_windows = read_git_windows(app);
+    let tool_windows = tool_windows_store().lock().unwrap().clone();
     app.webview_windows()
         .into_iter()
         .filter(|(_, win)| win.is_visible().unwrap_or(false))
@@ -1789,6 +1813,7 @@ fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
             // with outer_size would re-add the title bar height on restore.
             let size = win.inner_size().ok()?;
             let git = git_windows.iter().find(|w| git_label(&w.repo) == label);
+            let tool = tool_windows.get(&label);
             Some(WindowSnapshot {
                 app: STUDIO_APP.to_string(),
                 title: label,
@@ -1799,6 +1824,8 @@ fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
                 repo: git.map(|w| w.repo.clone()),
                 color: git.map(|w| w.color.clone()),
                 editor: git.map(|w| w.editor.clone()),
+                tool_file: tool.map(|(file, _)| file.clone()),
+                tool_query: tool.and_then(|(_, query)| query.clone()),
             })
         })
         .collect()
@@ -1855,22 +1882,29 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
         }
     }
 
-    // Targets that weren't found among currently open windows were closed
-    // (not just minimized) since the layout was recorded. Git windows can be
-    // rebuilt from the snapshot's own repo/color/editor — closing one wipes
-    // its entry from git-windows.json (see remove_git_window), so the live
-    // store can't be relied on here. Other Studio windows (main, etc.) are
-    // always open, so there's nothing more to do for them.
+    // Targets that weren't found among currently open windows are either
+    // closed (Git windows — closing one wipes its git-windows.json entry, see
+    // remove_git_window, so the live store can't be relied on) or simply
+    // never opened this session (tool windows are built lazily on first open;
+    // on a fresh launch, before the user has opened one, it doesn't exist
+    // yet). Both are rebuilt from data captured into the snapshot itself at
+    // record time. Other Studio windows (main, etc.) are always open, so
+    // there's nothing more to do for them.
     for target in studio_targets.iter().filter(|t| !matched_labels.contains(&t.title)) {
-        let Some(repo) = &target.repo else { continue };
-        let win = GitWindow {
-            repo: repo.clone(),
-            color: target.color.clone().unwrap_or_default(),
-            editor: target.editor.clone().unwrap_or_default(),
-            ..Default::default()
-        };
-        upsert_git_window(&app, &win);
-        build_git_window(&app, &win);
+        if let Some(repo) = &target.repo {
+            let win = GitWindow {
+                repo: repo.clone(),
+                color: target.color.clone().unwrap_or_default(),
+                editor: target.editor.clone().unwrap_or_default(),
+                ..Default::default()
+            };
+            upsert_git_window(&app, &win);
+            build_git_window(&app, &win);
+        } else if let Some(file) = &target.tool_file {
+            open_tool(app.clone(), file.clone(), target.tool_query.clone());
+        } else {
+            continue;
+        }
         if let Some(win) = app.get_webview_window(&target.title) {
             let _ = win.set_position(tauri::PhysicalPosition::new(target.x, target.y));
             let _ = win.set_size(tauri::PhysicalSize::new(

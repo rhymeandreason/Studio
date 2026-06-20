@@ -101,9 +101,22 @@ window-layout snapshots, rendered as pill rows in `#ws-modes` by
   `studio_window_snapshots` from the live store at record time), and
   `apply_window_layout` rebuilds the `GitWindow` from the snapshot itself —
   `upsert_git_window` then `build_git_window` — before applying the saved
-  position/size. Other Studio windows (main, etc.) are always open (hidden,
-  not destroyed, per the close handler below), so there's nothing to reopen
-  for them.
+  position/size.
+
+  Tool windows (`src/tools/*.html`, opened via `open_tool`) are the other
+  case: they're built lazily on first open, so on a fresh Studio launch one
+  that was part of a saved mode but hasn't been opened yet this session
+  simply doesn't exist. Its label (`tool-{stem}-{hash(query)}`) can't be
+  reversed back into the `file`/`query` `open_tool` needs to rebuild it, so
+  `open_tool` also writes label → `(file, query)` into an in-memory
+  `TOOL_WINDOWS` map; `studio_window_snapshots` reads that map at record time
+  and stores `tool_file`/`tool_query` on the snapshot, durably, the same way
+  Git windows store `repo`/`color`/`editor`. `apply_window_layout` calls
+  `open_tool` directly (it's a plain fn under the `#[tauri::command]`
+  wrapper) when it finds a `tool_file` on an unmatched target.
+
+  Other Studio windows (main, etc.) are always open (hidden, not destroyed,
+  per the close handler below), so there's nothing to reopen for them.
 
 This replaced the old single Launch button (`launch_workspace`/repo+apps+files
 +URLs+Claude-terminal opener), which is still available as a Rust command but
