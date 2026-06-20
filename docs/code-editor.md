@@ -111,6 +111,17 @@ project). `parseDiff` marks:
 Errors (not a repo, etc.) are surfaced as "not in git" and the editor still
 works as a plain editor.
 
+A toolbar toggle switches the diff basis:
+
+- **Uncommitted** (default, teal) — `git diff HEAD`, the working-tree changes.
+- **Last commit** (blue) — `git diff HEAD~1 HEAD` (`git_diff_file_committed`),
+  what the most recent commit changed; "no prev commit" if there's only one.
+
+The mode flips a `body.diff-committed` class that overrides the `--add-bg` /
+`--add-bar` vars, so the row tint, gutter bars, and minimap recolor together.
+Note the last-commit diff's line numbers are from `HEAD`, so they line up best
+on a committed-clean file (uncommitted edits shift them).
+
 ## Preview window
 
 A separate tool window (so it can use Tauri events) showing the rendered page in
