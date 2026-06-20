@@ -325,6 +325,7 @@ body {
     right: 10px;
     background-color: transparent;
     pointer-events: none;
+display:none !important;
 }
 
 .card__trash {
