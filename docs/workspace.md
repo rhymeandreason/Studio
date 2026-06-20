@@ -107,24 +107,27 @@ window-layout snapshots, rendered as pill rows in `#ws-modes` by
   on first open, so on a fresh Studio launch one that was part of a saved
   mode but hasn't been opened yet this session simply doesn't exist. A
   label alone can't be reversed back into the args its opener needs (it's
-  often a hash, e.g. `tool-{stem}-{hash(query)}` for `open_tool`), so all
-  three tool-window openers — `open_tool` (the generic command), and the
-  internal `open_tool_window`/`open_tool_window_near`/
-  `open_tool_window_with_color` (tray tools, Code Editor, Code Preview) —
-  call `track_tool_window(label, file, query_or_color, kind)`, writing into
-  an in-memory `TOOL_WINDOWS` map. `studio_window_snapshots` reads that map
-  at record time and stores `tool_file`/`tool_query`/`tool_kind` on the
+  often a hash, e.g. `tool-{stem}-{hash(query)}` for `open_tool`), so every
+  tool-window opener — `open_tool` (the generic command), the internal
+  `open_tool_window`/`open_tool_window_near`/`open_tool_window_with_color`
+  (tray tools, Code Editor, Code Preview), and `open_git_pulse` — calls
+  `track_tool_window(label, file, query_or_color_or_repo, kind)`, writing
+  into an in-memory `TOOL_WINDOWS` map. `studio_window_snapshots` reads that
+  map at record time and stores `tool_file`/`tool_query`/`tool_kind` on the
   snapshot, durably, the same way Git windows store `repo`/`color`/`editor`.
 
-  `tool_kind` matters because `open_tool_window_with_color` uses a *different*
-  label scheme than the other two (filename-with-extension, not
-  `file_stem()` — a pre-existing inconsistency, not something introduced
-  here): reopening a `"color"`-kind target through the generic `open_tool`
-  would produce a window, but under the wrong label, so the position/size
-  restore right after (which looks the window up by the originally-recorded
-  label) would silently fail to find it. `apply_window_layout` instead
-  replays `"color"` targets through `open_tool_window_with_color` itself and
-  everything else through `open_tool`, so the label always matches.
+  `tool_kind` matters because several openers use a label scheme the generic
+  `open_tool` can't reproduce (a pre-existing inconsistency, not something
+  introduced here): `open_tool_window_with_color` keys on
+  filename-with-extension instead of `file_stem()` (kind `"color"`), and
+  `open_git_pulse` keys on a 40-char repo-path slug instead of either (kind
+  `"git-pulse"`, where `tool_query` holds the repo path, not a query
+  string). Reopening one of these through the generic `open_tool` would
+  still produce *a* window, but under the wrong label, so the position/size
+  restore right after (which looks the window up by the
+  originally-recorded label) would silently fail to find it.
+  `apply_window_layout` dispatches on `tool_kind` to replay each target
+  through the exact function that produced its label.
 
   Other Studio windows (main, etc.) are always open (hidden, not destroyed,
   per the close handler below), so there's nothing to reopen for them.

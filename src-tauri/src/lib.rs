@@ -1921,13 +1921,19 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
             upsert_git_window(&app, &win);
             build_git_window(&app, &win);
         } else if let Some(file) = &target.tool_file {
-            if target.tool_kind.as_deref() == Some("color") {
-                // Must go through the exact function that produced the
-                // original label (filename-with-extension, not file_stem) so
-                // the position/size lookup by `target.title` below succeeds.
-                open_tool_window_with_color(&app, file, target.tool_query.as_deref().unwrap_or(""));
-            } else {
-                open_tool(app.clone(), file.clone(), target.tool_query.clone());
+            // Each kind must go through the exact function that produced the
+            // original label, since several tool windows use a label scheme
+            // that the generic open_tool can't reproduce — otherwise the
+            // position/size lookup by `target.title` below silently misses.
+            match target.tool_kind.as_deref() {
+                Some("color") => {
+                    open_tool_window_with_color(&app, file, target.tool_query.as_deref().unwrap_or(""))
+                }
+                Some("git-pulse") => {
+                    let Some(repo) = &target.tool_query else { continue };
+                    open_git_pulse(app.clone(), repo.clone());
+                }
+                _ => open_tool(app.clone(), file.clone(), target.tool_query.clone()),
             }
         } else {
             continue;
@@ -3316,6 +3322,7 @@ fn open_git_pulse(app: AppHandle, repo: String) {
         .map(|c| if c.is_alphanumeric() { c } else { '-' })
         .collect();
     let label = format!("tool-git-pulse-{}", &slug[slug.len().saturating_sub(40)..]);
+    track_tool_window(&label, "git-pulse.html", Some(repo.clone()), "git-pulse");
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.show();
         let _ = win.set_focus();
