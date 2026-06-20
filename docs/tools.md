@@ -373,6 +373,31 @@ keyboard focus. Don't use AppleScript / Accessibility `first window` queries fro
 a floating tool — you'll get the tool itself back. Use `winbounds` instead (see
 below).
 
+## Re-entrant render functions (avoid duplicated content on re-render)
+
+If a `main()`/`render()` clears a container and rebuilds it with `await
+invoke(...)`, and it can be triggered more than once that overlaps — initial
+load plus a Tauri event listener (`project-activated`, etc.) — a slow call can
+still be mid-`await` when a newer call clears and rebuilds too. Both then
+append, duplicating the content (bit File Directory's tree this way).
+
+**Fix:** a generation counter, checked after every `await` before touching the DOM:
+
+```js
+let renderGeneration = 0;
+
+async function main() {
+  const generation = ++renderGeneration;
+  const data = await invoke('get_some_data');
+  if (generation !== renderGeneration) return; // superseded by a newer call
+
+  container.innerHTML = '';
+  container.appendChild(buildSomething(data));
+}
+```
+
+Only needed for render functions reachable from more than one trigger.
+
 ## Querying on-screen window bounds (`winbounds`)
 
 `src-tauri/swift/winbounds.swift` is a compiled Swift helper (built by `build.rs`,
@@ -397,22 +422,4 @@ const parts = result.split(',');
 const [x, y, w, h] = parts.slice(-4).map(Number);
 ```
 
-## Ideas
 
-For the design discussion on adding tools **without a rebuild** and giving tools explicit **categories**, see [docs/tools-dynamic-loading.md](tools-dynamic-loading.md). 
-For a brainstorm of tools to build next, see [docs/tool-ideas.md](tool-ideas.md).
-
-## Custom tools from outside the repo
-
-Not currently supported — only `*.html` files under `src/tools/` (bundled
-into `frontendDist`) can be opened, because IPC/`save_tool_export` requires
-the `tauri://localhost` protocol, and that protocol only serves embedded
-`frontendDist` content.
-
-To let users import a tool from an arbitrary folder later, the path is a
-**custom URI scheme** (e.g. `tool://`) backed by a Rust handler that reads
-from a user directory (e.g. `~/Library/Application Support/Studio/tools/`)
-and serves it with a real origin — analogous to what `tauri://` does for
-`frontendDist`. Windows using that scheme would need the same `tool-*`
-capability grant for `save_tool_export` to keep working. Until that's built,
-new tools have to live in `src/tools/` and ship with Studio.
