@@ -182,13 +182,18 @@ func applyMode() {
     }
 
     // Then minimize every on-screen window that wasn't part of the layout.
-    var axCache: [pid_t: [(AXUIElement, String)]] = [:]
-    for win in onScreenWindows() {
-        let windows = axCache[win.pid] ?? axWindows(pid: win.pid)
-        axCache[win.pid] = windows
-        guard let (axWin, _) = windows.first(where: { $0.1 == win.title }) else { continue }
-        if consumedWindows.contains(where: { CFEqual($0, axWin) }) { continue }
-        setMinimized(axWin, true)
+    // Matched by pid only, not title: CGWindowList's kCGWindowName is blank
+    // without Screen Recording permission while AX's kAXTitleAttribute still
+    // returns the real title, so title-matching here (unlike the restore
+    // loop above, which falls back to "first window" when titles disagree)
+    // would silently skip every window and never minimize anything.
+    var seenPids = Set<pid_t>()
+    for win in onScreenWindows() where !seenPids.contains(win.pid) {
+        seenPids.insert(win.pid)
+        for (axWin, _) in axWindows(pid: win.pid) {
+            if consumedWindows.contains(where: { CFEqual($0, axWin) }) { continue }
+            setMinimized(axWin, true)
+        }
     }
 }
 

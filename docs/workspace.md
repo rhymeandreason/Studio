@@ -74,6 +74,15 @@ window-layout snapshots, rendered as pill rows in `#ws-modes` by
   permission once (System Settings → Privacy & Security → Accessibility) —
   until granted, AX calls are silent no-ops.
 
+  Matching a recorded window back to a live AX window during restore is by
+  title, with a fallback to "first window of that app" when titles don't
+  match — because `CGWindowList`'s `kCGWindowName` comes back blank for
+  other processes' windows without Screen Recording permission, while AX's
+  `kAXTitleAttribute` still returns the real title. The final "minimize
+  whatever's left" pass deliberately does *not* try to match by title at
+  all (no exact-match fallback there) — it just minimizes every AX window of
+  every on-screen process that wasn't already restored.
+
   Studio's own windows are deliberately handled outside winlayout: matching
   a window back to "is this app already running" requires comparing process
   names across two different macOS APIs (`CGWindowList` vs
