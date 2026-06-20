@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spotlight</title>
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: transparent;
+    height: 100vh;
+    overflow: hidden;
+    font-family: var(--font-ui, "Futura PT", sans-serif);
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 36px;
+  }
+
+  #panel {
+    width: 520px;
+    max-height: 360px;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-radius: var(--radius-lg, 16px);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    -webkit-app-region: drag;
+  }
+
+  #query {
+    width: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 22px;
+    padding: 18px 20px;
+    color: var(--ink);
+    -webkit-app-region: no-drag;
+  }
+
+  #query::placeholder { color: var(--ink-faint, #999); }
+
+  #results {
+    border-top: 1px solid var(--border, rgba(0,0,0,0.08));
+    overflow-y: auto;
+    -webkit-app-region: no-drag;
+  }
+
+  #results:empty { border-top: none; }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--ink);
+  }
+
+  .row .material-symbols-rounded {
+    font-size: 18px;
+    color: var(--ink-muted, #777);
+  }
+
+  .row.active {
+    background: var(--accent, #2563eb);
+    color: #fff;
+  }
+
+  .row.active .material-symbols-rounded { color: #fff; }
+
+  #empty {
+    padding: 16px 20px;
+    font-size: 13px;
+    color: var(--ink-faint, #999);
+  }
+</style>
+</head>
+<body>
+  <div id="panel">
+    <input id="query" type="text" placeholder="Open a tool…" autofocus autocomplete="off" spellcheck="false" />
+    <div id="results"></div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { listen } = window.__TAURI__.event;
+    const { getCurrentWindow } = window.__TAURI__.window;
+    const win = getCurrentWindow();
+
+    const queryEl = document.getElementById('query');
+    const resultsEl = document.getElementById('results');
+
+    let allTools = [];
+    let shown = [];
+    let activeIndex = 0;
+
+    async function loadTools() {
+      try {
+        allTools = await invoke('list_tools');
+      } catch (_) {
+        allTools = [];
+      }
+    }
+
+    function render() {
+      const q = queryEl.value.trim().toLowerCase();
+      shown = q
+        ? allTools.filter((t) => t.name.toLowerCase().includes(q))
+        : allTools;
+      activeIndex = 0;
+
+      resultsEl.innerHTML = '';
+      if (q && shown.length === 0) {
+        const empty = document.createElement('div');
+        empty.id = 'empty';
+        empty.textContent = 'No matching tools';
+        resultsEl.appendChild(empty);
+        return;
+      }
+
+      shown.forEach((tool, i) => {
+        const row = document.createElement('div');
+        row.className = 'row' + (i === activeIndex ? ' active' : '');
+        row.innerHTML = `<span class="material-symbols-rounded">widgets</span><span>${tool.name}</span>`;
+        row.addEventListener('mousedown', (e) => e.preventDefault());
+        row.addEventListener('click', () => launch(tool));
+        row.addEventListener('mouseenter', () => setActive(i));
+        resultsEl.appendChild(row);
+      });
+    }
+
+    function setActive(i) {
+      activeIndex = i;
+      [...resultsEl.children].forEach((row, idx) => {
+        row.classList.toggle('active', idx === i);
+      });
+    }
+
+    async function launch(tool) {
+      if (!tool) return;
+      await invoke('open_tool', { file: tool.file, query: null });
+      reset();
+      await win.hide();
+    }
+
+    function reset() {
+      queryEl.value = '';
+      render();
+    }
+
+    queryEl.addEventListener('input', render);
+
+    document.addEventListener('keydown', async (e) => {
+      if (e.key === 'Escape') {
+        reset();
+        await win.hide();
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (shown.length) setActive((activeIndex + 1) % shown.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (shown.length) setActive((activeIndex - 1 + shown.length) % shown.length);
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        launch(shown[activeIndex]);
+      }
+    });
+
+    listen('spotlight-shown', () => {
+      reset();
+      queryEl.focus();
+    });
+
+    loadTools().then(render);
+    queryEl.focus();
+  </script>
+</body>
+</html>

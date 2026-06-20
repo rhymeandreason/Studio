@@ -428,6 +428,62 @@ fn scan_tools(app: &AppHandle) -> Vec<Project> {
     tools
 }
 
+#[derive(serde::Serialize)]
+struct SpotlightTool {
+    name: String,
+    file: String,
+}
+
+/// Tool list for the Spotlight launcher: name + bare filename (so the
+/// frontend can pass it straight to `open_tool`).
+#[tauri::command]
+fn list_tools(app: AppHandle) -> Vec<SpotlightTool> {
+    scan_tools(&app)
+        .into_iter()
+        .map(|p| SpotlightTool {
+            name: p.name,
+            file: Path::new(&p.path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_string(),
+        })
+        .collect()
+}
+
+/// Show/hide the Spotlight-style quick launcher (Option+Space). Built once,
+/// then just shown/hidden/focused — transparent + undecorated + always-on-top,
+/// centered on screen, with a fixed size; the page itself stays visually
+/// empty except for a floating card so unfilled space reads as transparent.
+fn toggle_spotlight_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("spotlight") {
+        if win.is_visible().unwrap_or(false) {
+            let _ = win.hide();
+        } else {
+            let _ = win.show();
+            let _ = win.set_focus();
+            let _ = win.emit("spotlight-shown", ());
+        }
+        return;
+    }
+
+    let url = WebviewUrl::App("tools/spotlight.html".into());
+    if let Ok(win) = WebviewWindowBuilder::new(app, "spotlight", url)
+        .inner_size(600.0, 420.0)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .center()
+        .visible(false)
+        .build()
+    {
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+}
+
 /// Open (or focus) a tool's HTML file in its own native window.
 fn open_tool_window(app: &AppHandle, path: &str) {
     open_tool_window_near(app, path, None);
@@ -4558,6 +4614,15 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        toggle_spotlight_window(app);
+                    }
+                })
+                .build(),
+        )
         .manage(AppState::default())
         .manage(ClaudeState::default())
         .invoke_handler(tauri::generate_handler![
@@ -4583,6 +4648,7 @@ pub fn run() {
             overwrite_artifact,
             delete_artifact,
             open_tool,
+            list_tools,
             list_projects,
             open_project,
             create_project,
@@ -4679,6 +4745,14 @@ pub fn run() {
                     _ => {}
                 }
             }
+            // Spotlight: losing focus means the user clicked away — dismiss it
+            // like the real Spotlight does, instead of leaving it stranded
+            // on top of whatever else they're doing.
+            if window.label() == "spotlight" {
+                if let tauri::WindowEvent::Focused(false) = event {
+                    let _ = window.hide();
+                }
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Git windows are real, dismissible windows: closing one means
                 // "I'm done with this repo" — drop it from the persisted set so
@@ -4702,6 +4776,16 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let handle = app.handle().clone();
+
+            // Option+Space opens/hides the Spotlight-style tool launcher.
+            {
+                use tauri_plugin_global_shortcut::GlobalShortcutExt;
+                let shortcut = tauri_plugin_global_shortcut::Shortcut::new(
+                    Some(tauri_plugin_global_shortcut::Modifiers::ALT),
+                    tauri_plugin_global_shortcut::Code::Space,
+                );
+                let _ = handle.global_shortcut().register(shortcut);
+            }
 
             // Build Studio's tray icons in the order given by TrayItems.json
             // (default: studio, tools, ram, daily-notes), reversed — macOS adds new
