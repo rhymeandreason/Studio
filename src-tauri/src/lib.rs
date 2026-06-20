@@ -650,32 +650,6 @@ fn build_tray_menu(
         }
     }
 
-    // Tools section: the built-in Scheduled Tasks window, then any user tools.
-    items.push(Box::new(PredefinedMenuItem::separator(app)?));
-    items.push(Box::new(MenuItem::with_id(
-        app,
-        "open_schedules",
-        "🗓 Scheduled Tasks",
-        true,
-        None::<&str>,
-    )?));
-    items.push(Box::new(MenuItem::with_id(
-        app,
-        "open_video",
-        "🎬 Video Editor",
-        true,
-        None::<&str>,
-    )?));
-    for t in &scan_tools(app) {
-        items.push(Box::new(MenuItem::with_id(
-            app,
-            format!("{TOOL_PREFIX}{}", t.path),
-            format!("🔧 {}", t.name),
-            true,
-            None::<&str>,
-        )?));
-    }
-
     items.push(Box::new(PredefinedMenuItem::separator(app)?));
     items.push(Box::new(MenuItem::with_id(
         app,
@@ -700,9 +674,9 @@ struct TrayItemEntry {
 
 /// `TrayItems.json`, bundled with Studio (see `tauri.conf.json` →
 /// `bundle.resources`) — order and optional icon overrides for Studio's
-/// three menu-bar items: "studio" (main menu), "ram" (RAM overview), and
-/// "daily-notes". Missing/unreadable file falls back to the default order
-/// with no overrides.
+/// menu-bar items: "studio" (main menu), "tools" (wrench dropdown), "ram"
+/// (RAM overview), and "daily-notes". Missing/unreadable file falls back to
+/// the default order with no overrides.
 fn read_tray_items_manifest(app: &AppHandle) -> Option<Vec<TrayItemEntry>> {
     let dir = app.path().resource_dir().ok()?;
     let text = std::fs::read_to_string(dir.join("TrayItems.json")).ok()?;
@@ -718,6 +692,7 @@ fn tray_item_order(app: &AppHandle) -> Vec<String> {
         }
         _ => vec![
             "studio".to_string(),
+            "tools".to_string(),
             "ram".to_string(),
             "daily-notes".to_string(),
         ],
@@ -755,20 +730,9 @@ fn build_studio_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Re
                     show_studio(app);
                     let _ = app.emit("new-project-request", ());
                 }
-                "open_schedules" => {
-                    let _ = open_schedules_window(app.clone());
-                }
-                "open_video" => {
-                    if let Some(project) = app.state::<AppState>().active.lock().unwrap().clone() {
-                        let _ = open_video_window(app.clone(), project.path);
-                    }
-                }
                 "quit" => app.exit(0),
                 _ if id.starts_with(PROJECT_PREFIX) => {
                     activate_project(app, &id[PROJECT_PREFIX.len()..]);
-                }
-                _ if id.starts_with(TOOL_PREFIX) => {
-                    open_tool_window(app, &id[TOOL_PREFIX.len()..]);
                 }
                 _ => {}
             }
@@ -824,6 +788,67 @@ fn build_daily_notes_tray(app: &AppHandle, icon: Option<Image<'static>>) -> taur
             } = event
             {
                 open_tool_window_near(tray.app_handle(), "daily-notes.html", Some(rect));
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
+/// Build the Tools tray icon: a wrench dropdown with the built-in Scheduled
+/// Tasks / Video Editor windows, then any user tools from `scan_tools()`.
+fn build_tools_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Result<()> {
+    let mut items: Vec<Box<dyn IsMenuItem<Wry>>> = Vec::new();
+    items.push(Box::new(MenuItem::with_id(
+        app,
+        "open_schedules",
+        "🗓 Scheduled Tasks",
+        true,
+        None::<&str>,
+    )?));
+    items.push(Box::new(MenuItem::with_id(
+        app,
+        "open_video",
+        "🎬 Video Editor",
+        true,
+        None::<&str>,
+    )?));
+    for t in &scan_tools(app) {
+        items.push(Box::new(MenuItem::with_id(
+            app,
+            format!("{TOOL_PREFIX}{}", t.path),
+            format!("🔧 {}", t.name),
+            true,
+            None::<&str>,
+        )?));
+    }
+    let refs: Vec<&dyn IsMenuItem<Wry>> = items.iter().map(|b| b.as_ref()).collect();
+    let menu = Menu::with_items(app, &refs)?;
+
+    let icon = match icon {
+        Some(icon) => icon,
+        None => Image::from_bytes(include_bytes!("../icons/hexagon.png"))?,
+    };
+
+    TrayIconBuilder::with_id("tools-tray")
+        .icon(icon)
+        .tooltip("Tools")
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| {
+            let id = event.id.as_ref();
+            match id {
+                "open_schedules" => {
+                    let _ = open_schedules_window(app.clone());
+                }
+                "open_video" => {
+                    if let Some(project) = app.state::<AppState>().active.lock().unwrap().clone() {
+                        let _ = open_video_window(app.clone(), project.path);
+                    }
+                }
+                _ if id.starts_with(TOOL_PREFIX) => {
+                    open_tool_window(app, &id[TOOL_PREFIX.len()..]);
+                }
+                _ => {}
             }
         })
         .build(app)?;
@@ -4679,13 +4704,14 @@ pub fn run() {
             let handle = app.handle().clone();
 
             // Build Studio's tray icons in the order given by TrayItems.json
-            // (default: studio, ram, daily-notes), reversed — macOS adds new
+            // (default: studio, tools, ram, daily-notes), reversed — macOS adds new
             // menu-bar items to the *left* of existing ones, so building in
             // reverse makes the manifest order read left-to-right.
             for id in tray_item_order(&handle).into_iter().rev() {
                 let icon_override = tray_item_icon(&handle, &id);
                 match id.as_str() {
                     "studio" => build_studio_tray(&handle, icon_override)?,
+                    "tools" => build_tools_tray(&handle, icon_override)?,
                     "ram" => build_ram_tray(&handle, icon_override)?,
                     "daily-notes" => build_daily_notes_tray(&handle, icon_override)?,
                     _ => {}

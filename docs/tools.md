@@ -34,7 +34,7 @@ Then a local `<style>` for tool-specific overrides only — never rewrite what k
 
 - Drop a self-contained `.html` file into [`src/tools/`](../src/tools)
   (plain HTML + inline `<style>`/`<script>`, no build step).
-- It appears in the **tray menu** (🔧 *name*).
+- It appears under the **wrench (🔧) tray icon's** dropdown menu (🔧 *name*).
 - Clicking it opens the file in its **own native window**, loaded via
   `tauri://localhost/tools/<file>` (the same `tauri://` protocol the main
   window uses, since `src/` is `frontendDist`) — not a browser tab and not
