@@ -226,6 +226,8 @@
   body.soft-wrap #code, body.soft-wrap #hl { white-space: pre-wrap; word-break: break-word; }
   .btn.active { background: var(--accent-soft); color: var(--text); }
   #hl .hline.chg { background: var(--add-bg); box-shadow: -12px 0 0 var(--add-bg), 9999px 0 0 var(--add-bg); }
+  /* "Last commit" diff mode: changes shown in blue instead of teal. */
+  body.diff-committed { --add-bg: rgba(37, 99, 235, 0.20); --add-bar: #2563eb; }
   #code {
     z-index: 2;
     background: transparent;
@@ -367,6 +369,7 @@
     </div>
     <div>
         <button class="btn btn-secondary" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span>Refresh</button>
+        <button class="btn btn-secondary" id="diff-mode" title="Toggle diff: uncommitted vs last commit"><span class="mi">difference</span>Uncommitted</button>
         <button class="btn btn-secondary" id="view-toggle" title="Toggle code / preview"><span class="mi">visibility</span>Preview</button>
         <button class="btn btn-primary" id="preview-btn"><span class="mi">open_in_new</span>Preview</button>
     </div>
@@ -700,20 +703,33 @@ minimap.addEventListener("click", (e) => {
 });
 
 // ---------- git diff ----------
+// "working" = uncommitted changes vs HEAD (teal); "committed" = what the last
+// commit changed, HEAD~1..HEAD (blue).
+let diffMode = "working";
+$("diff-mode").addEventListener("click", () => {
+  diffMode = diffMode === "working" ? "committed" : "working";
+  document.body.classList.toggle("diff-committed", diffMode === "committed");
+  $("diff-mode").innerHTML = diffMode === "committed"
+    ? `<span class="mi">difference</span>Last commit`
+    : `<span class="mi">difference</span>Uncommitted`;
+  refreshDiff();
+});
+
 async function refreshDiff() {
   changedLines = new Set();
   deletedAt = new Set();
   diffStatus.textContent = "";
   if (!invoke || !currentPath) { paint(); return; }
+  const cmd = diffMode === "committed" ? "git_diff_file_committed" : "git_diff_file";
   try {
-    const diff = await invoke("git_diff_file", { path: currentPath });
+    const diff = await invoke(cmd, { path: currentPath });
     parseDiff(diff);
     const parts = [];
     if (changedLines.size) parts.push(`${changedLines.size} changed`);
     if (deletedAt.size) parts.push(`${deletedAt.size} deletion${deletedAt.size > 1 ? "s" : ""}`);
     diffStatus.textContent = parts.join(", ") || "no changes";
   } catch (e) {
-    diffStatus.textContent = "not in git";
+    diffStatus.textContent = diffMode === "committed" ? "no prev commit" : "not in git";
   }
   paint();
 }

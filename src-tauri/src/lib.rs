@@ -3628,6 +3628,27 @@ fn git_diff_file(path: String) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
+/// Unified `git diff` for what the *last commit* changed in a file
+/// (`HEAD~1..HEAD`), as opposed to uncommitted working-tree changes. Repo is
+/// derived from the file's own directory. Used by the Code Editor's "Last
+/// commit" diff mode.
+#[tauri::command]
+fn git_diff_file_committed(path: String) -> Result<String, String> {
+    let p = PathBuf::from(&path);
+    let dir = p.parent().ok_or("file has no parent directory")?;
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["diff", "--no-color", "HEAD~1", "HEAD", "--"])
+        .arg(&path)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
 /// Stage everything and commit. Returns an error string on failure (e.g.
 /// nothing to commit), which the window surfaces.
 #[tauri::command]
@@ -4720,6 +4741,7 @@ pub fn run() {
             take_pending_open,
             active_git_color,
             git_color_for_path,
+            git_diff_file_committed,
             pick_text_file,
             open_code_preview,
             read_text_file,
