@@ -117,9 +117,11 @@ function renderModes() {
 
     const head = document.createElement("div");
     head.className = "ws-mode__head";
-    const name = document.createElement("span");
+    const name = document.createElement("input");
+    name.type = "text";
     name.className = "ws-mode__name";
-    name.textContent = mode.name;
+    name.value = mode.name;
+    name.spellcheck = false;
     const saved = document.createElement("span");
     saved.className = "ws-mode__saved";
     saved.textContent = formatSavedAt(mode.recordedAt);
@@ -138,6 +140,17 @@ function renderModes() {
     playBtn.type = "button";
     playBtn.className = "ws-mode__btn ws-mode__btn--play";
     playBtn.title = `Restore "${mode.name}"'s windows`;
+
+    name.addEventListener("input", () => {
+      mode.name = name.value;
+      recordBtn.title = `Record current windows into "${mode.name}"`;
+      playBtn.title = `Restore "${mode.name}"'s windows`;
+    });
+    name.addEventListener("change", () => {
+      mode.name = name.value.trim() || mode.name;
+      name.value = mode.name;
+      scheduleWorkspaceSave();
+    });
     playBtn.disabled = !mode.layout?.length;
     playBtn.innerHTML = mi("play_arrow");
 
