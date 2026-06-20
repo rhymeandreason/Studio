@@ -280,6 +280,37 @@ to force one.
 the affected tray icon(s) via `tray_by_id` + a fresh `build_*_tray` call,
 instead of requiring a restart.
 
+## Workspace Modes (record/play) need to know how to reopen your window
+
+Workspace's record/play Modes (see [docs/workspace.md](workspace.md)) can
+save a tool window as part of a layout and reopen it later — including on a
+fresh Studio launch, before the user has opened that tool this session, when
+the window doesn't exist yet to be found by label.
+
+If your tool opens via `open_tool` (the generic command), or the existing
+`open_tool_window`/`open_tool_window_near`/`open_tool_window_with_color`
+helpers, **you don't need to do anything** — they already call
+`track_tool_window(label, file, extra, kind)` internally, which is all
+Workspace Modes needs.
+
+You only need to act if you write a **fully custom window opener** — a new
+`#[tauri::command]` that calls `WebviewWindowBuilder::new` directly instead
+of going through those helpers (e.g. because your tool needs a bespoke label
+scheme, like `open_git_pulse`'s repo-slug labels, or extra open-time
+arguments, like `open_video_window`'s project path). In that case:
+
+1. Call `track_tool_window(&label, file_or_blank, extra, "your-kind")` right
+   after computing the window's label (before the "already open? just
+   show/focus" early return, so re-opening keeps the entry fresh too).
+2. Add a matching arm to the `match target.tool_kind.as_deref()` block in
+   `apply_window_layout` (`src-tauri/src/lib.rs`) that calls your opener with
+   whatever `extra` (stored as `tool_query`) holds.
+
+Skipping this isn't a hard error — Play just silently does nothing for that
+window if it wasn't already open, the same bug this was added to fix for
+Code Editor, Code Preview, Git Pulse, the Claude window, Scheduled Tasks,
+and the Video editor.
+
 ## How advanced is the tool?
 
 1. **Tray-launched HTML window (current approach)** — zero build step, just
