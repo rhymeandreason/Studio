@@ -118,6 +118,16 @@ struct WindowSnapshot {
     w: i32,
     #[serde(default)]
     h: i32,
+    /// Git-window-only: the repo path + companion-window color/editor, so a
+    /// Git window that's since been *closed* (which deletes its entry from
+    /// git-windows.json — see `remove_git_window`) can still be rebuilt from
+    /// the snapshot alone, not just reopened from a live store entry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    repo: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    editor: Option<String>,
 }
 
 fn default_schedule_model() -> String {
@@ -1768,12 +1778,14 @@ const STUDIO_APP: &str = "Studio";
 /// reliable than matching process names across APIs — see
 /// `apply_window_layout`'s doc comment for why that broke).
 fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
+    let git_windows = read_git_windows(app);
     app.webview_windows()
         .into_iter()
         .filter(|(_, win)| win.is_visible().unwrap_or(false))
         .filter_map(|(label, win)| {
             let pos = win.outer_position().ok()?;
             let size = win.outer_size().ok()?;
+            let git = git_windows.iter().find(|w| git_label(&w.repo) == label);
             Some(WindowSnapshot {
                 app: STUDIO_APP.to_string(),
                 title: label,
@@ -1781,6 +1793,9 @@ fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
                 y: pos.y,
                 w: size.width as i32,
                 h: size.height as i32,
+                repo: git.map(|w| w.repo.clone()),
+                color: git.map(|w| w.color.clone()),
+                editor: git.map(|w| w.editor.clone()),
             })
         })
         .collect()
@@ -1839,19 +1854,20 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
 
     // Targets that weren't found among currently open windows were closed
     // (not just minimized) since the layout was recorded. Git windows can be
-    // reopened from their persisted store; other Studio windows (main, etc.)
-    // are always open, so there's nothing more to do for them here.
+    // rebuilt from the snapshot's own repo/color/editor — closing one wipes
+    // its entry from git-windows.json (see remove_git_window), so the live
+    // store can't be relied on here. Other Studio windows (main, etc.) are
+    // always open, so there's nothing more to do for them.
     for target in studio_targets.iter().filter(|t| !matched_labels.contains(&t.title)) {
-        if !target.title.starts_with("git-") {
-            continue;
-        }
-        let Some(saved) = read_git_windows(&app)
-            .into_iter()
-            .find(|w| git_label(&w.repo) == target.title)
-        else {
-            continue;
+        let Some(repo) = &target.repo else { continue };
+        let win = GitWindow {
+            repo: repo.clone(),
+            color: target.color.clone().unwrap_or_default(),
+            editor: target.editor.clone().unwrap_or_default(),
+            ..Default::default()
         };
-        build_git_window(&app, &saved);
+        upsert_git_window(&app, &win);
+        build_git_window(&app, &win);
         if let Some(win) = app.get_webview_window(&target.title) {
             let _ = win.set_position(tauri::PhysicalPosition::new(target.x, target.y));
             let _ = win.set_size(tauri::PhysicalSize::new(
