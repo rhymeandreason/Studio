@@ -59,6 +59,7 @@
   .row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
     padding: 10px 20px;
     cursor: pointer;
@@ -66,9 +67,11 @@
     color: var(--ink);
   }
 
-  .row .material-symbols-rounded {
-    font-size: 18px;
-    color: var(--ink-muted, #777);
+  .row .tag {
+    font-size: 11px;
+    color: var(--ink-faint, #999);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   .row.active {
@@ -76,7 +79,7 @@
     color: #fff;
   }
 
-  .row.active .material-symbols-rounded { color: #fff; }
+  .row.active .tag { color: rgba(255, 255, 255, 0.75); }
 
   #empty {
     padding: 16px 20px;
@@ -87,7 +90,7 @@
 </head>
 <body>
   <div id="panel">
-    <input id="query" type="text" placeholder="Open a tool…" autofocus autocomplete="off" spellcheck="false" />
+    <input id="query" type="text" placeholder="Open a tool or project…" autofocus autocomplete="off" spellcheck="false" />
     <div id="results"></div>
   </div>
 
@@ -100,40 +103,49 @@
     const queryEl = document.getElementById('query');
     const resultsEl = document.getElementById('results');
 
-    let allTools = [];
+    let allItems = [];
     let shown = [];
     let activeIndex = 0;
 
-    async function loadTools() {
+    async function loadItems() {
+      let tools = [];
+      let projects = [];
       try {
-        allTools = await invoke('list_tools');
-      } catch (_) {
-        allTools = [];
-      }
+        tools = await invoke('list_tools');
+      } catch (_) {}
+      try {
+        projects = await invoke('list_projects');
+      } catch (_) {}
+
+      allItems = projects
+        .map((p) => ({ name: p.name, kind: 'project', path: p.path }))
+        .concat(tools.map((t) => ({ name: t.name, kind: 'tool', file: t.file })))
+        .sort((a, b) => a.name.localeCompare(b.name));
     }
 
     function render() {
       const q = queryEl.value.trim().toLowerCase();
       shown = q
-        ? allTools.filter((t) => t.name.toLowerCase().includes(q))
-        : allTools;
+        ? allItems.filter((item) => item.name.toLowerCase().includes(q))
+        : allItems;
       activeIndex = 0;
 
       resultsEl.innerHTML = '';
       if (q && shown.length === 0) {
         const empty = document.createElement('div');
         empty.id = 'empty';
-        empty.textContent = 'No matching tools';
+        empty.textContent = 'No matches';
         resultsEl.appendChild(empty);
         return;
       }
 
-      shown.forEach((tool, i) => {
+      shown.forEach((item, i) => {
         const row = document.createElement('div');
         row.className = 'row' + (i === activeIndex ? ' active' : '');
-        row.innerHTML = `<span class="material-symbols-rounded">widgets</span><span>${tool.name}</span>`;
+        const tag = item.kind === 'project' ? 'Project' : 'Tool';
+        row.innerHTML = `<span>${item.name}</span><span class="tag">${tag}</span>`;
         row.addEventListener('mousedown', (e) => e.preventDefault());
-        row.addEventListener('click', () => launch(tool));
+        row.addEventListener('click', () => launch(item));
         row.addEventListener('mouseenter', () => setActive(i));
         resultsEl.appendChild(row);
       });
@@ -144,11 +156,16 @@
       [...resultsEl.children].forEach((row, idx) => {
         row.classList.toggle('active', idx === i);
       });
+      resultsEl.children[i]?.scrollIntoView({ block: 'nearest' });
     }
 
-    async function launch(tool) {
-      if (!tool) return;
-      await invoke('open_tool', { file: tool.file, query: null });
+    async function launch(item) {
+      if (!item) return;
+      if (item.kind === 'project') {
+        await invoke('open_project', { path: item.path });
+      } else {
+        await invoke('open_tool', { file: item.file, query: null });
+      }
       reset();
       await win.hide();
     }
@@ -183,11 +200,12 @@
     });
 
     listen('spotlight-shown', () => {
-      reset();
+      loadItems().then(render);
+      queryEl.value = '';
       queryEl.focus();
     });
 
-    loadTools().then(render);
+    loadItems().then(render);
     queryEl.focus();
   </script>
 </body>
