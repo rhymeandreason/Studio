@@ -1933,6 +1933,16 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
                     let Some(repo) = &target.tool_query else { continue };
                     open_git_pulse(app.clone(), repo.clone());
                 }
+                Some("schedules") => {
+                    let _ = open_schedules_window(app.clone());
+                }
+                Some("video") => {
+                    let Some(path) = &target.tool_query else { continue };
+                    let _ = open_video_window(app.clone(), path.clone());
+                }
+                Some("claude") => {
+                    let _ = open_claude_window(app.clone(), None, target.tool_query.clone());
+                }
                 _ => open_tool(app.clone(), file.clone(), target.tool_query.clone()),
             }
         } else {
@@ -4094,6 +4104,7 @@ struct ClaudeState {
 /// tasks across every project under ~/Projects.
 #[tauri::command]
 fn open_schedules_window(app: AppHandle) -> Result<(), String> {
+    track_tool_window("schedules", "", None, "schedules");
     if let Some(win) = app.get_webview_window("schedules") {
         let _ = win.show();
         let _ = win.set_focus();
@@ -4127,6 +4138,7 @@ fn video_label(path: &str) -> String {
 #[tauri::command]
 fn open_video_window(app: AppHandle, path: String) -> Result<(), String> {
     let label = video_label(&path);
+    track_tool_window(&label, "", Some(path.clone()), "video");
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.show();
         let _ = win.set_focus();
@@ -4153,6 +4165,7 @@ fn open_claude_window(
     key: Option<String>,
     project_path: Option<String>,
 ) -> Result<(), String> {
+    track_tool_window("claude", "", project_path.clone(), "claude");
     if let Some(win) = app.get_webview_window("claude") {
         let _ = win.show();
         let _ = win.set_focus();

@@ -103,28 +103,36 @@ window-layout snapshots, rendered as pill rows in `#ws-modes` by
   `upsert_git_window` then `build_git_window` — before applying the saved
   position/size.
 
-  Tool windows (`src/tools/*.html`) are the other case: they're built lazily
-  on first open, so on a fresh Studio launch one that was part of a saved
-  mode but hasn't been opened yet this session simply doesn't exist. A
-  label alone can't be reversed back into the args its opener needs (it's
-  often a hash, e.g. `tool-{stem}-{hash(query)}` for `open_tool`), so every
-  tool-window opener — `open_tool` (the generic command), the internal
+  Any other lazily-built Studio window is the same case: built on first
+  open, so on a fresh Studio launch one that was part of a saved mode but
+  hasn't been opened yet this session simply doesn't exist, and a label
+  alone often can't be reversed back into the args its opener needs (it's
+  frequently a hash or unrelated slug). So every such opener —
+  `open_tool` (the generic `src/tools/*.html` command); the internal
   `open_tool_window`/`open_tool_window_near`/`open_tool_window_with_color`
-  (tray tools, Code Editor, Code Preview), and `open_git_pulse` — calls
-  `track_tool_window(label, file, query_or_color_or_repo, kind)`, writing
-  into an in-memory `TOOL_WINDOWS` map. `studio_window_snapshots` reads that
-  map at record time and stores `tool_file`/`tool_query`/`tool_kind` on the
-  snapshot, durably, the same way Git windows store `repo`/`color`/`editor`.
+  (tray tools, Code Editor, Code Preview); `open_git_pulse`;
+  `open_schedules_window`; `open_video_window`; and `open_claude_window` —
+  calls `track_tool_window(label, file, extra, kind)`, writing into an
+  in-memory `TOOL_WINDOWS` map (`extra` is whatever that opener needs to
+  rebuild itself: a query string, a color, a repo path, a project path, or
+  nothing). `studio_window_snapshots` reads that map at record time and
+  stores `tool_file`/`tool_query`/`tool_kind` on the snapshot, durably, the
+  same way Git windows store `repo`/`color`/`editor`. Despite the name,
+  `tool_*` covers all of these, not just `src/tools/*.html` windows — kept
+  as one field set/map rather than a second parallel one.
 
-  `tool_kind` matters because several openers use a label scheme the generic
-  `open_tool` can't reproduce (a pre-existing inconsistency, not something
-  introduced here): `open_tool_window_with_color` keys on
-  filename-with-extension instead of `file_stem()` (kind `"color"`), and
-  `open_git_pulse` keys on a 40-char repo-path slug instead of either (kind
-  `"git-pulse"`, where `tool_query` holds the repo path, not a query
-  string). Reopening one of these through the generic `open_tool` would
-  still produce *a* window, but under the wrong label, so the position/size
-  restore right after (which looks the window up by the
+  `tool_kind` matters because several openers use a label scheme the
+  generic `open_tool` can't reproduce (most of these are pre-existing
+  inconsistencies, not introduced here): `open_tool_window_with_color`
+  keys on filename-with-extension instead of `file_stem()` (`"color"`);
+  `open_git_pulse` keys on a 40-char repo-path slug (`"git-pulse"`,
+  `tool_query` = repo path); `open_schedules_window`/`open_claude_window`
+  use fixed labels (`"schedules"`/`"claude"`, no file at all); and
+  `open_video_window` keys on a hash of the project path (`"video"`,
+  `tool_query` = path). Reopening one of these through the generic
+  `open_tool` would still produce *a* window, but under the wrong label
+  (or, for fixed-label ones, with no file to pass it at all), so the
+  position/size restore right after (which looks the window up by the
   originally-recorded label) would silently fail to find it.
   `apply_window_layout` dispatches on `tool_kind` to replay each target
   through the exact function that produced its label.
