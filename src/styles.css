@@ -520,14 +520,13 @@ select.field__input {
 
 .listfield__rows {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     align-items: start;
     gap: 12px;
     position: relative;
 }
 
 .ws-item {
-    aspect-ratio: 2 / 1;
     background: var(--elevated);
     border: 1px solid var(--hairline);
     border-radius: var(--radius);
@@ -690,26 +689,37 @@ select.field__input {
     background: var(--elevated);
 }
 
-/* Secondary actions: two labeled groups on a divided footer. */
+/* Secondary actions: a primary row (editor + Open/Pulse), then a quieter
+   color row underneath — kept apart so neither has to fight the other for
+   space at narrow widths. */
 .ws-repo__actions {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 24px;
+    flex-direction: column;
+    gap: 10px;
     margin-top: auto;
     padding-top: 12px;
     border-top: 1px solid var(--hairline);
+}
+
+.ws-repo__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+}
+
+.ws-repo__row--primary {
+    justify-content: space-between;
+}
+
+.ws-repo__row--color {
+    color: var(--text-soft);
 }
 
 .ws-repo__group {
     display: flex;
     align-items: center;
     gap: 8px;
-}
-
-.ws-repo__group--git {
-    flex-wrap: wrap;
-    margin-left: auto;
 }
 
 .ws-repo__glabel {
@@ -737,14 +747,13 @@ select.field__input {
 
 .ws-repo__swatches {
     display: flex;
-    flex-wrap: nowrap;
-    flex-shrink: 0;
-    gap: 5px;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
 .ws-swatch {
-    width: 15px;
-    height: 15px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     border: 1px solid var(--hairline-strong);
     padding: 0;
@@ -788,6 +797,20 @@ select.field__input {
     filter: brightness(1.08);
 }
 
+/* Pulse is secondary to the primary Git-window Open — ghost it down. */
+.ws-repo__git--ghost {
+    background: var(--surface);
+    border-color: var(--hairline-strong);
+    color: var(--text-muted);
+}
+
+.ws-repo__git--ghost:hover {
+    filter: none;
+    color: var(--text);
+    border-color: var(--text);
+    background: var(--elevated);
+}
+
 .btn-remove {
     // flex: 0 0 auto;
     background: var(--surface);
@@ -828,6 +851,7 @@ select.field__input {
 /* Workspace modes — record/play a saved window layout per mode */
 .ws-modes {
     display: flex;
+grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     flex-wrap: wrap;
     gap: 10px;
     margin-bottom: 16px;

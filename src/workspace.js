@@ -447,11 +447,15 @@ export function addRow(list, value = "") {
     pathRow.append(input, browse);
     card.append(pathRow);
 
-    // Footer: two labeled action groups.
+    // Footer: a primary action row (editor + Open/Pulse), with the color
+    // picker demoted to its own quiet row underneath — it's set once and
+    // rarely touched, so it shouldn't compete with the buttons for space.
     const footer = document.createElement("div");
     footer.className = "ws-repo__actions";
 
-    // Group 1 — open the repo in an editor.
+    const primaryRow = document.createElement("div");
+    primaryRow.className = "ws-repo__row ws-repo__row--primary";
+
     const editorGroup = document.createElement("label");
     editorGroup.className = "ws-repo__group";
     editorGroup.innerHTML = `<span class="ws-repo__glabel">Open in</span>`;
@@ -471,12 +475,38 @@ export function addRow(list, value = "") {
     });
     editorGroup.append(editorSel);
 
-    // Group 2 — the Git companion window: color swatches + an Open button.
-    const gitGroup = document.createElement("div");
-    gitGroup.className = "ws-repo__group ws-repo__group--git";
+    const gitBtn = document.createElement("button");
+    gitBtn.type = "button";
+    gitBtn.className = "ws-repo__git";
+    gitBtn.innerHTML = `${mi("commit")}Open`;
+    gitBtn.title = "Open Git window for this repo";
+    gitBtn.addEventListener("click", () => {
+      const repo = input.value.trim();
+      if (!repo) return;
+      invoke("open_git_window", { repo, color: wsGitColor, editor: wsEditor });
+    });
+    const pulseBtn = document.createElement("button");
+    pulseBtn.type = "button";
+    pulseBtn.className = "ws-repo__git ws-repo__git--ghost";
+    pulseBtn.innerHTML = `${mi("bar_chart")}Pulse`;
+    pulseBtn.title = "Open Git Pulse for this repo";
+    pulseBtn.addEventListener("click", () => {
+      const repo = input.value.trim();
+      if (!repo) return;
+      invoke("open_git_pulse", { repo });
+    });
+    const gitBtns = document.createElement("div");
+    gitBtns.className = "ws-repo__gitbtns";
+    gitBtns.append(gitBtn, pulseBtn);
+
+    primaryRow.append(editorGroup, gitBtns);
+
+    // Quiet row: the Git window color, picked once per repo.
+    const colorRow = document.createElement("div");
+    colorRow.className = "ws-repo__row ws-repo__row--color";
     const gitLabel = document.createElement("span");
     gitLabel.className = "ws-repo__glabel";
-    gitLabel.textContent = "Git window";
+    gitLabel.textContent = "Color";
     const swatches = document.createElement("div");
     swatches.className = "ws-repo__swatches";
     const paintSwatches = () => {
@@ -499,32 +529,9 @@ export function addRow(list, value = "") {
       swatches.append(sw);
     });
     paintSwatches();
-    const gitBtn = document.createElement("button");
-    gitBtn.type = "button";
-    gitBtn.className = "ws-repo__git";
-    gitBtn.innerHTML = `${mi("commit")}Open`;
-    gitBtn.title = "Open Git window for this repo";
-    gitBtn.addEventListener("click", () => {
-      const repo = input.value.trim();
-      if (!repo) return;
-      invoke("open_git_window", { repo, color: wsGitColor, editor: wsEditor });
-    });
-    const pulseBtn = document.createElement("button");
-    pulseBtn.type = "button";
-    pulseBtn.className = "ws-repo__git";
-    pulseBtn.innerHTML = `${mi("bar_chart")}Pulse`;
-    pulseBtn.title = "Open Git Pulse for this repo";
-    pulseBtn.addEventListener("click", () => {
-      const repo = input.value.trim();
-      if (!repo) return;
-      invoke("open_git_pulse", { repo });
-    });
-    const gitBtns = document.createElement("div");
-    gitBtns.className = "ws-repo__gitbtns";
-    gitBtns.append(gitBtn, pulseBtn);
-    gitGroup.append(gitLabel, swatches, gitBtns);
+    colorRow.append(gitLabel, swatches);
 
-    footer.append(editorGroup, gitGroup);
+    footer.append(primaryRow, colorRow);
     card.append(footer);
   }
 
