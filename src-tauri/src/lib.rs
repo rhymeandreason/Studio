@@ -1784,7 +1784,10 @@ fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
         .filter(|(_, win)| win.is_visible().unwrap_or(false))
         .filter_map(|(label, win)| {
             let pos = win.outer_position().ok()?;
-            let size = win.outer_size().ok()?;
+            // inner_size, not outer_size: apply_window_layout restores via
+            // set_size(), which sets the inner (content) size — pairing it
+            // with outer_size would re-add the title bar height on restore.
+            let size = win.inner_size().ok()?;
             let git = git_windows.iter().find(|w| git_label(&w.repo) == label);
             Some(WindowSnapshot {
                 app: STUDIO_APP.to_string(),
