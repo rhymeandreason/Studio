@@ -19,7 +19,7 @@ import {
   pasteImageFromClipboard,
 } from "./media.js";
 import {
-  initLaunch,
+  initModes,
   initClaudeButton,
   initFileDirectoryButton,
   initSpriteBadge,
@@ -2089,7 +2089,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   initDevInspect();
   initTabs();
   initAllProjectsButton();
-  initLaunch();
+  initModes();
   initClaudeButton();
   initFileDirectoryButton();
   initSpriteBadge();

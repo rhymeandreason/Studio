@@ -47,6 +47,14 @@ fn main() {
     println!("cargo:rustc-env=WINBOUNDS_BIN={}", wb_bin.display());
     println!("cargo:rerun-if-changed={wb_src}");
 
+    // Window layout helper (AXUIElement) — record/restore window positions
+    // across apps for Workspace modes.
+    let wl_src = "swift/winlayout.swift";
+    let wl_bin = Path::new(&out_dir).join("winlayout");
+    swiftc(wl_src, &wl_bin, "macosx11.0");
+    println!("cargo:rustc-env=WINLAYOUT_BIN={}", wl_bin.display());
+    println!("cargo:rerun-if-changed={wl_src}");
+
     tauri_build::build();
 }
 

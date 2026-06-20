@@ -53,12 +53,28 @@ To add another editor option, add `{ value, label }` to `EDITOR_OPTIONS` in
 `src/workspace.js` — `value` must match the `.app` name macOS expects after
 `open -a` (e.g. `"Visual Studio Code"`, `"IntelliJ IDEA"`).
 
-## Launch button
+## Modes (record/play window layouts)
 
-`initLaunch()` wires `#launch-btn` → `invoke("launch_workspace", { path })`,
-which (in order): opens URLs + Figma via `open`, opens the repo in the chosen
-editor, opens the Claude terminal (if `claude.mode === "terminal"`), and opens
-any apps/files/folders.
+`workspace.json`'s `modes` array (seeded with Code/Design/Default) holds named
+window-layout snapshots, rendered as pill rows in `#ws-modes` by
+`initModes()`/`renderModes()` in `src/workspace.js`. Each mode has a record
+(●) and play (▶) button:
+
+- **Record** → `invoke("list_windows")`, which shells out to the `winlayout`
+  Swift helper (`list` mode, `CGWindowListCopyWindowInfo`) and returns every
+  on-screen window (any app) as `{app, title, x, y, w, h}`. Stored as
+  `mode.layout`, autosaved like the rest of the form.
+- **Play** → `invoke("apply_window_layout", { layout })`, which runs
+  `winlayout apply`: for each on-screen window, if it matches an `(app,
+  title)` pair in the layout, move/resize it there and un-minimize it;
+  otherwise minimize it. Matching and minimizing other apps' windows uses the
+  Accessibility API (`AXUIElement`), which needs the user to grant Studio
+  Accessibility permission once (System Settings → Privacy & Security →
+  Accessibility) — until granted, AX calls are silent no-ops.
+
+This replaced the old single Launch button (`launch_workspace`/repo+apps+files
++URLs+Claude-terminal opener), which is still available as a Rust command but
+no longer has a UI entry point.
 
 ## Tab pinning
 

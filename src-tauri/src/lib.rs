@@ -74,6 +74,50 @@ struct Workspace {
     /// Workspace UI as 3 slots.
     #[serde(default = "default_schedule_slots", rename = "scheduleSlots")]
     schedule_slots: Vec<String>,
+    /// Named window-layout snapshots (Code / Design / Default, plus any the
+    /// user adds), each recorded via the Workspace tab's record/play buttons.
+    #[serde(default = "default_modes")]
+    modes: Vec<WorkspaceMode>,
+}
+
+fn default_modes() -> Vec<WorkspaceMode> {
+    ["Code", "Design", "Default"]
+        .iter()
+        .map(|name| WorkspaceMode {
+            id: name.to_lowercase(),
+            name: name.to_string(),
+            layout: Vec::new(),
+        })
+        .collect()
+}
+
+/// One Workspace mode: a name and its recorded window layout (empty until
+/// the user hits Record).
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct WorkspaceMode {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    layout: Vec<WindowSnapshot>,
+}
+
+/// One recorded window: which app/title owned it and its on-screen frame.
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct WindowSnapshot {
+    #[serde(default)]
+    app: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    x: i32,
+    #[serde(default)]
+    y: i32,
+    #[serde(default)]
+    w: i32,
+    #[serde(default)]
+    h: i32,
 }
 
 fn default_schedule_model() -> String {
@@ -1711,6 +1755,48 @@ fn get_focused_window_bounds() -> Result<String, String> {
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     } else {
         Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+const WINLAYOUT_BIN: &str = env!("WINLAYOUT_BIN");
+
+/// List every on-screen window (any app), for recording a Workspace mode.
+#[tauri::command]
+fn list_windows() -> Result<Vec<WindowSnapshot>, String> {
+    let out = Command::new(WINLAYOUT_BIN)
+        .arg("list")
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())
+}
+
+/// Restore a saved window layout: move/resize/un-minimize each window in
+/// `layout`, then minimize every other on-screen window not in it. Requires
+/// Accessibility permission (System Settings > Privacy & Security); until
+/// granted, the helper's AX calls are silent no-ops.
+#[tauri::command]
+fn apply_window_layout(layout: Vec<WindowSnapshot>) -> Result<(), String> {
+    use std::io::Write;
+    let mut child = Command::new(WINLAYOUT_BIN)
+        .arg("apply")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let payload = serde_json::to_vec(&layout).map_err(|e| e.to_string())?;
+    child
+        .stdin
+        .take()
+        .ok_or("no stdin")?
+        .write_all(&payload)
+        .map_err(|e| e.to_string())?;
+    let status = child.wait().map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("winlayout apply failed".to_string())
     }
 }
 
@@ -4422,7 +4508,9 @@ pub fn run() {
             git_diff_file,
             git_log_week,
             open_git_pulse,
-            get_focused_window_bounds
+            get_focused_window_bounds,
+            list_windows,
+            apply_window_layout
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.

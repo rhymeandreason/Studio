@@ -28,10 +28,6 @@ function appNameFromPath(path) {
   return base.replace(/\.app$/i, "");
 }
 
-// --- Workspace launch --------------------------------------------------------
-
-const LAUNCH_LABEL = `${mi("rocket_launch")}Launch workspace`;
-
 export function initClaudeButton() {
   const btn = document.getElementById("claude-btn");
   btn.addEventListener("click", (e) => {
@@ -53,23 +49,83 @@ export function initFileDirectoryButton() {
   });
 }
 
-export function initLaunch() {
-  const btn = document.getElementById("launch-btn");
-  btn.addEventListener("click", async () => {
-    if (!state.activeProject) return;
-    btn.disabled = true;
-    btn.innerHTML = `${mi("hourglass_top")}Launching…`;
-    try {
-      await invoke("launch_workspace", { path: state.activeProject.path });
-      btn.innerHTML = `${mi("check")}Launched`;
-    } catch (err) {
-      btn.innerHTML = `${mi("error")}Error`;
-    }
-    setTimeout(() => {
-      btn.innerHTML = LAUNCH_LABEL;
-      btn.disabled = false;
-    }, 1500);
+// --- Workspace modes ---------------------------------------------------
+//
+// Each mode is a name + a recorded window layout (app/title/x/y/w/h for every
+// on-screen window at record time). Record snapshots the desktop; Play moves
+// every recorded window back into place and minimizes anything else.
+
+let wsModes = [];
+
+function flashBtn(btn, icon, ms = 1200) {
+  const original = btn.innerHTML;
+  btn.innerHTML = mi(icon);
+  setTimeout(() => {
+    btn.innerHTML = original;
+  }, ms);
+}
+
+async function recordMode(mode, btn, playBtn) {
+  btn.disabled = true;
+  try {
+    mode.layout = await invoke("list_windows");
+    scheduleWorkspaceSave();
+    flashBtn(btn, "check");
+    playBtn.disabled = !mode.layout.length;
+  } catch (err) {
+    flashBtn(btn, "error");
+    console.error(err);
+  }
+  btn.disabled = false;
+}
+
+async function playMode(mode, btn) {
+  btn.disabled = true;
+  try {
+    await invoke("apply_window_layout", { layout: mode.layout || [] });
+    flashBtn(btn, "check");
+  } catch (err) {
+    flashBtn(btn, "error");
+    console.error(err);
+  }
+  btn.disabled = false;
+}
+
+function renderModes() {
+  const wrap = document.getElementById("ws-modes");
+  wrap.innerHTML = "";
+  wsModes.forEach((mode) => {
+    const row = document.createElement("div");
+    row.className = "ws-mode";
+
+    const name = document.createElement("span");
+    name.className = "ws-mode__name";
+    name.textContent = mode.name;
+    row.append(name);
+
+    const recordBtn = document.createElement("button");
+    recordBtn.type = "button";
+    recordBtn.className = "ws-mode__btn ws-mode__btn--record";
+    recordBtn.title = `Record current windows into "${mode.name}"`;
+    recordBtn.innerHTML = mi("fiber_manual_record");
+
+    const playBtn = document.createElement("button");
+    playBtn.type = "button";
+    playBtn.className = "ws-mode__btn ws-mode__btn--play";
+    playBtn.title = `Restore "${mode.name}"'s windows`;
+    playBtn.disabled = !mode.layout?.length;
+    playBtn.innerHTML = mi("play_arrow");
+
+    recordBtn.addEventListener("click", () => recordMode(mode, recordBtn, playBtn));
+    playBtn.addEventListener("click", () => playMode(mode, playBtn));
+
+    row.append(recordBtn, playBtn);
+    wrap.append(row);
   });
+}
+
+export function initModes() {
+  renderModes();
 }
 
 // --- Workspace form --------------------------------------------------------
@@ -503,6 +559,14 @@ export async function loadWorkspace(path) {
   wsScheduleSlots = ws.scheduleSlots && ws.scheduleSlots.length === 3
     ? ws.scheduleSlots
     : ["09:00", "13:00", "17:00"];
+  wsModes = ws.modes && ws.modes.length
+    ? ws.modes
+    : [
+        { id: "code", name: "Code", layout: [] },
+        { id: "design", name: "Design", layout: [] },
+        { id: "default", name: "Default", layout: [] },
+      ];
+  renderModes();
 }
 
 function renderSpriteBadge() {
@@ -554,6 +618,7 @@ function readWorkspaceForm() {
     sprite: wsSprite,
     schedules: wsSchedules,
     scheduleSlots: wsScheduleSlots,
+    modes: wsModes,
   };
 }
 

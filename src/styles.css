@@ -816,6 +816,61 @@ select.field__input {
     color: var(--text-muted);
 }
 
+/* Workspace modes — record/play a saved window layout per mode */
+.ws-modes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.ws-mode {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px 4px 12px;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 999px;
+    background: var(--surface);
+}
+
+.ws-mode__name {
+    font-size: 13px;
+    color: var(--text);
+    margin-right: 4px;
+    white-space: nowrap;
+}
+
+.ws-mode__btn {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.ws-mode__btn:hover {
+    background: var(--bg);
+    color: var(--text);
+}
+
+.ws-mode__btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
+}
+
+.ws-mode__btn--record:hover {
+    color: var(--rose);
+}
+
 /* Notes panel */
 .notes-toolbar {
     display: flex;
