@@ -64,6 +64,10 @@ A quick tour of what Studio can do.
   and plain HTML files in the browser; remembers which folders you had open.
 - They share Studio's look (the "Runes" design kit) and work fully offline.
 - Exports and artifacts save straight into your active project's folder.
+- **Spotlight launcher**: press **Option+Space** anywhere to bring up a
+  floating, transparent search palette listing every tool and project.
+  Type to filter, arrow keys + Enter (or click) to open; Escape or clicking
+  away dismisses it.
 
 ## Scheduled tasks
 - Schedule Claude Code tasks to run automatically, grouped into two shared time

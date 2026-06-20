@@ -218,6 +218,33 @@ HTML as a `?color=` URL param so the page body matches it on first paint too.
    invoke("open_my_preview", { color: titleColor });
    ```
 
+## Global-shortcut access (Spotlight launcher)
+
+`src/tools/spotlight.html` is opened by a global keyboard shortcut
+(Option+Space) instead of the tray, via `toggle_spotlight_window` in
+`src-tauri/src/lib.rs` (registered through `tauri-plugin-global-shortcut`
+in `.setup()`). It doesn't go through `open_tool`/`Tools.json`, so it's
+hidden from the wrench-tray dropdown by default.
+
+It's also the only window that's transparent + undecorated +
+always-on-top, which needs the `macos-private-api` Cargo feature and
+`"macOSPrivateApi": true` in `tauri.conf.json`. The page itself stays
+visually empty except for a floating card (`#panel`), so unfilled window
+space reads as transparent; losing focus hides the window
+(`on_window_event` checks `window.label() == "spotlight"`). It has its own
+capability file (`src-tauri/capabilities/spotlight.json`) rather than
+reusing `tool-*`.
+
+It lists both tools (`list_tools` command, wrapping `scan_tools`) and
+projects (`list_projects`), merged and filtered client-side, launching via
+`open_tool` / `open_project` depending on which was picked.
+
+**Not yet included: Claude and Git.** Both are opened through separate
+commands that don't fit the tools/projects list — `open_claude_window`
+takes an optional per-project path, and `open_git_window` needs a specific
+repo path, with no single "list all repos" source today. Worth revisiting
+if Spotlight should cover them too.
+
 ## Dedicated tray icon + positioning
 
 A tool can get its own tray icon (next to Studio's) instead of living only in
