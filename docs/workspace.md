@@ -103,17 +103,28 @@ window-layout snapshots, rendered as pill rows in `#ws-modes` by
   `upsert_git_window` then `build_git_window` — before applying the saved
   position/size.
 
-  Tool windows (`src/tools/*.html`, opened via `open_tool`) are the other
-  case: they're built lazily on first open, so on a fresh Studio launch one
-  that was part of a saved mode but hasn't been opened yet this session
-  simply doesn't exist. Its label (`tool-{stem}-{hash(query)}`) can't be
-  reversed back into the `file`/`query` `open_tool` needs to rebuild it, so
-  `open_tool` also writes label → `(file, query)` into an in-memory
-  `TOOL_WINDOWS` map; `studio_window_snapshots` reads that map at record time
-  and stores `tool_file`/`tool_query` on the snapshot, durably, the same way
-  Git windows store `repo`/`color`/`editor`. `apply_window_layout` calls
-  `open_tool` directly (it's a plain fn under the `#[tauri::command]`
-  wrapper) when it finds a `tool_file` on an unmatched target.
+  Tool windows (`src/tools/*.html`) are the other case: they're built lazily
+  on first open, so on a fresh Studio launch one that was part of a saved
+  mode but hasn't been opened yet this session simply doesn't exist. A
+  label alone can't be reversed back into the args its opener needs (it's
+  often a hash, e.g. `tool-{stem}-{hash(query)}` for `open_tool`), so all
+  three tool-window openers — `open_tool` (the generic command), and the
+  internal `open_tool_window`/`open_tool_window_near`/
+  `open_tool_window_with_color` (tray tools, Code Editor, Code Preview) —
+  call `track_tool_window(label, file, query_or_color, kind)`, writing into
+  an in-memory `TOOL_WINDOWS` map. `studio_window_snapshots` reads that map
+  at record time and stores `tool_file`/`tool_query`/`tool_kind` on the
+  snapshot, durably, the same way Git windows store `repo`/`color`/`editor`.
+
+  `tool_kind` matters because `open_tool_window_with_color` uses a *different*
+  label scheme than the other two (filename-with-extension, not
+  `file_stem()` — a pre-existing inconsistency, not something introduced
+  here): reopening a `"color"`-kind target through the generic `open_tool`
+  would produce a window, but under the wrong label, so the position/size
+  restore right after (which looks the window up by the originally-recorded
+  label) would silently fail to find it. `apply_window_layout` instead
+  replays `"color"` targets through `open_tool_window_with_color` itself and
+  everything else through `open_tool`, so the label always matches.
 
   Other Studio windows (main, etc.) are always open (hidden, not destroyed,
   per the close handler below), so there's nothing to reopen for them.

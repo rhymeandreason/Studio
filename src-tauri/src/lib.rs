@@ -129,24 +129,44 @@ struct WindowSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     editor: Option<String>,
     /// Tool-window-only (label starts with "tool-"): the `src/tools/*.html`
-    /// file + query string it was opened with, captured at record time from
-    /// `TOOL_WINDOWS` — needed to rebuild it if it's not open yet (e.g. a
-    /// fresh launch, before the user has opened that tool this session) since
-    /// its label alone (a hash of the query) can't be reversed back into one.
+    /// file + query string (or, for `tool_kind: "color"`, the bare color) it
+    /// was opened with, captured at record time from `TOOL_WINDOWS` — needed
+    /// to rebuild it if it's not open yet (e.g. a fresh launch, before the
+    /// user has opened that tool this session) since its label alone (often
+    /// a hash) can't be reversed back into one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     tool_file: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     tool_query: Option<String>,
+    /// "plain" (reopen via `open_tool`) or "color" (reopen via
+    /// `open_tool_window_with_color` — a different label scheme, so it must
+    /// be replayed through that same function). Missing/absent = "plain".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tool_kind: Option<String>,
 }
 
-/// label → (file, query) for every tool window opened this session (via
-/// `open_tool`), so a Workspace mode recorded while one was open can store
-/// enough to rebuild it later — even after a restart, since the label itself
-/// (`tool-{stem}-{hash(query)}`) can't be reversed back into a file/query.
-static TOOL_WINDOWS: OnceLock<Mutex<HashMap<String, (String, Option<String>)>>> = OnceLock::new();
+/// label → (file, query/color, kind) for every tool window opened this
+/// session, so a Workspace mode recorded while one was open can store enough
+/// to rebuild it later — even after a restart, since a label alone (often a
+/// hash, or otherwise unparseable) can't be reversed back into the args its
+/// opener needs. `kind` is `"plain"` (reopen via `open_tool`, used by
+/// `open_tool`/`open_tool_window_near`/`open_tool_window`) or `"color"`
+/// (reopen via `open_tool_window_with_color`, which uses a different label
+/// scheme — filename-with-extension, not file_stem — so it must be replayed
+/// through that exact function for the label, and thus the position/size
+/// restore that depends on it, to match).
+static TOOL_WINDOWS: OnceLock<Mutex<HashMap<String, (String, Option<String>, String)>>> =
+    OnceLock::new();
 
-fn tool_windows_store() -> &'static Mutex<HashMap<String, (String, Option<String>)>> {
+fn tool_windows_store() -> &'static Mutex<HashMap<String, (String, Option<String>, String)>> {
     TOOL_WINDOWS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn track_tool_window(label: &str, file: &str, query: Option<String>, kind: &str) {
+    tool_windows_store()
+        .lock()
+        .unwrap()
+        .insert(label.to_string(), (file.to_string(), query, kind.to_string()));
 }
 
 fn default_schedule_model() -> String {
@@ -425,6 +445,7 @@ fn open_tool_window_with_color(app: &AppHandle, path: &str, color: &str) {
             .map(|c| if c.is_alphanumeric() { c } else { '-' })
             .collect::<String>()
     );
+    track_tool_window(&label, filename, Some(color.to_string()), "color");
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.show();
         let _ = win.set_focus();
@@ -463,6 +484,15 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
             .collect::<String>()
     );
 
+    // Load via the app's tauri://localhost protocol (the tool's HTML lives
+    // in src/tools/, part of frontendDist) rather than file://: file://
+    // windows send `Origin: null`, which Tauri's IPC rejects ("Origin
+    // header not valid URL").
+    let Some(filename) = Path::new(path).file_name().and_then(|n| n.to_str()) else {
+        return;
+    };
+    track_tool_window(&label, filename, None, "plain");
+
     if let Some(win) = app.get_webview_window(&label) {
         if let Some(rect) = near {
             // Tray-icon click: toggle visibility instead of always showing.
@@ -476,14 +506,6 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
         let _ = win.set_focus();
         return;
     }
-
-    // Load via the app's tauri://localhost protocol (the tool's HTML lives
-    // in src/tools/, part of frontendDist) rather than file://: file://
-    // windows send `Origin: null`, which Tauri's IPC rejects ("Origin
-    // header not valid URL").
-    let Some(filename) = Path::new(path).file_name().and_then(|n| n.to_str()) else {
-        return;
-    };
     let title = if filename == "daily-notes.html" || filename == "ram-overview.html"
         || filename == "kit-gallery.html" || filename == "file-directory.html"
     {
@@ -1148,10 +1170,7 @@ fn open_tool(app: AppHandle, file: String, query: Option<String>) {
         Some(q) => format!("tool-{stem}-{}", tool_hash(q)),
         None => format!("tool-{stem}"),
     };
-    tool_windows_store()
-        .lock()
-        .unwrap()
-        .insert(label.clone(), (file.clone(), q.clone()));
+    track_tool_window(&label, &file, q.clone(), "plain");
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.show();
         let _ = win.set_focus();
@@ -1824,8 +1843,9 @@ fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
                 repo: git.map(|w| w.repo.clone()),
                 color: git.map(|w| w.color.clone()),
                 editor: git.map(|w| w.editor.clone()),
-                tool_file: tool.map(|(file, _)| file.clone()),
-                tool_query: tool.and_then(|(_, query)| query.clone()),
+                tool_file: tool.map(|(file, _, _)| file.clone()),
+                tool_query: tool.and_then(|(_, query, _)| query.clone()),
+                tool_kind: tool.map(|(_, _, kind)| kind.clone()),
             })
         })
         .collect()
@@ -1901,7 +1921,14 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
             upsert_git_window(&app, &win);
             build_git_window(&app, &win);
         } else if let Some(file) = &target.tool_file {
-            open_tool(app.clone(), file.clone(), target.tool_query.clone());
+            if target.tool_kind.as_deref() == Some("color") {
+                // Must go through the exact function that produced the
+                // original label (filename-with-extension, not file_stem) so
+                // the position/size lookup by `target.title` below succeeds.
+                open_tool_window_with_color(&app, file, target.tool_query.as_deref().unwrap_or(""));
+            } else {
+                open_tool(app.clone(), file.clone(), target.tool_query.clone());
+            }
         } else {
             continue;
         }
