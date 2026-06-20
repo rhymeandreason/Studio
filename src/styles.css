@@ -708,10 +708,12 @@ select.field__input {
 }
 
 .ws-repo__group--git {
+    flex-wrap: wrap;
     margin-left: auto;
 }
 
 .ws-repo__glabel {
+    flex-shrink: 0;
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
@@ -735,7 +737,8 @@ select.field__input {
 
 .ws-repo__swatches {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
     gap: 5px;
 }
 
@@ -756,6 +759,12 @@ select.field__input {
 
 .ws-swatch.is-active {
     box-shadow: 0 0 0 2px var(--elevated), 0 0 0 4px var(--text);
+}
+
+.ws-repo__gitbtns {
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
 }
 
 /* Git is the repo card's primary call-to-action: filled, not ghosted. */

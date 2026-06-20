@@ -519,7 +519,10 @@ export function addRow(list, value = "") {
       if (!repo) return;
       invoke("open_git_pulse", { repo });
     });
-    gitGroup.append(gitLabel, swatches, gitBtn, pulseBtn);
+    const gitBtns = document.createElement("div");
+    gitBtns.className = "ws-repo__gitbtns";
+    gitBtns.append(gitBtn, pulseBtn);
+    gitGroup.append(gitLabel, swatches, gitBtns);
 
     footer.append(editorGroup, gitGroup);
     card.append(footer);
@@ -579,7 +582,7 @@ let wsSprite = DEFAULT_SPRITE;
 
 export async function loadWorkspace(path) {
   const ws = await invoke("read_workspace", { path });
-  wsEditor = ws.editor || "";
+  wsEditor = ws.editor || "Studio Code Editor";
   wsGitColor = ws.gitColor || GIT_COLORS[0];
   wsClaude = ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
   wsSprite = ws.sprite || DEFAULT_SPRITE;
@@ -636,7 +639,7 @@ function setStatus(text) {
 }
 
 let wsSaveTimer = null;
-let wsEditor = "";
+let wsEditor = "Studio Code Editor";
 let wsGitColor = GIT_COLORS[0];
 let wsPinnedTab = null;
 let wsSchedules = [];
