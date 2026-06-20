@@ -204,6 +204,7 @@
 
   <script>
     const STORE_KEY = 'studio-daily-notes';
+    const invoke = window.__TAURI__?.core?.invoke;
 
     function todayKey(d = new Date()) {
       const y = d.getFullYear();
@@ -212,7 +213,9 @@
       return `${y}-${m}-${day}`;
     }
 
-    function loadStore() {
+    // One-time migration from the old localStorage-only store; the disk
+    // file (read_daily_notes) takes precedence once it exists.
+    function loadLegacyStore() {
       try {
         return JSON.parse(localStorage.getItem(STORE_KEY)) || {};
       } catch {
@@ -220,14 +223,25 @@
       }
     }
 
-    function saveStore(store) {
-      localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    async function loadStore() {
+      if (!invoke) return loadLegacyStore();
+      const onDisk = await invoke('read_daily_notes');
+      if (onDisk && Object.keys(onDisk).length) return onDisk;
+      return loadLegacyStore();
+    }
+
+    async function saveStore(store) {
+      if (invoke) {
+        await invoke('save_daily_notes', { store });
+      } else {
+        localStorage.setItem(STORE_KEY, JSON.stringify(store));
+      }
     }
 
     // Migrate: if today's list doesn't exist yet, carry over unchecked
     // items from the most recent earlier day. Only today's list is kept.
-    function loadTodayItems() {
-      const store = loadStore();
+    async function loadTodayItems() {
+      const store = await loadStore();
       const today = todayKey();
       let carried = 0;
 
@@ -248,7 +262,7 @@
         for (const k of Object.keys(store)) {
           if (k !== today) delete store[k];
         }
-        saveStore(store);
+        await saveStore(store);
       }
 
       return {
@@ -259,10 +273,10 @@
 
     let items = [];
 
-    function persist() {
-      const store = loadStore();
+    async function persist() {
+      const store = await loadStore();
       store[todayKey()] = items;
-      saveStore(store);
+      await saveStore(store);
     }
 
     function render() {
@@ -380,13 +394,15 @@
       }
     }
 
-    const {
-      items: initialItems,
-      carried
-    } = loadTodayItems();
-    items = initialItems;
-    renderHeader(carried);
-    render();
+    (async () => {
+      const {
+        items: initialItems,
+        carried
+      } = await loadTodayItems();
+      items = initialItems;
+      renderHeader(carried);
+      render();
+    })();
     renderCalendar();
 
     const newItemInput = document.getElementById('new-item');

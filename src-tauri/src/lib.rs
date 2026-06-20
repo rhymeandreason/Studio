@@ -2411,6 +2411,25 @@ fn save_project_order(app: AppHandle, data: String) -> Result<(), String> {
     std::fs::write(dir.join("project-order.json"), data).map_err(|e| e.to_string())
 }
 
+/// Read the Daily Notes store (app config dir / daily-notes.json).
+#[tauri::command]
+fn read_daily_notes(app: AppHandle) -> Result<serde_json::Value, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    match std::fs::read_to_string(dir.join("daily-notes.json")) {
+        Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
+        Err(_) => Ok(serde_json::json!({})),
+    }
+}
+
+/// Write the Daily Notes store (app config dir / daily-notes.json, pretty-printed).
+#[tauri::command]
+fn save_daily_notes(app: AppHandle, store: serde_json::Value) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let text = serde_json::to_string_pretty(&store).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("daily-notes.json"), text).map_err(|e| e.to_string())
+}
+
 /// Path to the global schedules store (app config dir / schedules.json).
 fn schedules_file_path(app: &AppHandle) -> Option<PathBuf> {
     app.path()
@@ -4706,6 +4725,8 @@ pub fn run() {
             save_media_meta,
             read_project_order,
             save_project_order,
+            read_daily_notes,
+            save_daily_notes,
             read_schedules,
             save_schedules,
             paste_image,
