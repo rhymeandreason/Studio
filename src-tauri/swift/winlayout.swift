@@ -4,9 +4,12 @@
 //   list    — print a JSON array of every on-screen window (app, title, x, y,
 //             w, h), same filtering as winbounds (skips menus/Dock/tiny
 //             windows), but across the whole screen, not just the frontmost.
-//   apply   — read a JSON array of the same shape from stdin, move/resize and
-//             un-minimize each matching window via the Accessibility API,
-//             then minimize every other on-screen window not in the list.
+//   apply   — read a JSON array of the same shape from stdin. For each entry,
+//             launch the app if it isn't running (and wait for its first
+//             window), then move/resize/un-minimize the matching window via
+//             the Accessibility API — including windows that are currently
+//             minimized, which CGWindowList can't see. Finally minimize every
+//             on-screen window that wasn't part of the layout.
 //
 // Moving/resizing/minimizing windows owned by *other* processes requires the
 // Accessibility API (AXUIElement) — CGWindowList is read-only. First run
@@ -101,49 +104,72 @@ func setFrame(_ win: AXUIElement, x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat
     }
 }
 
+func runningPid(forApp app: String) -> pid_t? {
+    NSWorkspace.shared.runningApplications.first(where: { $0.localizedName == app })?.processIdentifier
+}
+
+// Launches an app the layout references but that isn't running, then blocks
+// (briefly) until both the process and at least one AX window of it exist —
+// app launch and first-window creation are async.
+func launchAndWaitForWindows(app: String, timeout: Double = 6.0) -> [(AXUIElement, String)] {
+    Process.launchedProcess(launchPath: "/usr/bin/open", arguments: ["-a", app])
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+        if let pid = runningPid(forApp: app) {
+            let windows = axWindows(pid: pid)
+            if !windows.isEmpty { return windows }
+        }
+        usleep(200_000)
+    }
+    if let pid = runningPid(forApp: app) { return axWindows(pid: pid) }
+    return []
+}
+
 func applyMode() {
     let inputData = FileHandle.standardInput.readDataToEndOfFile()
     guard let targets = try? JSONSerialization.jsonObject(with: inputData) as? [[String: Any]] else {
         exit(1)
     }
 
-    let onscreen = onScreenWindows()
-    // Group onscreen windows by pid so we only touch AX for processes that
-    // actually have a window on the desktop right now.
-    var pidsByApp: [String: pid_t] = [:]
-    for win in onscreen where pidsByApp[win.app] == nil {
-        pidsByApp[win.app] = win.pid
-    }
-
-    // Track which (app,title) pairs are in the saved layout, and consume AX
-    // windows as we match them so duplicate titles don't double-restore.
+    // Restore every saved window first — by app, not by what's currently
+    // onscreen, so minimized windows (excluded from CGWindowList) and apps
+    // that aren't running yet both get handled.
     var remainingTargets = targets
-    var axCache: [pid_t: [(AXUIElement, String)]] = [:]
+    var consumedWindows: [AXUIElement] = []
+    let targetApps = NSOrderedSet(array: targets.compactMap { $0["app"] as? String }).array as! [String]
 
-    func consumeTarget(app: String, title: String) -> [String: Any]? {
-        guard let idx = remainingTargets.firstIndex(where: {
-            ($0["app"] as? String) == app && ($0["title"] as? String) == title
-        }) else { return nil }
-        return remainingTargets.remove(at: idx)
-    }
+    for app in targetApps {
+        var windows = runningPid(forApp: app).map(axWindows(pid:)) ?? []
+        if windows.isEmpty {
+            windows = launchAndWaitForWindows(app: app)
+        }
 
-    for win in onscreen {
-        guard let pid = pidsByApp[win.app] else { continue }
-        let windows = axCache[pid] ?? axWindows(pid: pid)
-        axCache[pid] = windows
+        while let idx = remainingTargets.firstIndex(where: { ($0["app"] as? String) == app }) {
+            let target = remainingTargets[idx]
+            let title = target["title"] as? String ?? ""
+            let matchIdx = windows.firstIndex(where: { $0.1 == title }) ?? (windows.isEmpty ? nil : 0)
+            guard let mi = matchIdx else { break }
+            let (axWin, _) = windows.remove(at: mi)
+            remainingTargets.remove(at: idx)
 
-        guard let (axWin, _) = windows.first(where: { $0.1 == win.title }) else { continue }
-
-        if let target = consumeTarget(app: win.app, title: win.title) {
-            let x = (target["x"] as? NSNumber)?.doubleValue ?? Double(win.x)
-            let y = (target["y"] as? NSNumber)?.doubleValue ?? Double(win.y)
-            let w = (target["w"] as? NSNumber)?.doubleValue ?? Double(win.w)
-            let h = (target["h"] as? NSNumber)?.doubleValue ?? Double(win.h)
+            let x = (target["x"] as? NSNumber)?.doubleValue ?? 0
+            let y = (target["y"] as? NSNumber)?.doubleValue ?? 0
+            let w = (target["w"] as? NSNumber)?.doubleValue ?? 0
+            let h = (target["h"] as? NSNumber)?.doubleValue ?? 0
             setMinimized(axWin, false)
             setFrame(axWin, x: CGFloat(x), y: CGFloat(y), w: CGFloat(w), h: CGFloat(h))
-        } else {
-            setMinimized(axWin, true)
+            consumedWindows.append(axWin)
         }
+    }
+
+    // Then minimize every on-screen window that wasn't part of the layout.
+    var axCache: [pid_t: [(AXUIElement, String)]] = [:]
+    for win in onScreenWindows() {
+        let windows = axCache[win.pid] ?? axWindows(pid: win.pid)
+        axCache[win.pid] = windows
+        guard let (axWin, _) = windows.first(where: { $0.1 == win.title }) else { continue }
+        if consumedWindows.contains(where: { CFEqual($0, axWin) }) { continue }
+        setMinimized(axWin, true)
     }
 }
 
