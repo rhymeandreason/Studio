@@ -59,9 +59,13 @@ To add another editor option, add `{ value, label }` to `EDITOR_OPTIONS` in
 ## Modes (record/play window layouts)
 
 `workspace.json`'s `modes` array (seeded with Code/Design/Default) holds named
-window-layout snapshots, rendered as pill rows in `#ws-modes` by
-`initModes()`/`renderModes()` in `src/workspace.js`. Each mode has a record
-(●) and play (▶) button:
+window-layout snapshots, rendered as cards in `#ws-modes` by
+`initModes()`/`renderModes()` in `src/workspace.js` — name + "Saved <when>"
+on top, a bigger record (●) and play (▶) button below. The timestamp comes
+from `mode.recordedAt` (an ISO string set by the frontend on a successful
+Record, formatted by `formatSavedAt()`), persisted as `recordedAt` on the
+Rust side (`WorkspaceMode::recorded_at` — Rust only carries it through,
+never sets it).
 
 - **Record** → `invoke("list_windows")`, which shells out to the `winlayout`
   Swift helper (`list` mode, `CGWindowListCopyWindowInfo`) and returns every

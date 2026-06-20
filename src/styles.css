@@ -820,45 +820,69 @@ select.field__input {
 .ws-modes {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 14px;
+    gap: 10px;
+    margin-bottom: 16px;
 }
 
 .ws-mode {
     display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 6px 4px 12px;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
     border: 1px solid var(--hairline-strong);
-    border-radius: 999px;
+    border-radius: var(--radius);
     background: var(--surface);
+    min-width: 140px;
+}
+
+.ws-mode__head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .ws-mode__name {
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 600;
     color: var(--text);
-    margin-right: 4px;
     white-space: nowrap;
+}
+
+.ws-mode__saved {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.ws-mode__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .ws-mode__btn {
     flex: 0 0 auto;
-    width: 26px;
-    height: 26px;
+    width: 40px;
+    height: 40px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: transparent;
-    border: none;
+    background: var(--bg);
+    border: 1px solid var(--hairline-strong);
     border-radius: 50%;
     color: var(--text-muted);
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.ws-mode__btn .mi {
+    font-size: 22px;
 }
 
 .ws-mode__btn:hover {
-    background: var(--bg);
+    background: var(--surface);
     color: var(--text);
+    border-color: var(--text);
 }
 
 .ws-mode__btn:disabled {
@@ -869,6 +893,7 @@ select.field__input {
 
 .ws-mode__btn--record:hover {
     color: var(--rose);
+    border-color: var(--rose);
 }
 
 /* Notes panel */

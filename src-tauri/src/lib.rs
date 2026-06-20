@@ -87,6 +87,7 @@ fn default_modes() -> Vec<WorkspaceMode> {
             id: name.to_lowercase(),
             name: name.to_string(),
             layout: Vec::new(),
+            recorded_at: None,
         })
         .collect()
 }
@@ -101,6 +102,11 @@ struct WorkspaceMode {
     name: String,
     #[serde(default)]
     layout: Vec<WindowSnapshot>,
+    /// ISO timestamp of the last successful Record, shown in the UI as
+    /// "Saved <when>". Set by the frontend, not Rust — Record's result
+    /// already round-trips through JS either way.
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "recordedAt")]
+    recorded_at: Option<String>,
 }
 
 /// One recorded window: which app/title owned it and its on-screen frame.

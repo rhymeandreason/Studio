@@ -65,13 +65,30 @@ function flashBtn(btn, icon, ms = 1200) {
   }, ms);
 }
 
-async function recordMode(mode, btn, playBtn) {
+function formatSavedAt(iso) {
+  if (!iso) return "Not recorded yet";
+  const d = new Date(iso);
+  if (isNaN(d)) return "Not recorded yet";
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (sameDay) return `Saved today at ${time}`;
+  const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `Saved ${date} at ${time}`;
+}
+
+async function recordMode(mode, btn, playBtn, savedEl) {
   btn.disabled = true;
   try {
     mode.layout = await invoke("list_windows");
+    mode.recordedAt = new Date().toISOString();
     scheduleWorkspaceSave();
     flashBtn(btn, "check");
     playBtn.disabled = !mode.layout.length;
+    savedEl.textContent = formatSavedAt(mode.recordedAt);
   } catch (err) {
     flashBtn(btn, "error");
     console.error(err);
@@ -95,13 +112,21 @@ function renderModes() {
   const wrap = document.getElementById("ws-modes");
   wrap.innerHTML = "";
   wsModes.forEach((mode) => {
-    const row = document.createElement("div");
-    row.className = "ws-mode";
+    const card = document.createElement("div");
+    card.className = "ws-mode";
 
+    const head = document.createElement("div");
+    head.className = "ws-mode__head";
     const name = document.createElement("span");
     name.className = "ws-mode__name";
     name.textContent = mode.name;
-    row.append(name);
+    const saved = document.createElement("span");
+    saved.className = "ws-mode__saved";
+    saved.textContent = formatSavedAt(mode.recordedAt);
+    head.append(name, saved);
+
+    const actions = document.createElement("div");
+    actions.className = "ws-mode__actions";
 
     const recordBtn = document.createElement("button");
     recordBtn.type = "button";
@@ -116,11 +141,12 @@ function renderModes() {
     playBtn.disabled = !mode.layout?.length;
     playBtn.innerHTML = mi("play_arrow");
 
-    recordBtn.addEventListener("click", () => recordMode(mode, recordBtn, playBtn));
+    recordBtn.addEventListener("click", () => recordMode(mode, recordBtn, playBtn, saved));
     playBtn.addEventListener("click", () => playMode(mode, playBtn));
 
-    row.append(recordBtn, playBtn);
-    wrap.append(row);
+    actions.append(recordBtn, playBtn);
+    card.append(head, actions);
+    wrap.append(card);
   });
 }
 
