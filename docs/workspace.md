@@ -45,9 +45,12 @@ dot-graph of this week's commits, one dot per commit, hover for message).
 
 The repo card has an `<select class="ws-item__editor">` ("open in") with
 `EDITOR_OPTIONS`: Zed (default/blank), Atom, VS Code, Sublime Text, Xcode.
-Changing it sets `wsEditor`, persisted as `workspace.json`'s `editor` field.
-`launch_workspace` in `lib.rs` runs `open -a <editor> <repo path>` (or just
-`open -a Zed` if blank).
+Changing it sets `wsEditor`, persisted as `workspace.json`'s `editor` field
+and copied onto the Git window's own `editor` field (`open_git_window` in
+`lib.rs`). `git_open_file` reads it back to decide how to open a changed
+file clicked from that Git window — `open -a <editor> <file>` (or
+`open -a Zed` if blank), or the in-app Studio Code Editor if `editor` is
+`STUDIO_EDITOR`.
 
 To add another editor option, add `{ value, label }` to `EDITOR_OPTIONS` in
 `src/workspace.js` — `value` must match the `.app` name macOS expects after
@@ -144,9 +147,9 @@ window-layout snapshots, rendered as pill rows in `#ws-modes` by
   Other Studio windows (main, etc.) are always open (hidden, not destroyed,
   per the close handler below), so there's nothing to reopen for them.
 
-This replaced the old single Launch button (`launch_workspace`/repo+apps+files
-+URLs+Claude-terminal opener), which is still available as a Rust command but
-no longer has a UI entry point.
+This replaced the old single Launch button (`launch_workspace`, a one-shot
+repo+apps+files+URLs+Claude-terminal opener), removed entirely along with
+the command itself.
 
 ## Tab pinning
 
