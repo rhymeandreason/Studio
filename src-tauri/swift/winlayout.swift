@@ -104,8 +104,21 @@ func setFrame(_ win: AXUIElement, x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat
     }
 }
 
+// Maps owner app name → pid using CGWindowList (kCGWindowListOptionAll, so
+// minimized/hidden windows count too), the same source `app` names in a
+// saved layout come from. Deliberately not NSWorkspace.runningApplications:
+// its `localizedName` can disagree with kCGWindowOwnerName for unbundled
+// processes (e.g. Studio itself under `tauri dev`), which would make a
+// running app look "not running" and launch a duplicate instance.
 func runningPid(forApp app: String) -> pid_t? {
-    NSWorkspace.shared.runningApplications.first(where: { $0.localizedName == app })?.processIdentifier
+    guard let list = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[String: Any]] else {
+        return nil
+    }
+    for win in list {
+        guard (win[kCGWindowOwnerName as String] as? String) == app else { continue }
+        return win[kCGWindowOwnerPID as String] as? pid_t
+    }
+    return nil
 }
 
 // Launches an app the layout references but that isn't running, then blocks
