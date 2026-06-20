@@ -29,6 +29,11 @@ struct WinInfo {
     let h: CGFloat
 }
 
+// Studio (our parent process — winlayout is always invoked as its
+// subprocess) handles its own windows natively via Tauri, not through here;
+// skip them so this helper never fights with or duplicates that.
+let studioPid = getppid()
+
 func onScreenWindows() -> [WinInfo] {
     let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
     guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
@@ -46,6 +51,7 @@ func onScreenWindows() -> [WinInfo] {
         guard !app.isEmpty, app != "Window Server", app != "Dock", app != "winlayout" else { continue }
 
         guard let pid = win[kCGWindowOwnerPID as String] as? pid_t else { continue }
+        guard pid != studioPid else { continue }
 
         guard let bounds = win[kCGWindowBounds as String] as? [String: Any],
               let x = bounds["X"] as? CGFloat,

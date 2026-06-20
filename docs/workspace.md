@@ -64,13 +64,23 @@ window-layout snapshots, rendered as pill rows in `#ws-modes` by
   Swift helper (`list` mode, `CGWindowListCopyWindowInfo`) and returns every
   on-screen window (any app) as `{app, title, x, y, w, h}`. Stored as
   `mode.layout`, autosaved like the rest of the form.
-- **Play** → `invoke("apply_window_layout", { layout })`, which runs
-  `winlayout apply`: for each on-screen window, if it matches an `(app,
-  title)` pair in the layout, move/resize it there and un-minimize it;
-  otherwise minimize it. Matching and minimizing other apps' windows uses the
-  Accessibility API (`AXUIElement`), which needs the user to grant Studio
-  Accessibility permission once (System Settings → Privacy & Security →
-  Accessibility) — until granted, AX calls are silent no-ops.
+- **Play** → `invoke("apply_window_layout", { layout })`. Studio's own
+  windows are restored directly through Tauri (`apply_window_layout` in
+  `lib.rs`) — matched by window label, not process name. Everything else
+  goes to `winlayout apply`, which moves/resizes/un-minimizes matching
+  windows (launching the app first if needed) and minimizes whatever's left.
+  Matching/minimizing *other* apps' windows uses the Accessibility API
+  (`AXUIElement`), which needs the user to grant Studio Accessibility
+  permission once (System Settings → Privacy & Security → Accessibility) —
+  until granted, AX calls are silent no-ops.
+
+  Studio's own windows are deliberately handled outside winlayout: matching
+  a window back to "is this app already running" requires comparing process
+  names across two different macOS APIs (`CGWindowList` vs
+  `NSWorkspace.runningApplications`), and for Studio's own unbundled
+  `tauri dev` process those names can disagree — Play would conclude Studio
+  wasn't running and launch a duplicate instance. Tauri already knows its
+  own windows directly, so there's nothing to match.
 
 This replaced the old single Launch button (`launch_workspace`/repo+apps+files
 +URLs+Claude-terminal opener), which is still available as a Rust command but

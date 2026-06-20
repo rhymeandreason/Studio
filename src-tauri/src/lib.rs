@@ -1760,9 +1760,37 @@ fn get_focused_window_bounds() -> Result<String, String> {
 
 const WINLAYOUT_BIN: &str = env!("WINLAYOUT_BIN");
 
+/// Sentinel `app` value marking a `WindowSnapshot` as one of Studio's own
+/// windows, handled natively via Tauri (not the AX helper — see below).
+const STUDIO_APP: &str = "Studio";
+
+/// Studio's own visible windows, identified by Tauri window label (more
+/// reliable than matching process names across APIs — see
+/// `apply_window_layout`'s doc comment for why that broke).
+fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
+    app.webview_windows()
+        .into_iter()
+        .filter(|(_, win)| win.is_visible().unwrap_or(false))
+        .filter_map(|(label, win)| {
+            let pos = win.outer_position().ok()?;
+            let size = win.outer_size().ok()?;
+            Some(WindowSnapshot {
+                app: STUDIO_APP.to_string(),
+                title: label,
+                x: pos.x,
+                y: pos.y,
+                w: size.width as i32,
+                h: size.height as i32,
+            })
+        })
+        .collect()
+}
+
 /// List every on-screen window (any app), for recording a Workspace mode.
+/// Studio's own windows come from Tauri directly; everything else from the
+/// winlayout helper (Accessibility-API based, for other processes).
 #[tauri::command]
-fn list_windows() -> Result<Vec<WindowSnapshot>, String> {
+fn list_windows(app: AppHandle) -> Result<Vec<WindowSnapshot>, String> {
     let out = Command::new(WINLAYOUT_BIN)
         .arg("list")
         .output()
@@ -1770,22 +1798,49 @@ fn list_windows() -> Result<Vec<WindowSnapshot>, String> {
     if !out.status.success() {
         return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
     }
-    serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())
+    let mut snapshots: Vec<WindowSnapshot> =
+        serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())?;
+    snapshots.extend(studio_window_snapshots(&app));
+    Ok(snapshots)
 }
 
 /// Restore a saved window layout: move/resize/un-minimize each window in
-/// `layout`, then minimize every other on-screen window not in it. Requires
-/// Accessibility permission (System Settings > Privacy & Security); until
-/// granted, the helper's AX calls are silent no-ops.
+/// `layout`, then minimize every other on-screen window not in it.
+///
+/// Studio's own windows are restored directly through Tauri, not handed to
+/// the winlayout helper — matching them by process name across CGWindowList
+/// and the Accessibility API is unreliable for Studio's own (unbundled, dev-
+/// mode) process, which previously made Play think Studio wasn't running and
+/// launch a duplicate instance. Every other app still goes through winlayout
+/// (Accessibility API), which needs the user to grant Studio Accessibility
+/// permission once; until granted, its AX calls are silent no-ops.
 #[tauri::command]
-fn apply_window_layout(layout: Vec<WindowSnapshot>) -> Result<(), String> {
+fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<(), String> {
     use std::io::Write;
+
+    let (studio_targets, other_targets): (Vec<_>, Vec<_>) =
+        layout.into_iter().partition(|w| w.app == STUDIO_APP);
+
+    for (label, win) in app.webview_windows() {
+        if let Some(target) = studio_targets.iter().find(|t| t.title == label) {
+            let _ = win.unminimize();
+            let _ = win.show();
+            let _ = win.set_position(tauri::PhysicalPosition::new(target.x, target.y));
+            let _ = win.set_size(tauri::PhysicalSize::new(
+                target.w.max(0) as u32,
+                target.h.max(0) as u32,
+            ));
+        } else {
+            let _ = win.minimize();
+        }
+    }
+
     let mut child = Command::new(WINLAYOUT_BIN)
         .arg("apply")
         .stdin(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
-    let payload = serde_json::to_vec(&layout).map_err(|e| e.to_string())?;
+    let payload = serde_json::to_vec(&other_targets).map_err(|e| e.to_string())?;
     child
         .stdin
         .take()
