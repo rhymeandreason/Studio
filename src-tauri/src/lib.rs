@@ -1821,8 +1821,10 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
     let (studio_targets, other_targets): (Vec<_>, Vec<_>) =
         layout.into_iter().partition(|w| w.app == STUDIO_APP);
 
+    let mut matched_labels: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (label, win) in app.webview_windows() {
         if let Some(target) = studio_targets.iter().find(|t| t.title == label) {
+            matched_labels.insert(label);
             let _ = win.unminimize();
             let _ = win.show();
             let _ = win.set_position(tauri::PhysicalPosition::new(target.x, target.y));
@@ -1832,6 +1834,30 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
             ));
         } else {
             let _ = win.minimize();
+        }
+    }
+
+    // Targets that weren't found among currently open windows were closed
+    // (not just minimized) since the layout was recorded. Git windows can be
+    // reopened from their persisted store; other Studio windows (main, etc.)
+    // are always open, so there's nothing more to do for them here.
+    for target in studio_targets.iter().filter(|t| !matched_labels.contains(&t.title)) {
+        if !target.title.starts_with("git-") {
+            continue;
+        }
+        let Some(saved) = read_git_windows(&app)
+            .into_iter()
+            .find(|w| git_label(&w.repo) == target.title)
+        else {
+            continue;
+        };
+        build_git_window(&app, &saved);
+        if let Some(win) = app.get_webview_window(&target.title) {
+            let _ = win.set_position(tauri::PhysicalPosition::new(target.x, target.y));
+            let _ = win.set_size(tauri::PhysicalSize::new(
+                target.w.max(0) as u32,
+                target.h.max(0) as u32,
+            ));
         }
     }
 

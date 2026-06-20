@@ -82,6 +82,14 @@ window-layout snapshots, rendered as pill rows in `#ws-modes` by
   wasn't running and launch a duplicate instance. Tauri already knows its
   own windows directly, so there's nothing to match.
 
+  A saved Studio target that isn't among the currently-open webview windows
+  means it was *closed* (not minimized) since recording. Git windows are the
+  one case `apply_window_layout` knows how to reopen — it looks the label up
+  in the persisted `git-windows.json` store and calls `build_git_window`
+  before applying the saved position/size. Other Studio windows (main, etc.)
+  are always open (hidden, not destroyed, per the close handler below), so
+  there's nothing to reopen for them.
+
 This replaced the old single Launch button (`launch_workspace`/repo+apps+files
 +URLs+Claude-terminal opener), which is still available as a Rust command but
 no longer has a UI entry point.
