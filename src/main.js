@@ -481,6 +481,7 @@ export function selectTab(name) {
   document.querySelectorAll(".tab").forEach((t) => {
     t.classList.toggle("is-active", t.dataset.tab === name);
   });
+  document.getElementById("workspace-btn").classList.toggle("btn-round-filled", name === "workspace");
   document.querySelectorAll(".panel").forEach((p) => {
     p.hidden = p.dataset.panel !== name;
   });
@@ -545,6 +546,10 @@ function initTabs() {
 
 function initAllProjectsButton() {
   document.getElementById("all-projects-btn").addEventListener("click", showOverview);
+}
+
+function initWorkspaceButton() {
+  document.getElementById("workspace-btn").addEventListener("click", () => selectTab("workspace"));
 }
 
 // --- New project modal -----------------------------------------------------
@@ -2089,6 +2094,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   initDevInspect();
   initTabs();
   initAllProjectsButton();
+  initWorkspaceButton();
   initModes();
   initClaudeButton();
   initFileDirectoryButton();
