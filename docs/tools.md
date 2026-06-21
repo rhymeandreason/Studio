@@ -166,6 +166,48 @@ in an in-page drag strip. To apply to a tool (e.g. `my-tool.html`):
    Remove any top `padding` from `body` — the titlebar div provides the
    spacing instead. Run `cargo check` after the Rust edit.
 
+### Fully frameless style (no titlebar, no traffic lights, no shadow)
+
+No native chrome at all.
+
+1. In `open_tool_window_near` (`src-tauri/src/lib.rs`):
+
+   ```rust
+   if filename == "my-tool.html" {
+       builder = builder
+           .decorations(false)
+           .shadow(false)
+           .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff)); // --bg
+   }
+   ```
+
+2. Dragging needs a real `data-tauri-drag-region` element (CSS
+   `-webkit-app-region: drag` alone doesn't work here) — put it on a spacer
+   that fills empty header space, not on the header itself, so it doesn't
+   swallow clicks on buttons/tabs:
+
+   ```html
+   <div class="tabstrip">
+     <!-- tabs -->
+     <div class="tabstrip-spacer" data-tauri-drag-region></div>
+   </div>
+   ```
+
+3. No traffic lights means no close button — bind one:
+
+   ```js
+   window.addEventListener("keydown", (e) => {
+     if (e.key === "Escape" || ((e.metaKey || e.ctrlKey) && e.key === "w")) {
+       getCurrentWindow().close();
+     }
+   });
+   ```
+
+4. Add to `src-tauri/capabilities/tools.json`:
+   `core:window:allow-start-dragging`, `core:window:allow-close`.
+
+5. `cargo check`, then restart `npm run tauri dev` (capability changes need a restart).
+
 ### Colored title bar style (Code Editor / Preview pattern)
 
 The native title bar is transparent, `background_color` provides the color, and
