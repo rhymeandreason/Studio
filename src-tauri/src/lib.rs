@@ -504,7 +504,7 @@ fn toggle_mode_switcher_window(app: &AppHandle) {
 
     let url = WebviewUrl::App("tools/mode-switcher.html".into());
     if let Ok(win) = WebviewWindowBuilder::new(app, "mode-switcher", url)
-        .inner_size(640.0, 460.0)
+        .inner_size(960.0, 690.0)
         .resizable(false)
         .decorations(false)
         .transparent(true)

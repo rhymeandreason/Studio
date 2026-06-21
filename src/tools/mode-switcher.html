@@ -29,8 +29,8 @@
     position: fixed;
     top: 50%;
     left: 50%;
-    width: 420px;
-    height: 420px;
+    width: 500px;
+    height: 500px;
     transform: translate(-50%, -50%);
     border-radius: 50%;
     background: black;
@@ -86,6 +86,10 @@
     const win = getCurrentWindow();
 
     const listEl = document.getElementById('list');
+
+    // Drive window size from JS so it can be tuned with a reload (no restart).
+    const { LogicalSize } = window.__TAURI__.dpi;
+    win.setSize(new LogicalSize(960, 690)).then(() => win.center()).catch(() => {});
 
     let modes = [];
     let activeIndex = 0;
