@@ -507,7 +507,45 @@ export function addRow(list, value = "") {
     gitBtns.className = "ws-repo__gitbtns";
     gitBtns.append(gitBtn, pulseBtn);
 
-    primaryRow.append(editorGroup, gitBtns);
+    // Convention-based Start/Stop: shown only if dev-open.sh / dev-stop.sh
+    // exist at the repo root (checked via repo_scripts, re-run whenever the
+    // path changes). No per-project setup — drop the script in, get the button.
+    const startBtn = document.createElement("button");
+    startBtn.type = "button";
+    startBtn.className = "ws-repo__git";
+    startBtn.innerHTML = `${mi("play_arrow")}Start`;
+    startBtn.title = "Run dev-open.sh";
+    startBtn.hidden = true;
+    const stopBtn = document.createElement("button");
+    stopBtn.type = "button";
+    stopBtn.className = "ws-repo__git ws-repo__git--ghost";
+    stopBtn.innerHTML = `${mi("stop")}Stop`;
+    stopBtn.title = "Run dev-stop.sh";
+    stopBtn.hidden = true;
+    const scriptBtns = document.createElement("div");
+    scriptBtns.className = "ws-repo__gitbtns";
+    scriptBtns.append(startBtn, stopBtn);
+
+    const refreshRepoScripts = async () => {
+      const repo = input.value.trim();
+      if (!repo) {
+        startBtn.hidden = true;
+        stopBtn.hidden = true;
+        return;
+      }
+      const { start, stop } = await invoke("repo_scripts", { repo });
+      startBtn.hidden = !start;
+      startBtn.onclick = () => start && invoke("run_script", { path: start });
+      stopBtn.hidden = !stop;
+      stopBtn.onclick = () => stop && invoke("run_script", { path: stop });
+    };
+    refreshRepoScripts();
+    input.addEventListener("change", refreshRepoScripts);
+    browse.addEventListener("click", () =>
+      requestAnimationFrame(refreshRepoScripts),
+    );
+
+    primaryRow.append(editorGroup, gitBtns, scriptBtns);
 
     // Quiet row: the Git window color, picked once per repo.
     const colorRow = document.createElement("div");

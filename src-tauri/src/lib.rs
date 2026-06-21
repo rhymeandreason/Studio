@@ -1904,6 +1904,29 @@ fn run_script(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Serialize)]
+struct RepoScripts {
+    start: Option<String>,
+    stop: Option<String>,
+}
+
+/// Convention-based Start/Stop for the repo card: if `dev-open.sh` /
+/// `dev-stop.sh` exist at the repo root, the card surfaces matching buttons
+/// without any per-project Studio config — drop the script in, the button
+/// appears.
+#[tauri::command]
+fn repo_scripts(repo: String) -> RepoScripts {
+    let root = Path::new(repo.trim());
+    let check = |name: &str| -> Option<String> {
+        let p = root.join(name);
+        p.is_file().then(|| p.to_string_lossy().to_string())
+    };
+    RepoScripts {
+        start: check("dev-open.sh"),
+        stop: check("dev-stop.sh"),
+    }
+}
+
 const WINBOUNDS_BIN: &str = env!("WINBOUNDS_BIN");
 
 /// Return the frontmost non-utility window's info as "app,title,x,y,w,h".
@@ -4739,6 +4762,7 @@ pub fn run() {
             open_in_zed,
             open_app,
             run_script,
+            repo_scripts,
             open_in_photos,
             run_shortcut,
             heic_preview,
