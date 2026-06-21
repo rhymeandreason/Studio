@@ -49,6 +49,9 @@
   }
 
   .mode {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 56px;
     line-height: 1.05;
     font-weight: 600;
@@ -69,6 +72,37 @@
   #list.projects .mode { font-size: 32px; }
 
   .mode:focus { outline: none; }
+
+  /* Armed: name scoots left, Record button appears on the right. */
+  .mode.armed {
+    flex-direction: row;
+    align-items: center;
+    gap: 28px;
+    transform: scale(1.04);
+  }
+
+  .mode__save {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: inherit;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 8px 18px 8px 12px;
+    border: none;
+    border-radius: 999px;
+    background: #d23b3b;
+    color: #fff;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+  }
+
+  .rec-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #fff;
+  }
 
   #empty {
     font-size: 22px;
@@ -98,14 +132,25 @@
     let picking = 'mode';
     let items = [];
     let activeIndex = 0;
+    let saveArmed = false;          // Tab reveals a Record button on the active mode
+    let projectPath = null;         // for saving the workspace back
+    let workspace = null;
+
+    function mi(name) {
+      return `<span class="material-symbols-rounded">${name}</span>`;
+    }
 
     async function loadModes() {
+      saveArmed = false;
       const project = await invoke('get_active_project').catch(() => null);
       if (project) {
-        const ws = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
+        projectPath = project.path;
+        workspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
         picking = 'mode';
-        items = (ws && ws.modes) || [];
+        items = (workspace && workspace.modes) || [];
       } else {
+        projectPath = null;
+        workspace = null;
         picking = 'project';
         items = await invoke('list_projects').catch(() => []);
       }
@@ -129,10 +174,26 @@
         return;
       }
       items.forEach((item, i) => {
+        const armed = saveArmed && i === activeIndex && picking === 'mode';
         const el = document.createElement('div');
-        el.className = 'mode' + (i === activeIndex ? ' active' : '');
+        el.className = 'mode' + (i === activeIndex ? ' active' : '') + (armed ? ' armed' : '');
         el.tabIndex = 0;
-        el.textContent = item.name;
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'mode__name';
+        nameEl.textContent = item.name;
+        el.appendChild(nameEl);
+
+        if (armed) {
+          const saveBtn = document.createElement('button');
+          saveBtn.type = 'button';
+          saveBtn.className = 'mode__save';
+          saveBtn.innerHTML = '<span class="rec-dot"></span>Record';
+          saveBtn.addEventListener('mousedown', (e) => e.preventDefault());
+          saveBtn.addEventListener('click', () => recordActive());
+          el.appendChild(saveBtn);
+        }
+
         el.addEventListener('mouseenter', () => setActive(i));
         el.addEventListener('click', () => run(items[i]));
         listEl.appendChild(el);
@@ -141,10 +202,14 @@
     }
 
     function setActive(i) {
+      if (i === activeIndex) return;
+      const wasArmed = saveArmed;
+      saveArmed = false;
       activeIndex = i;
-      [...listEl.children].forEach((el, idx) => {
-        el.classList.toggle('active', idx === i);
-      });
+      // Full rebuild only needed to drop a Record button from the old row;
+      // otherwise just move the highlight (keeps focus stable for arrow keys).
+      if (wasArmed) { render(); return; }
+      [...listEl.children].forEach((el, idx) => el.classList.toggle('active', idx === i));
       focusActive();
     }
 
@@ -164,12 +229,34 @@
       await win.hide();
     }
 
+    // Record the current window layout into the active mode (same as the
+    // workspace card's Record button), then persist the workspace.
+    async function recordActive() {
+      const mode = items[activeIndex];
+      if (!mode || !workspace || !projectPath) return;
+      try {
+        mode.layout = await invoke('list_windows');
+        mode.recordedAt = new Date().toISOString();
+        workspace.modes = items;
+        await invoke('save_workspace', { path: projectPath, workspace });
+        await win.hide();
+      } catch (err) {
+        console.error(err);
+      }
+      saveArmed = false;
+    }
+
     document.addEventListener('keydown', async (e) => {
       if (e.key === 'Escape') {
         await win.hide();
         return;
       }
       if (!items.length) return;
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (picking === 'mode') { saveArmed = !saveArmed; render(); }
+        return;
+      }
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
         e.preventDefault();
         setActive((activeIndex + 1) % items.length);
@@ -182,7 +269,8 @@
       }
       if (e.key === 'Enter') {
         e.preventDefault();
-        run(items[activeIndex]);
+        if (saveArmed && picking === 'mode') recordActive();
+        else run(items[activeIndex]);
       }
     });
 

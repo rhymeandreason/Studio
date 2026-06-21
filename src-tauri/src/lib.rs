@@ -2000,6 +2000,9 @@ fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
     app.webview_windows()
         .into_iter()
         .filter(|(_, win)| win.is_visible().unwrap_or(false))
+        // Global-shortcut overlays (Spotlight, Mode switcher) are transient
+        // launchers, never part of a saved layout — don't record them.
+        .filter(|(label, _)| label != "spotlight" && label != "mode-switcher")
         .filter_map(|(label, win)| {
             let pos = win.outer_position().ok()?;
             // inner_size, not outer_size: apply_window_layout restores via
