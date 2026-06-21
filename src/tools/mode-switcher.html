@@ -152,7 +152,7 @@
         projectPath = null;
         workspace = null;
         picking = 'project';
-        items = await invoke('list_projects').catch(() => []);
+        items = await applyProjectOrder(await invoke('list_projects').catch(() => []));
       }
       // Open on the last mode used for this project, if still present.
       const last = picking === 'mode' && projectPath
@@ -165,6 +165,25 @@
 
     function rememberMode(name) {
       if (projectPath && name) localStorage.setItem('lastMode:' + projectPath, name);
+    }
+
+    // Match the overview's manual project order (read_project_order), falling
+    // back to name order for any project not in the saved list.
+    async function applyProjectOrder(projects) {
+      let order = [];
+      try {
+        const raw = await invoke('read_project_order');
+        order = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(order)) order = [];
+      } catch (_) {}
+      if (!order.length) return projects;
+      const idx = new Map(order.map((p, i) => [p, i]));
+      const rank = (p) => (idx.has(p) ? idx.get(p) : Infinity);
+      return [...projects].sort(
+        (a, b) =>
+          rank(a.path) - rank(b.path) ||
+          a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+      );
     }
 
     function render() {
