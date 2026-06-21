@@ -138,8 +138,9 @@ position: absolute;
     let items = [];
     let activeIndex = 0;
     let saveArmed = false;          // Tab reveals a Record button on the active mode
-    let projectPath = null;         // for saving the workspace back
+    let projectPath = null;         // currently-shown project (may be a preview)
     let projectName = null;         // shown as the navigable header in mode view
+    let activePath = null;          // the actually-active project (vs. flipped preview)
     let workspace = null;
 
     // In mode view the active project name sits above the modes as a
@@ -154,26 +155,57 @@ position: absolute;
     async function loadModes() {
       saveArmed = false;
       const project = await invoke('get_active_project').catch(() => null);
+      activePath = project ? project.path : null;
       if (project) {
-        projectPath = project.path;
-        projectName = project.name;
-        workspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
-        picking = 'mode';
-        items = (workspace && workspace.modes) || [];
+        await showProjectModes(project, 0);
       } else {
         projectPath = null;
         projectName = null;
         workspace = null;
         picking = 'project';
         items = await applyProjectOrder(await invoke('list_projects').catch(() => []));
+        activeIndex = 0;
+        render();
       }
+    }
+
+    // Show a project's Modes (the active one, or a flipped preview). dir drives
+    // the slide animation: 1 = came from the right, -1 = from the left, 0 = none.
+    async function showProjectModes(project, dir) {
+      saveArmed = false;
+      projectPath = project.path;
+      projectName = project.name;
+      workspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
+      picking = 'mode';
+      items = (workspace && workspace.modes) || [];
       // Open on the last mode used for this project, if still present.
-      const last = picking === 'mode' && projectPath
-        ? localStorage.getItem('lastMode:' + projectPath)
-        : null;
+      const last = localStorage.getItem('lastMode:' + projectPath);
       const idx = last ? items.findIndex((m) => m.name === last) : -1;
       activeIndex = idx >= 0 ? idx : (items.length ? 0 : -1);
       render();
+      if (dir) slideIn(dir);
+    }
+
+    // Flip to the previous/next project (in custom order) as a preview.
+    async function flipProject(dir) {
+      const projects = await applyProjectOrder(await invoke('list_projects').catch(() => []));
+      if (projects.length < 2) return;
+      let i = projects.findIndex((p) => p.path === projectPath);
+      if (i < 0) i = 0;
+      const target = projects[(i + dir + projects.length) % projects.length];
+      if (target.path === projectPath) return;
+      await showProjectModes(target, dir);
+    }
+
+    function slideIn(dir) {
+      listEl.style.transition = 'none';
+      listEl.style.transform = `translateX(${dir > 0 ? 70 : -70}px)`;
+      listEl.style.opacity = '0';
+      requestAnimationFrame(() => {
+        listEl.style.transition = 'transform 0.18s ease, opacity 0.18s ease';
+        listEl.style.transform = 'translateX(0)';
+        listEl.style.opacity = '1';
+      });
     }
 
     // Switch from a project's modes to the project picker (Enter on header).
@@ -287,6 +319,10 @@ position: absolute;
         return;
       }
       rememberMode(item.name);
+      // If we're previewing a flipped project, activate it before applying.
+      if (projectPath !== activePath) {
+        await invoke('open_project', { path: projectPath }).catch(() => {});
+      }
       await invoke('apply_window_layout', { layout: item.layout || [] }).catch(() => {});
       await win.hide();
     }
@@ -317,6 +353,13 @@ position: absolute;
       if (e.key === 'Tab') {
         e.preventDefault();
         if (picking === 'mode' && activeIndex >= 0) { saveArmed = !saveArmed; render(); }
+        return;
+      }
+
+      // In mode view, left/right flip to the adjacent project (preview).
+      if (picking === 'mode' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        flipProject(e.key === 'ArrowRight' ? 1 : -1);
         return;
       }
 
