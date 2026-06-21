@@ -1041,6 +1041,14 @@ fn activate_project(app: &AppHandle, path: &str) {
     refresh_tray(app, Some(&project.path));
     show_studio(app);
     let _ = app.emit("project-activated", &project);
+
+    // Auto-apply the project's first recorded Mode (first with a saved layout),
+    // so activating a project snaps its windows into place.
+    if let Ok(ws) = read_workspace(project.path.clone()) {
+        if let Some(mode) = ws.modes.iter().find(|m| !m.layout.is_empty()) {
+            let _ = apply_window_layout(app.clone(), mode.layout.clone());
+        }
+    }
 }
 
 /// Frontend calls this on load to render the currently-active project (if any).
