@@ -68,6 +68,14 @@ A quick tour of what Studio can do.
   floating, transparent search palette listing every tool and project.
   Type to filter, arrow keys + Enter (or click) to open; Escape or clicking
   away dismisses it.
+- **Mode switcher**: press **Ctrl+Space** anywhere for a giant-text,
+  full-screen list of the active project's Workspace Modes. Arrow keys +
+  Enter (or click) applies a mode's window layout; it opens on the mode you
+  used last. Press **Tab** on a highlighted mode to reveal a **Record**
+  button — Enter then snapshots your current windows into that mode (same as
+  the Workspace tab's record), without capturing the Spotlight/switcher
+  overlays themselves. If no project is active, it shows the project list to
+  pick one first. Escape or clicking away dismisses it.
 
 ## Scheduled tasks
 - Schedule Claude Code tasks to run automatically, grouped into two shared time
