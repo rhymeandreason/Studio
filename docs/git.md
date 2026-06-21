@@ -27,11 +27,12 @@ The window re-polls `git_status` on focus and after each action.
 
 ## Launching + theming
 
-The Workspace repo card ([`src/workspace.js`](../src/workspace.js)) has a row of
-8 curated bright **swatches** (`GIT_COLORS`) and a **Git** button. The chosen
-color is saved as `gitColor` on the project's `workspace.json`
-(`Workspace::git_color`, serde `gitColor`). The Git button calls
-`open_git_window(repo, color, editor)`.
+The Workspace repo card ([`src/workspace.js`](../src/workspace.js)) has a **Git**
+button that calls `open_git_window(repo, color, editor)`. The window color comes
+from the project's **accent color** (`Workspace::color`, serde `color`), set via
+the Mode switcher's swatches (`Ctrl+Space` → project header → `Tab`), not a
+per-repo picker. The legacy per-repo `gitColor` field is still read as a fallback
+(`active_git_color_hex`) but is no longer written.
 
 Each window's label is `git-<hash-of-repo-path>` (`git_label`), so opening the
 same repo focuses the existing window instead of duplicating it; different repos

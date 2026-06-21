@@ -25,6 +25,7 @@ import {
   initSpriteBadge,
   initWorkspaceForm,
   loadWorkspace,
+  syncProjectColor,
   scheduleWorkspaceSave,
   addRow,
   updatePinButton,
@@ -2117,6 +2118,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   // overview if visible. Notes/workspace forms are left alone (avoid clobbering
   // in-progress edits).
   await listen("fs-changed", () => {
+    if (state.activeProject) syncProjectColor(state.activeProject.path);
     if (state.activeProject && !document.getElementById("project-content").hidden) {
       loadMedia(state.activeProject.path);
       // Live-refresh the Artifacts panel when it's the one in view (picks up

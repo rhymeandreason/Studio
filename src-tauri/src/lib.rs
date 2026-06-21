@@ -3680,7 +3680,10 @@ fn open_code_preview(app: AppHandle, color: Option<String>) {
 fn active_git_color_hex(app: &AppHandle) -> Option<String> {
     let project = app.state::<AppState>().active.lock().unwrap().clone()?;
     let ws = read_workspace(project.path).ok()?;
-    let c = ws.git_color.trim().to_string();
+    // Prefer the project accent color; fall back to the legacy per-repo
+    // gitColor, then a default bright.
+    let c = ws.color.trim().to_string();
+    let c = if c.is_empty() { ws.git_color.trim().to_string() } else { c };
     Some(if c.is_empty() { "#ffd23f".to_string() } else { c })
 }
 

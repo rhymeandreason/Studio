@@ -220,19 +220,6 @@ const EDITOR_OPTIONS = [
   { value: "Xcode", label: "Xcode" },
 ];
 
-// Curated bright backgrounds for a project's Git companion window. The first
-// is the default when `gitColor` is blank (mirrors the Rust-side fallback).
-const GIT_COLORS = [
-  "#ffd23f", // amber
-  "#ff7a5c", // coral
-  "#ff5d8f", // pink
-  "#c77dff", // violet
-  "#4cc9f0", // sky
-  "#43e8a0", // mint
-  "#ffe066", // lemon
-  "#a0e548", // lime
-];
-
 // Workspace item selection (interaction-spec §3). Multi-select over the form's
 // item cards; ids are per-render (rows have no persistent id).
 let wsRowCounter = 0;
@@ -500,7 +487,7 @@ export function addRow(list, value = "", autoBrowse = false) {
     gitBtn.addEventListener("click", () => {
       const repo = input.value.trim();
       if (!repo) return;
-      invoke("open_git_window", { repo, color: wsGitColor, editor: wsEditor });
+      invoke("open_git_window", { repo, color: wsColor, editor: wsEditor });
     });
     const pulseBtn = document.createElement("button");
     pulseBtn.type = "button";
@@ -556,37 +543,9 @@ export function addRow(list, value = "", autoBrowse = false) {
 
     primaryRow.append(editorGroup, gitBtns, scriptBtns);
 
-    // Quiet row: the Git window color, picked once per repo.
-    const colorRow = document.createElement("div");
-    colorRow.className = "ws-repo__row ws-repo__row--color";
-    const gitLabel = document.createElement("span");
-    gitLabel.className = "ws-repo__glabel";
-    gitLabel.textContent = "Color";
-    const swatches = document.createElement("div");
-    swatches.className = "ws-repo__swatches";
-    const paintSwatches = () => {
-      swatches.querySelectorAll(".ws-swatch").forEach((s) => {
-        s.classList.toggle("is-active", s.dataset.color === wsGitColor);
-      });
-    };
-    GIT_COLORS.forEach((color) => {
-      const sw = document.createElement("button");
-      sw.type = "button";
-      sw.className = "ws-swatch";
-      sw.dataset.color = color;
-      sw.style.background = color;
-      sw.title = "Git window color";
-      sw.addEventListener("click", () => {
-        wsGitColor = color;
-        paintSwatches();
-        scheduleWorkspaceSave();
-      });
-      swatches.append(sw);
-    });
-    paintSwatches();
-    colorRow.append(gitLabel, swatches);
-
-    footer.append(primaryRow, colorRow);
+    // Window colors now come from the project's accent color (set via the
+    // Mode switcher), not a per-repo swatch row.
+    footer.append(primaryRow);
     card.append(footer);
   }
 
@@ -647,7 +606,6 @@ let wsSprite = DEFAULT_SPRITE;
 export async function loadWorkspace(path) {
   const ws = await invoke("read_workspace", { path });
   wsEditor = ws.editor || "Studio Code Editor";
-  wsGitColor = ws.gitColor || GIT_COLORS[0];
   wsColor = ws.color || "";
   wsClaude = ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
   wsSprite = ws.sprite || DEFAULT_SPRITE;
@@ -675,6 +633,13 @@ export async function loadWorkspace(path) {
         { id: "default", name: "Default", layout: [] },
       ];
   renderModes();
+}
+
+// Re-read just the project accent color from disk (it can be changed externally
+// by the Mode switcher), so a later workspace save doesn't clobber it.
+export async function syncProjectColor(path) {
+  const ws = await invoke("read_workspace", { path }).catch(() => null);
+  if (ws) wsColor = ws.color || "";
 }
 
 function renderSpriteBadge() {
@@ -706,7 +671,6 @@ function setStatus(text) {
 
 let wsSaveTimer = null;
 let wsEditor = "Studio Code Editor";
-let wsGitColor = GIT_COLORS[0];
 let wsColor = "";
 let wsPinnedTab = null;
 let wsSchedules = [];
@@ -716,7 +680,6 @@ function readWorkspaceForm() {
   return {
     repo: readList("repo")[0] || "",
     editor: wsEditor,
-    gitColor: wsGitColor,
     color: wsColor,
     figma: readList("figma")[0] || "",
     claude: { mode: wsClaude },
