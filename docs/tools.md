@@ -260,32 +260,83 @@ HTML as a `?color=` URL param so the page body matches it on first paint too.
    invoke("open_my_preview", { color: titleColor });
    ```
 
-## Global-shortcut access (Spotlight launcher)
+## "Spotlight" tools: global-shortcut transparent overlays
 
-`src/tools/spotlight.html` is opened by a global keyboard shortcut
-(Option+Space) instead of the tray, via `toggle_spotlight_window` in
-`src-tauri/src/lib.rs` (registered through `tauri-plugin-global-shortcut`
-in `.setup()`). It doesn't go through `open_tool`/`Tools.json`, so it's
-hidden from the wrench-tray dropdown by default.
+A handful of tools aren't tray-launched at all — they're full-screen
+transparent overlays summoned by a global keyboard shortcut, with a
+floating card/text centered on an otherwise-transparent window. Examples:
 
-It's also the only window that's transparent + undecorated +
-always-on-top, which needs the `macos-private-api` Cargo feature and
-`"macOSPrivateApi": true` in `tauri.conf.json`. The page itself stays
-visually empty except for a floating card (`#panel`), so unfilled window
-space reads as transparent; losing focus hides the window
-(`on_window_event` checks `window.label() == "spotlight"`). It has its own
-capability file (`src-tauri/capabilities/spotlight.json`) rather than
-reusing `tool-*`.
+- **Spotlight launcher** — `src/tools/spotlight.html`, Option+Space.
+  Lists tools (`list_tools`) + projects (`list_projects`), filtered
+  client-side, launches via `open_tool` / `open_project`.
+- **Mode switcher** — `src/tools/mode-switcher.html`, Ctrl+Space. Giant
+  text list of the active project's Workspace Modes; arrows + Enter applies
+  a mode's window layout via `apply_window_layout`.
 
-It lists both tools (`list_tools` command, wrapping `scan_tools`) and
-projects (`list_projects`), merged and filtered client-side, launching via
-`open_tool` / `open_project` depending on which was picked.
+They share the same plumbing. **The transparent + undecorated +
+always-on-top window style needs the `macos-private-api` Cargo feature and
+`"macOSPrivateApi": true` in `tauri.conf.json`** — already enabled, so new
+overlays of this kind need no change there.
 
-**Not yet included: Claude and Git.** Both are opened through separate
-commands that don't fit the tools/projects list — `open_claude_window`
-takes an optional per-project path, and `open_git_window` needs a specific
-repo path, with no single "list all repos" source today. Worth revisiting
-if Spotlight should cover them too.
+### To add a new Spotlight-type tool (e.g. `my-overlay.html`)
+
+1. **HTML/CSS** — transparent page, content in a centered floating element
+   (`#panel` in spotlight, `#circle` + `#list` in mode-switcher). Keep
+   unfilled space transparent so only your card shows. Use these Tauri JS
+   globals (no kit needed):
+
+   ```js
+   const { invoke } = window.__TAURI__.core;
+   const { listen } = window.__TAURI__.event;
+   const { getCurrentWindow } = window.__TAURI__.window;
+   const win = getCurrentWindow();
+   ```
+
+   **Keyboard focus gotcha:** an undecorated transparent window won't deliver
+   `keydown` unless a real, focusable, *visible* element holds focus. Give your
+   selectable items `tabIndex = 0` and `.focus()` the active one (mode-switcher
+   pattern) — a zero-opacity/1px hidden input is *not* reliable in WKWebView.
+   Bind `Escape` to `win.hide()`.
+
+2. **Rust toggle fn** (`src-tauri/src/lib.rs`) — copy `toggle_spotlight_window`:
+   build once with `.transparent(true).decorations(false).always_on_top(true)
+   .shadow(false).skip_taskbar(true).center().visible(false)`, then on later
+   presses show/focus/hide and `emit("my-overlay-shown", ())` so the page can
+   reload its data each open.
+
+3. **Register the shortcut** in `.setup()` next to the existing
+   `global_shortcut().register(...)` calls, and route it in the shared
+   `with_handler` closure (match on `shortcut.mods` / `shortcut.key` to pick
+   which overlay to toggle — see the Option+Space vs Ctrl+Space branch).
+
+4. **Hide on focus loss** — add your label to the `on_window_event` check
+   (`window.label() == "spotlight" || window.label() == "mode-switcher" …`)
+   so clicking away dismisses it, like real Spotlight.
+
+5. **Capability / permissions** — these windows do *not* match `tool-*`, so
+   they don't inherit `src-tauri/capabilities/tools.json`. They share
+   [`src-tauri/capabilities/spotlight.json`](../src-tauri/capabilities/spotlight.json).
+   **Add your window label to its `"windows"` array**, or `win.hide()` (and any
+   other `core:window:*` call) throws *"window.hide not allowed on window …"*
+   at runtime:
+
+   ```json
+   "windows": ["spotlight", "mode-switcher", "my-overlay"],
+   "permissions": ["core:default", "core:event:default", "core:window:allow-hide"]
+   ```
+
+   Add any extra perms your overlay needs (e.g. `core:window:allow-close`).
+   **Capability changes need a full `npm run tauri dev` restart**, not just a
+   window reload — easy to forget when debugging "why won't it close".
+
+These overlays bypass `open_tool`/`Tools.json`, so they stay hidden from the
+wrench-tray dropdown by default.
+
+**Not yet included in Spotlight: Claude and Git.** Both open through separate
+commands that don't fit the tools/projects list — `open_claude_window` takes
+an optional per-project path, `open_git_window` needs a specific repo path,
+with no single "list all repos" source today. Worth revisiting if Spotlight
+should cover them too.
 
 ## Dedicated tray icon + positioning
 
