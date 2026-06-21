@@ -251,14 +251,22 @@ function repaintWorkspaceSelection() {
   );
 }
 
+// Code-editor-native file types open in Studio's Code Editor tool instead of
+// their default app.
+const CODE_EDITOR_EXTENSIONS = new Set(["html", "css", "md"]);
+
 // Open a workspace item's value. Apps store a name → `open -a`; scripts are
 // spawned directly (so a `#!/usr/bin/env bash` file actually runs instead of
-// opening in its default app); everything else (paths, URLs) goes through `open`.
+// opening in its default app); html/css/md files open in the Code Editor;
+// everything else (paths, URLs) goes through `open`.
 function openWorkspaceValue(card) {
   const value = card?.querySelector("textarea")?.value.trim();
   if (!value) return;
+  const ext = value.split(".").pop()?.toLowerCase();
   if (card.dataset.list === "apps") invoke("open_app", { name: value });
   else if (card.dataset.list === "scripts") invoke("run_script", { path: value });
+  else if (card.dataset.list === "files" && CODE_EDITOR_EXTENSIONS.has(ext))
+    invoke("open_file_in_code_editor", { file: value });
   else invoke("open_path", { path: value });
 }
 
