@@ -315,7 +315,7 @@ panelKeymaps.workspace = {
   Escape: () => workspaceSelection.clear(),
 };
 
-export function addRow(list, value = "") {
+export function addRow(list, value = "", autoBrowse = false) {
   const rows = listContainer();
   const meta = LIST_META[list];
 
@@ -448,6 +448,7 @@ export function addRow(list, value = "") {
       const picked = await pickPath({ directory: true });
       if (picked) {
         input.value = picked;
+        input.dispatchEvent(new Event("input"));
         requestAnimationFrame(resizeInput);
         scheduleWorkspaceSave();
       }
@@ -599,10 +600,12 @@ export function addRow(list, value = "") {
             : await pickPath({});
       if (picked) {
         input.value = meta.browse === "app" ? appNameFromPath(picked) : picked;
+        input.dispatchEvent(new Event("input"));
         scheduleWorkspaceSave();
       }
     });
     card.append(browse);
+    if (autoBrowse) browse.click();
   }
 
   rows.append(card);
@@ -765,7 +768,8 @@ export function initWorkspaceForm() {
     .forEach((btn) =>
       btn.addEventListener("click", () => {
         closeAddMenu();
-        addRow(btn.dataset.addList);
+        const list = btn.dataset.addList;
+        addRow(list, "", !!LIST_META[list]?.browse);
       }),
     );
   // Autosave: any typing or selection change in the form persists (debounced).
