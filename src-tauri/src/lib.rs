@@ -487,6 +487,39 @@ fn toggle_spotlight_window(app: &AppHandle) {
     }
 }
 
+/// Show/hide the giant-text Mode switcher (Ctrl+Space). Same transparent,
+/// undecorated, always-on-top card treatment as Spotlight; switches the active
+/// project's window-layout modes via arrow keys + Enter.
+fn toggle_mode_switcher_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("mode-switcher") {
+        if win.is_visible().unwrap_or(false) {
+            let _ = win.hide();
+        } else {
+            let _ = win.show();
+            let _ = win.set_focus();
+            let _ = win.emit("mode-switcher-shown", ());
+        }
+        return;
+    }
+
+    let url = WebviewUrl::App("tools/mode-switcher.html".into());
+    if let Ok(win) = WebviewWindowBuilder::new(app, "mode-switcher", url)
+        .inner_size(640.0, 460.0)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .center()
+        .visible(false)
+        .build()
+    {
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+}
+
 /// Open (or focus) a tool's HTML file in its own native window.
 fn open_tool_window(app: &AppHandle, path: &str) {
     open_tool_window_near(app, path, None);
@@ -4711,9 +4744,16 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
+                .with_handler(|app, shortcut, event| {
                     if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        toggle_spotlight_window(app);
+                        use tauri_plugin_global_shortcut::{Code, Modifiers};
+                        if shortcut.mods.contains(Modifiers::CONTROL)
+                            && shortcut.key == Code::Space
+                        {
+                            toggle_mode_switcher_window(app);
+                        } else {
+                            toggle_spotlight_window(app);
+                        }
                     }
                 })
                 .build(),
@@ -4848,7 +4888,7 @@ pub fn run() {
             // Spotlight: losing focus means the user clicked away — dismiss it
             // like the real Spotlight does, instead of leaving it stranded
             // on top of whatever else they're doing.
-            if window.label() == "spotlight" {
+            if window.label() == "spotlight" || window.label() == "mode-switcher" {
                 if let tauri::WindowEvent::Focused(false) = event {
                     let _ = window.hide();
                 }
@@ -4885,6 +4925,13 @@ pub fn run() {
                     tauri_plugin_global_shortcut::Code::Space,
                 );
                 let _ = handle.global_shortcut().register(shortcut);
+
+                // Ctrl+Space opens/hides the giant-text Mode switcher.
+                let mode_shortcut = tauri_plugin_global_shortcut::Shortcut::new(
+                    Some(tauri_plugin_global_shortcut::Modifiers::CONTROL),
+                    tauri_plugin_global_shortcut::Code::Space,
+                );
+                let _ = handle.global_shortcut().register(mode_shortcut);
             }
 
             // Build Studio's tray icons in the order given by TrayItems.json
