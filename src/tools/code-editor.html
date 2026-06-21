@@ -577,16 +577,28 @@ function prettify() {
 
 function setDirty(v) { dirty = v; dirtyEl.classList.toggle("on", v); }
 
-// Persist the open file + current text so a window reload (e.g. Tauri's dev
-// watcher reloads all webviews when a frontend file is saved) restores it
-// instead of coming back empty.
+// Persist the open file + current text + scroll/cursor position so a window
+// reload (e.g. Tauri's dev watcher reloads all webviews when a frontend file
+// is saved) restores it exactly where you left off, instead of coming back
+// empty and scrolled to the top.
 function persist() {
-  try { localStorage.setItem("ce:session", JSON.stringify({ path: currentPath, value: code.value, dirty })); } catch {}
+  try {
+    localStorage.setItem("ce:session", JSON.stringify({
+      path: currentPath, value: code.value, dirty,
+      scrollTop: code.scrollTop, selStart: code.selectionStart, selEnd: code.selectionEnd,
+    }));
+  } catch {}
 }
 
 // ---------- editor: gutter + highlight + minimap ----------
 code.addEventListener("input", () => { setDirty(true); paint(); persist(); scheduleRender(); });
-code.addEventListener("scroll", syncScroll);
+let scrollPersistScheduled = false;
+code.addEventListener("scroll", () => {
+  syncScroll();
+  if (scrollPersistScheduled) return;
+  scrollPersistScheduled = true;
+  requestAnimationFrame(() => { scrollPersistScheduled = false; persist(); });
+});
 
 function lineCount() { return code.value.split("\n").length; }
 
@@ -1299,6 +1311,12 @@ window.addEventListener("keydown", (e) => {
     render();
     paint();
     refreshDiff();
+    if (typeof s.selStart === "number") {
+      code.setSelectionRange(s.selStart, s.selEnd ?? s.selStart);
+    }
+    if (typeof s.scrollTop === "number") {
+      requestAnimationFrame(() => { code.scrollTop = s.scrollTop; syncScroll(); });
+    }
   } else {
     paint();
   }
