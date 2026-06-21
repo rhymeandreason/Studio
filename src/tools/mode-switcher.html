@@ -58,7 +58,6 @@
     letter-spacing: -0.01em;
     color: var(--ink-faint, #9a9a9a);
     opacity: 0.35;
-    cursor: pointer;
     transition: opacity 0.12s, color 0.12s, transform 0.12s;
     white-space: nowrap;
   }
@@ -70,6 +69,13 @@
   }
 
   #list.projects .mode { font-size: 32px; }
+
+  /* Project-name header above the modes — smaller, with a bit of breathing room. */
+  .mode.header {
+    font-size: 28px;
+position: absolute;
+    top: -80px;
+  }
 
   .mode:focus { outline: none; }
 
@@ -93,7 +99,6 @@
     border-radius: 999px;
     background: #d23b3b;
     color: #fff;
-    cursor: pointer;
     -webkit-app-region: no-drag;
   }
 
@@ -134,7 +139,13 @@
     let activeIndex = 0;
     let saveArmed = false;          // Tab reveals a Record button on the active mode
     let projectPath = null;         // for saving the workspace back
+    let projectName = null;         // shown as the navigable header in mode view
     let workspace = null;
+
+    // In mode view the active project name sits above the modes as a
+    // selectable header at index -1 (Enter on it shows the project list).
+    function headerPresent() { return picking === 'mode' && !!projectName; }
+    function domIndex(i) { return headerPresent() ? i + 1 : i; } // i>=0 → child index
 
     function mi(name) {
       return `<span class="material-symbols-rounded">${name}</span>`;
@@ -145,11 +156,13 @@
       const project = await invoke('get_active_project').catch(() => null);
       if (project) {
         projectPath = project.path;
+        projectName = project.name;
         workspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
         picking = 'mode';
         items = (workspace && workspace.modes) || [];
       } else {
         projectPath = null;
+        projectName = null;
         workspace = null;
         picking = 'project';
         items = await applyProjectOrder(await invoke('list_projects').catch(() => []));
@@ -159,6 +172,19 @@
         ? localStorage.getItem('lastMode:' + projectPath)
         : null;
       const idx = last ? items.findIndex((m) => m.name === last) : -1;
+      activeIndex = idx >= 0 ? idx : (items.length ? 0 : -1);
+      render();
+    }
+
+    // Switch from a project's modes to the project picker (Enter on header).
+    async function showProjects() {
+      const current = projectPath;
+      picking = 'project';
+      projectPath = null;
+      projectName = null;
+      workspace = null;
+      items = await applyProjectOrder(await invoke('list_projects').catch(() => []));
+      const idx = current ? items.findIndex((p) => p.path === current) : -1;
       activeIndex = idx >= 0 ? idx : 0;
       render();
     }
@@ -189,6 +215,16 @@
     function render() {
       listEl.innerHTML = '';
       listEl.classList.toggle('projects', picking === 'project');
+
+      if (headerPresent()) {
+        const h = document.createElement('div');
+        h.className = 'mode header' + (activeIndex === -1 ? ' active' : '');
+        h.tabIndex = 0;
+        h.textContent = projectName;
+        h.title = 'Switch project';
+        listEl.appendChild(h);
+      }
+
       if (!items.length) {
         const empty = document.createElement('div');
         empty.id = 'empty';
@@ -198,7 +234,7 @@
           : 'No modes for this project';
         empty.style.outline = 'none';
         listEl.appendChild(empty);
-        empty.focus();
+        focusActive();
         return;
       }
       items.forEach((item, i) => {
@@ -213,17 +249,12 @@
         el.appendChild(nameEl);
 
         if (armed) {
-          const saveBtn = document.createElement('button');
-          saveBtn.type = 'button';
+          const saveBtn = document.createElement('span');
           saveBtn.className = 'mode__save';
           saveBtn.innerHTML = '<span class="rec-dot"></span>Record';
-          saveBtn.addEventListener('mousedown', (e) => e.preventDefault());
-          saveBtn.addEventListener('click', () => recordActive());
           el.appendChild(saveBtn);
         }
 
-        el.addEventListener('mouseenter', () => setActive(i));
-        el.addEventListener('click', () => run(items[i]));
         listEl.appendChild(el);
       });
       focusActive();
@@ -237,12 +268,14 @@
       // Full rebuild only needed to drop a Record button from the old row;
       // otherwise just move the highlight (keeps focus stable for arrow keys).
       if (wasArmed) { render(); return; }
-      [...listEl.children].forEach((el, idx) => el.classList.toggle('active', idx === i));
+      const di = i < 0 ? 0 : domIndex(i);
+      [...listEl.children].forEach((el, idx) => el.classList.toggle('active', idx === di));
       focusActive();
     }
 
     function focusActive() {
-      listEl.children[activeIndex]?.focus();
+      const di = activeIndex < 0 ? 0 : domIndex(activeIndex);
+      (listEl.children[di] || listEl.firstElementChild)?.focus();
     }
 
     async function run(item) {
@@ -281,24 +314,30 @@
         await win.hide();
         return;
       }
-      if (!items.length) return;
       if (e.key === 'Tab') {
         e.preventDefault();
-        if (picking === 'mode') { saveArmed = !saveArmed; render(); }
+        if (picking === 'mode' && activeIndex >= 0) { saveArmed = !saveArmed; render(); }
         return;
       }
+
+      const min = headerPresent() ? -1 : 0;  // -1 = the project-name header
+      const max = items.length - 1;
+
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
         e.preventDefault();
-        setActive((activeIndex + 1) % items.length);
+        if (max < min) return;
+        setActive(activeIndex + 1 > max ? min : activeIndex + 1);
         return;
       }
       if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
         e.preventDefault();
-        setActive((activeIndex - 1 + items.length) % items.length);
+        if (max < min) return;
+        setActive(activeIndex - 1 < min ? max : activeIndex - 1);
         return;
       }
       if (e.key === 'Enter') {
         e.preventDefault();
+        if (activeIndex === -1) { showProjects(); return; }
         if (saveArmed && picking === 'mode') recordActive();
         else run(items[activeIndex]);
       }
