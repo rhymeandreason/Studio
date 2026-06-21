@@ -648,6 +648,7 @@ export async function loadWorkspace(path) {
   const ws = await invoke("read_workspace", { path });
   wsEditor = ws.editor || "Studio Code Editor";
   wsGitColor = ws.gitColor || GIT_COLORS[0];
+  wsColor = ws.color || "";
   wsClaude = ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
   wsSprite = ws.sprite || DEFAULT_SPRITE;
   setList("repo", ws.repo ? [ws.repo] : []);
@@ -706,6 +707,7 @@ function setStatus(text) {
 let wsSaveTimer = null;
 let wsEditor = "Studio Code Editor";
 let wsGitColor = GIT_COLORS[0];
+let wsColor = "";
 let wsPinnedTab = null;
 let wsSchedules = [];
 let wsScheduleSlots = ["09:00", "13:00", "17:00"];
@@ -715,6 +717,7 @@ function readWorkspaceForm() {
     repo: readList("repo")[0] || "",
     editor: wsEditor,
     gitColor: wsGitColor,
+    color: wsColor,
     figma: readList("figma")[0] || "",
     claude: { mode: wsClaude },
     apps: readList("apps"),

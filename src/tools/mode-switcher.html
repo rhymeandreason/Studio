@@ -109,6 +109,26 @@ position: absolute;
     background: #fff;
   }
 
+  .swatches {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: 16px;
+  }
+
+  .swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    transition: transform 0.12s, border-color 0.12s;
+  }
+
+  .swatch.sel {
+    border-color: var(--ink, #fff);
+    transform: scale(1.18);
+  }
+
   #empty {
     font-size: 22px;
     color: var(--ink-faint, #9a9a9a);
@@ -138,10 +158,14 @@ position: absolute;
     let items = [];
     let activeIndex = 0;
     let saveArmed = false;          // Tab reveals a Record button on the active mode
+    let colorArmed = false;         // Tab on the header reveals color swatches
     let projectPath = null;         // currently-shown project (may be a preview)
     let projectName = null;         // shown as the navigable header in mode view
+    let projectColor = '';          // this project's accent color (hex), if set
     let activePath = null;          // the actually-active project (vs. flipped preview)
     let workspace = null;
+
+    const COLORS = ['#ff7a5c', '#ff5d8f', '#c77dff', '#4cc9f0', '#43e8a0', '#ffe066', '#a0e548'];
 
     // In mode view the active project name sits above the modes as a
     // selectable header at index -1 (Enter on it shows the project list).
@@ -173,9 +197,11 @@ position: absolute;
     // the slide animation: 1 = came from the right, -1 = from the left, 0 = none.
     async function showProjectModes(project, dir) {
       saveArmed = false;
+      colorArmed = false;
       projectPath = project.path;
       projectName = project.name;
       workspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
+      projectColor = (workspace && workspace.color) || '';
       picking = 'mode';
       items = (workspace && workspace.modes) || [];
       // Open on the last mode used for this project, if still present.
@@ -225,6 +251,23 @@ position: absolute;
       if (projectPath && name) localStorage.setItem('lastMode:' + projectPath, name);
     }
 
+    // Move through the color swatches and persist the project's accent color.
+    function selectSwatch(dir) {
+      const cur = COLORS.indexOf(projectColor);
+      const next = cur < 0
+        ? (dir > 0 ? 0 : COLORS.length - 1)
+        : (cur + dir + COLORS.length) % COLORS.length;
+      projectColor = COLORS[next];
+      render();
+      saveProjectColor();
+    }
+
+    async function saveProjectColor() {
+      if (!workspace || !projectPath) return;
+      workspace.color = projectColor;
+      await invoke('save_workspace', { path: projectPath, workspace }).catch(() => {});
+    }
+
     // Match the overview's manual project order (read_project_order), falling
     // back to name order for any project not in the saved list.
     async function applyProjectOrder(projects) {
@@ -252,8 +295,26 @@ position: absolute;
         const h = document.createElement('div');
         h.className = 'mode header' + (activeIndex === -1 ? ' active' : '');
         h.tabIndex = 0;
-        h.textContent = projectName;
         h.title = 'Switch project';
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'mode__name';
+        nameEl.textContent = projectName;
+        if (projectColor) nameEl.style.color = projectColor;
+        h.appendChild(nameEl);
+
+        if (colorArmed && activeIndex === -1) {
+          const row = document.createElement('div');
+          row.className = 'swatches';
+          COLORS.forEach((c) => {
+            const sw = document.createElement('span');
+            sw.className = 'swatch' + (c === projectColor ? ' sel' : '');
+            sw.style.background = c;
+            row.appendChild(sw);
+          });
+          h.appendChild(row);
+        }
+
         listEl.appendChild(h);
       }
 
@@ -294,11 +355,12 @@ position: absolute;
 
     function setActive(i) {
       if (i === activeIndex) return;
-      const wasArmed = saveArmed;
+      const wasArmed = saveArmed || colorArmed;
       saveArmed = false;
+      colorArmed = false;
       activeIndex = i;
-      // Full rebuild only needed to drop a Record button from the old row;
-      // otherwise just move the highlight (keeps focus stable for arrow keys).
+      // Full rebuild only needed to drop a Record button / swatches from the old
+      // row; otherwise just move the highlight (keeps focus stable for arrows).
       if (wasArmed) { render(); return; }
       const di = i < 0 ? 0 : domIndex(i);
       [...listEl.children].forEach((el, idx) => el.classList.toggle('active', idx === di));
@@ -352,14 +414,18 @@ position: absolute;
       }
       if (e.key === 'Tab') {
         e.preventDefault();
-        if (picking === 'mode' && activeIndex >= 0) { saveArmed = !saveArmed; render(); }
+        if (picking !== 'mode') return;
+        if (activeIndex === -1) { colorArmed = !colorArmed; render(); }
+        else { saveArmed = !saveArmed; render(); }
         return;
       }
 
-      // In mode view, left/right flip to the adjacent project (preview).
       if (picking === 'mode' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         e.preventDefault();
-        flipProject(e.key === 'ArrowRight' ? 1 : -1);
+        // On the header with swatches showing, left/right pick a color;
+        // otherwise they flip to the adjacent project.
+        if (colorArmed && activeIndex === -1) selectSwatch(e.key === 'ArrowRight' ? 1 : -1);
+        else flipProject(e.key === 'ArrowRight' ? 1 : -1);
         return;
       }
 
@@ -380,7 +446,11 @@ position: absolute;
       }
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (activeIndex === -1) { showProjects(); return; }
+        if (activeIndex === -1) {
+          if (colorArmed) { colorArmed = false; render(); }
+          else showProjects();
+          return;
+        }
         if (saveArmed && picking === 'mode') recordActive();
         else run(items[activeIndex]);
       }

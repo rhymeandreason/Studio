@@ -51,6 +51,11 @@ struct Workspace {
     /// swatch row in the Workspace tab.
     #[serde(default, rename = "gitColor")]
     git_color: String,
+    /// Project-wide accent color (hex, e.g. "#ff5d8f"). Used to tint windows
+    /// opened in relation to this project. Set via the Mode switcher's color
+    /// swatches; intended to supersede the per-repo `gitColor`.
+    #[serde(default)]
+    color: String,
     #[serde(default)]
     figma: String,
     #[serde(default)]
