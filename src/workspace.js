@@ -750,10 +750,23 @@ export function scheduleWorkspaceSave() {
 }
 
 export function initWorkspaceForm() {
+  // Round "+" trigger → dropdown of card types to add (kit .menu pattern).
+  const addBtn = document.getElementById("ws-add-btn");
+  const addMenu = document.getElementById("ws-add-menu");
+  const closeAddMenu = () => (addMenu.hidden = true);
+  addBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    addMenu.hidden = !addMenu.hidden;
+  });
+  document.addEventListener("click", closeAddMenu);
+
   document
     .querySelectorAll("[data-add-list]")
     .forEach((btn) =>
-      btn.addEventListener("click", () => addRow(btn.dataset.addList)),
+      btn.addEventListener("click", () => {
+        closeAddMenu();
+        addRow(btn.dataset.addList);
+      }),
     );
   // Autosave: any typing or selection change in the form persists (debounced).
   const form = document.getElementById("ws-form");
