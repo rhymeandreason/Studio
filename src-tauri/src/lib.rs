@@ -60,6 +60,8 @@ struct Workspace {
     #[serde(default)]
     urls: Vec<String>,
     #[serde(default)]
+    scripts: Vec<String>,
+    #[serde(default)]
     claude: ClaudeCfg,
     /// Animal sprite shown on the Workspace tab and in the Claude window
     /// status bar (a key into the frontend's sprite registry).
@@ -1876,6 +1878,27 @@ fn open_in_zed(file: String, line: u32) -> Result<(), String> {
 fn open_app(name: String) -> Result<(), String> {
     Command::new("open")
         .args(["-a", name.trim()])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Run a workspace "Script" card: spawn the file directly (not via `open`,
+/// which would launch a `.sh` in its default text editor instead of running
+/// it) with its own directory as cwd, so relative paths inside the script
+/// resolve the way they would from a terminal in that folder.
+#[tauri::command]
+fn run_script(path: String) -> Result<(), String> {
+    let path = path.trim();
+    let script = if let Some(rest) = path.strip_prefix("~/") {
+        let home = std::env::var("HOME").map_err(|_| "No HOME env var.")?;
+        format!("{home}/{rest}")
+    } else {
+        path.to_string()
+    };
+    let dir = Path::new(&script).parent().ok_or("no parent dir")?;
+    Command::new(&script)
+        .current_dir(dir)
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -4715,6 +4738,7 @@ pub fn run() {
             app_icon,
             open_in_zed,
             open_app,
+            run_script,
             open_in_photos,
             run_shortcut,
             heic_preview,

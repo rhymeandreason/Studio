@@ -201,6 +201,12 @@ const LIST_META = {
     browse: "dir",
   },
   urls: { icon: "link", label: "URL", placeholder: "https://…" },
+  scripts: {
+    icon: "terminal",
+    label: "Script",
+    placeholder: "~/code/run.sh",
+    browse: "file",
+  },
 };
 
 // Code editors offered for the Repo card's "Open in" picker. Empty value =
@@ -245,12 +251,14 @@ function repaintWorkspaceSelection() {
   );
 }
 
-// Open a workspace item's value. Apps store a name → `open -a`; everything else
-// (paths, URLs) goes through `open`.
+// Open a workspace item's value. Apps store a name → `open -a`; scripts are
+// spawned directly (so a `#!/usr/bin/env bash` file actually runs instead of
+// opening in its default app); everything else (paths, URLs) goes through `open`.
 function openWorkspaceValue(card) {
   const value = card?.querySelector("textarea")?.value.trim();
   if (!value) return;
   if (card.dataset.list === "apps") invoke("open_app", { name: value });
+  else if (card.dataset.list === "scripts") invoke("run_script", { path: value });
   else invoke("open_path", { path: value });
 }
 
@@ -599,6 +607,7 @@ export async function loadWorkspace(path) {
   setList("files", ws.files);
   setList("folders", ws.folders);
   setList("urls", ws.urls);
+  setList("scripts", ws.scripts);
   setStatus("");
   wsPinnedTab = ws.pinnedTab || null;
   selectTab(wsPinnedTab || "workspace");
@@ -663,6 +672,7 @@ function readWorkspaceForm() {
     files: readList("files"),
     folders: readList("folders"),
     urls: readList("urls"),
+    scripts: readList("scripts"),
     pinnedTab: wsPinnedTab,
     sprite: wsSprite,
     schedules: wsSchedules,
