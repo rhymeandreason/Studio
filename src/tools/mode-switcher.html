@@ -25,18 +25,6 @@
     outline: none;
   }
 
-  #focuscatch {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    border: none;
-    background: transparent;
-    -webkit-app-region: no-drag;
-  }
-
   #circle {
     position: fixed;
     top: 50%;
@@ -45,7 +33,7 @@
     height: 420px;
     transform: translate(-50%, -50%);
     border-radius: 50%;
-    background: var(--surface, #2a2520);
+    background: black;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.06);
     z-index: 0;
   }
@@ -78,6 +66,8 @@
     transform: scale(1.04);
   }
 
+  .mode:focus { outline: none; }
+
   #empty {
     font-size: 22px;
     color: var(--ink-faint, #9a9a9a);
@@ -86,7 +76,6 @@
 </style>
 </head>
 <body tabindex="-1">
-  <input id="focuscatch" autofocus autocomplete="off" spellcheck="false" />
   <div id="circle"></div>
   <div id="list"></div>
 
@@ -117,19 +106,23 @@
       if (!modes.length) {
         const empty = document.createElement('div');
         empty.id = 'empty';
+        empty.tabIndex = 0;
         empty.textContent = 'No modes for this project';
+        empty.style.outline = 'none';
         listEl.appendChild(empty);
+        empty.focus();
         return;
       }
       modes.forEach((mode, i) => {
         const el = document.createElement('div');
         el.className = 'mode' + (i === activeIndex ? ' active' : '');
+        el.tabIndex = 0;
         el.textContent = mode.name;
-        el.addEventListener('mousedown', (e) => e.preventDefault());
         el.addEventListener('mouseenter', () => setActive(i));
         el.addEventListener('click', () => run(modes[i]));
         listEl.appendChild(el);
       });
+      focusActive();
     }
 
     function setActive(i) {
@@ -137,6 +130,11 @@
       [...listEl.children].forEach((el, idx) => {
         el.classList.toggle('active', idx === i);
       });
+      focusActive();
+    }
+
+    function focusActive() {
+      listEl.children[activeIndex]?.focus();
     }
 
     async function run(mode) {
@@ -168,10 +166,10 @@
     });
 
     // Built once, then hidden/shown — so just pull fresh modes each time it opens.
-    listen('mode-switcher-shown', async () => {
-      await loadModes();
-      document.getElementById('focuscatch').focus();
-    });
+    listen('mode-switcher-shown', () => loadModes());
+
+    // Keep keyboard focus on the selected mode so arrow/Esc keys reach us.
+    window.addEventListener('focus', focusActive);
 
     loadModes();
   </script>
