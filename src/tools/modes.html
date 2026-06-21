@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modes</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../kit/kit.css" />
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #titlebar {
+      height: 44px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: flex-end;
+      padding: 0 14px 8px;
+      -webkit-app-region: drag;
+      display: none;
+    }
+
+    #empty {
+      flex: 1 1 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    #modes {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-content: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 16px;
+    }
+
+    .mode-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100px;
+    }
+
+    .mode-btn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .mode-btn .mi {
+      font-size: 32px;
+    }
+
+    .mode-btn:hover:not(:disabled) {
+      background: #5d5247;
+    }
+
+    .mode-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .mode-card__name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      text-align: center;
+    }
+
+  </style>
+</head>
+
+<body>
+  <div id="titlebar" data-tauri-drag-region>
+    <div class="page-title" id="page-title">Modes</div>
+  </div>
+
+  <div id="empty" hidden>No active project.</div>
+  <div id="modes" hidden></div>
+
+  <script>
+    const invoke = window.__TAURI__?.core?.invoke;
+
+    const emptyEl = document.getElementById('empty');
+    const modesEl = document.getElementById('modes');
+    const pageTitle = document.getElementById('page-title');
+
+    let currentProjectPath = null;
+    let currentWorkspace = null;
+
+    function mi(name) {
+      return `<span class="mi material-symbols-rounded">${name}</span>`;
+    }
+
+    function renderModes() {
+      modesEl.innerHTML = '';
+      for (const mode of currentWorkspace.modes || []) {
+        const card = document.createElement('div');
+        card.className = 'mode-card';
+
+        const playBtn = document.createElement('button');
+        playBtn.type = 'button';
+        playBtn.className = 'mode-btn';
+        playBtn.title = `Restore "${mode.name}"'s windows`;
+        playBtn.disabled = !mode.layout?.length;
+        playBtn.innerHTML = mi('play_arrow');
+
+        const name = document.createElement('div');
+        name.className = 'mode-card__name';
+        name.textContent = mode.name;
+
+        playBtn.addEventListener('click', async () => {
+          playBtn.disabled = true;
+          await invoke('apply_window_layout', { layout: mode.layout || [] }).catch(() => {});
+          playBtn.disabled = !mode.layout?.length;
+        });
+
+        card.append(playBtn, name);
+        modesEl.append(card);
+      }
+    }
+
+    let mainGeneration = 0;
+
+    async function main() {
+      const generation = ++mainGeneration;
+      const project = await invoke('get_active_project').catch(() => null);
+      if (generation !== mainGeneration) return;
+
+      if (!project) {
+        pageTitle.textContent = 'Modes';
+        currentProjectPath = null;
+        currentWorkspace = null;
+        emptyEl.hidden = false;
+        modesEl.hidden = true;
+        return;
+      }
+
+      pageTitle.textContent = project.name;
+      currentProjectPath = project.path;
+      currentWorkspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
+      if (generation !== mainGeneration) return;
+
+      emptyEl.hidden = true;
+      modesEl.hidden = false;
+      renderModes();
+    }
+
+    main();
+
+    if (window.__TAURI__ && window.__TAURI__.event) {
+      window.__TAURI__.event.listen('project-activated', () => main());
+    }
+  </script>
+  <script type="module">
+    import { initDevInspect } from "../devinspect.js";
+    initDevInspect();
+  </script>
+</body>
+
+</html>

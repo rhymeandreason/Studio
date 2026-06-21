@@ -1,12 +1,13 @@
-# Studio — agent primer
+# Read first
 
 You are an engineer who cares about design and UX. We're building modular customizeable desktop tools that are nicer in specific interactions than usual apps.
-The map + the non-obvious bits. Read the code and the linked docs for detail.
+**Don't use sub-agents, this is a small codebase.** If you disagree, ask human first and state why.
 
 macOS menu-bar app for designer-developers. Each **project** = a folder under
 `~/Projects/` (`workspace.json` manifest, `notes.json`, `media/`, `artifacts/`).
 Activating a project launches its apps + `claude`; the UI has tabs for media (a
 non-destructive image editor), notes, workspace, and artifacts.
+
 
 ## Stack
 - **Tauri v2** (Rust) + **vanilla JS/HTML/CSS**, no bundler. All
@@ -25,6 +26,10 @@ non-destructive image editor), notes, workspace, and artifacts.
 icon. Editing `src/` is live (reload the window); Rust changes need a restart.
 
 ## Subsystems (detail in each doc)
+- **Design system** ( — tokens, kit classes, `<studio-*>` components) —
+  [docs/DESIGN.md](docs/DESIGN.md)
+- **Tools** (single-file HTML utilities in `src/tools/`, kit-styled) — **read [docs/tools.md](docs/tools.md)
+  before creating or editing any tool**!,
 - **Media + image editor** — `media.js`. [docs/media.md](docs/media.md)
 - **Notes** — in `main.js`. [docs/notes.md](docs/notes.md)
 - **Workspace** (per-project launchpad) — `workspace.js`. [docs/workspace.md](docs/workspace.md)
@@ -37,11 +42,6 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
 - **Code Editor** (HTML/CSS/JS tool: DOM tree, inspector, git diff, syntax
   highlighting, separate preview window) — `src/tools/code-editor.html` +
   `code-preview.html`. [docs/code-editor.md](docs/code-editor.md)
-- **Design system** (Runes — tokens, kit classes, `<studio-*>` components) —
-  [docs/DESIGN.md](docs/DESIGN.md)
-- **Tools** (single-file HTML utilities in `src/tools/`, kit-styled;
-  `kit-gallery.html` is the living reference) — **read [docs/tools.md](docs/tools.md)
-  before creating or editing any tool**! future ideas: [docs/tools-dynamic-loading.md](docs/tools-dynamic-loading.md),
 - **Slides** (presentation builder: `presentation` + `theme` artifacts, shared
   renderer in `src/deck/`, Slides + Theme editor tools) — [docs/slides.md](docs/slides.md)
 - **Interaction model** (shared selection + keyboard) — `selection.js` /
@@ -74,7 +74,10 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
 ## Conventions
 - The human tests each step in the running app before committing. `cargo check`
   in `src-tauri/` after Rust edits.
+- **Read docs/tools.md before making any tools.**
+- When building new features, consider how the code can be modular and reusuable.
 - Prefer native macOS frameworks. Project structure is convention, not enforced —
   tolerate missing subfolders.
 - One user (the author), v0.1. The user is a designer who codes with Claude Code.
 - Design principles are modularity and lightweight simplicity. Lean towards making the UX obvious and easy to edit. When proposing architecture, don't overdo it.
+- Read the code and the linked docs for detail.
