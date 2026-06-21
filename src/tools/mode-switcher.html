@@ -154,8 +154,17 @@
         picking = 'project';
         items = await invoke('list_projects').catch(() => []);
       }
-      activeIndex = 0;
+      // Open on the last mode used for this project, if still present.
+      const last = picking === 'mode' && projectPath
+        ? localStorage.getItem('lastMode:' + projectPath)
+        : null;
+      const idx = last ? items.findIndex((m) => m.name === last) : -1;
+      activeIndex = idx >= 0 ? idx : 0;
       render();
+    }
+
+    function rememberMode(name) {
+      if (projectPath && name) localStorage.setItem('lastMode:' + projectPath, name);
     }
 
     function render() {
@@ -225,6 +234,7 @@
         await loadModes();
         return;
       }
+      rememberMode(item.name);
       await invoke('apply_window_layout', { layout: item.layout || [] }).catch(() => {});
       await win.hide();
     }
@@ -239,6 +249,7 @@
         mode.recordedAt = new Date().toISOString();
         workspace.modes = items;
         await invoke('save_workspace', { path: projectPath, workspace });
+        rememberMode(mode.name);
         await win.hide();
       } catch (err) {
         console.error(err);
