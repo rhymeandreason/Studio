@@ -6,10 +6,12 @@
 //             windows), but across the whole screen, not just the frontmost.
 //   apply   — read a JSON array of the same shape from stdin. For each entry,
 //             launch the app if it isn't running (and wait for its first
-//             window), then move/resize/un-minimize the matching window via
-//             the Accessibility API — including windows that are currently
-//             minimized, which CGWindowList can't see. Finally minimize every
-//             on-screen window that wasn't part of the layout.
+//             window), then move/resize/un-minimize/unhide the matching
+//             window via the Accessibility API — including windows that are
+//             currently minimized, which CGWindowList can't see. Finally
+//             hide (or, where an app has a mix of target and non-target
+//             windows, minimize) every on-screen window that wasn't part of
+//             the layout.
 //
 // Moving/resizing/minimizing windows owned by *other* processes requires the
 // Accessibility API (AXUIElement) — CGWindowList is read-only. First run
@@ -158,7 +160,11 @@ func applyMode() {
     let targetApps = NSOrderedSet(array: targets.compactMap { $0["app"] as? String }).array as! [String]
 
     for app in targetApps {
-        var windows = runningPid(forApp: app).map(axWindows(pid:)) ?? []
+        let pid = runningPid(forApp: app)
+        if let pid, let runningApp = NSRunningApplication(processIdentifier: pid) {
+            runningApp.unhide()
+        }
+        var windows = pid.map(axWindows(pid:)) ?? []
         if windows.isEmpty {
             windows = launchAndWaitForWindows(app: app)
         }
@@ -181,18 +187,33 @@ func applyMode() {
         }
     }
 
-    // Then minimize every on-screen window that wasn't part of the layout.
-    // Matched by pid only, not title: CGWindowList's kCGWindowName is blank
-    // without Screen Recording permission while AX's kAXTitleAttribute still
-    // returns the real title, so title-matching here (unlike the restore
-    // loop above, which falls back to "first window" when titles disagree)
-    // would silently skip every window and never minimize anything.
+    // Then get every on-screen window that wasn't part of the layout out of
+    // the way. Matched by pid only, not title: CGWindowList's kCGWindowName
+    // is blank without Screen Recording permission while AX's
+    // kAXTitleAttribute still returns the real title, so title-matching here
+    // (unlike the restore loop above, which falls back to "first window"
+    // when titles disagree) would silently skip every window and never
+    // hide/minimize anything.
+    //
+    // Prefer hiding the whole app (NSRunningApplication.hide(), the Cmd+H
+    // equivalent) over minimizing each window: it's instant, while AX
+    // minimize plays the genie animation per window, which is slow with
+    // several windows. Only fall back to per-window minimize when some of
+    // the app's windows are layout targets (consumed) and others aren't —
+    // hiding is app-wide so it would also hide the windows we just placed.
     var seenPids = Set<pid_t>()
     for win in onScreenWindows() where !seenPids.contains(win.pid) {
         seenPids.insert(win.pid)
-        for (axWin, _) in axWindows(pid: win.pid) {
-            if consumedWindows.contains(where: { CFEqual($0, axWin) }) { continue }
-            setMinimized(axWin, true)
+        let axWins = axWindows(pid: win.pid)
+        let unconsumed = axWins.filter { (axWin, _) in !consumedWindows.contains(where: { CFEqual($0, axWin) }) }
+        if unconsumed.isEmpty { continue }
+
+        if unconsumed.count == axWins.count, let runningApp = NSRunningApplication(processIdentifier: win.pid) {
+            runningApp.hide()
+        } else {
+            for (axWin, _) in unconsumed {
+                setMinimized(axWin, true)
+            }
         }
     }
 }
