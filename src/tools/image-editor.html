@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Editor</title>
+    <!-- styles.css @imports tokens.css and carries the editor / lightbox /
+         modal styling the markup below depends on. kit.css adds .btn / .field /
+         .chip etc. -->
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="../kit/kit.css" />
+    <script type="module" src="../kit/components.js"></script>
+    <style>
+      /* The editor is the whole window here (no grid / side column), so pin the
+         lightbox as the page and let it fill the viewport. */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: var(--bg);
+      }
+      .lightbox {
+        position: fixed;
+        inset: 0;
+      }
+      /* Empty state shown until an image is opened. */
+      .ie-empty {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-3, 12px);
+        color: var(--ink-soft, #888);
+        background: var(--bg);
+        z-index: 2; /* cover the (uninitialised) editor until an image opens */
+      }
+      .ie-empty .mi {
+        font-size: 48px;
+      }
+      .ie-empty[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Image editor (mirrors the media-panel lightbox) -->
+    <div class="lightbox" id="lightbox">
+      <div class="lightbox__bar">
+        <span class="lightbox__name" id="lightbox-name">Image Editor</span>
+        <div class="lightbox__actions">
+          <span class="edit-status" id="edit-status"></span>
+          <button class="btn-ghost" id="lb-open">
+            <span class="mi mi-sm">folder_open</span>Open…
+          </button>
+          <button class="btn-ghost" id="lb-export">
+            <span class="mi mi-sm">file_copy</span>Duplicate
+          </button>
+          <button class="btn-ghost" id="lb-webexport">
+            <span class="mi mi-sm">photo_size_select_large</span>Export
+          </button>
+          <button class="btn-ghost" id="lb-replace">
+            <span class="mi mi-sm">published_with_changes</span>Replace original
+          </button>
+          <button class="btn-ghost" id="lb-copy">
+            <span class="mi mi-sm">file_export</span>Copy path
+          </button>
+          <button class="btn-ghost" id="lb-reveal">
+            <span class="mi mi-sm">folder_open</span>Show in Finder
+          </button>
+        </div>
+      </div>
+
+      <div class="lightbox__stage" id="lb-stage">
+        <div class="ie-empty" id="ie-empty">
+          <span class="mi">add_photo_alternate</span>
+          <span>Open an image to edit</span>
+        </div>
+        <div class="editor" id="editor">
+          <div class="editor__canvas-wrap" id="editor-canvas-wrap">
+            <div class="canvasstack" id="canvasstack">
+              <canvas id="editor-canvas"></canvas>
+              <div class="crop" id="crop" style="display: none">
+                <span class="crop__h" data-h="nw"></span>
+                <span class="crop__h" data-h="ne"></span>
+                <span class="crop__h" data-h="sw"></span>
+                <span class="crop__h" data-h="se"></span>
+              </div>
+            </div>
+          </div>
+          <aside class="editor__panel">
+            <div class="editsection">
+              <div class="editgroup">
+                <span class="editgroup__label">Rotate &amp; flip</span>
+                <div class="editbtns">
+                  <button class="iconbtn" id="ed-rotl" title="Rotate left">
+                    <span class="mi">rotate_left</span>
+                  </button>
+                  <button class="iconbtn" id="ed-rotr" title="Rotate right">
+                    <span class="mi">rotate_right</span>
+                  </button>
+                  <button class="iconbtn" id="ed-fliph" title="Flip horizontal">
+                    <span class="mi">flip</span>
+                  </button>
+                  <button class="iconbtn" id="ed-flipv" title="Flip vertical">
+                    <span class="mi" style="transform: rotate(90deg)">flip</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="editgroup">
+                <span class="editgroup__label">Crop</span>
+                <div class="editbtns editbtns--wrap">
+                  <button class="chip" data-aspect="none">None</button>
+                  <button class="chip" data-aspect="free">Free</button>
+                  <button class="chip" data-aspect="1">1:1</button>
+                  <button class="chip" data-aspect="1.7778">16:9</button>
+                  <button class="chip" data-aspect="0.8">4:5</button>
+                </div>
+              </div>
+
+              <div class="editgroup">
+                <span class="editgroup__label">
+                  Straighten
+                  <em id="ed-straighten-val">0°</em>
+                </span>
+                <input
+                  class="slider"
+                  type="range"
+                  id="ed-straighten"
+                  min="-15"
+                  max="15"
+                  step="0.5"
+                  value="0"
+                />
+              </div>
+            </div>
+
+            <div class="editsection">
+              <div class="editgroup">
+                <div id="tonal-sliders"></div>
+              </div>
+            </div>
+
+            <div class="editsection">
+              <div class="editgroup">
+                <span class="editgroup__label">Background</span>
+                <button class="chip chip--reset" id="ed-removebg">
+                  <span class="mi mi-sm">auto_fix_high</span>Remove background
+                </button>
+                <button class="chip chip--reset" id="ed-extendbg">
+                  <span class="mi mi-sm">aspect_ratio</span>Extend background
+                </button>
+                <button class="chip chip--reset" id="ed-photos">
+                  <span class="mi mi-sm">photo_library</span>Edit in Photos
+                </button>
+              </div>
+            </div>
+
+            <div class="editsection">
+              <div class="editgroup">
+                <button class="chip chip--reset" id="m-reset">
+                  <span class="mi mi-sm">restart_alt</span>Reset adjustments
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- Background-removal cutout preview -->
+    <div class="modal cutout" id="cutout" hidden>
+      <div class="modal__card cutout__card">
+        <h2 class="modal__title">Background removed</h2>
+        <div class="cutout__stage">
+          <img class="cutout__img" id="cutout-img" alt="cutout" />
+        </div>
+        <div class="modal__actions">
+          <button class="btn-ghost" id="cutout-cancel">Cancel</button>
+          <button class="btn-main" id="cutout-save">
+            <span class="mi mi-sm">save</span>Save cutout
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Extend background (outpaint) -->
+    <div class="modal extend" id="extend" hidden>
+      <div class="modal__card extend__card">
+        <h2 class="modal__title">Extend background</h2>
+        <p class="modal__hint">
+          Drag the handles to grow the canvas, or pick a ratio. Fill synthesizes
+          the new area from the image.
+        </p>
+        <div class="extend__ratios" id="extend-ratios">
+          <div class="orient-toggle" id="extend-orient">
+            <button
+              class="orient-btn is-active"
+              data-orient="landscape"
+              title="Landscape"
+            >
+              <span class="mi mi-sm">crop_landscape</span>
+            </button>
+            <button class="orient-btn" data-orient="portrait" title="Portrait">
+              <span class="mi mi-sm">crop_portrait</span>
+            </button>
+          </div>
+          <button class="chip is-active" data-ratio="free">Free</button>
+          <button class="chip" data-ratio="1">1:1</button>
+          <button class="chip" data-ratio="1.7778">16:9</button>
+          <button class="chip" data-ratio="1.5">3:2</button>
+          <button class="chip" data-ratio="1.3333">4:3</button>
+          <button class="chip" data-ratio="1.25">5:4</button>
+        </div>
+        <div class="extend__stage" id="extend-stage">
+          <div class="extend__frame" id="extend-frame">
+            <canvas id="extend-canvas"></canvas>
+            <span class="exh" data-h="n"></span>
+            <span class="exh" data-h="s"></span>
+            <span class="exh" data-h="e"></span>
+            <span class="exh" data-h="w"></span>
+            <span class="exh" data-h="nw"></span>
+            <span class="exh" data-h="ne"></span>
+            <span class="exh" data-h="sw"></span>
+            <span class="exh" data-h="se"></span>
+          </div>
+        </div>
+        <div class="extend__options" id="extend-options" hidden>
+          <div class="extend__opt" id="opt-simple" hidden>
+            <label class="extend__slider">
+              <span>Blur</span>
+              <input
+                type="range"
+                class="slider"
+                id="extend-blur"
+                min="0"
+                max="50"
+                value="15"
+              />
+            </label>
+            <label class="extend__slider">
+              <span>Noise</span>
+              <input
+                type="range"
+                class="slider"
+                id="extend-noise"
+                min="0"
+                max="40"
+                value="10"
+              />
+            </label>
+          </div>
+          <div class="extend__opt" id="opt-color" hidden>
+            <label class="extend__slider">
+              <span>Color</span>
+              <input type="color" id="extend-color" />
+            </label>
+          </div>
+        </div>
+        <div class="modal__actions">
+          <span class="edit-status" id="extend-status"></span>
+          <button class="btn-ghost" id="extend-cancel">Cancel</button>
+          <button
+            class="btn-ghost extend__fillbtn"
+            id="extend-fill-simple"
+            title="Edge-stretch + blur + noise (fast)"
+          >
+            <span class="mi mi-sm">blur_on</span>Simple Fill
+          </button>
+          <button
+            class="btn-ghost extend__fillbtn"
+            id="extend-fill-color"
+            title="Fill with a solid color (default: average of the 4 corners)"
+          >
+            <span class="extend__swatch" id="extend-color-sw"></span>Color Fill
+          </button>
+          <button
+            class="btn-ghost extend__fillbtn"
+            id="extend-fill"
+            title="Content-aware fill (best for plain backgrounds)"
+          >
+            <span class="mi mi-sm">auto_fix_normal</span>Patch Fill
+          </button>
+          <button
+            class="btn-ghost extend__fillbtn"
+            id="extend-fill-sd"
+            title="Generative fill (Stable Diffusion)"
+            hidden
+          >
+            <span class="mi mi-sm">auto_awesome</span>Generative Fill
+          </button>
+          <button class="btn-main" id="extend-save" disabled>
+            <span class="mi mi-sm">save</span>Save
+          </button>
+          <button class="btn-ghost" id="extend-edit-photos" hidden>
+            <span class="mi mi-sm">photo_library</span>Edit in Photos
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export -->
+    <div class="modal webexport" id="webexport" hidden>
+      <div class="modal__card">
+        <h2 class="modal__title">Export</h2>
+        <p class="modal__hint" id="web-context"></p>
+
+        <div class="field">
+          <span class="field__label">Format</span>
+          <div class="editbtns">
+            <button class="chip" data-fmt="webp">WebP</button>
+            <button class="chip" data-fmt="jpeg">JPG</button>
+            <button class="chip" data-fmt="png">PNG</button>
+          </div>
+        </div>
+
+        <label class="field">
+          <span class="field__label">Max size (longest side)</span>
+          <select class="field__input" id="web-maxdim">
+            <option value="0">Original</option>
+            <option value="2560">2560 px</option>
+            <option value="1920">1920 px</option>
+            <option value="1280">1280 px</option>
+            <option value="1024">1024 px</option>
+            <option value="640">640 px</option>
+          </select>
+        </label>
+
+        <div class="field" id="web-quality-field">
+          <span class="field__label">Quality <em id="web-quality-val">82</em></span>
+          <input
+            class="slider"
+            type="range"
+            id="web-quality"
+            min="1"
+            max="100"
+            value="82"
+          />
+        </div>
+
+        <div class="modal__actions">
+          <button class="btn-ghost" id="web-cancel">Cancel</button>
+          <button class="btn-main" id="web-export">
+            <span class="mi mi-sm">save</span>Export
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import {
+        initEditor,
+        loadEditor,
+        ensureFullRes,
+        renderEditorPreview,
+        getEditItem,
+        setEditStatus,
+      } from "../editor.js";
+
+      const { invoke } = window.__TAURI__.core;
+
+      // Roomier than the 900×640 tool default — the editor wants stage + panel.
+      if (window.__TAURI__) {
+        const { getCurrentWindow } = window.__TAURI__.window;
+        const { LogicalSize } = window.__TAURI__.dpi;
+        getCurrentWindow().setSize(new LogicalSize(1240, 820));
+      }
+
+      // The grid hooks default to no-ops — there's no grid here, just the editor.
+      initEditor();
+
+      const empty = document.getElementById("ie-empty");
+
+      async function openFile(path) {
+        if (!path) return;
+        empty.hidden = true;
+        const name = path.split("/").pop();
+        const ext = (name.includes(".") ? name.split(".").pop() : "").toLowerCase();
+        await loadEditor({ path, name, ext }); // loads sidecar edits + a thumb
+        setEditStatus("Loading…");
+        await ensureFullRes(); // upgrade to the ~2048px preview
+        if (getEditItem() && getEditItem().path === path) {
+          setEditStatus("");
+          renderEditorPreview();
+        }
+      }
+
+      async function pickFile() {
+        const { open } = window.__TAURI__.dialog;
+        const path = await open({
+          multiple: false,
+          filters: [
+            {
+              name: "Images",
+              extensions: [
+                "png", "jpg", "jpeg", "webp", "gif",
+                "tif", "tiff", "bmp", "heic", "heif",
+              ],
+            },
+          ],
+        });
+        if (typeof path === "string") openFile(path);
+      }
+
+      document.getElementById("lb-open").addEventListener("click", pickFile);
+      document.getElementById("lb-copy").addEventListener("click", () => {
+        const it = getEditItem();
+        if (it) navigator.clipboard.writeText(it.path);
+      });
+      document.getElementById("lb-reveal").addEventListener("click", () => {
+        const it = getEditItem();
+        if (it) invoke("reveal_in_finder", { path: it.path });
+      });
+
+      // ⌘O opens the picker; Esc closes any open modal.
+      window.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
+          e.preventDefault();
+          pickFile();
+        } else if (e.key === "Escape") {
+          for (const id of ["cutout", "extend", "webexport"]) {
+            document.getElementById(id).hidden = true;
+          }
+        }
+      });
+
+      // Open straight away so the user lands on the file picker.
+      pickFile();
+    </script>
+  </body>
+</html>
