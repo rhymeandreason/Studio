@@ -437,6 +437,10 @@
         if (it) invoke("reveal_in_finder", { path: it.path });
       });
 
+      // Click the empty state to open a file.
+      empty.addEventListener("click", pickFile);
+      empty.style.cursor = "pointer";
+
       // ⌘O opens the picker; Esc closes any open modal.
       window.addEventListener("keydown", (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
@@ -448,9 +452,6 @@
           }
         }
       });
-
-      // Open straight away so the user lands on the file picker.
-      pickFile();
     </script>
   </body>
 </html>
