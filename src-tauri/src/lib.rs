@@ -227,6 +227,12 @@ struct ScheduledTask {
     /// of the 3 shared time slots shown in the UI.
     #[serde(default)]
     slot: u8,
+    /// Tool file in `src/tools/` to open when this task fires, e.g.
+    /// "daily-briefing.html". When set, firing opens that tool's window
+    /// instead of running a `claude -p` prompt — the "open a tool at a time"
+    /// mode. Empty = legacy prompt task (`prompt`/`model`/`output_file`).
+    #[serde(default)]
+    tool: String,
     /// Folder the `claude -p` run uses as its working dir, and where the
     /// output file is written. Blank = the ~/Projects root ("Global").
     #[serde(default, rename = "projectPath")]
@@ -1982,6 +1988,24 @@ fn repo_scripts(repo: String) -> RepoScripts {
 }
 
 const WINBOUNDS_BIN: &str = env!("WINBOUNDS_BIN");
+const DAYAGENDA_BIN: &str = env!("DAYAGENDA_BIN");
+
+/// Today's calendar events as a JSON array string:
+/// `[{"time":"10:00–10:30","title":"…","location":"…"}]` (EventKit, via the
+/// `dayagenda` Swift helper). Returns `"[]"` if calendar access is denied or
+/// there are no events; the calendar-access prompt (attributed to Studio) is
+/// shown by macOS on first call. Used by the Daily Briefing tool.
+#[tauri::command]
+async fn day_agenda() -> Result<String, String> {
+    let out = Command::new(DAYAGENDA_BIN)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
 
 /// Return the frontmost non-utility window's info as "app,title,x,y,w,h".
 /// Calls the compiled winbounds Swift helper which uses CGWindowListCopyWindowInfo
@@ -4005,14 +4029,24 @@ fn run_due_schedules(app: &AppHandle) {
         }
         task.last_run = Some(today.clone());
         changed = true;
-        run_scheduled_task(
-            app,
-            task.project_path.clone(),
-            task.prompt.clone(),
-            task.model.clone(),
-            task.output_file.clone(),
-            task.id.clone(),
-        );
+        if !task.tool.trim().is_empty() {
+            // "Open a tool at a time" mode: pop the tool's window (the tool
+            // does its own work, e.g. Daily Briefing generates on load).
+            // Window creation must run on the main thread — this fires from the
+            // scheduler's worker thread.
+            let app2 = app.clone();
+            let tool = task.tool.clone();
+            let _ = app.run_on_main_thread(move || open_tool(app2.clone(), tool, None));
+        } else {
+            run_scheduled_task(
+                app,
+                task.project_path.clone(),
+                task.prompt.clone(),
+                task.model.clone(),
+                task.output_file.clone(),
+                task.id.clone(),
+            );
+        }
     }
     if changed {
         let _ = write_schedules_file(app, &file);
@@ -4183,6 +4217,111 @@ fn run_schedule_now(
     run_scheduled_task(&app, project_path, prompt, model, output_file, task_id);
 }
 
+/// Run `claude -p <prompt>` headless in `cwd` and capture `(success, output)`,
+/// where `output` is stdout on success or stderr/error on failure. Shared by
+/// the scheduler (writes the text to a file) and `run_claude_prompt` (returns
+/// it straight to a caller, e.g. a tool generating content live).
+fn claude_capture(cwd: &Path, prompt: &str, model: &str) -> (bool, String) {
+    let mut cmd = Command::new("claude");
+    cmd.env("PATH", claude_path())
+        .current_dir(cwd)
+        .arg("-p")
+        // Headless: nobody is around to approve tool-use prompts.
+        .arg("--permission-mode")
+        .arg("bypassPermissions");
+    if !model.trim().is_empty() {
+        cmd.args(["--model", model.trim()]);
+    }
+    match cmd.arg(prompt).output() {
+        Ok(o) if o.status.success() => (true, String::from_utf8_lossy(&o.stdout).to_string()),
+        Ok(o) => (false, String::from_utf8_lossy(&o.stderr).to_string()),
+        Err(e) => (false, e.to_string()),
+    }
+}
+
+/// Run `claude -p <prompt>` headless and return its stdout directly (no file
+/// written). Tools call this to generate content on demand — e.g. the Daily
+/// Briefing asks for JSON and parses it. `project_path` blank = the ~/Projects
+/// root; the run uses that project's repo dir as its cwd, so `claude` has the
+/// same web/tool access the scheduler gives it.
+#[tauri::command]
+async fn run_claude_prompt(
+    app: AppHandle,
+    project_path: String,
+    prompt: String,
+    model: String,
+) -> Result<String, String> {
+    let project_path = if project_path.trim().is_empty() {
+        projects_root(&app)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or(project_path)
+    } else {
+        project_path
+    };
+    let cwd = claude_cwd(&app, &project_path, "repo");
+    let (ok, text) = claude_capture(&cwd, &prompt, &model);
+    if ok {
+        Ok(text)
+    } else {
+        Err(text)
+    }
+}
+
+/// Path to the global Daily Briefing cache, `~/Projects/today.json`. It's not
+/// tied to any one project, so it lives in the Projects root.
+fn briefing_path(app: &AppHandle) -> Option<PathBuf> {
+    projects_root(app).map(|p| p.join("today.json"))
+}
+
+/// Read the cached briefing JSON (the whole `{date, brief}` blob the tool
+/// wrote). Returns `""` if it doesn't exist yet.
+#[tauri::command]
+fn read_briefing(app: AppHandle) -> Result<String, String> {
+    let path = briefing_path(&app).ok_or("no home dir")?;
+    match std::fs::read_to_string(&path) {
+        Ok(s) => Ok(s),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Write the briefing JSON cache to `~/Projects/today.json`.
+#[tauri::command]
+fn save_briefing(app: AppHandle, content: String) -> Result<(), String> {
+    let path = briefing_path(&app).ok_or("no home dir")?;
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+/// Path to the editable briefing instructions, `~/Projects/briefing-prompt.txt`
+/// — the "what should the briefing fetch & cover?" note, global like the cache.
+fn briefing_prompt_path(app: &AppHandle) -> Option<PathBuf> {
+    projects_root(app).map(|p| p.join("briefing-prompt.txt"))
+}
+
+/// Read the briefing instructions. Returns `""` if not set yet.
+#[tauri::command]
+fn read_briefing_prompt(app: AppHandle) -> Result<String, String> {
+    let path = briefing_prompt_path(&app).ok_or("no home dir")?;
+    match std::fs::read_to_string(&path) {
+        Ok(s) => Ok(s),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Write the briefing instructions to `~/Projects/briefing-prompt.txt`.
+#[tauri::command]
+fn save_briefing_prompt(app: AppHandle, content: String) -> Result<(), String> {
+    let path = briefing_prompt_path(&app).ok_or("no home dir")?;
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
 /// Run `claude -p <prompt>` headless in the project's repo dir, write the
 /// result to `<project>/<output_file>` (overwriting it), and emit
 /// `"schedule-ran"` so the UI can show it if the project is open.
@@ -4207,22 +4346,7 @@ fn run_scheduled_task(
     // Scheduled/headless runs operate on the code repo (preserves prior behavior).
     let cwd = claude_cwd(&app, &project_path, "repo");
     std::thread::spawn(move || {
-        let mut cmd = Command::new("claude");
-        cmd.env("PATH", claude_path())
-            .current_dir(&cwd)
-            .arg("-p")
-            // Headless: nobody is around to approve tool-use prompts.
-            .arg("--permission-mode")
-            .arg("bypassPermissions");
-        if !model.trim().is_empty() {
-            cmd.args(["--model", model.trim()]);
-        }
-        let output = cmd.arg(&prompt).output();
-        let (ok, text) = match output {
-            Ok(o) if o.status.success() => (true, String::from_utf8_lossy(&o.stdout).to_string()),
-            Ok(o) => (false, String::from_utf8_lossy(&o.stderr).to_string()),
-            Err(e) => (false, e.to_string()),
-        };
+        let (ok, text) = claude_capture(&cwd, &prompt, &model);
 
         let file_name = if output_file.trim().is_empty() {
             default_schedule_output_file()
@@ -4786,6 +4910,12 @@ pub fn run() {
             claude_send,
             claude_stop,
             run_schedule_now,
+            run_claude_prompt,
+            day_agenda,
+            read_briefing,
+            save_briefing,
+            read_briefing_prompt,
+            save_briefing_prompt,
             update_wake_schedule,
             read_claude_sessions,
             save_claude_sessions,

@@ -100,26 +100,7 @@
     flex-wrap: wrap;
 }
 
-.ws-schedule__prompt {
-    background: transparent;
-    border: none;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 12.5px;
-    line-height: 1.5;
-    min-height: 19px;
-    outline: none;
-    resize: none;
-    width: 100%;
-    padding: 0;
-}
-
-.ws-schedule__prompt::placeholder {
-    color: var(--text-soft);
-}
-
-.ws-schedule__model,
-.ws-schedule__project {
+.ws-schedule__tool {
     background: var(--surface);
     border: 1px solid var(--hairline-strong);
     border-radius: var(--radius-sm);
@@ -128,10 +109,7 @@
     font-family: var(--sans);
     font-size: 12px;
     padding: 4px 6px;
-}
-
-.ws-schedule__project {
-    max-width: 140px;
+    max-width: 200px;
 }
 
 .ws-schedule__days {
@@ -156,21 +134,6 @@
     background: var(--accent);
     border-color: var(--accent);
     color: var(--surface);
-}
-
-.ws-schedule__output {
-    background: var(--surface);
-    border: 1px solid var(--hairline-strong);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 4px 6px;
-    width: 150px;
-}
-
-.ws-schedule__output::placeholder {
-    color: var(--text-soft);
 }
 
 .ws-schedule__last {

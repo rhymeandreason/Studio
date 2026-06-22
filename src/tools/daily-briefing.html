@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Daily Briefing</title>
+    <link rel="stylesheet" href="../tokens.css" />
+    <link rel="stylesheet" href="../kit/kit.css" />
+    <script type="module" src="../kit/components.js"></script>
+    <script src="../vendor/marked.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        padding: var(--space-6);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-5);
+        min-height: 100vh;
+        box-sizing: border-box;
+      }
+      .brief-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+      }
+      .brief-date { font-size: 15px; }
+      .brief-section { display: flex; flex-direction: column; gap: var(--space-3); }
+      .brief-section.is-hidden { display: none; }
+      .brief-list { display: flex; flex-direction: column; gap: var(--space-2); }
+
+      .meeting {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-3);
+        padding: var(--space-2) 0;
+        border-bottom: 1px solid var(--surface);
+      }
+      .meeting:last-child { border-bottom: none; }
+      .meeting__time {
+        flex: 0 0 auto;
+        min-width: 9ch;
+        font-variant-numeric: tabular-nums;
+      }
+      .meeting__title { flex: 1 1 auto; }
+      .meeting__loc { color: var(--ink); opacity: 0.55; }
+
+      /* Freeform Markdown body — whatever the prompt produces. */
+      .md-body { line-height: 1.6; }
+      .md-body.is-loading { opacity: 0.5; }
+      .md-body > :first-child { margin-top: 0; }
+      .md-body > :last-child { margin-bottom: 0; }
+      .md-body h1, .md-body h2, .md-body h3 { line-height: 1.25; }
+      .md-body a { color: inherit; }
+      .md-body pre {
+        background: var(--surface);
+        padding: var(--space-3);
+        border-radius: var(--radius);
+        overflow-x: auto;
+      }
+      .md-body code { font-family: var(--mono, monospace); }
+
+      .brief-empty { opacity: 0.55; }
+      .brief-error {
+        color: var(--danger, #b00020);
+        white-space: pre-wrap;
+      }
+      .settings { display: none; flex-direction: column; gap: var(--space-2); }
+      .settings.is-open { display: flex; }
+    </style>
+  </head>
+  <body>
+    <div class="brief-head">
+      <div id="date" class="brief-date eyebrow"></div>
+      <div style="display:flex; gap: var(--space-2); flex: 0 0 auto;">
+        <button id="settings-btn" class="btn btn-ghost btn-icon" title="Edit prompt">
+          <span class="material-symbols-rounded">tune</span>
+        </button>
+        <button id="refresh-btn" class="btn btn-ghost btn-icon" title="Refresh">
+          <span class="material-symbols-rounded">refresh</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="settings" class="settings card">
+      <label class="label" for="sources">Briefing prompt</label>
+      <textarea id="sources" class="field" rows="4"
+        placeholder="Anything — e.g. a warm morning briefing with top news, or 'Write a haiku about today's weather in Woodacre, CA.'"></textarea>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--space-2);">
+        <span class="text-xs text-muted">Saved to ~/Projects/briefing-prompt.txt · output is Markdown</span>
+        <button id="run-prompt-btn" class="btn btn-primary">
+          <span class="material-symbols-rounded">bolt</span> Run with this prompt
+        </button>
+      </div>
+    </div>
+
+    <div id="meetings-section" class="brief-section is-hidden">
+      <div class="eyebrow">Today's meetings</div>
+      <div id="meetings" class="brief-list"></div>
+    </div>
+
+    <div class="brief-section">
+      <div id="body" class="md-body is-loading">Loading…</div>
+    </div>
+
+    <div id="status" class="text-xs text-muted" style="margin-top: auto;"></div>
+
+    <script type="module">
+      const hasTauri = !!window.__TAURI__;
+      const invoke = hasTauri ? window.__TAURI__.core.invoke : null;
+
+      // Used when ~/Projects/briefing-prompt.txt is empty.
+      const DEFAULT_PROMPT =
+        "Write a warm, concise morning briefing: a one-line greeting, then the " +
+        "top 3 Hacker News stories with one-line summaries, then one design or " +
+        "engineering article worth reading today (with links).";
+      const MODEL = "haiku";
+      // Cache is a global file at ~/Projects/today.json (read_briefing /
+      // save_briefing); the editable prompt is ~/Projects/briefing-prompt.txt
+      // (read_briefing_prompt / save_briefing_prompt).
+
+      const $ = (id) => document.getElementById(id);
+
+      function todayStr() {
+        return new Date().toISOString().slice(0, 10);
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"]/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+      }
+
+      function renderMeetings(meetings) {
+        const section = $("meetings-section");
+        const box = $("meetings");
+        box.innerHTML = "";
+        // Calendar-driven section, independent of the prompt — hide it entirely
+        // when there's nothing today so a non-briefing prompt isn't cluttered.
+        if (!meetings || meetings.length === 0) {
+          section.classList.add("is-hidden");
+          return;
+        }
+        section.classList.remove("is-hidden");
+        for (const m of meetings) {
+          const row = document.createElement("div");
+          row.className = "meeting";
+          const loc = m.location ? `<span class="meeting__loc">· ${escapeHtml(m.location)}</span>` : "";
+          row.innerHTML =
+            `<span class="meeting__time text-mono text-xs">${escapeHtml(m.time || "")}</span>` +
+            `<span class="meeting__title">${escapeHtml(m.title || "")} ${loc}</span>`;
+          box.appendChild(row);
+        }
+      }
+
+      function renderBody(markdown) {
+        const el = $("body");
+        el.classList.remove("is-loading");
+        el.innerHTML = window.marked
+          ? window.marked.parse(markdown || "", { breaks: true })
+          : escapeHtml(markdown || "");
+      }
+
+      function buildPrompt(userPrompt, meetings) {
+        const lines = [
+          `Today is ${new Date().toLocaleDateString(undefined, {
+            weekday: "long", month: "long", day: "numeric", year: "numeric",
+          })}.`,
+        ];
+        if (meetings.length) {
+          lines.push("", "My calendar today (use only if relevant to the request):");
+          lines.push(...meetings.map((m) => `- ${m.time} ${m.title}`));
+        }
+        lines.push(
+          "",
+          userPrompt,
+          "",
+          "Respond in Markdown. Output only the content itself — no preamble, no explanation, no code fence around the whole thing.",
+        );
+        return lines.join("\n");
+      }
+
+      function setStatus(text) {
+        $("status").textContent = text;
+      }
+
+      let refreshing = false;
+
+      async function refresh() {
+        if (!hasTauri || refreshing) return;
+        refreshing = true;
+        $("refresh-btn").classList.add("is-busy");
+        setStatus("Refreshing…");
+
+        // Meetings are fast — render them first.
+        let meetings = [];
+        try {
+          meetings = JSON.parse(await invoke("day_agenda"));
+        } catch {}
+        renderMeetings(meetings);
+
+        const prompt = ($("sources").value || DEFAULT_PROMPT).trim();
+        try {
+          const markdown = await invoke("run_claude_prompt", {
+            projectPath: "",
+            prompt: buildPrompt(prompt, meetings),
+            model: MODEL,
+          });
+          renderBody(markdown);
+          await invoke("save_briefing", {
+            content: JSON.stringify({ date: todayStr(), markdown, meetings }, null, 2),
+          });
+          setStatus(`Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
+        } catch (e) {
+          setStatus("");
+          $("body").classList.remove("is-loading");
+          $("body").innerHTML =
+            `<div class="brief-error">Couldn't generate briefing:\n${escapeHtml(e.message || String(e))}</div>`;
+        } finally {
+          refreshing = false;
+          $("refresh-btn").classList.remove("is-busy");
+        }
+      }
+
+      // Render the cached briefing if present. Returns true only when today's
+      // briefing already exists — the signal that we should NOT regenerate.
+      async function loadCache() {
+        if (!hasTauri) return false;
+        try {
+          const raw = await invoke("read_briefing");
+          const cached = raw ? JSON.parse(raw) : null;
+          if (cached && typeof cached.markdown === "string") {
+            renderMeetings(cached.meetings || []);
+            renderBody(cached.markdown);
+            if (cached.date === todayStr()) {
+              setStatus("Today's briefing.");
+              return true;
+            }
+            setStatus("Yesterday's briefing — refresh to update.");
+          }
+        } catch {}
+        return false;
+      }
+
+      // Header date
+      $("date").textContent = new Date().toLocaleDateString(undefined, {
+        weekday: "long", month: "long", day: "numeric",
+      });
+
+      // Settings
+      $("settings-btn").addEventListener("click", () => {
+        $("settings").classList.toggle("is-open");
+      });
+      if (hasTauri) {
+        invoke("read_briefing_prompt")
+          .then((v) => { $("sources").value = v || ""; })
+          .catch(() => {});
+      }
+      $("sources").addEventListener("change", () => {
+        if (hasTauri) invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
+      });
+      // Force a regenerate with the current prompt (saving it first so the file
+      // matches what just ran).
+      $("run-prompt-btn").addEventListener("click", async () => {
+        if (hasTauri) await invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
+        refresh();
+      });
+      $("refresh-btn").addEventListener("click", refresh);
+
+      if (hasTauri) {
+        const { getCurrentWindow } = window.__TAURI__.window;
+        const { LogicalSize } = window.__TAURI__.dpi;
+        getCurrentWindow().setSize(new LogicalSize(680, 720));
+      }
+
+      // The scheduled morning open generates the day's briefing; every later
+      // open just displays it. Only generate when today's doesn't exist yet
+      // (so the scheduled 7am open — the first of the day — is what generates).
+      (async () => {
+        if (!(await loadCache())) refresh();
+      })();
+    </script>
+  </body>
+</html>

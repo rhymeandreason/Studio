@@ -55,6 +55,14 @@ fn main() {
     println!("cargo:rustc-env=WINLAYOUT_BIN={}", wl_bin.display());
     println!("cargo:rerun-if-changed={wl_src}");
 
+    // Calendar agenda helper (EventKit → today's events as JSON). macOS 14+
+    // for requestFullAccessToEvents.
+    let ag_src = "swift/dayagenda.swift";
+    let ag_bin = Path::new(&out_dir).join("dayagenda");
+    swiftc(ag_src, &ag_bin, "macosx14.0");
+    println!("cargo:rustc-env=DAYAGENDA_BIN={}", ag_bin.display());
+    println!("cargo:rerun-if-changed={ag_src}");
+
     tauri_build::build();
 }
 

@@ -1,8 +1,10 @@
 // Scheduled Tasks window: 3 shared global time slots, each defined by a time +
 // days (in the slot header). Tasks are assigned to a slot and inherit its
-// timing; each task picks the project folder it runs in (default "Global" =
-// the ~/Projects root). Empty slots are hidden. Backed by a single global
-// store (read_schedules / save_schedules); see docs/workspace.md.
+// timing; each task opens a tool (e.g. Daily Briefing) when it fires — the
+// tool does its own work on load. Empty slots are hidden. Backed by a single
+// global store (read_schedules / save_schedules); see docs/workspace.md.
+// (Legacy `claude -p` prompt tasks with no `tool` still run headlessly via the
+// backend, but new tasks created here are tool-openers.)
 
 import { el, mi, genId } from "../dom.js";
 import { initDevInspect } from "../devinspect.js";
@@ -12,13 +14,6 @@ const { listen } = window.__TAURI__.event;
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
-const SCHEDULE_MODELS = [
-  { value: "haiku", label: "Haiku" },
-  { value: "sonnet", label: "Sonnet" },
-  { value: "opus", label: "Opus" },
-  { value: "fable", label: "Fable" },
-];
-
 const DEFAULT_SLOTS = [
   { time: "09:00", days: [] },
   { time: "17:00", days: [] },
@@ -26,8 +21,8 @@ const DEFAULT_SLOTS = [
 
 // { slots: [{time, days}…], tasks: [task…] } — the whole global store.
 let store = { slots: DEFAULT_SLOTS.map((s) => ({ ...s })), tasks: [] };
-// Projects offered in each task's dropdown ("" = Global / ~/Projects root).
-let projects = [];
+// Tools offered in each task's dropdown — [{ name, file }].
+let tools = [];
 let saveTimer = null;
 // The wake-schedule signature currently applied to the system (matches the
 // backend's wake-signature.txt). The "Save schedule" button shows only when
@@ -44,7 +39,7 @@ async function load() {
     ),
     tasks: parsed?.tasks || [],
   };
-  projects = await invoke("list_projects");
+  tools = await invoke("list_tools");
   appliedSignature = wakeSignature();
   render();
 }
@@ -168,63 +163,26 @@ function buildScheduleRow(task) {
 
   const main = el("div", "ws-schedule__main");
 
-  const prompt = el("textarea", "ws-schedule__prompt", {
-    placeholder: "Prompt for claude -p…",
-    rows: 1,
-    value: task.prompt || "",
-  });
-  const resizePrompt = () => {
-    prompt.style.height = "auto";
-    prompt.style.height = prompt.scrollHeight + "px";
-  };
-  prompt.addEventListener("input", () => {
-    task.prompt = prompt.value;
-    resizePrompt();
-    scheduleSave();
-  });
-  requestAnimationFrame(resizePrompt);
-
   const controls = el("div", "ws-schedule__row");
 
-  const project = el("select", "ws-schedule__project", {
-    title: "Project folder this task runs in",
+  const tool = el("select", "ws-schedule__tool", {
+    title: "Tool this task opens when it fires",
   });
-  project.append(el("option", null, { value: "", textContent: "Global" }));
-  projects.forEach((p) => {
-    project.append(el("option", null, { value: p.path, textContent: p.name }));
+  tool.append(el("option", null, { value: "", textContent: "Pick a tool…" }));
+  tools.forEach((t) => {
+    tool.append(el("option", null, { value: t.file, textContent: t.name }));
   });
-  project.value = task.projectPath || "";
-  project.addEventListener("change", () => {
-    task.projectPath = project.value;
-    scheduleSave();
-  });
-
-  const model = el("select", "ws-schedule__model");
-  SCHEDULE_MODELS.forEach((opt) => {
-    model.append(el("option", null, { value: opt.value, textContent: opt.label }));
-  });
-  model.value = task.model || "haiku";
-  model.addEventListener("change", () => {
-    task.model = model.value;
-    scheduleSave();
-  });
-
-  const output = el("input", "ws-schedule__output", {
-    type: "text",
-    placeholder: "Scheduled Output.md",
-    value: task.outputFile || "",
-    title: "Markdown file (in the project folder) the result is written to",
-  });
-  output.addEventListener("change", () => {
-    task.outputFile = output.value.trim();
+  tool.value = task.tool || "";
+  tool.addEventListener("change", () => {
+    task.tool = tool.value;
     scheduleSave();
   });
 
   const last = el("span", "ws-schedule__last", {});
   setLastRunText(last, task);
 
-  controls.append(project, model, output, last);
-  main.append(prompt, controls);
+  controls.append(tool, last);
+  main.append(controls);
 
   const toggleInput = el("input", null, {
     type: "checkbox",
@@ -240,19 +198,14 @@ function buildScheduleRow(task) {
   const toggle = el("label", "ws-schedule__toggle claude-toggle", { title: "Enabled" });
   toggle.append(toggleInput, toggleTrack);
 
-  const run = el("button", "ws-schedule__run", { type: "button", title: "Run now" });
+  const run = el("button", "ws-schedule__run", { type: "button", title: "Open now" });
   run.innerHTML = mi("play_arrow");
   run.addEventListener("click", async () => {
+    if (!task.tool) return;
     run.disabled = true;
     run.innerHTML = mi("hourglass_top");
     try {
-      await invoke("run_schedule_now", {
-        projectPath: task.projectPath || "",
-        prompt: task.prompt,
-        model: task.model || "haiku",
-        outputFile: task.outputFile || "",
-        taskId: task.id,
-      });
+      await invoke("open_tool", { file: task.tool, query: null });
     } finally {
       run.disabled = false;
       run.innerHTML = mi("play_arrow");
@@ -275,12 +228,9 @@ function buildScheduleRow(task) {
 function addSchedule(slot) {
   store.tasks.push({
     id: genId(),
-    prompt: "",
+    tool: "",
     slot,
     enabled: true,
-    model: "haiku",
-    outputFile: "",
-    projectPath: "",
     lastRun: null,
   });
   render();
