@@ -72,7 +72,13 @@
     }
 
     .proj-item:hover {
-      background: var(--surface);
+      background: var(--project-hover, var(--surface));
+    }
+
+    body.has-project-color .proj-item:hover,
+    body.has-project-color .proj-item:hover .mi,
+    body.has-project-color .proj-item:hover .name {
+      color: #000;
     }
 
     .proj-item .mi {
@@ -118,7 +124,15 @@
     }
 
     .node:hover {
-      background: var(--surface);
+      background: var(--project-hover, var(--surface));
+    }
+
+    body.has-project-color .node:hover,
+    body.has-project-color .node:hover .twirl,
+    body.has-project-color .node:hover .icon .mi,
+    body.has-project-color .node:hover .name,
+    body.has-project-color .node:hover .open-browser {
+      color: #000;
     }
 
     .node .twirl {
@@ -470,6 +484,8 @@ max-width:350px;
       tree.innerHTML = '';
       picker.hidden = false;
       picker.innerHTML = '';
+      document.body.style.removeProperty('--project-hover');
+      document.body.classList.remove('has-project-color');
 
       const hint = document.createElement('div');
       hint.className = 'hint';
@@ -529,6 +545,17 @@ max-width:350px;
 
       const workspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
       if (generation !== mainGeneration) return;
+
+      // Hover backgrounds use the project's accent color when set (same
+      // accent used to tint Git/Code Editor windows for this project),
+      // with black text/icons for contrast against it.
+      if (workspace.color) {
+        document.body.style.setProperty('--project-hover', workspace.color);
+        document.body.classList.add('has-project-color');
+      } else {
+        document.body.style.removeProperty('--project-hover');
+        document.body.classList.remove('has-project-color');
+      }
 
       const root = await buildRoot(null, project.path);
       if (generation !== mainGeneration) return;
