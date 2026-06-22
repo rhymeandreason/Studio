@@ -403,6 +403,15 @@ export function copyAdjustments() {
   setEditStatus("Copied ✓");
 }
 
+// Clear all adjustments back to defaults (geometry + crop + tonal).
+export function resetAdjustments() {
+  if (!editState) return;
+  editState = defaultEdits();
+  syncEditorControls();
+  renderEditorPreview();
+  scheduleEditsSave();
+}
+
 export async function pasteAdjustments() {
   if (!copiedEdits || !editState) return;
   for (const f of ADJ_FIELDS) {
@@ -1502,13 +1511,12 @@ export function initEditor() {
       `${editState.straighten}°`;
     apply();
   });
-  const resetBtn = document.getElementById("m-reset");
-  if (resetBtn)
-    resetBtn.addEventListener("click", () => {
-      editState = defaultEdits();
-      syncEditorControls();
-      apply();
-    });
+  // Reset lives in the side "More" menu (m-reset) and the lightbox bar menu
+  // (lb-reset); wire whichever are present.
+  ["m-reset", "lb-reset"].forEach((id) => {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener("click", resetAdjustments);
+  });
 
   // Crop interactions.
   document

@@ -1213,6 +1213,17 @@ function initMedia() {
   };
 
   document.getElementById("lb-close").addEventListener("click", closeLightbox);
+
+  // Lightbox bar "More" menu (file actions). The lb-* items keep their ids, so
+  // editor.js / the handlers below wire them regardless of where they live.
+  const lbMenu = document.getElementById("lb-menu");
+  document.getElementById("lb-more").addEventListener("click", (e) => {
+    e.stopPropagation();
+    lbMenu.hidden = !lbMenu.hidden;
+  });
+  lbMenu.addEventListener("click", () => (lbMenu.hidden = true)); // any item closes it
+  document.addEventListener("click", () => (lbMenu.hidden = true));
+
   document.getElementById("lightbox").addEventListener("click", (e) => {
     if (shouldSuppressLightboxClick()) return;
     if (

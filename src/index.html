@@ -296,23 +296,41 @@
                 <span class="lightbox__name" id="lightbox-name"></span>
                 <div class="lightbox__actions">
                     <span class="edit-status" id="edit-status"></span>
-                    <button class="btn-ghost" id="lb-export">
-                        <span class="mi mi-sm">file_copy</span>Duplicate
-                    </button>
-                    <button class="btn-ghost" id="lb-webexport">
-                        <span class="mi mi-sm">photo_size_select_large</span
-                        >Export
-                    </button>
-                    <button class="btn-ghost" id="lb-replace">
-                        <span class="mi mi-sm">published_with_changes</span
-                        >Replace original
-                    </button>
-                    <button class="btn-ghost" id="lb-copy">
-                        <span class="mi mi-sm">file_export</span>Copy path
-                    </button>
-                    <button class="btn-ghost" id="lb-reveal">
-                        <span class="mi mi-sm">folder_open</span>Show in Finder
-                    </button>
+                    <!-- File actions live in a "More" menu to keep the bar
+                         compact (and fit narrow windows). -->
+                    <div class="side-more">
+                        <button class="btn-round" id="lb-more" title="Actions">
+                            <span class="mi mi-sm">more_vert</span>
+                        </button>
+                        <div class="menu" id="lb-menu" hidden>
+                            <button class="menu__item" id="lb-export">
+                                <span class="mi mi-sm">file_copy</span>Duplicate
+                            </button>
+                            <button class="menu__item" id="lb-webexport">
+                                <span class="mi mi-sm"
+                                    >photo_size_select_large</span
+                                >Export
+                            </button>
+                            <button class="menu__item" id="lb-replace">
+                                <span class="mi mi-sm"
+                                    >published_with_changes</span
+                                >Replace original
+                            </button>
+                            <div class="menu__sep"></div>
+                            <button class="menu__item" id="lb-copy">
+                                <span class="mi mi-sm">file_export</span>Copy path
+                            </button>
+                            <button class="menu__item" id="lb-reveal">
+                                <span class="mi mi-sm">folder_open</span>Show in
+                                Finder
+                            </button>
+                            <div class="menu__sep"></div>
+                            <button class="menu__item" id="lb-reset">
+                                <span class="mi mi-sm">restart_alt</span>Reset
+                                adjustments
+                            </button>
+                        </div>
+                    </div>
                     <button class="btn-ghost" id="lb-close">
                         <span class="mi mi-sm">close</span>Close
                     </button>
