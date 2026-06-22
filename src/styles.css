@@ -2066,6 +2066,31 @@ td.ntable__total-cell {
     box-shadow: var(--shadow-md);
 }
 
+/* Narrow window: stack the image full-width above the controls in one column,
+   mirroring the inline editor sidebar (.media-side__editor). Shared by the
+   media-panel lightbox and the standalone Image Editor tool. */
+@media (max-width: 500px) {
+    .lightbox__stage {
+        align-items: stretch;
+        overflow-y: auto;
+        padding: 16px;
+    }
+    .lightbox .editor {
+        flex-direction: column;
+        gap: 14px;
+        height: auto;
+    }
+    .lightbox .editor__canvas-wrap {
+        flex: 0 0 auto;
+        height: 300px;
+    }
+    .lightbox .editor__panel {
+        flex: 1 1 auto;
+        width: 100%;
+        max-height: none;
+    }
+}
+
 /* Image editor (in the lightbox) */
 .edit-status {
     font-size: 12px;
