@@ -11,75 +11,131 @@
     <style>
       body {
         margin: 0;
-        padding: var(--space-6);
+        padding: clamp(28px, 6vw, 56px);
         display: flex;
         flex-direction: column;
-        gap: var(--space-5);
+        gap: clamp(28px, 5vw, 48px);
         min-height: 100vh;
         box-sizing: border-box;
+        background: var(--bg);
+        color: var(--text);
       }
+
+      /* ── Masthead ───────────────────────────────────────────────── */
       .brief-head {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
-        gap: var(--space-3);
+        gap: var(--space-4);
       }
-      .brief-date { font-size: 15px; }
-      .brief-section { display: flex; flex-direction: column; gap: var(--space-3); }
-      .brief-section.is-hidden { display: none; }
-      .brief-list { display: flex; flex-direction: column; gap: var(--space-2); }
+      .brief-weekday {
+        font-family: var(--sans);
+        font-weight: 600;
+        line-height: 0.92;
+        letter-spacing: -0.02em;
+        font-size: clamp(44px, 11vw, 92px);
+        text-transform: uppercase;
+      }
+      .brief-date {
+        margin-top: 0.35em;
+        font-size: clamp(13px, 2vw, 16px);
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .brief-actions { display: flex; gap: var(--space-2); flex: 0 0 auto; }
 
+      /* ── Section framing ────────────────────────────────────────── */
+      .brief-section { display: flex; flex-direction: column; gap: var(--space-4); }
+      .brief-section.is-hidden { display: none; }
+      .section-label {
+        font-size: 12px;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        padding-bottom: var(--space-2);
+        border-bottom: 1px solid var(--hairline-strong);
+      }
+      .brief-list { display: flex; flex-direction: column; }
+
+      /* ── Meetings ───────────────────────────────────────────────── */
       .meeting {
         display: flex;
         align-items: baseline;
-        gap: var(--space-3);
-        padding: var(--space-2) 0;
-        border-bottom: 1px solid var(--surface);
+        gap: var(--space-4);
+        padding: var(--space-3) 0;
+        border-bottom: 1px solid var(--hairline);
       }
       .meeting:last-child { border-bottom: none; }
       .meeting__time {
         flex: 0 0 auto;
-        min-width: 9ch;
+        min-width: 8.5ch;
+        font-family: var(--mono);
+        font-size: 14px;
+        color: var(--accent);
         font-variant-numeric: tabular-nums;
       }
-      .meeting__title { flex: 1 1 auto; }
-      .meeting__loc { color: var(--ink); opacity: 0.55; }
+      .meeting__title { flex: 1 1 auto; font-size: clamp(18px, 2.4vw, 24px); line-height: 1.25; }
+      .meeting__loc { color: var(--text-muted); font-size: 0.7em; }
 
-      /* Freeform Markdown body — whatever the prompt produces. */
-      .md-body { line-height: 1.6; }
-      .md-body.is-loading { opacity: 0.5; }
+      /* ── Freeform Markdown body (poster scale) ──────────────────── */
+      .md-body {
+        font-size: clamp(19px, 2.6vw, 26px);
+        line-height: 1.5;
+        letter-spacing: -0.005em;
+        max-width: 32ch;
+      }
+      .md-body.is-loading { opacity: 0.4; }
       .md-body > :first-child { margin-top: 0; }
       .md-body > :last-child { margin-bottom: 0; }
-      .md-body h1, .md-body h2, .md-body h3 { line-height: 1.25; }
-      .md-body a { color: inherit; }
+      .md-body > * + * { margin-top: 0.7em; }
+      .md-body h1, .md-body h2, .md-body h3 {
+        font-weight: 600;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+        margin-top: 0.6em;
+      }
+      .md-body h1 { font-size: 1.7em; }
+      .md-body h2 { font-size: 1.3em; }
+      .md-body h3 { font-size: 1.1em; }
+      .md-body ul, .md-body ol { padding-left: 1.1em; }
+      .md-body li + li { margin-top: 0.3em; }
+      .md-body a { color: var(--accent); text-underline-offset: 3px; }
+      .md-body strong { font-weight: 600; }
+      .md-body em { font-style: italic; color: var(--text-muted); }
+      .md-body blockquote {
+        border-left: 3px solid var(--accent-soft);
+        padding-left: var(--space-4);
+        color: var(--text-muted);
+        font-style: italic;
+      }
       .md-body pre {
         background: var(--surface);
         padding: var(--space-3);
         border-radius: var(--radius);
         overflow-x: auto;
+        font-size: 0.7em;
       }
-      .md-body code { font-family: var(--mono, monospace); }
+      .md-body code { font-family: var(--mono); }
+      .md-body hr { border: none; border-top: 1px solid var(--hairline-strong); margin: 1em 0; }
 
       .brief-empty { opacity: 0.55; }
-      .brief-error {
-        color: var(--danger, #b00020);
-        white-space: pre-wrap;
-      }
-      .settings { display: none; flex-direction: column; gap: var(--space-2); }
+      .brief-error { color: var(--rose); white-space: pre-wrap; font-size: 15px; }
+
+      /* ── Settings ───────────────────────────────────────────────── */
+      .settings { display: none; flex-direction: column; gap: var(--space-3); }
       .settings.is-open { display: flex; }
+
+      #status { margin-top: auto; }
     </style>
   </head>
   <body>
     <div class="brief-head">
-      <div id="date" class="brief-date eyebrow"></div>
-      <div style="display:flex; gap: var(--space-2); flex: 0 0 auto;">
-        <button id="settings-btn" class="btn btn-ghost btn-icon" title="Edit prompt">
-          <span class="material-symbols-rounded">tune</span>
-        </button>
-        <button id="refresh-btn" class="btn btn-ghost btn-icon" title="Refresh">
-          <span class="material-symbols-rounded">refresh</span>
-        </button>
+      <div class="brief-masthead">
+        <div id="weekday" class="brief-weekday"></div>
+        <div id="date" class="brief-date"></div>
       </div>
+      <div id="tab-hint" class="text-xs text-muted">Tab to edit</div>
     </div>
 
     <div id="settings" class="settings card">
@@ -95,7 +151,7 @@
     </div>
 
     <div id="meetings-section" class="brief-section is-hidden">
-      <div class="eyebrow">Today's meetings</div>
+      <div class="section-label">Today's meetings</div>
       <div id="meetings" class="brief-list"></div>
     </div>
 
@@ -103,7 +159,7 @@
       <div id="body" class="md-body is-loading">Loading…</div>
     </div>
 
-    <div id="status" class="text-xs text-muted" style="margin-top: auto;"></div>
+    <div id="status" class="text-xs text-muted"></div>
 
     <script type="module">
       const hasTauri = !!window.__TAURI__;
@@ -146,7 +202,7 @@
           row.className = "meeting";
           const loc = m.location ? `<span class="meeting__loc">· ${escapeHtml(m.location)}</span>` : "";
           row.innerHTML =
-            `<span class="meeting__time text-mono text-xs">${escapeHtml(m.time || "")}</span>` +
+            `<span class="meeting__time">${escapeHtml(m.time || "")}</span>` +
             `<span class="meeting__title">${escapeHtml(m.title || "")} ${loc}</span>`;
           box.appendChild(row);
         }
@@ -188,7 +244,6 @@
       async function refresh() {
         if (!hasTauri || refreshing) return;
         refreshing = true;
-        $("refresh-btn").classList.add("is-busy");
         setStatus("Refreshing…");
 
         // Meetings are fast — render them first.
@@ -217,7 +272,6 @@
             `<div class="brief-error">Couldn't generate briefing:\n${escapeHtml(e.message || String(e))}</div>`;
         } finally {
           refreshing = false;
-          $("refresh-btn").classList.remove("is-busy");
         }
       }
 
@@ -241,14 +295,26 @@
         return false;
       }
 
-      // Header date
+      // Masthead date
+      $("weekday").textContent = new Date().toLocaleDateString(undefined, { weekday: "long" });
       $("date").textContent = new Date().toLocaleDateString(undefined, {
-        weekday: "long", month: "long", day: "numeric",
+        month: "long", day: "numeric", year: "numeric",
       });
 
-      // Settings
-      $("settings-btn").addEventListener("click", () => {
-        $("settings").classList.toggle("is-open");
+      // Settings — Tab toggles the edit view (and focuses the prompt when
+      // opening). Closing while the textarea has focus blurs it, which fires
+      // the change handler that saves the prompt.
+      function toggleSettings() {
+        const open = $("settings").classList.toggle("is-open");
+        $("tab-hint").textContent = open ? "Tab to close" : "Tab to edit";
+        if (open) $("sources").focus();
+        else $("sources").blur();
+      }
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Tab") {
+          e.preventDefault();
+          toggleSettings();
+        }
       });
       if (hasTauri) {
         invoke("read_briefing_prompt")
@@ -264,12 +330,11 @@
         if (hasTauri) await invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
         refresh();
       });
-      $("refresh-btn").addEventListener("click", refresh);
 
       if (hasTauri) {
         const { getCurrentWindow } = window.__TAURI__.window;
         const { LogicalSize } = window.__TAURI__.dpi;
-        getCurrentWindow().setSize(new LogicalSize(680, 720));
+        getCurrentWindow().setSize(new LogicalSize(720, 820));
       }
 
       // The scheduled morning open generates the day's briefing; every later
