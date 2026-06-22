@@ -20,79 +20,70 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-top: 36px;
+    justify-content: center;
+    -webkit-app-region: drag;
+    outline: none;
   }
 
-  #panel {
-    width: 520px;
-    max-height: 360px;
+  #hexagon {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 620px;
+    height: 540px;
+    transform: translate(-50%, -50%);
+    background: #0047ab;
+    clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
+    z-index: 0;
+  }
+
+  #list {
+    position: relative;
+    z-index: 1;
     display: flex;
     flex-direction: column;
-    background: var(--surface);
-    border-radius: var(--radius-lg, 16px);
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.06);
-    overflow: hidden;
-    -webkit-app-region: drag;
-  }
-
-  #query {
-    width: 100%;
-    border: none;
-    outline: none;
-    background: transparent;
-    font-size: 22px;
-    padding: 18px 20px;
-    color: var(--ink);
+    align-items: center;
+    gap: 6px;
     -webkit-app-region: no-drag;
-  }
-
-  #query::placeholder { color: var(--ink-faint, #999); }
-
-  #results {
-    border-top: 1px solid var(--border, rgba(0,0,0,0.08));
+    max-height: 460px;
     overflow-y: auto;
-    -webkit-app-region: no-drag;
   }
 
-  #results:empty { border-top: none; }
+  #list::-webkit-scrollbar { display: none; }
 
-  .row {
+  .tool {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 10px 20px;
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--ink);
+    justify-content: center;
+    font-size: 44px;
+    line-height: 1.05;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: rgba(255, 255, 255, 0.45);
+    transition: opacity 0.12s, color 0.12s, transform 0.12s;
+    white-space: nowrap;
   }
 
-  .row .tag {
-    font-size: 11px;
-    color: var(--ink-faint, #999);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .row.active {
-    background: var(--accent, #2563eb);
+  .tool.active {
     color: #fff;
+    transform: scale(1.04);
   }
 
-  .row.active .tag { color: rgba(255, 255, 255, 0.75); }
+  .tool:focus { outline: none; }
 
   #empty {
-    padding: 16px 20px;
-    font-size: 13px;
-    color: var(--ink-faint, #999);
+    position: relative;
+    z-index: 1;
+    font-size: 22px;
+    color: rgba(255, 255, 255, 0.6);
+    -webkit-app-region: no-drag;
   }
 </style>
 </head>
-<body>
-  <div id="panel">
-    <input id="query" type="text" placeholder="Open a tool or project…" autofocus autocomplete="off" spellcheck="false" />
-    <div id="results"></div>
-  </div>
+<body tabindex="-1">
+  <div id="hexagon"></div>
+  <div id="list"></div>
 
   <script>
     const { invoke } = window.__TAURI__.core;
@@ -100,113 +91,89 @@
     const { getCurrentWindow } = window.__TAURI__.window;
     const win = getCurrentWindow();
 
-    const queryEl = document.getElementById('query');
-    const resultsEl = document.getElementById('results');
+    const listEl = document.getElementById('list');
 
-    let allItems = [];
-    let shown = [];
+    // Drive window size from JS so it can be tuned with a reload (no restart).
+    const { LogicalSize } = window.__TAURI__.dpi;
+    win.setSize(new LogicalSize(900, 660)).then(() => win.center()).catch(() => {});
+
+    let tools = [];
     let activeIndex = 0;
 
-    async function loadItems() {
-      let tools = [];
-      let projects = [];
-      try {
-        tools = await invoke('list_tools');
-      } catch (_) {}
-      try {
-        projects = await invoke('list_projects');
-      } catch (_) {}
-
-      allItems = projects
-        .map((p) => ({ name: p.name, kind: 'project', path: p.path }))
-        .concat(tools.map((t) => ({ name: t.name, kind: 'tool', file: t.file })))
-        .sort((a, b) => a.name.localeCompare(b.name));
-    }
-
-    function render() {
-      const q = queryEl.value.trim().toLowerCase();
-      shown = q
-        ? allItems.filter((item) => item.name.toLowerCase().includes(q))
-        : allItems;
+    async function loadTools() {
+      tools = await invoke('list_tools').catch(() => []);
+      tools.sort((a, b) => a.name.localeCompare(b.name));
       activeIndex = 0;
-
-      resultsEl.innerHTML = '';
-      if (q && shown.length === 0) {
-        const empty = document.createElement('div');
-        empty.id = 'empty';
-        empty.textContent = 'No matches';
-        resultsEl.appendChild(empty);
-        return;
-      }
-
-      shown.forEach((item, i) => {
-        const row = document.createElement('div');
-        row.className = 'row' + (i === activeIndex ? ' active' : '');
-        const tag = item.kind === 'project' ? 'Project' : 'Tool';
-        row.innerHTML = `<span>${item.name}</span><span class="tag">${tag}</span>`;
-        row.addEventListener('mousedown', (e) => e.preventDefault());
-        row.addEventListener('click', () => launch(item));
-        row.addEventListener('mouseenter', () => setActive(i));
-        resultsEl.appendChild(row);
-      });
-    }
-
-    function setActive(i) {
-      activeIndex = i;
-      [...resultsEl.children].forEach((row, idx) => {
-        row.classList.toggle('active', idx === i);
-      });
-      resultsEl.children[i]?.scrollIntoView({ block: 'nearest' });
-    }
-
-    async function launch(item) {
-      if (!item) return;
-      if (item.kind === 'project') {
-        await invoke('open_project', { path: item.path });
-      } else {
-        await invoke('open_tool', { file: item.file, query: null });
-      }
-      reset();
-      await win.hide();
-    }
-
-    function reset() {
-      queryEl.value = '';
       render();
     }
 
-    queryEl.addEventListener('input', render);
+    function render() {
+      listEl.innerHTML = '';
+      if (!tools.length) {
+        const empty = document.createElement('div');
+        empty.id = 'empty';
+        empty.tabIndex = 0;
+        empty.style.outline = 'none';
+        empty.textContent = 'No tools';
+        listEl.appendChild(empty);
+        empty.focus();
+        return;
+      }
+      tools.forEach((tool, i) => {
+        const el = document.createElement('div');
+        el.className = 'tool' + (i === activeIndex ? ' active' : '');
+        el.tabIndex = 0;
+        el.textContent = tool.name;
+        listEl.appendChild(el);
+      });
+      focusActive();
+    }
+
+    function setActive(i) {
+      if (i === activeIndex) return;
+      activeIndex = i;
+      [...listEl.children].forEach((el, idx) => el.classList.toggle('active', idx === i));
+      focusActive();
+    }
+
+    function focusActive() {
+      (listEl.children[activeIndex] || listEl.firstElementChild)?.focus();
+    }
+
+    async function launch(tool) {
+      if (!tool) return;
+      await invoke('open_tool', { file: tool.file, query: null }).catch(() => {});
+      await win.hide();
+    }
 
     document.addEventListener('keydown', async (e) => {
       if (e.key === 'Escape') {
-        reset();
         await win.hide();
         return;
       }
-      if (e.key === 'ArrowDown') {
+      if (!tools.length) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
         e.preventDefault();
-        if (shown.length) setActive((activeIndex + 1) % shown.length);
+        setActive((activeIndex + 1) % tools.length);
         return;
       }
-      if (e.key === 'ArrowUp') {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
         e.preventDefault();
-        if (shown.length) setActive((activeIndex - 1 + shown.length) % shown.length);
+        setActive((activeIndex - 1 + tools.length) % tools.length);
         return;
       }
       if (e.key === 'Enter') {
         e.preventDefault();
-        launch(shown[activeIndex]);
+        launch(tools[activeIndex]);
       }
     });
 
-    listen('spotlight-shown', () => {
-      loadItems().then(render);
-      queryEl.value = '';
-      queryEl.focus();
-    });
+    // Built once, then hidden/shown — pull fresh tools each time it opens.
+    // Re-center on show in case window-state restored an old position.
+    listen('spotlight-shown', () => { loadTools(); win.center(); });
+    window.addEventListener('focus', focusActive);
 
-    loadItems().then(render);
-    queryEl.focus();
+    loadTools();
   </script>
 </body>
 </html>
