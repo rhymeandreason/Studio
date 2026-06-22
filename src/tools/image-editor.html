@@ -42,6 +42,29 @@
       .ie-empty[hidden] {
         display: none;
       }
+      /* Narrow window: stack the image above the controls in one column,
+         matching the media panel's editor sidebar (.media-side__editor). */
+      @media (max-width: 500px) {
+        .lightbox__stage {
+          align-items: stretch;
+          overflow-y: auto;
+          padding: 16px;
+        }
+        .editor {
+          flex-direction: column;
+          gap: 14px;
+          height: auto;
+        }
+        .editor__canvas-wrap {
+          flex: 0 0 auto;
+          height: 300px;
+        }
+        .editor__panel {
+          flex: 1 1 auto;
+          width: 100%;
+          max-height: none;
+        }
+      }
     </style>
   </head>
   <body>
@@ -54,21 +77,32 @@
           <button class="btn-ghost" id="lb-open">
             <span class="mi mi-sm">folder_open</span>Open…
           </button>
-          <button class="btn-ghost" id="lb-export">
-            <span class="mi mi-sm">file_copy</span>Duplicate
-          </button>
-          <button class="btn-ghost" id="lb-webexport">
-            <span class="mi mi-sm">photo_size_select_large</span>Export
-          </button>
-          <button class="btn-ghost" id="lb-replace">
-            <span class="mi mi-sm">published_with_changes</span>Replace original
-          </button>
-          <button class="btn-ghost" id="lb-copy">
-            <span class="mi mi-sm">file_export</span>Copy path
-          </button>
-          <button class="btn-ghost" id="lb-reveal">
-            <span class="mi mi-sm">folder_open</span>Show in Finder
-          </button>
+          <!-- "More" menu holds the file actions (keeps the bar compact, and
+               fits narrow windows). The lb-* ids are wired by editor.js /
+               this tool regardless of where they live. -->
+          <div class="side-more">
+            <button class="btn-round" id="ie-more" title="Actions">
+              <span class="mi mi-sm">more_horiz</span>
+            </button>
+            <div class="menu" id="ie-menu" hidden>
+              <button class="menu__item" id="lb-export">
+                <span class="mi mi-sm">file_copy</span>Duplicate
+              </button>
+              <button class="menu__item" id="lb-webexport">
+                <span class="mi mi-sm">photo_size_select_large</span>Export
+              </button>
+              <button class="menu__item" id="lb-replace">
+                <span class="mi mi-sm">published_with_changes</span>Replace original
+              </button>
+              <div class="menu__sep"></div>
+              <button class="menu__item" id="lb-copy">
+                <span class="mi mi-sm">file_export</span>Copy path
+              </button>
+              <button class="menu__item" id="lb-reveal">
+                <span class="mi mi-sm">folder_open</span>Show in Finder
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -405,6 +439,16 @@
       }
 
       document.getElementById("lb-open").addEventListener("click", pickFile);
+
+      // "..." actions dropdown (file actions live here to keep the bar compact).
+      const ieMenu = document.getElementById("ie-menu");
+      document.getElementById("ie-more").addEventListener("click", (e) => {
+        e.stopPropagation();
+        ieMenu.hidden = !ieMenu.hidden;
+      });
+      ieMenu.addEventListener("click", () => (ieMenu.hidden = true)); // any item closes it
+      document.addEventListener("click", () => (ieMenu.hidden = true));
+
       document.getElementById("lb-copy").addEventListener("click", () => {
         const it = getEditItem();
         if (it) navigator.clipboard.writeText(it.path);
