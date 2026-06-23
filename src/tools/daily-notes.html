@@ -274,8 +274,12 @@
     let items = [];
 
     async function persist() {
+      // Save under the day that's actually loaded/rendered, not the live
+      // clock — otherwise an edit made just before a day-rollover refresh
+      // fires would write yesterday's (un-filtered, done-items-included)
+      // list into today's slot.
       const store = await loadStore();
-      store[todayKey()] = items;
+      store[renderedKey] = items;
       await saveStore(store);
     }
 
@@ -394,16 +398,36 @@
       }
     }
 
-    (async () => {
+    let renderedKey = todayKey();
+
+    async function refreshForToday() {
       const {
         items: initialItems,
         carried
       } = await loadTodayItems();
       items = initialItems;
+      renderedKey = todayKey();
       renderHeader(carried);
       render();
-    })();
-    renderCalendar();
+      renderCalendar();
+    }
+
+    refreshForToday();
+
+    // The window can be hidden/shown via the tray without reloading the
+    // page, so a day rollover while it sits in the background wouldn't
+    // otherwise be picked up until the next manual reload.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && todayKey() !== renderedKey) {
+        refreshForToday();
+      }
+    });
+
+    // Also catch the case where the window stays focused/visible straight
+    // through midnight (no visibilitychange fires at all).
+    setInterval(() => {
+      if (todayKey() !== renderedKey) refreshForToday();
+    }, 60000);
 
     const newItemInput = document.getElementById('new-item');
     newItemInput.addEventListener('keydown', e => {
