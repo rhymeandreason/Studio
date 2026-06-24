@@ -43,6 +43,9 @@
   }
   .tb-group { display: flex; align-items: center; gap: 6px; }
   #toolbar .spacer { flex: 1; }
+.window-close{
+    margin-right:16px;
+}
 
   /* Filename + status live in the title bar (alongside the buttons). */
   #filename {
@@ -397,7 +400,7 @@
 </head>
 <body>
   <div id="toolbar" data-window-bar>
-    <div class="tb-group">
+    <div class="tb-group" data-window-close>
         <button class="btn btn-icon btn-tint-dark" id="back-btn" title="Back" disabled><span class="mi">arrow_back</span></button>
         <button class="btn btn-icon btn-tint-dark" id="forward-btn" title="Forward" disabled><span class="mi">arrow_forward</span></button>
         <button class="btn btn-icon btn-tint-dark" id="open" title="Open file"><span class="mi">folder_open</span></button>

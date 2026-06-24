@@ -62,7 +62,7 @@ body {
     border: none;
     padding: 0;
     flex: 0 0 auto;
-    background: var(--rose);
+    background: var(--text-muted);
     opacity: 0.55;
     cursor: pointer;
     transition: opacity var(--dur-fast);

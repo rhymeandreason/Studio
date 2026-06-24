@@ -35,12 +35,15 @@ function init() {
     const bar = document.querySelector("[data-window-bar]");
     if (bar) {
         bar.setAttribute("data-tauri-drag-region", "");
-        if (!bar.querySelector(".window-close")) {
+        // The close dot is prepended into [data-window-close] if the tool marks
+        // one (so it groups with that element's buttons), else into the bar.
+        const slot = bar.querySelector("[data-window-close]") || bar;
+        if (!slot.querySelector(".window-close")) {
             const btn = document.createElement("button");
             btn.className = "window-close";
             btn.title = "Close window";
             btn.addEventListener("click", closeWin);
-            bar.prepend(btn);
+            slot.prepend(btn);
         }
     }
     window.addEventListener("keydown", (e) => {

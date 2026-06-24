@@ -162,9 +162,11 @@ opens with no way to drag or close it.
 
    and mark the tool's top bar element `data-window-bar`. The module reads
    `?color=` → sets `--titlebar-tint`/`--window-color`, makes the bar a Tauri
-   drag region (buttons inside still click), injects a `.window-close` dot at
-   the bar's left edge, wires Cmd/Ctrl+W, and rounds the corners. Tools that
-   retint dynamically (Code Editor, per open file) just set `--titlebar-tint`
+   drag region (buttons inside still click), injects a `.window-close` dot,
+   wires Cmd/Ctrl+W, and rounds the corners. The dot is prepended into a
+   `[data-window-close]` element if the tool marks one (so it groups with that
+   element's buttons), otherwise at the bar's left edge. Tools that retint
+   dynamically (Code Editor, per open file) just set `--titlebar-tint`
    themselves later.
 
 3. **Rounded corners gotcha:** a background on `html`/`body` propagates to the
