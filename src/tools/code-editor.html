@@ -88,8 +88,10 @@
     gap: 10px;
     padding: 0 10px 10px;
     /* The tint fills the window (and is the opaque fill the rounded corners
-       clip against). Buttons/cards sit on top of it. */
+       clip against). Buttons/cards sit on top of it. Round its own bottom
+       corners so the window's bottom is rounded (the toolbar rounds the top). */
     background: var(--titlebar-tint, var(--bg));
+    border-radius: 0 0 var(--window-radius, 10px) var(--window-radius, 10px);
   }
 
   /* Left column: a stack of cards (DOM, Styles / Sections, Links). */

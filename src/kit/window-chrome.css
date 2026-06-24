@@ -18,6 +18,8 @@
    loads after it at equal (:root) specificity; --text stays solid ink so
    primary text keeps full contrast. */
 :root {
+    --window-radius: 20px;
+
     --text-muted: rgba(0, 0, 0, 0.65);
     --text-soft:  rgba(0, 0, 0, 0.4);
     --hairline:        rgba(0, 0, 0, 0.13);
