@@ -243,8 +243,6 @@ border-radius: 2px;
           <div class="stack"><span class="class-name">.btn-primary</span><button class="btn btn-primary">Primary</button></div>
           <div class="stack"><span class="class-name">.btn-secondary</span><button class="btn btn-secondary">Secondary</button></div>
           <div class="stack"><span class="class-name">.btn-ghost</span><button class="btn btn-ghost">Ghost</button></div>
-          <div class="stack"><span class="class-name">.btn-icon</span><button class="btn btn-icon"><span class="mi">add</span></button></div>
-          <div class="stack"><span class="class-name">.btn-icon-only</span><button class="btn btn-icon-only"><span class="mi">add</span></button></div>
           <div class="stack"><span class="class-name">disabled</span><button class="btn" disabled>Disabled</button></div>
         </div>
       </div>
@@ -267,30 +265,17 @@ border-radius: 2px;
         </div>
       </div>
       <div class="comp">
-        <div class="comp-name"><span class="class-name in-kit">.btn-round</span><span class="css-values">circular ghost icon button</span></div>
+        <div class="comp-name"><span class="class-name in-kit">.btn-icon / .btn-icon-only / .btn-round / .btn-round-filled / .btn-icon-s</span><span class="css-values">icon-only buttons</span></div>
         <div class="row">
-          <button class="btn-round"><span class="mi mi-sm">text_fields</span></button>
-          <button class="btn-round"><span class="mi mi-sm">more_horiz</span></button>
+          <div class="stack"><span class="class-name">.btn-icon</span><button class="btn btn-icon"><span class="mi">add</span></button></div>
+          <div class="stack"><span class="class-name">.btn-icon-only</span><button class="btn btn-icon-only"><span class="mi">add</span></button></div>
+          <div class="stack"><span class="class-name">.btn-round</span><button class="btn-round"><span class="mi mi-sm">text_fields</span></button></div>
+          <div class="stack"><span class="class-name">.btn-round-filled</span><button class="btn-round btn-round-filled"><span class="mi mi-sm">arrow_upward</span></button></div>
+          <div class="stack"><span class="class-name">.btn-round-filled disabled</span><button class="btn-round btn-round-filled" disabled><span class="mi mi-sm">arrow_upward</span></button></div>
+          <div class="stack"><span class="class-name">.btn-icon-s</span><button class="btn-icon-s"><span class="mi mi-sm">side_navigation</span></button></div>
+          <div class="stack"><span class="class-name">.btn-icon-s is-active</span><button class="btn-icon-s is-active"><span class="mi mi-sm">side_navigation</span></button></div>
         </div>
-        <div class="comp-caption">Hairline border, no fill. Used in Notes toolbar and Lightbox.</div>
-      </div>
-      <div class="comp">
-        <div class="comp-name"><span class="class-name in-kit">.btn-round-filled</span><span class="css-values">accent-filled circular button — primary action</span></div>
-        <div class="row">
-          <button class="btn-round btn-round-filled"><span class="mi mi-sm">arrow_upward</span></button>
-          <button class="btn-round btn-round-filled" disabled><span class="mi mi-sm">arrow_upward</span></button>
-        </div>
-        <div class="comp-caption">Pair with <code>.btn-round</code>. Accent fill, white icon; darkens to <code>--text</code> on hover. Used for send/submit actions.</div>
-      </div>
-      <div class="comp">
-        <div class="comp-name"><span class="class-name in-kit">.btn-icon-s</span><span class="css-values">28px small icon button</span></div>
-        <div class="row">
-          <button class="btn-icon-s"><span class="mi mi-sm">side_navigation</span></button>
-          <button class="btn-icon-s is-active"><span class="mi mi-sm">side_navigation</span></button>
-          <button class="btn-icon-s"><span class="mi mi-sm">add</span></button>
-          <button class="btn-icon-s"><span class="mi mi-sm">more_horiz</span></button>
-        </div>
-        <div class="comp-caption">28px ghost icon button. Add <code>.is-active</code> to highlight. Includes <code>-webkit-app-region: no-drag</code> for use in draggable title bars.</div>
+        <div class="comp-caption"><code>.btn-round</code>: hairline border, no fill — Notes toolbar, Lightbox. <code>.btn-round-filled</code> pairs with it for accent-filled primary actions. <code>.btn-icon-s</code>: 28px ghost, <code>.is-active</code> to highlight, includes <code>-webkit-app-region: no-drag</code> for draggable title bars.</div>
       </div>
       <div class="comp">
         <div class="comp-name"><span class="class-name in-kit">.chip</span><span class="css-values">pill toggle button</span></div>
