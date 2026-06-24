@@ -46,7 +46,6 @@
 
   /* Filename + status live in the title bar (alongside the buttons). */
   #filename {
-    font: var(--code-font);
     font-weight: 600;
     color: var(--text);
     white-space: nowrap;
@@ -137,7 +136,7 @@
   .node .tag:hover { background: var(--accent-ring); }
   .node .tag.sel { background: var(--accent-soft); }
   .tname { color: var(--accent); }
-  .tid { color: var(--sage); }
+  .tid { color: var(--rose); }   /* element id (distinct from tag/class) */
   .tcls { color: var(--text-muted); }
   .twrap { padding-left: 14px; }
 
@@ -311,7 +310,7 @@
     color: var(--text);
   }
   .rule { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--hairline); }
-  .rule .rsel { color: var(--sage); }
+  .rule .rsel { color: var(--rose); }
   .clk { cursor: pointer; }
   .chip.clk:hover { background: var(--accent); color: var(--elevated); }
   .rsel.clk:hover { text-decoration: underline; }
@@ -357,7 +356,7 @@
 
   /* Inline Markdown preview: hidden by default; the Code/Preview toggle and the
      separate-window button only apply to Markdown. */
-  #md-view { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; position: relative; background: #fff; }
+  #md-view { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; position: relative; background: var(--elevated); }
   #view-toggle { display: none; }
   body.is-markdown #view-toggle { display: inline-flex; }
   body.is-markdown #preview-btn { display: none; }
@@ -366,7 +365,7 @@
 
   /* Rendered Markdown typography (scoped to the inline view). */
   .md-body { max-width: 740px; margin: 0 auto; padding: 32px 32px 80px;
-    font: 16px/1.65 -apple-system, system-ui, "Segoe UI", sans-serif; color: #2a2a28; }
+    font: 16px/1.65 -apple-system, system-ui, "Segoe UI", sans-serif; color: var(--text); }
   .md-body h1, .md-body h2, .md-body h3, .md-body h4 { line-height: 1.25; margin: 1.6em 0 .5em; font-weight: 650; }
   .md-body h1 { font-size: 2em; border-bottom: 1px solid #e5e2db; padding-bottom: .3em; }
   .md-body h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: .25em; }

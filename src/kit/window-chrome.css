@@ -21,7 +21,7 @@
     --text-muted: rgba(0, 0, 0, 0.65);
     --text-soft:  rgba(0, 0, 0, 0.4);
     --hairline:        rgba(0, 0, 0, 0.13);
-    --hairline-strong: rgba(0, 0, 0, 0.25);
+    --hairline-strong: rgba(255, 255, 255, 0.5);
     --surface: rgba(255, 255, 255, 0.5);
     /* Cards floating on the tint (translucent white → picks up the tint). */
     --card:        rgba(255, 255, 255, 0.5);
