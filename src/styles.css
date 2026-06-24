@@ -1726,7 +1726,15 @@ td.ntable__total-cell {
     justify-content: flex-end;
     align-items: center;
     gap: 12px;
-    margin-bottom: 14px;
+    /* Stick to the top while the grid scrolls under it. Negative side margins +
+       matching padding extend the --bg backing across .content's 24px gutters so
+       tiles don't peek beside the toolbar. */
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--bg);
+    margin: 0 -24px;
+    padding: 6px 24px 14px;
 }
 
 
