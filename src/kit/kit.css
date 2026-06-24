@@ -29,9 +29,9 @@ body {
     gap: 6px;
     height: 30px;
     padding: 0 14px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--surface);
     border-radius: var(--radius-sm);
-    background: var(--elevated);
+    background: var(--surface);
     color: var(--text);
     cursor: pointer;
     user-select: none;
@@ -41,7 +41,8 @@ body {
         transform var(--dur-fast) var(--ease-standard);
 }
 .btn:hover {
-    background: var(--surface);
+    background: var(--text-dim);
+    border-color: var(--text-soft);
 }
 .btn:active {
     transform: translateY(0.5px) scale(0.99);
@@ -63,6 +64,7 @@ body {
 }
 .btn-primary:hover {
     background: #5d5247;
+
 }
 
 /* Ghost — no chrome until hover. */
@@ -72,6 +74,7 @@ body {
 }
 .btn-ghost:hover {
     background: var(--surface);
+    border-color: transparent;
 }
 
 /* Secondary — muted filled, for paired actions next to Primary. */
@@ -89,6 +92,18 @@ body {
 .btn-icon {
     width: 30px;
     padding: 0;
+}
+
+.btn-icon-only {
+    width: 30px;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+}
+
+.btn-icon-only:hover{
+    color:var(--window-color);
+    background:var(--text);
 }
 
 /* Sidebar toggle — 28px ghost icon button for toggling a panel.
