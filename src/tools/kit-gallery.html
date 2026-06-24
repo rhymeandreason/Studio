@@ -401,6 +401,16 @@ border-radius: 2px;
         <div class="comp-caption">Attrs: <code>checked</code> (boolean). Props: <code>.checked</code> (get/set). Events: <code>input</code>, <code>change</code>. Use <code>&lt;studio-toggle&gt;</code> in JS contexts; use <code>.toggle-button</code> CSS class directly for static HTML.</div>
       </div>
       <div class="comp">
+        <div class="comp-name"><span class="class-name in-kit">&lt;studio-icon-toggle&gt; / .icon-toggle</span><span class="css-values">segmented icon toggle</span></div>
+        <div class="row">
+          <studio-icon-toggle value="code">
+            <button value="code" data-icon="code" title="Source"></button>
+            <button value="preview" data-icon="visibility" title="Preview"></button>
+          </studio-icon-toggle>
+        </div>
+        <div class="comp-caption">Children with a <code>value</code> attr become segments; <code>data-icon</code> sets the glyph, <code>title</code> the tooltip. Props: <code>.value</code> (get/set). Events: <code>input</code>, <code>change</code>.</div>
+      </div>
+      <div class="comp">
         <div class="comp-name"><span class="class-name in-kit">.field</span><span class="css-values">text input, select, textarea</span></div>
         <div class="stack" style="max-width:260px;">
           <input class="field" placeholder="Text field" />

@@ -252,3 +252,66 @@ class StudioToggle extends HTMLElement {
 }
 
 customElements.define("studio-toggle", StudioToggle);
+
+/**
+ * <studio-icon-toggle value="..."> — a segmented icon toggle (two or more
+ * options). Each child with a `value` attribute is a segment; `data-icon` sets
+ * its Material Symbol, `title` its tooltip.
+ *
+ *   <studio-icon-toggle value="code">
+ *     <button value="code" data-icon="code" title="Show source"></button>
+ *     <button value="preview" data-icon="visibility" title="Show preview"></button>
+ *   </studio-icon-toggle>
+ *
+ * Attrs: value. Props: .value (get/set). Events: input, change (on user choice;
+ * setting .value programmatically updates the UI without firing them).
+ */
+class StudioIconToggle extends HTMLElement {
+    static observedAttributes = ["value"];
+
+    connectedCallback() {
+        if (this._built) return;
+        this._built = true;
+        this.classList.add("icon-toggle");
+
+        this._segs = [...this.querySelectorAll("[value]")];
+        for (const seg of this._segs) {
+            seg.classList.add("seg");
+            if (seg.tagName === "BUTTON") seg.type = "button";
+            const icon = seg.getAttribute("data-icon");
+            if (icon && !seg.querySelector(".mi")) {
+                const m = document.createElement("span");
+                m.className = "mi";
+                m.textContent = icon;
+                seg.append(m);
+            }
+            seg.addEventListener("click", () => this._choose(seg.getAttribute("value")));
+        }
+
+        if (!this.hasAttribute("value") && this._segs[0]) {
+            this.setAttribute("value", this._segs[0].getAttribute("value"));
+        }
+        this._reflect();
+    }
+
+    _choose(v) {
+        if (v === this.value) return;
+        this.setAttribute("value", v);   // _reflect runs via attributeChangedCallback
+        this.dispatchEvent(new Event("input", { bubbles: true }));
+        this.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    _reflect() {
+        const v = this.value;
+        for (const seg of this._segs || []) {
+            seg.classList.toggle("is-active", seg.getAttribute("value") === v);
+        }
+    }
+
+    get value() { return this.getAttribute("value"); }
+    set value(v) { v == null ? this.removeAttribute("value") : this.setAttribute("value", v); }
+
+    attributeChangedCallback() { if (this._built) this._reflect(); }
+}
+
+customElements.define("studio-icon-toggle", StudioIconToggle);

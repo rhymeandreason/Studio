@@ -374,33 +374,7 @@
      separate-window button only apply to Markdown. */
   #md-view { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; position: relative; background: var(--elevated); }
 
-  /* Two-icon segmented toggle (Code | Preview): both icons always visible, the
-     active view highlighted. */
-  .icon-toggle {
-    align-items: center;
-    gap: 2px;
-    height: 30px;
-    padding: 2px;
-    border-radius: 999px;
-    background: var(--card);
-  }
-  .icon-toggle .seg {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px; height: 26px;
-    padding: 0;
-    border: none;
-    background: transparent;
-    border-radius: 999px;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: background var(--dur-fast) var(--ease-standard),
-                color var(--dur-fast) var(--ease-standard);
-  }
-  .icon-toggle .seg:hover { color: var(--text); }
-  .icon-toggle .seg.is-active { background: var(--text); color: var(--window-color, var(--surface)); }
-
+  /* The Code | Preview toggle is a kit <studio-icon-toggle> (.icon-toggle). */
   #view-toggle { display: none; }
   body.is-markdown #view-toggle { display: inline-flex; }
   body.is-markdown #preview-btn { display: none; }
@@ -443,10 +417,10 @@
     <div class="tb-group">
         <button class="btn btn-icon-only" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span><span class="stale-dot"></span></button>
         <button class="btn btn-icon-only" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
-        <div class="icon-toggle" id="view-toggle" title="Code / Preview">
-            <button class="seg" data-view="code" title="Show source"><span class="mi">code</span></button>
-            <button class="seg" data-view="preview" title="Show rendered preview"><span class="mi">visibility</span></button>
-        </div>
+        <studio-icon-toggle id="view-toggle" value="code">
+            <button value="code" data-icon="code" title="Show source"></button>
+            <button value="preview" data-icon="visibility" title="Show rendered preview"></button>
+        </studio-icon-toggle>
         <button class="btn-round btn-round-filled" id="preview-btn" title="Preview"><span class="mi mi-sm">play_arrow</span></button>
     </div>
   </div>
@@ -511,6 +485,7 @@ import "../vendor/beautify-html.js";   // window.html_beautify (needs the two ab
 import "../vendor/prism.js";           // window.Prism (markup + css + js)
 import "../vendor/prism-markdown.min.js"; // adds Prism.languages.markdown
 import "../kit/window-chrome.js";         // custom title bar: drag, close dot, tint
+import "../kit/components.js";            // <studio-*> kit components (icon toggle)
 
 const TAURI = window.__TAURI__;
 const invoke = TAURI ? TAURI.core.invoke : null;
@@ -1004,11 +979,9 @@ function applyMode() {
   setViewToggle(md);   // Markdown opens in Preview, so offer "show source"
 }
 // Icon-only Code/Preview toggle: icon + tooltip reflect what the click will do.
-// Highlight the active segment of the Code | Preview toggle.
+// Reflect the current view on the Code | Preview toggle (without firing change).
 function setViewToggle(showingPreview) {
-  const vt = $("view-toggle");
-  vt.querySelector('[data-view="code"]').classList.toggle("is-active", !showingPreview);
-  vt.querySelector('[data-view="preview"]').classList.toggle("is-active", showingPreview);
+  $("view-toggle").value = showingPreview ? "preview" : "code";
 }
 
 // Switch views (Markdown only), keeping scroll position by syncing to the
@@ -1024,8 +997,7 @@ function setView(toPreview) {
     else { code.scrollTop = 0; syncScroll(); }
   });
 }
-$("view-toggle").querySelector('[data-view="code"]').addEventListener("click", () => setView(false));
-$("view-toggle").querySelector('[data-view="preview"]').addEventListener("click", () => setView(true));
+$("view-toggle").addEventListener("change", (e) => setView(e.target.value === "preview"));
 function inPreview() { return document.body.classList.contains("md-preview"); }
 
 // Clicking a link in the rendered Markdown: in-page anchors scroll; relative

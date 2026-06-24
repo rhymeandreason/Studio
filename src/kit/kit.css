@@ -779,6 +779,41 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
     background: var(--elevated);
 }
 
+/* Segmented icon toggle — two (or more) icon options, the active one filled.
+ * Driven by <studio-icon-toggle> (components.js), which adds .seg + .is-active.
+ *   <studio-icon-toggle value="code">
+ *     <button value="code" data-icon="code" title="Source"></button>
+ *     <button value="preview" data-icon="visibility" title="Preview"></button>
+ *   </studio-icon-toggle>
+ */
+.icon-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 30px;
+    padding: 2px;
+    border-radius: 999px;
+    /* --card exists on tinted custom windows; fall back to the paper surface. */
+    background: var(--card, var(--surface));
+}
+.icon-toggle .seg {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    border-radius: 999px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease-standard),
+                color var(--dur-fast) var(--ease-standard);
+}
+.icon-toggle .seg:hover { color: var(--text); }
+.icon-toggle .seg.is-active { background: var(--text); color: var(--window-color, var(--surface)); }
+
 /* Filled variant — accent fill, white icon. Used for primary actions (send, submit). */
 .btn-round-filled {
     background: var(--accent);
