@@ -63,6 +63,15 @@
     transition: opacity var(--dur-fast);
   }
   #dirty.on { opacity: 1; }
+  #refresh-btn { position: relative; }
+  #refresh-btn .stale-dot {
+    position: absolute; top: 2px; right: 2px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--rose);
+    opacity: 0;
+    transition: opacity var(--dur-fast);
+  }
+  #refresh-btn.stale .stale-dot { opacity: 1; }
   #diff-status { font: var(--code-font); color: var(--text-soft); }
 
   /* ---- main 4-column row ---- */
@@ -367,7 +376,7 @@
         <button class="btn btn-secondary" id="wrap-btn"><span class="mi">wrap_text</span>Wrap</button>
     </div>
     <div>
-        <button class="btn btn-secondary" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span>Refresh</button>
+        <button class="btn btn-secondary" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span>Refresh<span class="stale-dot"></span></button>
         <button class="btn btn-secondary" id="diff-mode" title="Toggle diff: uncommitted vs last commit"><span class="mi">difference</span>Uncommitted</button>
         <button class="btn btn-secondary" id="view-toggle" title="Toggle code / preview"><span class="mi">visibility</span>Preview</button>
         <button class="btn btn-primary" id="preview-btn"><span class="mi">open_in_new</span>Preview</button>
@@ -466,6 +475,9 @@ let mdHeadings = [];   // parsed ATX headings { level, text, line } for the sect
 const filenameEl = $("filename"), dirtyEl = $("dirty"), diffStatus = $("diff-status");
 
 let currentPath = null;
+let diskText = null;   // file contents as last synced with disk (loaded/saved/reloaded)
+const refreshBtn = $("refresh-btn");
+function setStale(v) { refreshBtn.classList.toggle("stale", v); }
 let changedLines = new Set();   // 1-based line numbers (new file) marked as added/changed
 let deletedAt = new Set();      // lines where preceding content was deleted (triangle marker)
 // In-editor undo/redo. WKWebView's native textarea undo is flaky and resets, so
@@ -539,6 +551,8 @@ async function loadPath(path, push = true) {
   if (!invoke) return;
   const text = await invoke("read_text_file", { path });
   currentPath = path;
+  diskText = text;
+  setStale(false);
   if (push && history[histIdx] !== path) {
     history = history.slice(0, histIdx + 1);   // drop forward entries
     history.push(path);
@@ -575,6 +589,8 @@ async function saveFile() {
   if (!currentPath) return;
   if (invoke) {
     await invoke("write_text_file", { path: currentPath, content: code.value });
+    diskText = code.value;
+    setStale(false);
     setDirty(false);
     persist();
     pushPreview();              // ensure the preview reflects the saved content
@@ -591,9 +607,20 @@ async function saveFile() {
 async function reloadFromDisk() {
   if (!invoke || !currentPath) return;
   const text = await invoke("read_text_file", { path: currentPath });
+  diskText = text;
+  setStale(false);
   loadText(text);
   await refreshDiff();
 }
+
+// Poll the open file for external changes (e.g. saved from another editor) and
+// flag the Refresh button with a dot rather than silently clobbering local edits.
+setInterval(async () => {
+  if (!invoke || !currentPath || document.hidden) return;
+  let text;
+  try { text = await invoke("read_text_file", { path: currentPath }); } catch { return; }
+  setStale(text !== diskText);
+}, 2000);
 
 function ext() { return (currentPath || "").split(".").pop().toLowerCase(); }
 
@@ -1342,6 +1369,7 @@ window.addEventListener("keydown", (e) => {
     filenameEl.title = currentPath;
     setDirty(!!s.dirty);
     history = [s.path]; histIdx = 0; updateNav();   // seed nav history
+    if (invoke) invoke("read_text_file", { path: s.path }).then((t) => { diskText = t; }).catch(() => {});
     applyMode();
     applyTitleColor();
     render();
