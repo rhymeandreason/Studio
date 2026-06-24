@@ -49,12 +49,11 @@
   }
   #filename {
     font: var(--code-font);
+    font-weight: 600;
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    direction: rtl;          /* keep the basename visible when truncating */
-    text-align: left;
     margin-top:3px;
   }
   #dirty {
@@ -562,7 +561,8 @@ function loadText(text) {
   code.value = text;
   setDirty(false);
   const base = currentPath ? currentPath.split("/").pop() : "untitled";
-  filenameEl.textContent = "‎" + (currentPath || base);
+  filenameEl.textContent = "‎" + base;
+  filenameEl.title = currentPath || "";
   applyMode();
   applyTitleColor();
   render();
@@ -1338,7 +1338,8 @@ window.addEventListener("keydown", (e) => {
   if (s && s.path) {
     currentPath = s.path;
     code.value = s.value || "";
-    filenameEl.textContent = "‎" + currentPath;
+    filenameEl.textContent = "‎" + currentPath.split("/").pop();
+    filenameEl.title = currentPath;
     setDirty(!!s.dirty);
     history = [s.path]; histIdx = 0; updateNav();   // seed nav history
     applyMode();
