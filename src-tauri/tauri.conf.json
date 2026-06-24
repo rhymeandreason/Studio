@@ -30,7 +30,8 @@
         "scope": [
           "$HOME/Projects/**",
           "$HOME/Projects/*/.studio-icon.png",
-          "$APPCACHE/**"
+          "$APPCACHE/**",
+          "$HOME/**"
         ]
       }
     }

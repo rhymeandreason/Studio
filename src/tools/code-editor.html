@@ -836,8 +836,29 @@ function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(
 // is marked-rendered HTML wrapped in a readable stylesheet; otherwise the raw
 // source (which is already HTML/CSS/JS).
 function renderedHTML() {
-  if (isMarkdown() && window.marked) return mdWrap(window.marked.parse(code.value, { breaks: true }));
-  return code.value;
+  const raw = (isMarkdown() && window.marked)
+    ? mdWrap(window.marked.parse(code.value, { breaks: true }))
+    : code.value;
+  return resolveAssets(raw);
+}
+
+// Rewrite relative src/href in the previewed HTML to absolute asset:// URLs
+// (the file's own directory), so its local CSS/JS/images load in the preview
+// iframe instead of resolving against the tool window's URL. Requires the file
+// to be under the asset-protocol scope ($HOME/Projects/**).
+const convertFileSrc = TAURI ? TAURI.core.convertFileSrc : null;
+function resolveAssets(html) {
+  if (!convertFileSrc || !currentPath) return html;
+  let doc;
+  try { doc = new DOMParser().parseFromString(html, "text/html"); } catch { return html; }
+  for (const node of doc.querySelectorAll("[src], [href]")) {
+    const attr = node.hasAttribute("src") ? "src" : "href";
+    const v = node.getAttribute(attr);
+    if (!v || /^[a-z][a-z0-9+.-]*:/i.test(v) || v.startsWith("//") || v.startsWith("#") || v.startsWith("data:")) continue;
+    const abs = resolveRelative(currentPath, v.split("#")[0].split("?")[0]);
+    try { node.setAttribute(attr, convertFileSrc(abs)); } catch {}
+  }
+  return "<!doctype html>" + doc.documentElement.outerHTML;
 }
 
 const MD_CSS = `
