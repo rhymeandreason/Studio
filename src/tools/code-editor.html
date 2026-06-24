@@ -134,11 +134,18 @@
     border-radius: var(--radius-sm);
   }
   .node .tag:hover { background: var(--accent-ring); }
-  .node .tag.sel { background: var(--accent-soft); }
+
   .tname { color: var(--accent); }
   .tid { color: var(--rose); }   /* element id (distinct from tag/class) */
-  .tcls { color: var(--text-muted); }
+  .tcls { color: var(--text-muted); font-weight:bold;}
   .twrap { padding-left: 14px; }
+  .node .tag.sel { background: var(--text); color:var(--window-color, var(--surface));}
+  .tag.sel .tcls, .tag.sel .tid{
+      color:var(--window-color, var(--surface));
+  }
+.tag.sel .tname {
+      color:var(--surface);
+  }
 
   /* editor (center) — its own rounded card on the tint */
   #editor-col {
@@ -300,7 +307,6 @@
     padding: 10px 12px;
     font: var(--code-font);
   }
-  #inspector .ins-sel { color: var(--accent); margin-bottom: 6px;}
   /* Layout only — color comes from the kit `.tint-dark` utility on the chip. */
   .chip {
     display: inline-block;
@@ -308,7 +314,7 @@
     margin: 0 4px 4px 0;
     border-radius: 999px;
   }
-  .rule { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--hairline); }
+  .rule { margin-top: 8px; padding-top: 6px;  }
   .rule .rsel { color: var(--rose); }
   .clk { cursor: pointer; }
   .rsel.clk:hover { text-decoration: underline; }
@@ -1227,9 +1233,7 @@ function pushPreview() {
 
 function showInspector(el) {
   const doc = parser.contentDocument;
-  let sel = el.tagName.toLowerCase();
-  if (el.id) sel += "#" + el.id;
-  let html = `<div class="ins-sel">${sel}${el.classList.length ? "." + [...el.classList].join(".") : ""}</div>`;
+  let html = "";
 
   const chips = [];
   if (el.id) chips.push(`<span class="chip tint-dark clk" data-find="#${el.id}">#${el.id}</span>`);
