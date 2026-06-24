@@ -835,28 +835,58 @@ function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(
 // The HTML shown in the preview / parsed for the tree. For Markdown files this
 // is marked-rendered HTML wrapped in a readable stylesheet; otherwise the raw
 // source (which is already HTML/CSS/JS).
-function renderedHTML() {
+async function renderedHTML() {
   const raw = (isMarkdown() && window.marked)
     ? mdWrap(window.marked.parse(code.value, { breaks: true }))
     : code.value;
-  return resolveAssets(raw);
+  return await resolveAssets(raw);
 }
 
-// Rewrite relative src/href in the previewed HTML to absolute asset:// URLs
-// (the file's own directory), so its local CSS/JS/images load in the preview
-// iframe instead of resolving against the tool window's URL. Requires the file
-// to be under the asset-protocol scope ($HOME/Projects/**).
 const convertFileSrc = TAURI ? TAURI.core.convertFileSrc : null;
-function resolveAssets(html) {
-  if (!convertFileSrc || !currentPath) return html;
+const isLocalRef = (v) => v && !/^[a-z][a-z0-9+.-]*:/i.test(v) && !v.startsWith("//") && !v.startsWith("#") && !v.startsWith("data:");
+
+// Rewrite a CSS string's relative url(...) refs to asset:// URLs, resolved
+// against the stylesheet's own absolute path (so @font-face fonts load).
+function rewriteCssUrls(css, cssAbsPath) {
+  return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (m, q, ref) => {
+    if (!isLocalRef(ref)) return m;
+    const abs = resolveRelative(cssAbsPath, ref.split("#")[0].split("?")[0]);
+    return `url("${convertFileSrc(abs)}")`;
+  });
+}
+
+// Make the previewed file's relative assets load in the preview. Scripts/images
+// get convertFileSrc URLs; stylesheets are inlined with their url() refs (e.g.
+// @font-face) rewritten too — convertFileSrc percent-encodes the path, so
+// relative url() inside an external sheet can't resolve on its own.
+async function resolveAssets(html) {
+  if (!convertFileSrc || !currentPath || !invoke) return html;
   let doc;
   try { doc = new DOMParser().parseFromString(html, "text/html"); } catch { return html; }
+
+  // Inline local stylesheets with rewritten url()s.
+  for (const link of [...doc.querySelectorAll('link[rel~="stylesheet"][href]')]) {
+    const href = link.getAttribute("href");
+    if (!isLocalRef(href)) continue;
+    const abs = resolveRelative(currentPath, href.split("#")[0].split("?")[0]);
+    try {
+      const css = await invoke("read_text_file", { path: abs });
+      const style = doc.createElement("style");
+      style.textContent = rewriteCssUrls(css, abs);
+      link.replaceWith(style);
+    } catch {}
+  }
+  // Rewrite remaining relative src/href (scripts, images, …).
   for (const node of doc.querySelectorAll("[src], [href]")) {
     const attr = node.hasAttribute("src") ? "src" : "href";
     const v = node.getAttribute(attr);
-    if (!v || /^[a-z][a-z0-9+.-]*:/i.test(v) || v.startsWith("//") || v.startsWith("#") || v.startsWith("data:")) continue;
+    if (!isLocalRef(v)) continue;
     const abs = resolveRelative(currentPath, v.split("#")[0].split("?")[0]);
     try { node.setAttribute(attr, convertFileSrc(abs)); } catch {}
+  }
+  // Inline <style> blocks: rewrite their url()s against the file's own path.
+  for (const style of doc.querySelectorAll("style")) {
+    if (style.textContent.includes("url(")) style.textContent = rewriteCssUrls(style.textContent, currentPath);
   }
   return "<!doctype html>" + doc.documentElement.outerHTML;
 }
@@ -886,11 +916,13 @@ function mdWrap(body) {
 
 // Re-parse into the offscreen iframe (rebuilds the tree) and push to the
 // preview window if it's open.
-function render() {
-  parser.srcdoc = renderedHTML();
+let lastRendered = "";
+async function render() {
   if (isMarkdown() && window.marked) {             // keep inline preview current
     mdView.innerHTML = `<div class="md-body">${window.marked.parse(code.value, { breaks: true })}</div>`;
   }
+  lastRendered = await renderedHTML();
+  parser.srcdoc = lastRendered;
   pushPreview();
 }
 
@@ -1161,7 +1193,7 @@ if (evt) {
 // preview stayed open, `previewOpen` is stale (no fresh ce:ready), so gating on
 // it would silently stop updates. Emitting to no listener is harmless.
 function pushPreview() {
-  if (evt) evt.emit("ce:html", renderedHTML());
+  if (evt) evt.emit("ce:html", lastRendered);
 }
 
 function showInspector(el) {
