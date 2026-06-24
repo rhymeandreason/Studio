@@ -62,7 +62,6 @@
     flex: 0 0 auto;
   }
   #dirty.on { opacity: 1; }
-  #diff-status { font: var(--code-font); color: var(--text); opacity: .65; white-space: nowrap; }
   #refresh-btn { position: relative; }
   #refresh-btn .stale-dot {
     position: absolute; top: 2px; right: 2px;
@@ -72,6 +71,14 @@
     transition: opacity var(--dur-fast);
   }
   #refresh-btn.stale .stale-dot { opacity: 1; }
+  /* When the file on disk has changes not yet loaded, periodically wiggle the
+     refresh icon to draw the eye (brief twist, then rest). */
+  #refresh-btn.stale .mi { animation: ce-refresh-wiggle 1.8s var(--ease-standard) infinite; }
+  @keyframes ce-refresh-wiggle {
+    0%, 70%, 100% { transform: rotate(0); }
+    80% { transform: rotate(-16deg); }
+    90% { transform: rotate(16deg); }
+  }
 
   /* ---- main row: cards floating on the tinted window background ---- */
   #main {
@@ -395,7 +402,6 @@
         <button class="btn btn-icon btn-tint-dark" id="save" title="Save (Cmd+S)"><span class="mi">save</span></button>
         <span id="filename">No file</span>
         <span id="dirty" title="Unsaved changes"></span>
-        <span id="diff-status"></span>
     </div>
     <div class="tb-group">
         <button class="btn btn-tint-dark" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
@@ -504,7 +510,7 @@ const code = $("code"), hl = $("hl"), gutter = $("gutter"), minimap = $("minimap
 const treeEl = $("tree"), inspector = $("inspector"), parser = $("parser");
 const sectionsEl = $("sections"), mdView = $("md-view"), linksEl = $("links");
 let mdHeadings = [];   // parsed ATX headings { level, text, line } for the section browser
-const filenameEl = $("filename"), dirtyEl = $("dirty"), diffStatus = $("diff-status");
+const filenameEl = $("filename"), dirtyEl = $("dirty");
 
 let currentPath = null;
 let diskText = null;   // file contents as last synced with disk (loaded/saved/reloaded)
@@ -826,18 +832,13 @@ $("diff-mode").addEventListener("click", () => {
 async function refreshDiff() {
   changedLines = new Set();
   deletedAt = new Set();
-  diffStatus.textContent = "";
   if (!invoke || !currentPath) { paint(); return; }
   const cmd = diffMode === "committed" ? "git_diff_file_committed" : "git_diff_file";
   try {
     const diff = await invoke(cmd, { path: currentPath });
-    parseDiff(diff);
-    const parts = [];
-    if (changedLines.size) parts.push(`${changedLines.size} changed`);
-    if (deletedAt.size) parts.push(`${deletedAt.size} deletion${deletedAt.size > 1 ? "s" : ""}`);
-    diffStatus.textContent = parts.join(", ") || "no changes";
+    parseDiff(diff);   // populates the gutter bars + minimap marks
   } catch (e) {
-    diffStatus.textContent = diffMode === "committed" ? "no prev commit" : "not in git";
+    // not a git repo / no previous commit — just leave the diff empty
   }
   paint();
 }
@@ -1006,7 +1007,7 @@ mdView.addEventListener("click", (e) => {
   if (!currentPath || !invoke) return;
   const rel = decodeURIComponent(href.split("#")[0].split("?")[0]);
   loadPath(resolveRelative(currentPath, rel)).catch(() => {
-    diffStatus.textContent = "can't open " + rel;
+    console.warn("can't open " + rel);
   });
 });
 
@@ -1127,7 +1128,7 @@ function buildLinks() {
     b.title = t;
     b.innerHTML = `<span class="mi">${isMd(t) ? "description" : "draft"}</span>${t.split("/").pop()}`;
     b.addEventListener("click", () => {
-      if (currentPath) loadPath(resolveRelative(currentPath, t)).catch(() => { diffStatus.textContent = "can't open " + t; });
+      if (currentPath) loadPath(resolveRelative(currentPath, t)).catch(() => { console.warn("can't open " + t); });
     });
     linksEl.append(b);
   }
