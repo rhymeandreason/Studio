@@ -42,6 +42,7 @@
     --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
 
     color-scheme: light;
+    --window-color:#f7f5f0;
 }
 
 /* Material Symbols — vendored variable font (not the Google Fonts CDN), so
