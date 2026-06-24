@@ -373,6 +373,34 @@
   /* Inline Markdown preview: hidden by default; the Code/Preview toggle and the
      separate-window button only apply to Markdown. */
   #md-view { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; position: relative; background: var(--elevated); }
+
+  /* Two-icon segmented toggle (Code | Preview): both icons always visible, the
+     active view highlighted. */
+  .icon-toggle {
+    align-items: center;
+    gap: 2px;
+    height: 30px;
+    padding: 2px;
+    border-radius: 999px;
+    background: var(--card);
+  }
+  .icon-toggle .seg {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 26px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    border-radius: 999px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease-standard),
+                color var(--dur-fast) var(--ease-standard);
+  }
+  .icon-toggle .seg:hover { color: var(--text); }
+  .icon-toggle .seg.is-active { background: var(--text); color: var(--window-color, var(--surface)); }
+
   #view-toggle { display: none; }
   body.is-markdown #view-toggle { display: inline-flex; }
   body.is-markdown #preview-btn { display: none; }
@@ -415,7 +443,10 @@
     <div class="tb-group">
         <button class="btn btn-icon-only" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span><span class="stale-dot"></span></button>
         <button class="btn btn-icon-only" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
-        <button class="btn btn-icon btn-tint-dark" id="view-toggle" title="Show rendered preview"><span class="mi">visibility</span></button>
+        <div class="icon-toggle" id="view-toggle" title="Code / Preview">
+            <button class="seg" data-view="code" title="Show source"><span class="mi">code</span></button>
+            <button class="seg" data-view="preview" title="Show rendered preview"><span class="mi">visibility</span></button>
+        </div>
         <button class="btn-round btn-round-filled" id="preview-btn" title="Preview"><span class="mi mi-sm">play_arrow</span></button>
     </div>
   </div>
@@ -973,26 +1004,28 @@ function applyMode() {
   setViewToggle(md);   // Markdown opens in Preview, so offer "show source"
 }
 // Icon-only Code/Preview toggle: icon + tooltip reflect what the click will do.
+// Highlight the active segment of the Code | Preview toggle.
 function setViewToggle(showingPreview) {
   const vt = $("view-toggle");
-  vt.innerHTML = `<span class="mi">${showingPreview ? "code" : "visibility"}</span>`;
-  vt.title = showingPreview ? "Show source" : "Show rendered preview";
-  vt.classList.toggle("active", showingPreview);
+  vt.querySelector('[data-view="code"]').classList.toggle("is-active", !showingPreview);
+  vt.querySelector('[data-view="preview"]').classList.toggle("is-active", showingPreview);
 }
 
-// Code/Preview toggle (Markdown only) — keeps scroll position by syncing to the
+// Switch views (Markdown only), keeping scroll position by syncing to the
 // nearest preceding heading between the two views.
-$("view-toggle").addEventListener("click", () => {
-  const goingToPreview = !inPreview();
-  const idx = goingToPreview ? currentCodeSectionIdx() : currentPreviewSectionIdx();
-  const on = document.body.classList.toggle("md-preview");
-  setViewToggle(on);
+function setView(toPreview) {
+  if (toPreview === inPreview()) return;
+  const idx = toPreview ? currentCodeSectionIdx() : currentPreviewSectionIdx();
+  document.body.classList.toggle("md-preview", toPreview);
+  setViewToggle(toPreview);
   requestAnimationFrame(() => {
-    if (on) scrollPreviewToSection(idx);
+    if (toPreview) scrollPreviewToSection(idx);
     else if (idx >= 0 && mdHeadings[idx]) scrollCodeToLine(mdHeadings[idx].line);
     else { code.scrollTop = 0; syncScroll(); }
   });
-});
+}
+$("view-toggle").querySelector('[data-view="code"]').addEventListener("click", () => setView(false));
+$("view-toggle").querySelector('[data-view="preview"]').addEventListener("click", () => setView(true));
 function inPreview() { return document.body.classList.contains("md-preview"); }
 
 // Clicking a link in the rendered Markdown: in-page anchors scroll; relative
@@ -1388,7 +1421,7 @@ function renderFindMarks() {
 function openFind() {
   if (inPreview()) {                 // find operates on the source; leave preview
     document.body.classList.remove("md-preview");
-    $("view-toggle").innerHTML = `<span class="mi">visibility</span>Preview`;
+    setViewToggle(false);
   }
   findBar.hidden = false;
   const sel = code.value.slice(code.selectionStart, code.selectionEnd);
