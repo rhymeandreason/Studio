@@ -87,8 +87,9 @@ export function clearEditor() {
 }
 
 // Flush any pending edit save so the host's thumbnail reflects the latest edits.
+// Returns true if it actually wrote (i.e. there were pending edits).
 export async function flushEditSave() {
-  if (!editItem || !editState || !editDirty) return;
+  if (!editItem || !editState || !editDirty) return false;
   clearTimeout(editSaveTimer);
   try {
     await invoke("save_edits", { path: editItem.path, edits: editState });
@@ -97,6 +98,7 @@ export async function flushEditSave() {
   }
   hooks.invalidateThumb(editItem.path);
   editDirty = false;
+  return true;
 }
 
 // The best loaded edit source: full preview in the lightbox, thumbnail inline —

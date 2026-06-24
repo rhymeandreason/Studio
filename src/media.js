@@ -394,10 +394,12 @@ async function trashMedia(paths) {
     clearEditor();
     document.getElementById("lightbox").hidden = true;
     moveEditor(document.getElementById("media-side-editor"));
-    document.getElementById("media-side").hidden = true;
-    document.getElementById("app-right").hidden = true;
-    invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
-
+    const appRight = document.getElementById("app-right");
+    if (appRight && !appRight.hidden) {
+      document.getElementById("media-side").hidden = true;
+      appRight.hidden = true;
+      invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+    }
   }
 
   try {
@@ -831,14 +833,18 @@ function moveEditor(host) {
 // thumbnail if edits were made.
 async function closeInlineEditor() {
   if (!state.activeItem) return;
-  const dirty = !!getEditItem(); // edits may be pending; flush handles the rest
-  await flushEditSave();
+  const dirty = await flushEditSave(); // true only if there were pending edits
   state.activeItem = null;
   document.getElementById("lightbox").hidden = true;
   moveEditor(document.getElementById("media-side-editor"));
-  document.getElementById("media-side").hidden = true;
-    document.getElementById("app-right").hidden = true;
+  // Only reclaim the 320px column width if it was actually showing — otherwise
+  // deselecting with the sidebar off wrongly shrinks the window.
+  const appRight = document.getElementById("app-right");
+  if (appRight && !appRight.hidden) {
+    document.getElementById("media-side").hidden = true;
+    appRight.hidden = true;
     invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+  }
 
   clearEditor();
   updateSelbar(); // editor closed — the batch bar may need to reappear
