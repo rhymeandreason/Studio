@@ -9,29 +9,9 @@
  *
  * Layer ABOVE tokens.css + kit.css. */
 
-/* On-tint theme. The paper grays/surfaces in tokens.css are solid colors tuned
-   for the #f7f5f0 background; on a saturated window tint they look muddy.
-   Redefine the gray + surface family as ink / white WITH ALPHA so they blend
-   with whatever is behind them — which means the same token reads correctly
-   both on the color tint and on the white content cards (no blend-mode needed).
-   Same approach as the Git window. Overrides tokens.css because this sheet
-   loads after it at equal (:root) specificity; --text stays solid ink so
-   primary text keeps full contrast. */
-:root {
-    --window-radius: 20px;
-
-    --text-muted: rgba(0, 0, 0, 0.65);
-    --text-soft:  rgba(0, 0, 0, 0.4);
-    --hairline:        rgba(0, 0, 0, 0.13);
-    --hairline-strong: rgba(255, 255, 255, 0.5);
-    --surface: rgba(255, 255, 255, 0.6);
-    /* Cards floating on the tint (translucent white → picks up the tint). */
-    --card:        rgba(255, 255, 255, 0.5);
-    --card-strong: rgba(255, 255, 255, 0.72);
-
-    --accent:rgba(0, 0, 0, 0.85);
-    --accent-soft: rgba(0, 0, 0, 0.2);
-}
+/* Custom-window corner radius. The on-tint color palette lives in tokens.css
+   as `.on-tint`, which window-chrome.js adds to the tool body. */
+:root { --window-radius: 20px; }
 
 /* Rounded corners. IMPORTANT: a background on `html` or `body` propagates to
    the square viewport (the CSS "canvas background" quirk) and ignores

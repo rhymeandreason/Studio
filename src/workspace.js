@@ -603,10 +603,17 @@ function setList(list, values) {
 let wsClaude = "terminal";
 let wsSprite = DEFAULT_SPRITE;
 
+// Reflect the active project's accent onto the app header (a CSS var on :root;
+// styles.css uses it for the .projhead background, falling back to --surface).
+function applyHeaderColor() {
+  document.documentElement.style.setProperty("--project-color", wsColor || "");
+}
+
 export async function loadWorkspace(path) {
   const ws = await invoke("read_workspace", { path });
   wsEditor = ws.editor || "Studio Code Editor";
   wsColor = ws.color || "";
+  applyHeaderColor();
   wsClaude = ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
   wsSprite = ws.sprite || DEFAULT_SPRITE;
   setList("repo", ws.repo ? [ws.repo] : []);
@@ -640,6 +647,7 @@ export async function loadWorkspace(path) {
 export async function syncProjectColor(path) {
   const ws = await invoke("read_workspace", { path }).catch(() => null);
   if (ws) wsColor = ws.color || "";
+  applyHeaderColor();
 }
 
 function renderSpriteBadge() {

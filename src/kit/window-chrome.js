@@ -32,6 +32,9 @@ function closeWin() {
 }
 
 function init() {
+    // Harmonize grays/surfaces against the tint (tokens.css `.on-tint`).
+    document.body.classList.add("on-tint");
+
     const bar = document.querySelector("[data-window-bar]");
     if (bar) {
         bar.setAttribute("data-tauri-drag-region", "");

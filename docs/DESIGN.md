@@ -14,6 +14,10 @@ Current components: `<studio-color>`, `<studio-swatch>`, `<studio-toggle>`, `<st
 
 **Radius scale:** `--radius-sm` (6px) · `--radius` (10px) · `--radius-lg` (12px). Use these — don't hardcode px values.
 
+**On a color background — `.on-tint`:** the gray/surface tokens are tuned for the `#f7f5f0` paper background and look muddy on a saturated color. Apply `class="on-tint"` to any subtree sitting on a tint to swap the gray / surface / accent family for ink-or-white-with-alpha, so each token blends with the color behind it (`--text` stays solid for contrast). Defined in `tokens.css`. Used by `window-chrome.js` (whole tool body) and the project header. Prefer this over `mix-blend-mode` — it's predictable across colors and doesn't muddy text.
+
+**Project-color window chrome:** tinted surfaces follow the active project's accent via a CSS variable, so they update without Rust. Tool windows read `?color=` → `--titlebar-tint`/`--window-color` (see [tools.md](tools.md)). The **main window** uses `titleBarStyle: "Overlay"` (tauri.conf.json) so the webview runs under the floating traffic lights; the project header (`.projhead.on-tint`, background `var(--project-color, …)`, set by `workspace.js`) then fills that strip. Content there needs top padding to clear the traffic lights.
+
 **Text utilities** (in `kit.css`): `.text-body`, `.text-muted`, `.text-xs`, `.text-mono` — cover the four most common text patterns. `.label` and `.eyebrow` are also in kit for structural labels.
 
 **`src/tools/kit-gallery.html`** (Tools → Design System) is the living reference for every token and class. Items with a ✓ are available as kit classes.

@@ -45,6 +45,25 @@
     --window-color:#f7f5f0;
 }
 
+/* On-tint color variant. The grays/surfaces above are solid colors tuned for
+   the #f7f5f0 paper background; on a saturated color (a tinted tool window, or
+   the app's project header) they look muddy. Apply `.on-tint` to a subtree to
+   swap the gray / surface / accent family for ink-or-white WITH ALPHA, so the
+   same token blends with whatever color is behind it (and still reads on white
+   cards) — no blend-mode needed. --text stays solid ink for full contrast.
+   Used by window-chrome.js (whole tool body) and the project header. */
+.on-tint {
+    --text-muted: rgba(0, 0, 0, 0.65);
+    --text-soft:  rgba(0, 0, 0, 0.4);
+    --hairline:        rgba(0, 0, 0, 0.13);
+    --hairline-strong: rgba(255, 255, 255, 0.5);
+    --surface: rgba(255, 255, 255, 0.6);
+    --card:        rgba(255, 255, 255, 0.5);
+    --card-strong: rgba(255, 255, 255, 0.72);
+    --accent:      rgba(0, 0, 0, 0.85);
+    --accent-soft: rgba(0, 0, 0, 0.2);
+}
+
 /* Material Symbols — vendored variable font (not the Google Fonts CDN), so
  * icons work offline and any document that links tokens.css gets them. The url
  * resolves relative to THIS stylesheet, so it's correct from any consumer
