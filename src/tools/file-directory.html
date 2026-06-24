@@ -7,7 +7,9 @@
   <title>File Directory</title>
   <link rel="stylesheet" href="../tokens.css" />
   <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
   <script type="module" src="../kit/components.js"></script>
+  <script type="module" src="../kit/window-chrome.js"></script>
   <style>
 
     * {
@@ -17,7 +19,9 @@
     body {
       margin: 0;
       font-family: var(--sans);
-      background: var(--bg);
+      /* Transparent for the custom window's rounded corners; the title bar and
+         content rows carry the paper fill (see window-chrome.css). */
+      background: transparent;
       color: var(--text);
       height: 100vh;
       display: flex;
@@ -29,10 +33,16 @@
       height: 44px;
       flex-shrink: 0;
       display: flex;
-      align-items: flex-end;
+      align-items: center;
       justify-content: space-between;
-      padding: 0 14px 8px;
-      -webkit-app-region: drag;
+      padding: 0 14px;
+    }
+    /* Close dot + page title grouped at the left (the dot is injected into
+       [data-window-close] by window-chrome.js). */
+    .fd-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     /* Toggled on by #text-scale-toggle — scales the whole window (text,
@@ -53,6 +63,8 @@
       flex: 1 1 auto;
       overflow-y: auto;
       padding: 6px 8px 14px;
+      background: var(--bg);   /* paper fill below the bar (body is transparent) */
+      border-radius: 0 0 var(--window-radius, 10px) var(--window-radius, 10px);
     }
 
     #project-picker .hint {
@@ -97,6 +109,8 @@
       flex: 1 1 auto;
       overflow-y: auto;
       padding: 2px 8px 14px;
+      background: var(--bg);   /* paper fill below the bar (body is transparent) */
+      border-radius: 0 0 var(--window-radius, 10px) var(--window-radius, 10px);
     }
 
     .group {
@@ -243,8 +257,10 @@ max-width:350px;
 </head>
 
 <body>
-  <div id="titlebar" data-tauri-drag-region>
-    <div class="page-title" id="page-title">File Directory</div>
+  <div id="titlebar" data-window-bar>
+    <div class="fd-title" data-window-close>
+      <div class="page-title" id="page-title">File Directory</div>
+    </div>
     <studio-toggle id="text-scale-toggle" title="Larger text"></studio-toggle>
   </div>
   <div id="project-picker" hidden></div>

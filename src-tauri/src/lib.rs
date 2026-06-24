@@ -578,7 +578,7 @@ fn tool_style(filename: &str) -> ToolStyle {
         "code-preview.html" => s(900.0, 640.0, true, Chrome::NativeTint, Tint::Project),
         "daily-notes.html" => s(300.0, 600.0, true, Chrome::NativeTint, Tint::Paper),
         "ram-overview.html" => s(380.0, 440.0, true, Chrome::NativeTint, Tint::Paper),
-        "file-directory.html" => s(350.0, 640.0, true, Chrome::NativeTint, Tint::Paper),
+        "file-directory.html" => s(350.0, 640.0, true, Chrome::Custom, Tint::Paper),
         "modes.html" => s(320.0, 480.0, true, Chrome::NativeTint, Tint::Paper),
         "kit-gallery.html" => s(900.0, 640.0, true, Chrome::NativeTint, Tint::Paper),
         _ => s(900.0, 640.0, false, Chrome::Native, Tint::None),

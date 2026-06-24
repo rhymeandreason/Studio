@@ -32,8 +32,9 @@ function closeWin() {
 }
 
 function init() {
-    // Harmonize grays/surfaces against the tint (tokens.css `.on-tint`).
-    document.body.classList.add("on-tint");
+    // Harmonize grays/surfaces against the tint (tokens.css `.on-tint`) — only
+    // when the window is actually color-tinted; paper windows keep solid grays.
+    if (color) document.body.classList.add("on-tint");
 
     const bar = document.querySelector("[data-window-bar]");
     if (bar) {
