@@ -1,0 +1,46 @@
+/* Studio kit — custom window chrome.
+ *
+ * For tool windows built with no native decorations (decorations(false) +
+ * transparent(true) on the Rust side): the page paints its own title bar,
+ * rounded corners, and close control. Pairs with window-chrome.js.
+ *
+ * Opt in from a tool: link this after kit.css, mark the top bar element with
+ * `data-window-bar`, and import window-chrome.js. See docs/tools.md.
+ *
+ * Layer ABOVE tokens.css + kit.css. */
+
+/* Rounded corners. IMPORTANT: a background on `html` or `body` propagates to
+   the square viewport (the CSS "canvas background" quirk) and ignores
+   border-radius — so the corners won't round. Keep html/body TRANSPARENT and
+   paint the opaque surface on the content rows inside body; body's overflow
+   clip then rounds them. The window itself is transparent + shadowless (set in
+   src-tauri/src/lib.rs), so the corner pixels reveal the desktop. */
+html, body { background: transparent; }
+body {
+    border-radius: var(--window-radius, 10px);
+    overflow: hidden;          /* clips content rows to the rounded corners */
+}
+
+/* The title bar: tinted with the window's color (--titlebar-tint, set by
+   window-chrome.js from the ?color= URL param), draggable, no text selection. */
+[data-window-bar] {
+    background: var(--titlebar-tint, var(--bg));
+    border-radius: var(--window-radius, 10px) var(--window-radius, 10px) 0 0;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Close control — a single dot where the traffic lights used to be. */
+.window-close {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    flex: 0 0 auto;
+    background: var(--rose);
+    opacity: 0.55;
+    cursor: pointer;
+    transition: opacity var(--dur-fast);
+}
+.window-close:hover { opacity: 1; }

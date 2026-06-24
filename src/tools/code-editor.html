@@ -6,6 +6,7 @@
 <title>Code Editor</title>
 <link rel="stylesheet" href="../tokens.css" />
 <link rel="stylesheet" href="../kit/kit.css" />
+<link rel="stylesheet" href="../kit/window-chrome.css" />
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -18,7 +19,11 @@
 
   html, body { height: 100%; }
   body {
-    background: var(--bg);
+    /* Transparent so the window's rounded corners (clipped by window-chrome.css)
+       reveal the desktop — an opaque body/html background propagates to the
+       square viewport and ignores border-radius. The content rows below carry
+       the paper fill instead. */
+    background: transparent;
     color: var(--text);
     font-family: var(--sans);
     display: flex;
@@ -26,7 +31,7 @@
     overflow: hidden;
   }
 
-  /* ---- toolbar ---- */
+  /* ---- toolbar (doubles as the draggable title bar; chrome from kit) ---- */
   #toolbar {
     flex: 0 0 auto;
     display: flex;
@@ -35,7 +40,6 @@
     gap: 8px;
     padding: 8px 12px;
     border-bottom: 1px solid var(--hairline);
-    background: var(--bg);
     z-index:20;
   }
   #toolbar .spacer { flex: 1; }
@@ -79,6 +83,7 @@
     flex: 1 1 auto;
     display: flex;
     min-height: 0;
+    background: var(--bg);   /* paper fill for the body (which is transparent for rounded corners) */
   }
 
   /* DOM tree (left) */
@@ -364,7 +369,7 @@
 </style>
 </head>
 <body>
-  <div id="toolbar">
+  <div id="toolbar" data-window-bar>
     <div>
         <button class="btn btn-icon" id="back-btn" title="Back" disabled><span class="mi">arrow_back</span></button>
         <button class="btn btn-icon" id="forward-btn" title="Forward" disabled><span class="mi">arrow_forward</span></button>
@@ -445,6 +450,7 @@ import "../vendor/beautify-css.js";    // window.css_beautify
 import "../vendor/beautify-html.js";   // window.html_beautify (needs the two above)
 import "../vendor/prism.js";           // window.Prism (markup + css + js)
 import "../vendor/prism-markdown.min.js"; // adds Prism.languages.markdown
+import "../kit/window-chrome.js";         // custom title bar: drag, close dot, tint
 
 const TAURI = window.__TAURI__;
 const invoke = TAURI ? TAURI.core.invoke : null;
@@ -455,6 +461,10 @@ if (TAURI) {
   const { getCurrentWindow } = TAURI.window;
   const { LogicalSize } = TAURI.dpi;
   getCurrentWindow().setSize(new LogicalSize(1060, 760));
+  // Custom window chrome (draggable bar, close dot, Cmd+W, rounded corners) is
+  // provided by kit/window-chrome.js, imported below. Re-tint on launch even
+  // before a file is opened (it retints per open file via applyTitleColor).
+  setTimeout(() => applyTitleColor(), 0);
 }
 
 const $ = (id) => document.getElementById(id);
@@ -465,6 +475,10 @@ let titleColor = "";
 async function applyTitleColor() {
   if (!invoke) return;
   titleColor = currentPath ? await invoke("git_color_for_path", { path: currentPath }) : "";
+  // No file (or file outside any known repo) → fall back to the active project's color.
+  if (!titleColor) titleColor = await invoke("active_git_color");
+  // Tint our custom title bar (the toolbar); empty string clears to paper.
+  document.documentElement.style.setProperty("--titlebar-tint", titleColor || "");
   if (evt) evt.emit("ce:color", titleColor);
 }
 
