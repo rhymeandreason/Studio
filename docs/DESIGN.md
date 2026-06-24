@@ -6,6 +6,8 @@
 2. **`src/kit/kit.css`** — Component classes built on tokens. No JS. Link after `tokens.css`.
 3. **`src/kit/components.js`** — `<studio-*>` Web Components for widgets that need JS behavior. Each exposes `.value` + emits `input`/`change` like a native form control.
 
+Also in the kit: **`src/kit/window-chrome.{js,css}`** — custom window chrome for decorationless tool windows (draggable title bar, close dot, color tint, rounded corners). Opt in by linking the CSS, importing the JS, and marking the top bar `data-window-bar`. See the "Window style" section in [tools.md](tools.md).
+
 **When to add a component vs. a class:** CSS class if it's purely visual; Web Component if it needs encapsulated JS behavior.
 
 Current components: `<studio-color>`, `<studio-swatch>`, `<studio-toggle>`. Full attribute/event docs are in [`kit-gallery.html`](../src/tools/kit-gallery.html) (Tools → Design System) next to each component demo.

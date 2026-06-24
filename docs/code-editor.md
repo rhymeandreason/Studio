@@ -20,6 +20,11 @@ all kit-styled, all offline. See [tools.md](tools.md) for how tools load.
 └──────────────┴──────────────────────────────────────┴──┘
 ```
 
+- **Custom window** — the editor is the first tool with fully custom chrome
+  (no native title bar / traffic lights): the toolbar (`#toolbar`, marked
+  `data-window-bar`) doubles as the draggable title bar, with a close dot and
+  project-color tint from the shared kit module `kit/window-chrome.js`. See
+  the "Window style" section in [tools.md](tools.md).
 - **DOM tree** — built from an **offscreen parser iframe** (not the visible
   preview), so it works even when the preview window is closed. The iframe runs
   scripts (`allow-same-origin allow-scripts`), so the tree reflects the

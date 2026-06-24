@@ -117,148 +117,79 @@ if (window.__TAURI__) {
 The `core:window:allow-set-size` permission is already granted to all `tool-*`
 windows in `src-tauri/capabilities/tools.json`.
 
-## Title bar conventions
+## Window style (title bar / chrome)
 
-By default tool windows get a normal title bar showing the file's stem (e.g.
-`bento-grid.html` → "Bento Grid"). The user may ask for the 'Minimal window style', instructions below:
+**One source of truth.** A tool's window look is decided by the `tool_style(filename)`
+table in `src-tauri/src/lib.rs`, returning a `ToolStyle { w, h, empty_title,
+chrome, tint }`. All three tool-window builders (`open_tool_window_near`,
+`open_tool_window_with_color`, `open_tool`) route through `apply_tool_chrome()`,
+so the style can't drift between them. To restyle a tool you edit *one* table
+entry — never the builders.
 
-### Minimal window style
+`Chrome` has three variants:
 
-Empty native title + transparent `--bg`-tinted title bar, so OS chrome
-disappears and the page owns the whole window. The tool provides its own title
-in an in-page drag strip. To apply to a tool (e.g. `my-tool.html`):
+- **`Native`** (default) — plain OS title bar showing the file's stem
+  (`bento-grid.html` → "Bento Grid").
+- **`NativeTint`** — transparent native title bar tinted to `tint`
+  (`Tint::Paper` = `--bg`, or `Tint::Project` = the active project's color). The
+  webview starts *below* the bar; the page can't draw into it. Used by the
+  paper tools (Daily Notes, RAM, etc.) and Code Preview.
+- **`Custom`** — fully custom: no native bar or traffic lights. The page paints
+  its own draggable bar, close control, and rounded corners via the shared kit
+  module (below). This is the target style for most project tools.
 
-1. In `open_tool_window_near` (`src-tauri/src/lib.rs`), add the filename to
-   the `title` blank-string branch and add a `background_color` block:
+### Custom chrome (the `Custom` recipe)
 
-   ```rust
-   // title
-   let title = if filename == "daily-notes.html" || filename == "my-tool.html" { … }
+Two halves — flip the table entry **and** convert the HTML; do both or the tool
+opens with no way to drag or close it.
 
-   // background color
-   if filename == "my-tool.html" {
-       builder = builder
-           .title_bar_style(tauri::TitleBarStyle::Transparent)
-           .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff)); // --bg
-   }
-   ```
+1. **Rust:** set the tool's `chrome` to `Chrome::Custom` in `tool_style`, with a
+   `tint` (`Project` for project-scoped tools, `Paper`/`None` for globals) and
+   `empty_title: true`. `apply_tool_chrome` then builds it with
+   `decorations(false).transparent(true).shadow(false)` and passes the resolved
+   color through as `?color=`. `cargo check` after.
 
-2. In the tool's HTML, add a drag strip as the **first element inside
-   `<body>`**. Put any in-page title text inside it:
+   > `shadow(false)` is required: the native macOS shadow is drawn around the
+   > *square* window bounds and reads as a 1px black border / square corners.
 
-   ```html
-   <div class="titlebar" data-tauri-drag-region>
-     <div class="page-title">My Tool</div>
-   </div>
-   ```
-
-   ```css
-   .titlebar {
-     height: 52px;          /* enough room for traffic lights + heading */
-     display: flex;
-     align-items: flex-end;
-     padding-bottom: 10px;
-     -webkit-app-region: drag;
-   }
-   .page-title { font-size: 16px; font-weight: 600; }
-   ```
-
-   Remove any top `padding` from `body` — the titlebar div provides the
-   spacing instead. Run `cargo check` after the Rust edit.
-
-### Fully frameless style (no titlebar, no traffic lights, no shadow)
-
-No native chrome at all.
-
-1. In `open_tool_window_near` (`src-tauri/src/lib.rs`):
-
-   ```rust
-   if filename == "my-tool.html" {
-       builder = builder
-           .decorations(false)
-           .shadow(false)
-           .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff)); // --bg
-   }
-   ```
-
-2. Dragging needs a real `data-tauri-drag-region` element (CSS
-   `-webkit-app-region: drag` alone doesn't work here) — put it on a spacer
-   that fills empty header space, not on the header itself, so it doesn't
-   swallow clicks on buttons/tabs:
+2. **HTML:** opt into the kit window chrome —
 
    ```html
-   <div class="tabstrip">
-     <!-- tabs -->
-     <div class="tabstrip-spacer" data-tauri-drag-region></div>
-   </div>
+   <link rel="stylesheet" href="../kit/window-chrome.css" />
+   ...
+   <script type="module" src="../kit/window-chrome.js"></script>
    ```
 
-3. No traffic lights means no close button — bind one:
+   and mark the tool's top bar element `data-window-bar`. The module reads
+   `?color=` → sets `--titlebar-tint`/`--window-color`, makes the bar a Tauri
+   drag region (buttons inside still click), injects a `.window-close` dot at
+   the bar's left edge, wires Cmd/Ctrl+W, and rounds the corners. Tools that
+   retint dynamically (Code Editor, per open file) just set `--titlebar-tint`
+   themselves later.
 
-   ```js
-   window.addEventListener("keydown", (e) => {
-     if (e.key === "Escape" || ((e.metaKey || e.ctrlKey) && e.key === "w")) {
-       getCurrentWindow().close();
-     }
-   });
-   ```
+3. **Rounded corners gotcha:** a background on `html`/`body` propagates to the
+   square viewport (CSS "canvas background" quirk) and **ignores
+   border-radius** — so corners stay square. Keep `html`/`body` **transparent**
+   (window-chrome.css does this) and paint the opaque surface on the content
+   rows *inside* body (e.g. Code Editor sets `#main { background: var(--bg) }`);
+   body's `overflow:hidden` clip then rounds them, and the transparent corner
+   pixels reveal the desktop.
 
-4. Add to `src-tauri/capabilities/tools.json`:
-   `core:window:allow-start-dragging`, `core:window:allow-close`.
+The needed window permissions (`core:window:allow-start-dragging`,
+`allow-close`, `allow-minimize`) are already granted to all `tool-*` windows in
+`src-tauri/capabilities/tools.json`.
 
-5. `cargo check`, then restart `npm run tauri dev` (capability changes need a restart).
+### Color / tint
 
-### Colored title bar style (Code Editor / Preview pattern)
+`Tint::Project` resolves to the active project's accent (`active_git_color_hex`,
+which prefers the workspace `color`, falling back to legacy per-repo
+`git_color`). The color is encoded into the URL as `?color=<hex>` so the page
+can paint its bar on the first frame — it can't be updated on the native bar
+after `build()`, which is why `NativeTint` tools must resolve it up front too.
 
-The native title bar is transparent, `background_color` provides the color, and
-the window title is the tool name rendered by macOS. The webview starts *below*
-the title bar — you cannot draw into that zone from HTML, so there is no in-page
-drag strip.
-
-**When to use:** tools that want a project-tinted chrome (e.g. matching the repo's
-Git window color) without a custom in-page header.
-
-**Key insight:** `background_color` on `WebviewWindowBuilder` must be set at
-window-creation time with the correct color — it cannot be updated later. So the
-color must be resolved in Rust *before* `build()` is called, and passed to the
-HTML as a `?color=` URL param so the page body matches it on first paint too.
-
-#### To apply this style to a new tool:
-
-1. Add `open_tool_window_with_color` call site in Rust, passing the color you
-   want (e.g. via `git_color_for_path` or a stored workspace color):
-
-   ```rust
-   // In your open_* function:
-   let color = git_color_for_path(app.clone(), file.clone());
-   open_tool_window_with_color(&app, "tools/my-tool.html", &color);
-   ```
-
-   `open_tool_window_with_color` (in `src-tauri/src/lib.rs`) sets
-   `TitleBarStyle::Transparent`, `background_color`, a non-empty title (derived
-   from the filename), and appends `?color=<hex>` to the URL.
-
-2. Keep the tool HTML free of any `#titlebar` div. The native title bar handles
-   the text and drag; the webview starts at the toolbar. No `cargo check` changes
-   needed beyond step 1.
-
-3. If the tool is opened by another tool (like Preview is opened by Code Editor),
-   accept a `color: Option<String>` parameter in the Rust command and forward it:
-
-   ```rust
-   #[tauri::command]
-   fn open_my_preview(app: AppHandle, color: Option<String>) {
-       match color.filter(|c| !c.is_empty()) {
-           Some(c) => open_tool_window_with_color(&app, "tools/my-preview.html", &c),
-           None    => open_tool_window(&app, "tools/my-preview.html"),
-       }
-   }
-   ```
-
-   Then pass the color from the calling tool's JS:
-   ```js
-   invoke("open_my_preview", { color: titleColor });
-   ```
+Code Editor / Preview are a paired example: the editor reads `?color=` and also
+retints per open file (`git_color_for_path`), forwarding the color to the
+Preview window over the Tauri event bus.
 
 ## "Spotlight" tools: global-shortcut transparent overlays
 
