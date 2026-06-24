@@ -301,18 +301,16 @@
     font: var(--code-font);
   }
   #inspector .ins-sel { color: var(--accent); margin-bottom: 6px;}
+  /* Layout only — color comes from the kit `.tint-dark` utility on the chip. */
   .chip {
     display: inline-block;
     padding: 1px 7px;
     margin: 0 4px 4px 0;
     border-radius: 999px;
-    background: var(--accent-soft);
-    color: var(--text);
   }
   .rule { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--hairline); }
   .rule .rsel { color: var(--rose); }
   .clk { cursor: pointer; }
-  .chip.clk:hover { background: var(--accent); color: var(--elevated); }
   .rsel.clk:hover { text-decoration: underline; }
   .rule .rdecl { color: var(--text-muted); padding-left: 12px; }
   .empty { color: var(--text-soft); }
@@ -385,22 +383,22 @@
 <body>
   <div id="toolbar" data-window-bar>
     <div class="tb-group">
-        <button class="btn btn-icon btn-secondary" id="back-btn" title="Back" disabled><span class="mi">arrow_back</span></button>
-        <button class="btn btn-icon btn-secondary" id="forward-btn" title="Forward" disabled><span class="mi">arrow_forward</span></button>
-        <button class="btn btn-icon btn-secondary" id="open" title="Open file"><span class="mi">folder_open</span></button>
-        <button class="btn btn-icon btn-secondary" id="save" title="Save (Cmd+S)"><span class="mi">save</span></button>
+        <button class="btn btn-icon btn-tint-dark" id="back-btn" title="Back" disabled><span class="mi">arrow_back</span></button>
+        <button class="btn btn-icon btn-tint-dark" id="forward-btn" title="Forward" disabled><span class="mi">arrow_forward</span></button>
+        <button class="btn btn-icon btn-tint-dark" id="open" title="Open file"><span class="mi">folder_open</span></button>
+        <button class="btn btn-icon btn-tint-dark" id="save" title="Save (Cmd+S)"><span class="mi">save</span></button>
         <span id="filename">No file</span>
         <span id="dirty" title="Unsaved changes"></span>
         <span id="diff-status"></span>
     </div>
     <div class="tb-group">
-        <button class="btn btn-secondary" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
-        <button class="btn btn-secondary" id="wrap-btn"><span class="mi">wrap_text</span>Wrap</button>
+        <button class="btn btn-tint-dark" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
+        <button class="btn btn-tint-dark" id="wrap-btn"><span class="mi">wrap_text</span>Wrap</button>
     </div>
     <div class="tb-group">
-        <button class="btn btn-icon btn-secondary" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span><span class="stale-dot"></span></button>
-        <button class="btn btn-icon btn-secondary" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
-        <button class="btn btn-icon btn-secondary" id="view-toggle" title="Show rendered preview"><span class="mi">visibility</span></button>
+        <button class="btn btn-icon btn-tint-dark" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span><span class="stale-dot"></span></button>
+        <button class="btn btn-icon btn-tint-dark" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
+        <button class="btn btn-icon btn-tint-dark" id="view-toggle" title="Show rendered preview"><span class="mi">visibility</span></button>
         <button class="btn-round btn-round-filled" id="preview-btn" title="Preview"><span class="mi mi-sm">play_arrow</span></button>
     </div>
   </div>
@@ -1234,8 +1232,8 @@ function showInspector(el) {
   let html = `<div class="ins-sel">${sel}${el.classList.length ? "." + [...el.classList].join(".") : ""}</div>`;
 
   const chips = [];
-  if (el.id) chips.push(`<span class="chip clk" data-find="#${el.id}">#${el.id}</span>`);
-  for (const c of el.classList) chips.push(`<span class="chip clk" data-find=".${c}">.${c}</span>`);
+  if (el.id) chips.push(`<span class="chip tint-dark clk" data-find="#${el.id}">#${el.id}</span>`);
+  for (const c of el.classList) chips.push(`<span class="chip tint-dark clk" data-find=".${c}">.${c}</span>`);
   html += chips.length ? chips.join("") : `<span class="empty">No classes</span>`;
 
   // Matched CSS rules from the document's stylesheets.

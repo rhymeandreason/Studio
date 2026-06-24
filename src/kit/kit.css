@@ -1039,3 +1039,34 @@ font-family: var(--sans);
     border-bottom: 1px solid var(--hairline);
     user-select: none;
 }
+
+/* Tinted buttons to use with custom colored windows */
+.btn-tint-light, .tint-light {
+    background: var(--surface);
+    border:none;
+    color: var(--text-muted);
+}
+.btn-tint-light:hover, .tint-light:hover {
+    background: var(--elevated);
+    color: var(--text);
+}
+
+.btn-tint-dark, .tint-dark {
+    background: var(--text-soft);
+    border:none;
+    color: var(--card-strong);
+}
+.btn-tint-dark:hover, .tint-dark:hover {
+    background: var(--text);
+    /* --window-color is only set on tinted custom windows; fall back to the
+       surface so the text stays legible against --text elsewhere. */
+    color: var(--window-color, var(--surface));
+}
+
+.chip-tint-light, .chip-tint-dark{
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 999px;
+}

@@ -22,7 +22,7 @@
     --text-soft:  rgba(0, 0, 0, 0.4);
     --hairline:        rgba(0, 0, 0, 0.13);
     --hairline-strong: rgba(255, 255, 255, 0.5);
-    --surface: rgba(255, 255, 255, 0.5);
+    --surface: rgba(255, 255, 255, 0.6);
     /* Cards floating on the tint (translucent white → picks up the tint). */
     --card:        rgba(255, 255, 255, 0.5);
     --card-strong: rgba(255, 255, 255, 0.72);
@@ -54,8 +54,8 @@ body {
 
 /* Close control — a single dot where the traffic lights used to be. */
 .window-close {
-    width: 13px;
-    height: 13px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     border: none;
     padding: 0;
@@ -66,3 +66,9 @@ body {
     transition: opacity var(--dur-fast);
 }
 .window-close:hover { opacity: 1; }
+
+/* Overrides for buttons on the colored background*/
+.btn.active{
+    //mix-blend-mode: overlay;
+    background:var(--text-muted);
+}
