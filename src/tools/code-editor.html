@@ -469,7 +469,44 @@ const filenameEl = $("filename"), dirtyEl = $("dirty"), diffStatus = $("diff-sta
 let currentPath = null;
 let changedLines = new Set();   // 1-based line numbers (new file) marked as added/changed
 let deletedAt = new Set();      // lines where preceding content was deleted (triangle marker)
-let prettifySnapshot = null;    // { before, after } for one-level Prettify undo
+// In-editor undo/redo. WKWebView's native textarea undo is flaky and resets, so
+// we keep our own stack of states ({value, selection}), coalescing typing
+// bursts into one step. `undoStack`'s last entry is always the current state.
+let undoStack = [], redoStack = [], undoTimer = null;
+function snap() { return { value: code.value, s: code.selectionStart, e: code.selectionEnd }; }
+function seedUndo() { undoStack = [snap()]; redoStack = []; clearTimeout(undoTimer); }
+function commitUndo() {                 // capture current state as a new step
+  clearTimeout(undoTimer);
+  if (!undoStack.length || undoStack[undoStack.length - 1].value !== code.value) {
+    undoStack.push(snap());
+    if (undoStack.length > 200) undoStack.shift();
+    redoStack = [];
+  }
+}
+function scheduleUndo() {                // coalesce a burst, then commit on pause
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(commitUndo, 350);
+}
+function applySnap(sp) {
+  const keepScroll = code.scrollTop;     // don't jump the viewport on undo/redo
+  code.value = sp.value;
+  code.setSelectionRange(sp.s, sp.e);    // (this would auto-scroll to the caret)
+  setDirty(true); render(); paint(); persist();
+  code.scrollTop = keepScroll;
+  syncScroll();
+}
+function undo() {
+  commitUndo();                          // fold any uncommitted burst
+  if (undoStack.length < 2) return;
+  redoStack.push(undoStack.pop());       // move current onto redo
+  applySnap(undoStack[undoStack.length - 1]);
+}
+function redo() {
+  if (!redoStack.length) return;
+  const sp = redoStack.pop();
+  undoStack.push(sp);
+  applySnap(sp);
+}
 let dirty = false;
 
 // ---------- file open / save ----------
@@ -531,6 +568,7 @@ function loadText(text) {
   render();
   paint();
   persist();
+  seedUndo();
 }
 
 async function saveFile() {
@@ -567,12 +605,11 @@ function prettify() {
     else if (ext() === "js" || ext() === "mjs") out = window.js_beautify(code.value, opts);
     else out = window.html_beautify(code.value, opts);
   } catch (e) { console.error(e); return; }
-  // Fast whole-value replace + a one-level snapshot so Cmd+Z can revert the
-  // Prettify (execCommand-based replace is too slow on large files).
-  prettifySnapshot = { before: code.value, after: out };
+  commitUndo();                 // checkpoint pre-Prettify state
   code.value = out;
+  commitUndo();                 // and the result, so Cmd+Z reverts it
   setDirty(true);
-  render(); paint();
+  render(); paint(); persist();
 }
 
 function setDirty(v) { dirty = v; dirtyEl.classList.toggle("on", v); }
@@ -591,7 +628,7 @@ function persist() {
 }
 
 // ---------- editor: gutter + highlight + minimap ----------
-code.addEventListener("input", () => { setDirty(true); paint(); persist(); scheduleRender(); });
+code.addEventListener("input", () => { setDirty(true); paint(); persist(); scheduleRender(); scheduleUndo(); });
 let scrollPersistScheduled = false;
 code.addEventListener("scroll", () => {
   syncScroll();
@@ -1284,15 +1321,13 @@ $("find-close").addEventListener("click", closeFind);
 window.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); saveFile(); return; }
   if ((e.metaKey || e.ctrlKey) && e.key === "f") { e.preventDefault(); openFind(); return; }
-  // Cmd+Z right after a Prettify (nothing typed since) reverts it; otherwise
-  // let the textarea's native undo handle it.
-  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "z" &&
-      prettifySnapshot && code.value === prettifySnapshot.after) {
+  // Undo / redo via our own stack (Cmd+Z, Cmd+Shift+Z or Cmd+Y).
+  if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")) {
     e.preventDefault();
-    code.value = prettifySnapshot.before;
-    prettifySnapshot = null;
-    setDirty(true); render(); paint(); persist();
+    e.shiftKey ? redo() : undo();
+    return;
   }
+  if ((e.metaKey || e.ctrlKey) && e.key === "y") { e.preventDefault(); redo(); return; }
 });
 
 // Restore the previous session (file + unsaved text) if there is one, so a
@@ -1311,6 +1346,7 @@ window.addEventListener("keydown", (e) => {
     render();
     paint();
     refreshDiff();
+    seedUndo();
     if (typeof s.selStart === "number") {
       code.setSelectionRange(s.selStart, s.selEnd ?? s.selStart);
     }
