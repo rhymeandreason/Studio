@@ -37,36 +37,33 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 10px;
     padding: 8px 12px;
-    border-bottom: 1px solid var(--hairline);
-    z-index:20;
+    z-index: 20;
   }
+  .tb-group { display: flex; align-items: center; gap: 6px; }
   #toolbar .spacer { flex: 1; }
-  #file-info{
-      background:var(--surface);
-      z-index:20;
-      padding:3px 8px;
-      border-bottom: 1px solid var(--hairline);
-      display: flex;
-      justify-content: space-between;
-  }
+
+  /* Filename + status live in the title bar (alongside the buttons). */
   #filename {
     font: var(--code-font);
     font-weight: 600;
-    color: var(--text-muted);
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-top:3px;
+    max-width: 220px;
+    margin-left: 4px;
   }
   #dirty {
     width: 7px; height: 7px; border-radius: 50%;
     background: var(--rose);
     opacity: 0;
     transition: opacity var(--dur-fast);
+    flex: 0 0 auto;
   }
   #dirty.on { opacity: 1; }
+  #diff-status { font: var(--code-font); color: var(--text); opacity: .65; white-space: nowrap; }
   #refresh-btn { position: relative; }
   #refresh-btn .stale-dot {
     position: absolute; top: 2px; right: 2px;
@@ -76,38 +73,52 @@
     transition: opacity var(--dur-fast);
   }
   #refresh-btn.stale .stale-dot { opacity: 1; }
-  #diff-status { font: var(--code-font); color: var(--text-soft); }
 
-  /* ---- main 4-column row ---- */
+  /* ---- main row: cards floating on the tinted window background ---- */
   #main {
     flex: 1 1 auto;
     display: flex;
     min-height: 0;
-    background: var(--bg);   /* paper fill for the body (which is transparent for rounded corners) */
+    gap: 10px;
+    padding: 0 10px 10px;
+    /* The tint fills the window (and is the opaque fill the rounded corners
+       clip against). Buttons/cards sit on top of it. */
+    background: var(--titlebar-tint, var(--bg));
   }
 
-  /* DOM tree (left) */
+  /* Left column: a stack of cards (DOM, Styles / Sections, Links). */
   #tree-col {
-    flex: 0 0 240px;
-    border-right: 1px solid var(--hairline);
+    flex: 0 0 250px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+  }
+  .panel-card {
+    /* Translucent white over the tint → the soft tinted-card look (à la the
+       Git window). The code card stays solid white for legibility. */
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     min-height: 0;
-    background: var(--bg);
-    width:250px;
   }
+  /* DOM is capped so Styles gets the rest of the column; the tree scrolls
+     inside its card when it's taller than the cap. */
+  #dom-card { flex: 0 1 auto; max-height: 60%; }
+  #styles-card { flex: 1 1 auto; }
+  #sections-card { flex: 1 1 auto; }
+  #links-card { flex: 0 1 auto; max-height: 40%; }
+
   .col-head {
     flex: 0 0 auto;
-    padding: 7px 12px;
+    padding: 8px 12px;
     font-size: 11px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--text);
+    color: var(--text-muted);
     border-bottom: 1px solid var(--hairline);
-    background: var(--surface);
-  }
-  #styles-heading{
-      border-top:1px solid var(--hairline-strong);
   }
   #tree {
     flex: 1 1 auto;
@@ -129,8 +140,17 @@
   .tcls { color: var(--text-muted); }
   .twrap { padding-left: 14px; }
 
-  /* editor (center) */
-  #editor-col { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; position: relative; }
+  /* editor (center) — its own rounded card on the tint */
+  #editor-col {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    position: relative;
+    background: var(--elevated);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
 
   /* Find bar (Cmd+F) */
   #find-bar {
@@ -275,10 +295,8 @@
 
   /* inspector (bottom of the left column) */
   #inspector {
-    flex: 0 0 auto;
-    max-height: 45%;
+    flex: 1 1 auto;
     overflow: auto;
-    background: var(--bg);
     padding: 10px 12px;
     font: var(--code-font);
   }
@@ -299,17 +317,13 @@
   .rule .rdecl { color: var(--text-muted); padding-left: 12px; }
   .empty { color: var(--text-soft); }
 
-  /* Markdown mode: left column is a heading browser, not DOM + Styles. */
-  #sections-heading, #sections { display: none; }
-  body.is-markdown #dom-heading,
-  body.is-markdown #tree,
-  body.is-markdown #styles-heading,
-  body.is-markdown #inspector { display: none; }
-  body.is-markdown #sections-heading,
-  body.is-markdown #sections,
-  body.is-markdown #links-heading,
-  body.is-markdown #links { display: block; }
-  #links-heading, #links { display: none; }
+  /* Markdown mode: left column shows a heading/link browser, not DOM + Styles.
+     Toggle whole cards (each .panel-card lays its header + body out as flex). */
+  #sections-card, #links-card { display: none; }
+  body.is-markdown #dom-card,
+  body.is-markdown #styles-card { display: none; }
+  body.is-markdown #sections-card,
+  body.is-markdown #links-card { display: flex; }
   #sections { flex: 1 1 auto; overflow: auto; padding: 6px 0 12px; font: var(--code-font); }
   #links { flex: 0 1 auto; max-height: 40%; overflow: auto; padding: 6px 0 12px; font: var(--code-font); }
   .lnk {
@@ -370,49 +384,49 @@
 </head>
 <body>
   <div id="toolbar" data-window-bar>
-    <div>
-        <button class="btn btn-icon" id="back-btn" title="Back" disabled><span class="mi">arrow_back</span></button>
-        <button class="btn btn-icon" id="forward-btn" title="Forward" disabled><span class="mi">arrow_forward</span></button>
-        <button class="btn" id="open"><span class="mi">folder_open</span>Open</button>
-        <button class="btn btn-primary" id="save"><span class="mi">save</span>Save</button>
+    <div class="tb-group">
+        <button class="btn btn-icon btn-secondary" id="back-btn" title="Back" disabled><span class="mi">arrow_back</span></button>
+        <button class="btn btn-icon btn-secondary" id="forward-btn" title="Forward" disabled><span class="mi">arrow_forward</span></button>
+        <button class="btn btn-icon btn-secondary" id="open" title="Open file"><span class="mi">folder_open</span></button>
+        <button class="btn btn-icon btn-secondary" id="save" title="Save (Cmd+S)"><span class="mi">save</span></button>
+        <span id="filename">No file</span>
+        <span id="dirty" title="Unsaved changes"></span>
+        <span id="diff-status"></span>
     </div>
-    <div>
+    <div class="tb-group">
         <button class="btn btn-secondary" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
         <button class="btn btn-secondary" id="wrap-btn"><span class="mi">wrap_text</span>Wrap</button>
     </div>
-    <div>
-        <button class="btn btn-secondary" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span>Refresh<span class="stale-dot"></span></button>
-        <button class="btn btn-secondary" id="diff-mode" title="Toggle diff: uncommitted vs last commit"><span class="mi">difference</span>Uncommitted</button>
-        <button class="btn btn-secondary" id="view-toggle" title="Toggle code / preview"><span class="mi">visibility</span>Preview</button>
+    <div class="tb-group">
+        <button class="btn btn-icon btn-secondary" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span><span class="stale-dot"></span></button>
+        <button class="btn btn-icon btn-secondary" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
+        <button class="btn btn-icon btn-secondary" id="view-toggle" title="Show rendered preview"><span class="mi">visibility</span></button>
         <button class="btn-round btn-round-filled" id="preview-btn" title="Preview"><span class="mi mi-sm">play_arrow</span></button>
     </div>
-
-
-
   </div>
 
   <div id="main">
     <div id="tree-col">
-      <div class="col-head" id="dom-heading">DOM</div>
-      <div id="tree"><div class="empty" style="padding:8px 12px">Open an HTML file</div></div>
-      <div class="col-head" id="styles-heading">Styles</div>
-      <div id="inspector"><span class="empty">Select an element in the DOM tree.</span></div>
-      <!-- Markdown files show a heading browser here instead of DOM/Styles. -->
-      <div class="col-head" id="sections-heading">Sections</div>
-      <div id="sections"><span class="empty" style="padding:8px 12px">No headings</span></div>
-      <div class="col-head" id="links-heading">Linked Files</div>
-      <div id="links"><span class="empty" style="padding:8px 12px">No links</span></div>
+      <div class="panel-card" id="dom-card">
+        <div class="col-head" id="dom-heading">DOM</div>
+        <div id="tree"><div class="empty" style="padding:8px 12px">Open an HTML file</div></div>
+      </div>
+      <div class="panel-card" id="styles-card">
+        <div class="col-head" id="styles-heading">Styles</div>
+        <div id="inspector"><span class="empty">Select an element in the DOM tree.</span></div>
+      </div>
+      <!-- Markdown files show these two cards instead of DOM/Styles. -->
+      <div class="panel-card" id="sections-card">
+        <div class="col-head" id="sections-heading">Sections</div>
+        <div id="sections"><span class="empty" style="padding:8px 12px">No headings</span></div>
+      </div>
+      <div class="panel-card" id="links-card">
+        <div class="col-head" id="links-heading">Linked Files</div>
+        <div id="links"><span class="empty" style="padding:8px 12px">No links</span></div>
+      </div>
     </div>
 
     <div id="editor-col">
-       <div id="file-info">
-           <span id="filename">No file</span>
-           <div>
-            <span id="dirty" title="Unsaved changes"></span>
-            <span class="spacer"></span>
-            <span id="diff-status"></span>
-           </div>
-       </div>
       <div id="editor">
         <div id="gutter"></div>
         <div id="codebox">
@@ -799,9 +813,9 @@ let diffMode = "working";
 $("diff-mode").addEventListener("click", () => {
   diffMode = diffMode === "working" ? "committed" : "working";
   document.body.classList.toggle("diff-committed", diffMode === "committed");
-  $("diff-mode").innerHTML = diffMode === "committed"
-    ? `<span class="mi">difference</span>Last commit`
-    : `<span class="mi">difference</span>Uncommitted`;
+  const dm = $("diff-mode");
+  dm.classList.toggle("active", diffMode === "committed");
+  dm.title = diffMode === "committed" ? "Diff: last commit" : "Diff: uncommitted changes";
   refreshDiff();
 });
 
@@ -946,9 +960,14 @@ function applyMode() {
   const md = isMarkdown();
   document.body.classList.toggle("is-markdown", md);
   document.body.classList.toggle("md-preview", md);        // Markdown opens in Preview
-  $("view-toggle").innerHTML = md
-    ? `<span class="mi">code</span>Code`
-    : `<span class="mi">visibility</span>Preview`;
+  setViewToggle(md);   // Markdown opens in Preview, so offer "show source"
+}
+// Icon-only Code/Preview toggle: icon + tooltip reflect what the click will do.
+function setViewToggle(showingPreview) {
+  const vt = $("view-toggle");
+  vt.innerHTML = `<span class="mi">${showingPreview ? "code" : "visibility"}</span>`;
+  vt.title = showingPreview ? "Show source" : "Show rendered preview";
+  vt.classList.toggle("active", showingPreview);
 }
 
 // Code/Preview toggle (Markdown only) — keeps scroll position by syncing to the
@@ -957,9 +976,7 @@ $("view-toggle").addEventListener("click", () => {
   const goingToPreview = !inPreview();
   const idx = goingToPreview ? currentCodeSectionIdx() : currentPreviewSectionIdx();
   const on = document.body.classList.toggle("md-preview");
-  $("view-toggle").innerHTML = on
-    ? `<span class="mi">code</span>Code`
-    : `<span class="mi">visibility</span>Preview`;
+  setViewToggle(on);
   requestAnimationFrame(() => {
     if (on) scrollPreviewToSection(idx);
     else if (idx >= 0 && mdHeadings[idx]) scrollCodeToLine(mdHeadings[idx].line);
