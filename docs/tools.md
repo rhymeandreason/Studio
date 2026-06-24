@@ -24,7 +24,7 @@ Then a local `<style>` for tool-specific overrides only — never rewrite what k
 
 **Motion:** `import { enter, exit, enterStagger, pop } from "../kit/motion.js"`
 
-**Tokens over hardcoding:** use `var(--space-*)`, `var(--bg)`, `var(--surface)`, `var(--ink)`, `var(--radius)` etc. — never hardcode colors, spacing, or border-radius.
+**Tokens over hardcoding:** use `var(--bg)`, `var(--surface)`, `var(--text)`, `var(--accent)`, `var(--radius)` etc. for colors and radii — never hardcode them. (There is no `--space-*` scale; follow the kit and use raw px for spacing.)
 
 **Icons:** `<span class="material-symbols-rounded">icon_name</span>` (font loaded by `tokens.css`).
 

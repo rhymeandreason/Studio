@@ -9,6 +9,16 @@
     <script type="module" src="../kit/components.js"></script>
     <script src="../vendor/marked.min.js"></script>
     <style>
+      /* Spacing scale — tokens.css/kit.css don't define --space-*, so set them
+         here (matching the kit's px rhythm) instead of letting them collapse. */
+      :root {
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 18px;
+        --space-5: 28px;
+        --space-6: 40px;
+      }
       body {
         margin: 0;
         padding: clamp(28px, 6vw, 56px);
