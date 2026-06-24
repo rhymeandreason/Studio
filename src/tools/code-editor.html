@@ -96,8 +96,9 @@
   }
   .panel-card {
     /* Translucent white over the tint → the soft tinted-card look (à la the
-       Git window). The code card stays solid white for legibility. */
-    background: rgba(255, 255, 255, 0.5);
+       Git window; --card from window-chrome.css). The code card stays solid
+       white for legibility. */
+    background: var(--card);
     border-radius: var(--radius-lg);
     overflow: hidden;
     display: flex;
