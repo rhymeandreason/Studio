@@ -1489,6 +1489,8 @@ struct DirEntry2 {
     name: String,
     path: String,
     is_dir: bool,
+    /// Last-modified time, as Unix epoch seconds (0 if unavailable).
+    modified: u64,
 }
 
 /// Shallow listing of a folder's immediate children (dotfiles skipped),
@@ -1502,10 +1504,19 @@ fn list_dir(path: String) -> Result<Vec<DirEntry2>, String> {
         .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
         .map(|e| {
             let is_dir = e.path().is_dir();
+            let modified = std::fs::metadata(e.path())
+                .and_then(|m| m.modified())
+                .map(|t| {
+                    t.duration_since(std::time::SystemTime::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0)
+                })
+                .unwrap_or(0);
             DirEntry2 {
                 name: e.file_name().to_string_lossy().to_string(),
                 path: e.path().to_string_lossy().to_string(),
                 is_dir,
+                modified,
             }
         })
         .collect();

@@ -195,6 +195,12 @@ max-width:350px;
       color: var(--text-muted);
     }
 
+    /* Files changed in the last 24h — flagged with the project's window
+     * tint so they stand out while browsing the tree. */
+    .node.file.recent .name {
+      color: var(--project-color, orange);
+    }
+
     .node .open-browser {
       flex-shrink: 0;
       display: flex;
@@ -335,13 +341,19 @@ max-width:350px;
       } catch {}
     }
 
+    // Files modified within this window are flagged "recent" in the tree.
+    const RECENT_SECONDS = 24 * 60 * 60;
+
     async function buildNode(entry, isRoot = false) {
       const row = document.createElement('div');
       row.className = 'row';
 
       const isArtifact = !entry.is_dir && !!artifactKind(entry.path);
+      const isRecent = !entry.is_dir && entry.modified > 0 &&
+        (Date.now() / 1000 - entry.modified) < RECENT_SECONDS;
       const node = document.createElement('div');
-      node.className = 'node ' + (entry.is_dir ? 'dir' : 'file') + (isArtifact ? ' artifact' : '');
+      node.className = 'node ' + (entry.is_dir ? 'dir' : 'file') +
+        (isArtifact ? ' artifact' : '') + (isRecent ? ' recent' : '');
       if (isArtifact) {
         node.title = 'Open in ' + ARTIFACT_EDITOR[artifactKind(entry.path)].replace('.html', '');
       } else if (!entry.is_dir && isCodeFile(entry.name)) {
