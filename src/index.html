@@ -15,12 +15,15 @@
     <body>
         <div class="app-left">
         <div class="projhead on-tint" id="project-header" hidden>
+            <div class="projhead__bar" data-tauri-drag-region>
+                <button class="window-close" id="main-close" title="Close window"></button>
+            </div>
             <div class="projhead__row">
                 <button class="projhead__all-projects" id="all-projects-btn" type="button" title="All projects">
                     <span class="mi mi-sm">arrow_back</span>
                 </button>
-                <div style="flex: 1 1 auto;">
-                    <h1 class="projhead__name" id="project-name"></h1>
+                <div style="flex: 1 1 auto;" data-tauri-drag-region>
+                    <h1 class="projhead__name" id="project-name" data-tauri-drag-region></h1>
                 </div>
                 <button class="btn-round btn-round-filled" id="workspace-btn" type="button" title="Workspace">
                     <span class="mi">tune</span>
@@ -51,8 +54,8 @@
         <main class="window">
             <!-- All-projects overview -->
             <div class="overview" id="overview" hidden>
-                <div class="overview__header">
-                    <h1 class="page-title">Projects</h1>
+                <div class="overview__header" data-tauri-drag-region>
+                    <h1 class="page-title" data-tauri-drag-region>Projects</h1>
                     <button class="btn-main" id="overview-new-btn" type="button">
                         <span class="mi mi-sm">add</span>New Project
                     </button>

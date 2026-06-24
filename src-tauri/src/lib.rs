@@ -4928,6 +4928,31 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
     Ok(new.to_string_lossy().to_string())
 }
 
+/// Hide the macOS traffic-light buttons on a window while keeping its native
+/// frame, shadow, rounded corners, and title-bar dragging (so the project-color
+/// strip stays draggable). The main window uses titleBarStyle: Overlay, which
+/// otherwise floats the buttons over the header.
+#[cfg(target_os = "macos")]
+fn hide_traffic_lights(win: &tauri::WebviewWindow) {
+    use cocoa::appkit::{NSWindow, NSWindowButton};
+    use cocoa::base::id;
+    use objc::{msg_send, sel, sel_impl};
+    let Ok(ptr) = win.ns_window() else { return };
+    let ns = ptr as id;
+    unsafe {
+        for b in [
+            NSWindowButton::NSWindowCloseButton,
+            NSWindowButton::NSWindowMiniaturizeButton,
+            NSWindowButton::NSWindowZoomButton,
+        ] {
+            let btn: id = ns.standardWindowButton_(b);
+            if !btn.is_null() {
+                let _: () = msg_send![btn, setHidden: true];
+            }
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -5123,6 +5148,13 @@ pub fn run() {
             // Menu-bar app: no Dock icon, lives in the system tray.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            // Hide the main window's traffic lights (kept frameless-looking but
+            // still a normal decorated window for shadow + dragging).
+            #[cfg(target_os = "macos")]
+            if let Some(win) = app.get_webview_window("main") {
+                hide_traffic_lights(&win);
+            }
 
             let handle = app.handle().clone();
 

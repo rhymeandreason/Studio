@@ -106,6 +106,23 @@ body {
     background:var(--text);
 }
 
+/* Close dot — small round button standing in for the macOS traffic lights on
+ * frameless / hidden-titlebar windows. Used by window-chrome.js (tools) and the
+ * main app header. */
+.window-close {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    flex: 0 0 auto;
+    background: var(--text-muted);
+    opacity: 0.55;
+    cursor: pointer;
+    transition: opacity var(--dur-fast);
+}
+.window-close:hover { opacity: 1; }
+
 /* Sidebar toggle — 28px ghost icon button for toggling a panel.
  * Add .is-active when the panel is open. */
 .btn-icon-s {

@@ -34,20 +34,7 @@ body {
     user-select: none;
 }
 
-/* Close control — a single dot where the traffic lights used to be. */
-.window-close {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    border: none;
-    padding: 0;
-    flex: 0 0 auto;
-    background: var(--text-muted);
-    opacity: 0.55;
-    cursor: pointer;
-    transition: opacity var(--dur-fast);
-}
-.window-close:hover { opacity: 1; }
+/* .window-close (the close dot) lives in kit.css so the main app can reuse it. */
 
 /* Overrides for buttons on the colored background*/
 .btn.active{

@@ -547,6 +547,10 @@ function initTabs() {
 
 function initAllProjectsButton() {
   document.getElementById("all-projects-btn").addEventListener("click", showOverview);
+  // Close dot stands in for the hidden traffic lights; on_close hides the
+  // menu-bar window rather than quitting (see lib.rs).
+  document.getElementById("main-close")
+    .addEventListener("click", () => window.__TAURI__.window.getCurrentWindow().close());
 }
 
 function initWorkspaceButton() {

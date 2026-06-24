@@ -65,13 +65,20 @@ body {
 /* Active-project header */
 .projhead {
     flex: 0 0 auto;
-    /* Extra top padding clears the overlaid traffic lights (the window uses
-       titleBarStyle: Overlay, so content runs to the top edge). */
-    padding: 34px 24px 0;
+    padding: 4px 24px 0;
     border-bottom: 1px solid var(--hairline);
     /* Tinted with the active project's accent (set by workspace.js); paper
        surface when the project has no color. */
     background: var(--project-color, var(--surface));
+}
+
+/* Thin draggable strip at the very top (the window has no traffic lights), with
+   the close dot at the left. The window uses titleBarStyle: Overlay so content
+   runs to the top edge. */
+.projhead__bar {
+    display: flex;
+    align-items: center;
+    height: 22px;
 }
 
 .projhead__row {
@@ -271,8 +278,7 @@ body {
 /* All-projects overview */
 .overview {
     flex: 1 1 auto;
-    /* Top padding clears the overlaid traffic lights (Overlay title bar). */
-    padding: 40px 24px 24px;
+    padding: 20px 24px 24px;
 }
 
 .overview__header {
