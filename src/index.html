@@ -23,9 +23,6 @@
                     </button>
                 </div>
                 <div class="projhead__bar-group">
-                    <button class="btn btn-icon-only" id="workspace-btn" type="button" title="Workspace">
-                        <span class="mi">tune</span>
-                    </button>
                     <button class="btn btn-icon-only" id="file-directory-btn" type="button" title="File Directory">
                         <span class="mi">folder_open</span>
                     </button>
@@ -34,21 +31,26 @@
                     </button>
                 </div>
             </div>
-            <h1 class="projhead__name" id="project-name" data-tauri-drag-region></h1>
-            <nav class="tabs" id="tabs">
-                <button class="tab" data-tab="media">
-                    <span class="mi">image</span>Media
-                </button>
-                <button class="tab" data-tab="notes">
-                    <span class="mi">sticky_note_2</span>Notes
-                </button>
-                <button class="tab" data-tab="artifacts">
-                    <span class="mi">palette</span>Artifacts
-                </button>
-                <button class="tab-pin" id="tab-pin" type="button" title="Pin tab">
-                    <span class="mi mi-sm">push_pin</span>
-                </button>
-            </nav>
+            <div class="projhead__row">
+                <h1 class="projhead__name" id="project-name" data-tauri-drag-region></h1>
+                <nav class="tabs tabs--round" id="tabs">
+                    <button class="tab tab--round" data-tab="media" title="Media">
+                        <span class="mi">image</span>
+                    </button>
+                    <button class="tab tab--round" data-tab="notes" title="Notes">
+                        <span class="mi">sticky_note_2</span>
+                    </button>
+                    <button class="tab tab--round" data-tab="artifacts" title="Artifacts">
+                        <span class="mi">palette</span>
+                    </button>
+                    <button class="btn btn-icon-only tab--round" id="workspace-btn" type="button" title="Workspace">
+                        <span class="mi">tune</span>
+                    </button>
+                    <button class="tab-pin" id="tab-pin" type="button" title="Pin tab">
+                        <span class="mi mi-sm">push_pin</span>
+                    </button>
+                </nav>
+            </div>
         </div>
 
         <main class="window">

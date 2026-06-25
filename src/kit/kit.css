@@ -298,6 +298,10 @@ select.field {
     gap: 2px;
     margin-top: 16px;
 }
+.tabs--round {
+    margin-top: 0;
+    gap: 6px;
+}
 .tab {
     display: inline-flex;
     align-items: center;
@@ -330,8 +334,30 @@ select.field {
     border-radius: var(--radius-sm);
     color: var(--text);
 }
+/* Round icon-only variant — used in the project header's tab row. */
+.tab--round {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+    border-bottom: none;
+}
+.tab--round .mi {
+    font-size: 18px;
+}
+.tab--round:hover {
+    color: var(--text);
+    background: var(--hairline);
+}
+.tab--round.is-active {
+    color: var(--elevated);
+    background: var(--accent);
+    border-bottom: none;
+}
+
 .tab-pin {
-    margin-left: auto;
+    margin-left: 4px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
