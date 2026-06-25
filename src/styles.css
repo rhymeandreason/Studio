@@ -65,46 +65,36 @@ body {
 /* Active-project header */
 .projhead {
     flex: 0 0 auto;
-    padding: 4px 24px 0;
     border-bottom: 1px solid var(--hairline);
     /* Tinted with the active project's accent (set by workspace.js); paper
        surface when the project has no color. */
     background: var(--project-color, var(--surface));
 }
 
-/* Thin draggable strip at the very top (the window has no traffic lights), with
-   the close dot at the left. The window uses titleBarStyle: Overlay so content
-   runs to the top edge. */
+/* Top control row (also the drag strip — the window has no traffic lights, and
+   uses titleBarStyle: Overlay so content runs to the top edge). Close + back at
+   the left, the action buttons at the right; the project name sits below it. */
 .projhead__bar {
     display: flex;
     align-items: center;
-    height: 22px;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 30px;
 }
 
-.projhead__row {
+.projhead__bar-group {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
 }
 
-.projhead__all-projects {
+#toolbar {
     flex: 0 0 auto;
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    background: transparent;
-    border: none;
-    border-radius: 50%;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-}
-
-.projhead__all-projects:hover {
-    background: var(--surface);
-    color: var(--text);
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
 }
 
 .projhead__name {
@@ -112,6 +102,11 @@ body {
     font-size: 22px;
     font-weight: 600;
     letter-spacing: -0.01em;
+    margin: 0px 0 12px 12px;
+}
+
+.projhead .tabs{
+    padding-right:12px;
 }
 
 /* Animated animal sprite badge (Workspace toolbar, see sprites.js) */
@@ -188,6 +183,7 @@ body {
 .claude-btn__icon {
     width: 16px;
     height: 16px;
+    mix-blend-mode: difference;
 }
 
 .btn-ghost {

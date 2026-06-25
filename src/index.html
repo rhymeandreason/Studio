@@ -15,26 +15,26 @@
     <body>
         <div class="app-left">
         <div class="projhead on-tint" id="project-header" hidden>
-            <div class="projhead__bar" data-tauri-drag-region>
-                <button class="window-close" id="main-close" title="Close window"></button>
-            </div>
-            <div class="projhead__row">
-                <button class="projhead__all-projects" id="all-projects-btn" type="button" title="All projects">
-                    <span class="mi mi-sm">arrow_back</span>
-                </button>
-                <div style="flex: 1 1 auto;" data-tauri-drag-region>
-                    <h1 class="projhead__name" id="project-name" data-tauri-drag-region></h1>
+            <div class="projhead__bar" id="toolbar" data-tauri-drag-region>
+                <div class="projhead__bar-group" >
+                    <button class="window-close" id="main-close" title="Close window"></button>
+                    <button class="btn btn-icon-only" id="all-projects-btn" type="button" title="All projects">
+                        <span class="mi mi-sm">arrow_back</span>
+                    </button>
                 </div>
-                <button class="btn-round btn-round-filled" id="workspace-btn" type="button" title="Workspace">
-                    <span class="mi">tune</span>
-                </button>
-                <button class="btn-round btn-round-filled" id="file-directory-btn" type="button" title="File Directory">
-                    <span class="mi">folder_open</span>
-                </button>
-                <button class="btn-round btn-round-filled" id="claude-btn" type="button">
-                    <img class="claude-btn__icon" src="claude/claude-icon.svg" alt="">
-                </button>
+                <div class="projhead__bar-group">
+                    <button class="btn btn-icon-only" id="workspace-btn" type="button" title="Workspace">
+                        <span class="mi">tune</span>
+                    </button>
+                    <button class="btn btn-icon-only" id="file-directory-btn" type="button" title="File Directory">
+                        <span class="mi">folder_open</span>
+                    </button>
+                    <button class="btn btn-icon-only" id="claude-btn" type="button">
+                        <img class="claude-btn__icon" src="claude/claude-icon.svg" alt="">
+                    </button>
+                </div>
             </div>
+            <h1 class="projhead__name" id="project-name" data-tauri-drag-region></h1>
             <nav class="tabs" id="tabs">
                 <button class="tab" data-tab="media">
                     <span class="mi">image</span>Media
