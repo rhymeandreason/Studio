@@ -47,6 +47,8 @@ function setSprite(name) {
 
 function setWindowTitle(projectName) {
     getCurrentWindow().setTitle(projectName ? `Claude · ${projectName}` : "Claude");
+    const el = document.getElementById("project-name");
+    if (el) el.textContent = projectName || "";
 }
 
 const sessionsListEl = document.getElementById("sessions-list");

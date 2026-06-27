@@ -116,9 +116,23 @@
     -webkit-app-region: drag;
 }
 
-/* Tabs sit on the right of the window bar. */
-.claude-topbar .claude-tabs {
-    margin-left: auto;
+/* Project name, just right of the close dot. */
+.claude-topbar .claude-project-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    -webkit-app-region: no-drag;
+}
+
+/* Sidebar/add buttons cluster on the right of the window bar.
+   (The close dot, prepended by window-chrome.js, keeps the left edge.) */
+.claude-topbar #sessions-toggle {
+    margin-left: auto; /* pushes the button cluster to the right */
 }
 
 .claude-topbar #sessions-toggle,
