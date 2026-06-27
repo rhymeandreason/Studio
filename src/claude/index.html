@@ -31,11 +31,11 @@
 
             <div class="claude-right">
                 <div class="claude-topbar" data-window-bar>
-                    <button class="btn-icon-s" id="sessions-toggle" title="Sessions">
+                    <button class="btn btn-icon-only" id="sessions-toggle" title="Sessions">
                         <span class="mi mi-sm">side_navigation</span>
                     </button>
 
-                    <button class="btn-icon-s claude-newtab" id="new-session" title="New session">
+                    <button class="btn btn-icon-only claude-newtab" id="new-session" title="New session">
                         <span class="mi mi-sm">add</span>
                     </button>
                     <div class="claude-tabs" id="tabs"></div>
@@ -85,27 +85,27 @@
                         </div>
                         <span class="claude-status__meta"></span>
                     </div>
-                    <form class="claude-input" id="input-form">
-                        <textarea
-                            class="field__input claude-textarea"
-                            id="prompt-input"
-                            rows="2"
-                            placeholder="What shall we do next?"
-                        ></textarea>
-                        <button class="btn-round btn-round-filled" id="send-btn" type="submit" title="Send">
-                            <span class="mi mi-sm">arrow_upward</span>
-                        </button>
-                        <button class="btn-round claude-stop" id="stop-btn" type="button" title="Stop" hidden>
-                            <span class="mi mi-sm">stop</span>
-                        </button>
-                    </form>
-                    <div class="claude-controls">
-                        <div class="notedrop claude-model claude-cwd" id="cwd-select" title="Working directory: project (artifacts) or code repo"></div>
-                        <div class="claude-model-wrap">
-                            <div class="notedrop claude-model" id="model-select"></div>
-                        </div>
-                        <div class="notedrop claude-model claude-permission" id="permission-select" title="Permission mode"></div>
+                </div>
+                <form class="claude-input" id="input-form">
+                    <textarea
+                        class="field__input claude-textarea"
+                        id="prompt-input"
+                        rows="2"
+                        placeholder="What shall we do next?"
+                    ></textarea>
+                    <button class="btn-round btn-round-filled" id="send-btn" type="submit" title="Send">
+                        <span class="mi mi-sm">arrow_upward</span>
+                    </button>
+                    <button class="btn-round claude-stop" id="stop-btn" type="button" title="Stop" hidden>
+                        <span class="mi mi-sm">stop</span>
+                    </button>
+                </form>
+                <div class="claude-controls">
+                    <div class="notedrop claude-model claude-cwd" id="cwd-select" title="Working directory: project (artifacts) or code repo"></div>
+                    <div class="claude-model-wrap">
+                        <div class="notedrop claude-model" id="model-select"></div>
                     </div>
+                    <div class="notedrop claude-model claude-permission" id="permission-select" title="Permission mode"></div>
                 </div>
             </div>
         </div>

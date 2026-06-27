@@ -44,7 +44,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 2px 14px 6px;
+    padding: 0px 10px 10px;
     background: transparent; /* on the project-color window background */
     -webkit-app-region: drag;
 }
@@ -111,7 +111,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 10px 6px;
+    padding: 8px 10px 10px;
     background: transparent; /* window-chrome.css tints [data-window-bar] */
     -webkit-app-region: drag;
 }
@@ -153,9 +153,8 @@
     align-items: center;
     gap: 4px;
     padding: 3px 8px;
-    border: 1px solid var(--hairline);
     border-radius: 999px;
-    background: var(--bg);
+    background: var(--surface);
     color: var(--text-muted);
     font: inherit;
     font-size: 11px;
@@ -207,7 +206,7 @@
 .claude-usage {
     display: flex;
     gap: 16px;
-    padding: 0 16px 10px;
+    padding: 0px 12px 16px;
     background: transparent; /* on the project-color window background */
 }
 
@@ -460,9 +459,9 @@
     min-width: 0;
     min-height: 0;
     /* The chat reads as a card against the project-color window background. */
-    margin: 0 12px 12px;
+    margin: 0 10px 10px;
     background: var(--card-strong, var(--surface));
-    border-radius: 16px;
+    border-radius: var(--radius-lg);
     overflow: hidden;
 }
 
@@ -718,7 +717,7 @@
 }
 
 .claude-msg__body {
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius);
     padding: 8px 12px;
     font-size: 13px;
     line-height: 1.5;
@@ -737,11 +736,11 @@
 }
 
 .claude-msg--user .claude-msg__body {
-    background: var(--accent-soft);
+    background: var(--surface);
 }
 
 .claude-msg--assistant .claude-msg__body {
-    background: var(--surface);
+   // background: var(--surface);
 }
 
 .claude-msg--tool .claude-msg__body {
@@ -764,8 +763,7 @@
     display: flex;
     gap: 8px;
     align-items: center;
-    padding: 10px;
-    border-top: 1px solid var(--hairline);
+    padding: 0 10px 10px 10px;
 }
 
 .claude-textarea {
@@ -775,7 +773,8 @@
     max-height: 140px;
     /* Solid field against the translucent card. */
     background: var(--elevated, #fff);
-    border-radius: 12px;
+    border-radius: var(--radius);
+border-color: transparent;
 }
 
 
