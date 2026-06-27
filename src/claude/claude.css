@@ -118,9 +118,9 @@
 
 .claude-tabs {
     display: flex;
-    align-items: stretch;
-    gap: 2px;
-    flex: 1;
+    align-items: center;
+    gap: 4px;
+    flex: 0 1 auto;
     min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
@@ -136,33 +136,27 @@
 }
 
 .claude-tab {
-    flex: 0 1 160px;
-    min-width: 0;
+    flex: 0 0 auto;
+    max-width: 120px;
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 7px 8px 7px 12px;
-    border: none;
-    background: none;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    background: var(--bg);
     color: var(--text-muted);
     font: inherit;
-    font-size: 12px;
+    font-size: 11px;
     cursor: pointer;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
 }
 
 .claude-tab:hover {
     color: var(--text);
-}
-
-.claude-tab.is-active {
-    color: var(--text);
-    border-bottom-color: var(--accent);
+    background: var(--surface);
 }
 
 .claude-tab__name {
-    flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -175,8 +169,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     border: none;
     border-radius: 4px;
     background: none;
@@ -185,8 +179,7 @@
     opacity: 0;
 }
 
-.claude-tab:hover .claude-tab__close,
-.claude-tab.is-active .claude-tab__close {
+.claude-tab:hover .claude-tab__close {
     opacity: 1;
 }
 

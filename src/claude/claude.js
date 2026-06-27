@@ -310,9 +310,10 @@ function visibleSessions() {
 // A tab per session for the current project; click to switch, × to close.
 function renderTabs() {
     tabsEl.innerHTML = "";
-    const visible = visibleSessions();
-    if (visible.length < 2) return; // tabs only earn their space with 2+
-    for (const s of visible) {
+    // Only the *other* sessions get a tab; the current one is shown as the title.
+    const others = visibleSessions().filter((s) => s.key !== activeKey);
+    if (!others.length) return;
+    for (const s of others) {
         const tab = document.createElement("div");
         tab.className = "claude-tab" + (s.key === activeKey ? " is-active" : "");
         tab.title = s.name;
