@@ -7,7 +7,9 @@
         <!-- Material Symbols is vendored via tokens.css (@import in ../styles.css). -->
         <link rel="stylesheet" href="../styles.css" />
         <link rel="stylesheet" href="../kit/kit.css" />
+        <link rel="stylesheet" href="../kit/window-chrome.css" />
         <link rel="stylesheet" href="claude.css" />
+        <script type="module" src="../kit/window-chrome.js"></script>
         <script type="module" src="claude.js" defer></script>
     </head>
     <body class="claude-body">
@@ -28,7 +30,7 @@
             </aside>
 
             <div class="claude-right">
-                <div class="claude-topbar">
+                <div class="claude-topbar" data-window-bar>
                     <button class="btn-icon-s" id="sessions-toggle" title="Sessions">
                         <span class="mi mi-sm">side_navigation</span>
                     </button>
@@ -36,11 +38,11 @@
                     <button class="btn-icon-s claude-newtab" id="new-session" title="New session">
                         <span class="mi mi-sm">add</span>
                     </button>
+                    <div class="claude-tabs" id="tabs"></div>
                 </div>
 
                 <header class="claude-bar">
                     <span class="claude-session-name" id="session-name" title="Click to rename">New session</span>
-                    <div class="claude-tabs" id="tabs"></div>
                 </header>
 
                 <div class="claude-usage" id="usage-bars">

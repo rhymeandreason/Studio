@@ -17,6 +17,8 @@ struct Workspace {
     repo: String,
     #[serde(default)]
     sprite: String,
+    #[serde(default)]
+    color: String,
 }
 
 fn read_workspace(project_path: &str) -> Workspace {
@@ -502,22 +504,30 @@ fn open_project_window(app: &AppHandle, project: &str, name: &str) {
         return;
     }
 
-    let sprite = read_workspace(project).sprite;
+    let ws = read_workspace(project);
+    let color = ws.color.trim();
     let url = format!(
-        "claude/index.html?project={}&name={}&sprite={}",
+        "claude/index.html?project={}&name={}&sprite={}&color={}",
         url_encode(project),
         url_encode(name),
-        url_encode(&sprite),
+        url_encode(&ws.sprite),
+        url_encode(color),
     );
     let title = if name.is_empty() {
         "Studio Claude".to_string()
     } else {
         format!("Claude · {name}")
     };
+    // Custom chrome: the page paints its own title bar (kit/window-chrome.js) and
+    // tints the whole window with the project color. transparent + shadowless so
+    // the page's rounded corners read cleanly (see docs/tools.md window style).
     match tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
         .title(title)
         .inner_size(600.0, 800.0)
         .min_inner_size(420.0, 360.0)
+        .decorations(false)
+        .transparent(true)
+        .shadow(false)
         .build()
     {
         Ok(win) => {
@@ -606,7 +616,17 @@ pub fn run() {
                 let _ = app.run_on_main_thread(move || show_any_window(&h));
             }
         }))
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Only restore geometry — NOT decorations. The default builder persists
+        // DECORATIONS and would force the native title bar back on, defeating the
+        // custom chrome (decorations(false)). See docs/tools.md window-state gotcha.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .manage(ClaudeState::default())
         .invoke_handler(tauri::generate_handler![
@@ -642,6 +662,9 @@ pub fn run() {
                         .title("Studio Claude")
                         .inner_size(600.0, 800.0)
                         .min_inner_size(420.0, 360.0)
+                        .decorations(false)
+                        .transparent(true)
+                        .shadow(false)
                         .build();
                     }
                 });

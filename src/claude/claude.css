@@ -1,6 +1,8 @@
 .claude-body {
     margin: 0;
-    background: var(--bg);
+    /* Transparent so window-chrome.css can round the corners (the opaque fill
+       is painted on .claude-app, which carries the project color). */
+    background: transparent;
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     height: 100vh;
@@ -14,6 +16,12 @@
     height: 100vh;
     width: 100%;
     box-sizing: border-box;
+    /* The window background is the active project's color. */
+    background: var(--window-color, var(--bg));
+    /* Round the opaque fill to match the window-chrome corners (body is
+       transparent, so the rounding must live on this opaque layer). */
+    border-radius: var(--window-radius, 20px);
+    overflow: hidden;
 }
 
 /* Everything besides the full-height sidebar lives in this column. */
@@ -36,9 +44,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 12px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--hairline);
+    padding: 2px 14px 6px;
+    background: transparent; /* on the project-color window background */
     -webkit-app-region: drag;
 }
 
@@ -102,12 +109,16 @@
 /* --- Top row: sidebar toggle + session tabs --- */
 .claude-topbar {
     display: flex;
-    align-items: stretch;
+    align-items: center;
     gap: 6px;
-    padding: 4px 8px 0 8px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--hairline);
+    padding: 8px 10px 6px;
+    background: transparent; /* window-chrome.css tints [data-window-bar] */
     -webkit-app-region: drag;
+}
+
+/* Tabs sit on the right of the window bar. */
+.claude-topbar .claude-tabs {
+    margin-left: auto;
 }
 
 .claude-topbar #sessions-toggle,
@@ -196,9 +207,8 @@
 .claude-usage {
     display: flex;
     gap: 16px;
-    padding: 12px 16px 8px 16px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--hairline);
+    padding: 0 16px 10px;
+    background: transparent; /* on the project-color window background */
 }
 
 .claude-meter {
@@ -449,6 +459,11 @@
     flex-direction: column;
     min-width: 0;
     min-height: 0;
+    /* The chat reads as a card against the project-color window background. */
+    margin: 0 12px 12px;
+    background: var(--card-strong, var(--surface));
+    border-radius: 16px;
+    overflow: hidden;
 }
 
 /* Progress status pinned below the transcript while a turn runs. */
@@ -459,7 +474,7 @@
     padding: 4px 16px;
     min-height: 48px;
     border-top: 1px solid var(--hairline);
-    background: var(--surface);
+    background: transparent;
     font-size: 11px;
     color: var(--text-muted);
 }
@@ -758,6 +773,9 @@
     resize: none;
     font-family: inherit;
     max-height: 140px;
+    /* Solid field against the translucent card. */
+    background: var(--elevated, #fff);
+    border-radius: 12px;
 }
 
 
