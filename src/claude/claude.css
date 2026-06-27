@@ -819,6 +819,24 @@ border-color: transparent;
     flex-wrap: wrap;
 }
 
+/* Minimal select variant: no background or border, just the label + chevron. */
+.claude-controls .notedrop__btn {
+    background: transparent;
+    border-color: transparent;
+    padding: 4px 6px;
+}
+
+.claude-controls .notedrop__btn:hover {
+    border-color: transparent;
+    color: var(--text);
+background-color: var(--surface);
+border-radius: var(--radius);
+}
+
+.claude-controls .notedrop:focus-within .notedrop__btn {
+    border-color: transparent;
+}
+
 /* Selects sit at the bottom, so their menus open upward. */
 .claude-controls .notedrop__menu {
     top: auto;

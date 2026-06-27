@@ -109,7 +109,12 @@ function createDropdown(container, items, { icon } = {}) {
 
     btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        menu.hidden = !menu.hidden;
+        const open = menu.hidden;
+        // Close any other open dropdown so only one is ever open at a time.
+        document.querySelectorAll(".notedrop__menu").forEach((m) => {
+            if (m !== menu) m.hidden = true;
+        });
+        menu.hidden = !open;
     });
     document.addEventListener("click", (e) => {
         if (!container.contains(e.target)) menu.hidden = true;
