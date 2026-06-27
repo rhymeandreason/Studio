@@ -780,3 +780,11 @@
     padding:8px;
     height:54px;
 }
+
+.claude-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px 10px;
+    flex-wrap: wrap;
+}
