@@ -206,6 +206,12 @@
     min-width: 0;
 }
 
+/* 5-hour and 7-day usage hidden for now; context bar fills the row. */
+#five-hour,
+#sevenday {
+    display: none;
+}
+
 /* 7-day usage pie, right of the 5-hour meter */
 .claude-sevenday {
     flex: 0 0 auto;
