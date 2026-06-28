@@ -514,6 +514,10 @@ async function applyTitleColor() {
   if (!titleColor) titleColor = await invoke("active_git_color");
   // Tint our custom title bar (the toolbar); empty string clears to paper.
   document.documentElement.style.setProperty("--titlebar-tint", titleColor || "");
+  // Keep `.on-tint` in sync with the live tint: window-chrome.js only sets it
+  // from the initial ?color=, but we resolve the color dynamically (and may open
+  // with no ?color= at all), so the tint-harmonized CSS would otherwise be lost.
+  document.body.classList.toggle("on-tint", !!titleColor);
   if (evt) evt.emit("ce:color", titleColor);
 }
 
