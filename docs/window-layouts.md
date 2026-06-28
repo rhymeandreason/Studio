@@ -1,6 +1,7 @@
 # Window layouts — concept
 
-> **Status: concept / not built.** This captures the direction for what the
+> **Status: we've done most of this idea in the Mode Switcher
+concept / not built.** This captures the direction for what the
 > Workspace tab is *really* for. Today's Workspace (a card grid + a Launch
 > button that opens apps without placing them) is a degenerate first draft of
 > the idea below. Nothing here is implemented yet.

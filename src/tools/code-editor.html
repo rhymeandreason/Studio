@@ -1503,12 +1503,12 @@ function restore() {
 }
 
 // Restore this project's last session, then (if the window was launched to open
-// a specific file) load that, overriding the restored session. The file comes
-// in this window's own `?open=` param — scoped to this window, unlike the global
-// `pending_open` slot, so no cross-project window can grab it.
+// a specific file) load that, overriding the restored session. The pending file
+// is keyed by this window's label and consumed once, so a dev-watcher reload
+// falls back to the restored session instead of re-loading the launch file, and
+// no other project's window can grab it.
 restore();
-const openParam = new URLSearchParams(location.search).get("open");
-if (openParam) loadPath(openParam);
+if (invoke) invoke("take_pending_open", { label: myLabel }).then((p) => { if (p) loadPath(p); });
 
 import("../devinspect.js").then((m) => m.initDevInspect()).catch(() => {});
 </script>

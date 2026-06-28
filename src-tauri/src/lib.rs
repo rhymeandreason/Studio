@@ -304,9 +304,13 @@ struct SchedulesFile {
 #[derive(Default)]
 struct AppState {
     active: Mutex<Option<Project>>,
-    /// A file the Code Editor tool should load on launch (set when "Studio Code
-    /// Editor" is the chosen editor and a file is opened from a Git window).
-    pending_open: Mutex<Option<String>>,
+    /// A file each per-project Code Editor window should load on launch, keyed by
+    /// window label. One-shot: the window consumes its entry via
+    /// `take_pending_open` on first load, so a dev-watcher reload (which reloads
+    /// every webview) falls back to the restored session instead of snapping
+    /// back to this file. Keyed by label — not a single global slot — so opening
+    /// a file for one project can't be grabbed by another project's window.
+    pending_open: Mutex<HashMap<String, String>>,
 }
 
 const TRAY_ID: &str = "studio-tray";
@@ -689,8 +693,9 @@ fn code_editor_label(project_path: &str) -> String {
 ///
 /// `open_file` is an optional path to load: for an already-open window it's
 /// delivered as a `ce:open-file` event *to that window only*; for a fresh window
-/// it rides in that window's own `?open=` URL param. Both are window-scoped, so
-/// opening a file for one project never loads it into another's editor.
+/// it's stashed one-shot in `pending_open` keyed by this window's label. Both
+/// are window-scoped, so opening a file for one project never loads it into
+/// another's editor, and a reload falls back to the restored session.
 fn open_code_editor_window(app: &AppHandle, color: &str, project_path: &str, open_file: Option<String>) {
     let filename = "code-editor.html";
     let label = code_editor_label(project_path);
@@ -707,18 +712,23 @@ fn open_code_editor_window(app: &AppHandle, color: &str, project_path: &str, ope
         }
         return;
     }
+    // One-shot file to load on first launch, keyed by this window's label so it
+    // can't be consumed by another project's window, and so a dev-watcher reload
+    // (no entry the second time) falls back to the restored session rather than
+    // re-loading this file over wherever the user navigated.
+    if let Some(file) = open_file {
+        app.state::<AppState>()
+            .pending_open
+            .lock()
+            .unwrap()
+            .insert(label.clone(), file);
+    }
     let mut params: Vec<String> = Vec::new();
     if !color.is_empty() {
         params.push(format!("color={}", url_encode(color)));
     }
     if !project_path.is_empty() {
         params.push(format!("session={}", url_encode(project_path)));
-    }
-    // Carry the file to open in this window's own URL — NOT the global
-    // `pending_open` slot, which every editor window races to consume on launch
-    // and would let one project's window grab another's file.
-    if let Some(file) = open_file {
-        params.push(format!("open={}", url_encode(&file)));
     }
     let qs = if params.is_empty() {
         String::new()
@@ -4092,9 +4102,10 @@ fn git_open_file(
     Ok(())
 }
 
-/// Open the Code Editor tool window and have it load `file`. The path is stashed
-/// in `pending_open` for the window to pull on launch (`take_pending_open`), and
-/// also emitted as `ce:open-file` for the already-open case.
+/// Open the Code Editor tool window and have it load `file`. For a fresh window
+/// the path is stashed in `pending_open` (keyed by window label) for the page to
+/// pull on launch; for an already-open window it's sent as a label-stamped
+/// `ce:open-file` event.
 fn open_in_code_editor(
     app: &AppHandle,
     _state: &tauri::State<AppState>,
@@ -4109,11 +4120,12 @@ fn open_in_code_editor(
     Ok(())
 }
 
-/// The Code Editor tool calls this on launch to pick up a file it was asked to
-/// open (see `open_in_code_editor`). Clears the pending slot.
+/// The Code Editor tool calls this on launch (passing its own window label) to
+/// pick up a file it was asked to open (see `open_in_code_editor`). Removes the
+/// entry so a later reload of the same window restores the session instead.
 #[tauri::command]
-fn take_pending_open(state: tauri::State<AppState>) -> Option<String> {
-    state.pending_open.lock().unwrap().take()
+fn take_pending_open(state: tauri::State<AppState>, label: String) -> Option<String> {
+    state.pending_open.lock().unwrap().remove(&label)
 }
 
 /// Open an arbitrary file in the Code Editor tool window — the generic entry
