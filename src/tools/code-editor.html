@@ -611,7 +611,18 @@ async function loadPath(path, push = true) {
   loadText(text);
   await refreshDiff();
 }
-if (evt) evt.listen("ce:open-file", (e) => { if (e.payload) loadPath(e.payload); });
+// `ce:open-file` is delivered to a specific editor window via emit_to, but a
+// global JS listener can still see events meant for other windows, so the
+// payload carries the target window label and we ignore anything not for us —
+// otherwise opening a file in one project's editor leaks into another's.
+const myLabel = TAURI ? TAURI.window.getCurrentWindow().label : "";
+if (evt) evt.listen("ce:open-file", (e) => {
+  const p = e.payload;
+  const file = typeof p === "string" ? p : p?.file;
+  const target = (p && typeof p === "object") ? p.label : null;
+  if (target && myLabel && target !== myLabel) return;
+  if (file) loadPath(file);
+});
 $("fallback-file").addEventListener("change", (e) => {
   const f = e.target.files[0];
   if (!f) return;
@@ -694,9 +705,16 @@ function setDirty(v) { dirty = v; dirtyEl.classList.toggle("on", v); }
 // reload (e.g. Tauri's dev watcher reloads all webviews when a frontend file
 // is saved) restores it exactly where you left off, instead of coming back
 // empty and scrolled to the top.
+// Session is scoped per project: the window is opened per-project (see
+// open_code_editor_window in lib.rs) and passed `?session=<project path>`, so
+// reopening the editor under one project never restores a file from another.
+// Falls back to an unscoped key when no project is active.
+const sessionScope = new URLSearchParams(location.search).get("session") || "";
+const sessionKey = sessionScope ? "ce:session:" + sessionScope : "ce:session";
+
 function persist() {
   try {
-    localStorage.setItem("ce:session", JSON.stringify({
+    localStorage.setItem(sessionKey, JSON.stringify({
       path: currentPath, value: code.value, dirty,
       scrollTop: code.scrollTop, selStart: code.selectionStart, selEnd: code.selectionEnd,
     }));
@@ -1456,9 +1474,9 @@ window.addEventListener("keydown", (e) => {
 
 // Restore the previous session (file + unsaved text) if there is one, so a
 // window reload doesn't lose the open file. Falls back to empty otherwise.
-(function restore() {
+function restore() {
   let s;
-  try { s = JSON.parse(localStorage.getItem("ce:session") || "null"); } catch {}
+  try { s = JSON.parse(localStorage.getItem(sessionKey) || "null"); } catch {}
   if (s && s.path) {
     currentPath = s.path;
     code.value = s.value || "";
@@ -1482,11 +1500,15 @@ window.addEventListener("keydown", (e) => {
   } else {
     paint();
   }
-})();
+}
 
-// If this window was launched to open a specific file (Git window → "Studio
-// Code Editor"), load it, overriding any restored session.
-if (invoke) invoke("take_pending_open").then((p) => { if (p) loadPath(p); });
+// Restore this project's last session, then (if the window was launched to open
+// a specific file) load that, overriding the restored session. The file comes
+// in this window's own `?open=` param — scoped to this window, unlike the global
+// `pending_open` slot, so no cross-project window can grab it.
+restore();
+const openParam = new URLSearchParams(location.search).get("open");
+if (openParam) loadPath(openParam);
 
 import("../devinspect.js").then((m) => m.initDevInspect()).catch(() => {});
 </script>

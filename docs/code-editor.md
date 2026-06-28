@@ -55,10 +55,17 @@ all kit-styled, all offline. See [tools.md](tools.md) for how tools load.
 - **Back / Forward** — arrow buttons left of Open walk a navigation history of
   opened files (`history`/`histIdx`; opening from a back-position drops forward
   entries, like a browser). Seeded from the restored session.
-- **Session persistence** — the open path + unsaved text are saved to
-  `localStorage` (`ce:session`) on load/edit/save and restored on launch, so a
-  window reload (e.g. Tauri's dev watcher reloading webviews when a `src/` file
-  is saved) doesn't lose the file.
+- **Per-project windows + session** — the editor opens **one window per
+  project**, not a shared singleton: `open_code_editor_window` (lib.rs) labels
+  the window with a project slug and passes `?session=<project path>`. The page
+  keys its `localStorage` session on that (`ce:session:<projectPath>`; unscoped
+  `ce:session` when no project is active). So each project keeps its own editor
+  window + restored file side by side, and the scope is fixed for the window's
+  lifetime (survives dev-watcher reloads — no "active project changed under me"
+  staleness). The open path + unsaved text + scroll/cursor are saved on
+  load/edit/save and restored on launch, so a window reload doesn't lose the
+  file. Saved Workspace modes rebuild the right window via the `code-editor`
+  tool kind.
 
 ## Syntax highlighting
 

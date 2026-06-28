@@ -623,6 +623,11 @@ fn open_tool_window(app: &AppHandle, path: &str) {
 }
 
 fn open_tool_window_with_color(app: &AppHandle, path: &str, color: &str) {
+    // The Code Editor is opened per-project, not as a shared singleton.
+    if Path::new(path).file_name().and_then(|n| n.to_str()) == Some("code-editor.html") {
+        open_code_editor_window(app, color, &active_project_path(app), None);
+        return;
+    }
     if color.is_empty() {
         open_tool_window_near(app, path, None);
         return;
@@ -664,9 +669,118 @@ fn open_tool_window_with_color(app: &AppHandle, path: &str, color: &str) {
     let _ = apply_tool_chrome(builder, filename, color).build();
 }
 
+/// Per-project window label for the Code Editor, so each project gets its own
+/// editor window + restored session (keyed by the same project path on the JS
+/// side via the `?session=` param). Empty path → the project-less "none" scope.
+fn code_editor_label(project_path: &str) -> String {
+    let scope = if project_path.is_empty() {
+        "none".to_string()
+    } else {
+        slugify(project_path)
+    };
+    format!("tool-code-editor-html-{}", scope)
+}
+
+/// Open (or focus) the Code Editor window for `project_path`. Unlike a generic
+/// tool window it is keyed per project: the label carries a project slug and the
+/// URL carries `?session=<project_path>` so the page scopes its restored session
+/// to that project (see `restore()` in code-editor.html). `color` is the
+/// first-paint tint hint; the page re-derives it per open file afterwards.
+///
+/// `open_file` is an optional path to load: for an already-open window it's
+/// delivered as a `ce:open-file` event *to that window only*; for a fresh window
+/// it rides in that window's own `?open=` URL param. Both are window-scoped, so
+/// opening a file for one project never loads it into another's editor.
+fn open_code_editor_window(app: &AppHandle, color: &str, project_path: &str, open_file: Option<String>) {
+    let filename = "code-editor.html";
+    let label = code_editor_label(project_path);
+    // Track with the project path as the query + a dedicated kind, so a saved
+    // Workspace mode can rebuild this exact per-project window later.
+    track_tool_window(&label, filename, Some(project_path.to_string()), "code-editor");
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        if let Some(file) = open_file {
+            // Stamp the target label so other editor windows that also receive
+            // this event (global JS listeners) ignore it.
+            let _ = app.emit_to(&label, "ce:open-file", serde_json::json!({ "label": label, "file": file }));
+        }
+        return;
+    }
+    let mut params: Vec<String> = Vec::new();
+    if !color.is_empty() {
+        params.push(format!("color={}", url_encode(color)));
+    }
+    if !project_path.is_empty() {
+        params.push(format!("session={}", url_encode(project_path)));
+    }
+    // Carry the file to open in this window's own URL — NOT the global
+    // `pending_open` slot, which every editor window races to consume on launch
+    // and would let one project's window grab another's file.
+    if let Some(file) = open_file {
+        params.push(format!("open={}", url_encode(&file)));
+    }
+    let qs = if params.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", params.join("&"))
+    };
+    let url = format!("tools/{}{}", filename, qs);
+    // code-editor has empty_title (the page paints its own bar).
+    let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
+        .title(String::new());
+    let _ = apply_tool_chrome(builder, filename, color).build();
+}
+
+/// The active project's folder path, or empty if none is active.
+fn active_project_path(app: &AppHandle) -> String {
+    app.state::<AppState>()
+        .active
+        .lock()
+        .unwrap()
+        .clone()
+        .map(|p| p.path)
+        .unwrap_or_default()
+}
+
+/// The project that owns `file`: the project whose folder — or whose workspace
+/// `repo` (resolved, since a repo often lives outside the project folder, e.g.
+/// `~/Documents/GitHub/Studio`) — is the longest path prefix of the file. This
+/// is how the Code Editor scopes by the *file's* project rather than whichever
+/// project happens to be active. Returns None if the file is under no project.
+fn project_path_for_file(app: &AppHandle, file: &str) -> Option<String> {
+    let home = app.path().home_dir().ok();
+    let target = PathBuf::from(file);
+    let mut best: Option<(usize, String)> = None;
+    for p in scan_projects(app) {
+        let project_dir = PathBuf::from(&p.path);
+        let mut roots = vec![project_dir.clone()];
+        if let (Ok(ws), Some(home)) = (read_workspace(p.path.clone()), home.as_ref()) {
+            if !ws.repo.trim().is_empty() {
+                roots.push(resolve_path(home, &project_dir, &ws.repo));
+            }
+        }
+        for root in roots {
+            if target.starts_with(&root) {
+                let len = root.as_os_str().len();
+                if best.as_ref().map_or(true, |(l, _)| len > *l) {
+                    best = Some((len, p.path.clone()));
+                }
+            }
+        }
+    }
+    best.map(|(_, p)| p)
+}
+
 /// Open a tool window, optionally positioned just below a tray icon's rect
 /// (as reported by `TrayIconEvent::Click`).
 fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>) {
+    // The Code Editor is opened per-project, not as a shared singleton.
+    if Path::new(path).file_name().and_then(|n| n.to_str()) == Some("code-editor.html") {
+        let color = active_git_color_hex(app).unwrap_or_default();
+        open_code_editor_window(app, &color, &active_project_path(app), None);
+        return;
+    }
     let label = format!(
         "tool-{}",
         Path::new(path)
@@ -1094,6 +1208,24 @@ fn activate_project(app: &AppHandle, path: &str) {
     show_studio(app);
     let _ = app.emit("project-activated", &project);
 
+    // Tidy the per-project Code Editor windows: hide every other project's, and
+    // raise this project's if it's already open. Without this, switching
+    // projects leaves the previous project's editor frontmost (per-project
+    // windows are independent — nothing else brings the active one forward).
+    // Runs before any mode apply below, which can still override the layout.
+    let active_editor = code_editor_label(&project.path);
+    for (label, win) in app.webview_windows() {
+        if !label.starts_with("tool-code-editor-html-") {
+            continue;
+        }
+        if label == active_editor {
+            let _ = win.show();
+            let _ = win.set_focus();
+        } else {
+            let _ = win.hide();
+        }
+    }
+
     // Auto-apply the project's first recorded Mode (first with a saved layout),
     // so activating a project snaps its windows into place.
     if let Ok(ws) = read_workspace(project.path.clone()) {
@@ -1349,6 +1481,12 @@ fn tool_hash(s: &str) -> String {
 /// different artifacts don't collide on one shared `tool-<stem>` window.
 #[tauri::command]
 fn open_tool(app: AppHandle, file: String, query: Option<String>) {
+    // The Code Editor is opened per-project, not as a shared singleton.
+    if Path::new(&file).file_name().and_then(|n| n.to_str()) == Some("code-editor.html") {
+        let color = active_git_color_hex(&app).unwrap_or_default();
+        open_code_editor_window(&app, &color, &active_project_path(&app), None);
+        return;
+    }
     let stem: String = Path::new(&file)
         .file_stem()
         .and_then(|n| n.to_str())
@@ -2196,6 +2334,15 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
             match target.tool_kind.as_deref() {
                 Some("color") => {
                     open_tool_window_with_color(&app, file, target.tool_query.as_deref().unwrap_or(""))
+                }
+                Some("code-editor") => {
+                    let proj = target.tool_query.clone().unwrap_or_default();
+                    let color = if proj.is_empty() {
+                        active_git_color_hex(&app).unwrap_or_default()
+                    } else {
+                        git_color_for_path(app.clone(), proj.clone())
+                    };
+                    open_code_editor_window(&app, &color, &proj, None);
                 }
                 Some("git-pulse") => {
                     let Some(repo) = &target.tool_query else { continue };
@@ -3950,13 +4097,15 @@ fn git_open_file(
 /// also emitted as `ce:open-file` for the already-open case.
 fn open_in_code_editor(
     app: &AppHandle,
-    state: &tauri::State<AppState>,
+    _state: &tauri::State<AppState>,
     file: String,
 ) -> Result<(), String> {
     let color = git_color_for_path(app.clone(), file.clone());
-    *state.pending_open.lock().unwrap() = Some(file.clone());
-    open_tool_window_with_color(app, "tools/code-editor.html", &color);
-    let _ = app.emit("ce:open-file", file);
+    // Scope to the project that owns the file (not the active project), so a
+    // file from Yuniku always opens in Yuniku's editor even while Studio is
+    // active. open_code_editor_window handles the pending/event load itself.
+    let proj = project_path_for_file(app, &file).unwrap_or_else(|| active_project_path(app));
+    open_code_editor_window(app, &color, &proj, Some(file));
     Ok(())
 }
 
