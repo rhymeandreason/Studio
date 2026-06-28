@@ -51,6 +51,22 @@ function setWindowTitle(projectName) {
     if (el) el.textContent = projectName || "";
 }
 
+// Tint the window with the active project's color. window-chrome.js does this
+// once from the URL ?color=, but the in-Studio window is reused across projects,
+// so re-apply it on every jump.
+function setProjectColor(color) {
+    const root = document.documentElement.style;
+    if (color) {
+        root.setProperty("--window-color", color);
+        root.setProperty("--titlebar-tint", color);
+        document.body.classList.add("on-tint");
+    } else {
+        root.removeProperty("--window-color");
+        root.removeProperty("--titlebar-tint");
+        document.body.classList.remove("on-tint");
+    }
+}
+
 const sessionsListEl = document.getElementById("sessions-list");
 const historyListEl = document.getElementById("history-list");
 const historyToggle = document.getElementById("history-toggle");
@@ -1195,8 +1211,9 @@ listen("claude-jump", async (event) => {
     // The window hides rather than closes, so opening it doesn't re-run init();
     // refresh usage on each open (throttled, so rapid reopens don't 429).
     refreshUsage();
-    const { key, projectPath, projectName, sprite } = event.payload || {};
+    const { key, projectPath, projectName, sprite, color } = event.payload || {};
     if (sprite !== undefined) setSprite(sprite);
+    if (color !== undefined) setProjectColor(color);
     if (key && sessions.some((s) => s.key === key)) {
         await switchTo(key);
         return;
@@ -1204,6 +1221,7 @@ listen("claude-jump", async (event) => {
     if (projectPath) {
         const name = projectName || projectPath.split("/").filter(Boolean).pop();
         setLastProject(projectPath, name);
+        setWindowTitle(name);
         // Scope the sidebar to this project from here on.
         currentProjectPath = projectPath;
         // Return to the last active session for this project if it still

@@ -4680,11 +4680,17 @@ fn open_claude_window(
         let _ = win.set_focus();
     } else {
         use tauri_plugin_window_state::{StateFlags, WindowExt};
+        // Custom chrome: the page paints its own title bar + project-color tint
+        // (kit/window-chrome.js). transparent + shadowless so the rounded corners
+        // read cleanly. Matches the standalone companion window.
         let win =
             WebviewWindowBuilder::new(&app, "claude", WebviewUrl::App("claude/index.html".into()))
                 .title("Claude")
                 .inner_size(600.0, 800.0)
                 .min_inner_size(420.0, 360.0)
+                .decorations(false)
+                .transparent(true)
+                .shadow(false)
                 .build()
                 .map_err(|e| e.to_string())?;
         // The window is created dynamically, so the window-state plugin doesn't
@@ -4692,14 +4698,18 @@ fn open_claude_window(
         // again on app exit by the plugin.
         let _ = win.restore_state(StateFlags::SIZE | StateFlags::POSITION);
     }
-    let sprite = project_path
+    let ws = project_path
         .as_ref()
         .and_then(|p| read_workspace(p.clone()).ok())
-        .map(|w| w.sprite)
         .unwrap_or_default();
     let _ = app.emit(
         "claude-jump",
-        serde_json::json!({ "key": key, "projectPath": project_path, "sprite": sprite }),
+        serde_json::json!({
+            "key": key,
+            "projectPath": project_path,
+            "sprite": ws.sprite,
+            "color": ws.color,
+        }),
     );
     Ok(())
 }
