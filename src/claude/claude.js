@@ -524,6 +524,88 @@ function appendBubble(role, text) {
     return body;
 }
 
+// Render an AskUserQuestion tool call as an interactive card: each question's
+// options become buttons. The raw stream-json pipe can't return a real
+// tool_result (the CLI auto-denies AskUserQuestion in -p mode), so picking an
+// answer just sends it back as a normal follow-up message, which Claude
+// continues from. `input` is the tool_use input: { questions: [...] }.
+function appendQuestion(input) {
+    transcriptEl.querySelector(".claude-empty")?.remove();
+    const questions = Array.isArray(input?.questions) ? input.questions : [];
+    if (!questions.length) return;
+
+    const card = document.createElement("div");
+    card.className = "claude-msg claude-msg--question";
+    const selections = new Map(); // question index -> Set of chosen labels
+
+    questions.forEach((q, qi) => {
+        selections.set(qi, new Set());
+        const block = document.createElement("div");
+        block.className = "claude-q";
+        const head = document.createElement("div");
+        head.className = "claude-q__head";
+        head.textContent = q.question || q.header || "Question";
+        block.appendChild(head);
+
+        const opts = document.createElement("div");
+        opts.className = "claude-q__opts";
+        (q.options || []).forEach((opt) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "claude-q__opt";
+            btn.title = opt.description || "";
+            const label = document.createElement("span");
+            label.className = "claude-q__opt-label";
+            label.textContent = opt.label;
+            btn.appendChild(label);
+            if (opt.description) {
+                const desc = document.createElement("span");
+                desc.className = "claude-q__opt-desc";
+                desc.textContent = opt.description;
+                btn.appendChild(desc);
+            }
+            btn.addEventListener("click", () => {
+                const set = selections.get(qi);
+                if (q.multiSelect) {
+                    btn.classList.toggle("is-selected");
+                    if (set.has(opt.label)) set.delete(opt.label);
+                    else set.add(opt.label);
+                } else {
+                    opts.querySelectorAll(".claude-q__opt").forEach((b) =>
+                        b.classList.remove("is-selected"),
+                    );
+                    btn.classList.add("is-selected");
+                    set.clear();
+                    set.add(opt.label);
+                }
+                sendBtnEl.disabled = !questions.every((_, i) => selections.get(i).size);
+            });
+            opts.appendChild(btn);
+        });
+        block.appendChild(opts);
+        card.appendChild(block);
+    });
+
+    const sendBtnEl = document.createElement("button");
+    sendBtnEl.type = "button";
+    sendBtnEl.className = "btn btn-primary claude-q__send";
+    sendBtnEl.textContent = "Send answer";
+    sendBtnEl.disabled = true;
+    sendBtnEl.addEventListener("click", () => {
+        const answer = questions
+            .map((q, i) => `${q.header || q.question}: ${[...selections.get(i)].join(", ")}`)
+            .join("\n");
+        card.classList.add("is-answered");
+        card.querySelectorAll("button").forEach((b) => (b.disabled = true));
+        sendMessage(answer);
+    });
+    card.appendChild(sendBtnEl);
+
+    transcriptEl.appendChild(card);
+    scrollToBottom(true);
+    return card;
+}
+
 function resetUsageBars() {
     contextFill.style.width = "0%";
     contextPct.textContent = "0%";
@@ -811,6 +893,13 @@ function handleStreamLine(key, line) {
                 if (block.type === "tool_use" && !live.toolKeys.has(block.id)) {
                     live.toolKeys.add(block.id);
                     const summary = `${block.name} ${JSON.stringify(block.input || {})}`;
+                    // AskUserQuestion renders as an interactive answer card rather
+                    // than a collapsed tool bubble.
+                    if (block.name === "AskUserQuestion") {
+                        if (isActive) appendQuestion(block.input);
+                        session.transcript.push({ role: "tool", text: summary });
+                        continue;
+                    }
                     if (isActive) appendBubble("tool", summary);
                     session.transcript.push({ role: "tool", text: summary });
                     live.activity = `Running ${block.name}`;
