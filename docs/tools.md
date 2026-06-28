@@ -404,8 +404,9 @@ Workspace Modes needs.
 You only need to act if you write a **fully custom window opener** — a new
 `#[tauri::command]` that calls `WebviewWindowBuilder::new` directly instead
 of going through those helpers (e.g. because your tool needs a bespoke label
-scheme, like `open_git_pulse`'s repo-slug labels, or extra open-time
-arguments, like `open_video_window`'s project path). In that case:
+scheme, like `open_git_pulse`'s repo-slug labels or `open_code_editor_window`'s
+per-project `tool-code-editor-html-<slug>` labels, or extra open-time arguments,
+like `open_video_window`'s project path). In that case:
 
 1. Call `track_tool_window(&label, file_or_blank, extra, "your-kind")` right
    after computing the window's label (before the "already open? just

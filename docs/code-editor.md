@@ -66,6 +66,14 @@ all kit-styled, all offline. See [tools.md](tools.md) for how tools load.
   load/edit/save and restored on launch, so a window reload doesn't lose the
   file. Saved Workspace modes rebuild the right window via the `code-editor`
   tool kind.
+- **Opening a file** (Git / File Directory tools → `open_in_code_editor`) scopes
+  to the **file's** project — resolved by `project_path_for_file` from the
+  project folder or its workspace `repo` path — not whichever project is active,
+  so a Yuniku file always lands in Yuniku's editor. The file is delivered window-
+  scoped: a fresh window pulls it once from `pending_open` (a `HashMap` keyed by
+  window label, so a dev-watcher reload falls back to the session and no other
+  project's window can grab it); an already-open window gets a label-stamped
+  `ce:open-file` event that other editor windows ignore.
 
 ## Syntax highlighting
 
