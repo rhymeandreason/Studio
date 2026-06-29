@@ -61,10 +61,38 @@
       transition: box-shadow var(--dur-fast, .15s) var(--ease-standard, ease),
                   transform var(--dur-fast, .15s) var(--ease-standard, ease);
     }
-    .task:hover {
-      box-shadow: var(--shadow-md);
-      transform: translateY(-1px);
+    .flip:hover .face.front { box-shadow: var(--shadow-md); }
+
+    /* Flip card: front = task display, back = inline editor. The container's
+       height is set in JS (front height normally, back height when flipped) so
+       it expands only when the editor needs more room. */
+    .flip {
+      position: relative;
+      margin-bottom: 12px;
+      perspective: 1600px;
+      transition: height 0.5s cubic-bezier(0.16, 1, 0.3, 1);
     }
+    .flip-inner {
+      position: relative;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .flip.flipped .flip-inner { transform: rotateY(180deg); }
+    .flip .face {
+      position: absolute;
+      inset: 0 0 auto 0; /* top/left/right; height grows with content */
+      margin-bottom: 0;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .flip .face.back { transform: rotateY(180deg); }
+    /* Back face holds a wrapping editor form. */
+    .edit-form { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+    .edit-form .field { flex: 1 1 160px; }
+    .edit-form input[type="date"], .edit-form input[type="time"] { flex: 0 0 auto; }
+    .edit-form .form-hint { flex-basis: 100%; }
+    .edit-form .form-hint:empty { display: none; }
     .task .when {
       flex: 0 0 70px;
       font-variant-numeric: tabular-nums;
@@ -412,19 +440,45 @@
           list.appendChild(el("div", "day-head", { textContent: dayFmt.format(start) }));
           lastDay = key;
         }
-        const row = taskRow(t, start);
-        list.appendChild(row);
+        const flip = taskRow(t, start);
+        list.appendChild(flip);
+        // Size the flip container to its front face (now that it's laid out).
+        const front = flip.querySelector(".front");
+        flip.style.height = front.offsetHeight + "px";
         if (t.id === revealId) {
           revealId = null;
-          revealCard(row);
+          revealCard(front);
         }
       }
     }
 
+    // A row is a flip card: front (display) + back (inline editor). Clicking the
+    // front flips to the back, expanding the card to the editor's height.
     function taskRow(t, start) {
-      const row = el("div", "task");
-      row.title = "Click to edit";
-      row.addEventListener("click", () => openForm(t));
+      const flip = el("div", "flip");
+      const inner = el("div", "flip-inner");
+      const front = buildFront(t, start);
+      const back = buildBack(t, flip, front);
+      inner.append(front, back);
+      flip.appendChild(inner);
+
+      front.title = "Click to edit";
+      front.addEventListener("click", () => {
+        flip.style.height = back.offsetHeight + "px";
+        flip.classList.add("flipped");
+        back.querySelector(".edit-title")?.focus();
+      });
+      return flip;
+    }
+
+    // Reset the card to its front face at the front's height.
+    function closeFlip(flip, front) {
+      flip.style.height = front.offsetHeight + "px";
+      flip.classList.remove("flipped");
+    }
+
+    function buildFront(t, start) {
+      const row = el("div", "task face front");
       row.appendChild(el("div", "when", { textContent: timeFmt.format(start) }));
 
       const body = el("div", "body");
@@ -493,6 +547,59 @@
       actions.appendChild(del);
       row.appendChild(actions);
       return row;
+    }
+
+    // Back face: an inline editor for this task (title, link/location, date,
+    // time). Save writes the task (marking it userEdited so calendar sync leaves
+    // it alone); Cancel flips back without saving.
+    function buildBack(t, flip, front) {
+      const back = el("div", "task face back");
+      const form = el("div", "edit-form");
+
+      const title = el("input", "field edit-title", { value: t.title || "" });
+      title.placeholder = "Title";
+      const link = el("input", "field", {
+        value: t.actions?.find((a) => a.kind === "url")?.target || t.location || "",
+      });
+      link.placeholder = "Link or location (optional)";
+      const date = el("input", "field");
+      date.type = "date";
+      const time = el("input", "field");
+      time.type = "time";
+      const parts = t.start ? toLocalParts(t.start) : { date: "", time: "" };
+      date.value = parts.date;
+      time.value = parts.time;
+
+      const save = el("button", "btn btn-primary", { textContent: "Save" });
+      const cancel = el("button", "btn btn-ghost", { textContent: "Cancel" });
+      const hint = el("div", "form-hint text-xs text-muted");
+      if (t.source === "calendar" && !t.userEdited) {
+        hint.textContent = "Saving takes manual control — calendar sync won't overwrite it.";
+      }
+
+      save.addEventListener("click", async () => {
+        const ttl = title.value.trim();
+        if (!ttl || !date.value || !time.value) return;
+        const raw = link.value.trim();
+        const isUrl = /^https?:\/\//i.test(raw);
+        const updated = {
+          ...t,
+          title: ttl,
+          start: new Date(`${date.value}T${time.value}`).toISOString(),
+          location: isUrl ? "" : raw,
+          online: isUrl,
+          inPerson: !!raw && !isUrl,
+          userEdited: true,
+        };
+        updated.actions = isUrl ? [{ kind: "url", target: raw }] : (raw ? [] : (t.actions || []));
+        await invoke("save_task", { id: t.id, data: JSON.stringify(updated) });
+        refresh();
+      });
+      cancel.addEventListener("click", () => closeFlip(flip, front));
+
+      form.append(title, link, date, time, save, cancel, hint);
+      back.appendChild(form);
+      return back;
     }
 
     let busy = false;
