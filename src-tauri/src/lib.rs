@@ -4532,6 +4532,129 @@ fn save_briefing_prompt(app: AppHandle, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+/// Path to the saved weather location (a free-text place name, e.g.
+/// "Woodacre, CA"), `~/Projects/weather-location.txt`. Blank = auto-detect by
+/// IP, same global-not-per-project convention as the briefing prompt.
+fn weather_location_path(app: &AppHandle) -> Option<PathBuf> {
+    projects_root(app).map(|p| p.join("weather-location.txt"))
+}
+
+#[tauri::command]
+fn read_weather_location(app: AppHandle) -> Result<String, String> {
+    let path = weather_location_path(&app).ok_or("no home dir")?;
+    match std::fs::read_to_string(&path) {
+        Ok(s) => Ok(s),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn save_weather_location(app: AppHandle, content: String) -> Result<(), String> {
+    let path = weather_location_path(&app).ok_or("no home dir")?;
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+/// Map a WMO weather code (as used by Open-Meteo) to a short human label.
+/// https://open-meteo.com/en/docs#weathervariables
+fn wmo_condition(code: i64) -> &'static str {
+    match code {
+        0 => "Clear sky",
+        1 | 2 | 3 => "Partly cloudy",
+        45 | 48 => "Foggy",
+        51 | 53 | 55 => "Drizzle",
+        56 | 57 => "Freezing drizzle",
+        61 | 63 | 65 => "Rain",
+        66 | 67 => "Freezing rain",
+        71 | 73 | 75 => "Snow",
+        77 => "Snow grains",
+        80 | 81 | 82 => "Rain showers",
+        85 | 86 => "Snow showers",
+        95 => "Thunderstorm",
+        96 | 99 => "Thunderstorm with hail",
+        _ => "Unknown",
+    }
+}
+
+/// Current weather as a JSON object string: `{"tempF":62,"condition":"Partly
+/// cloudy","windMph":5,"label":"Woodacre, CA"}`. Used by the Daily Briefing
+/// tool so the prompt states the weather as fact instead of asking the LLM to
+/// web-search for it (unreliable — it doesn't always have/use a search tool
+/// or know the location).
+///
+/// `location`: a free-text place name to geocode, or blank to auto-detect via
+/// IP (ipapi.co). Both calls hit free, keyless APIs (Open-Meteo + ipapi.co).
+#[tauri::command]
+fn get_weather(location: String) -> Result<String, String> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(5))
+        .timeout_read(std::time::Duration::from_secs(10))
+        .build();
+
+    let (lat, lon, label): (f64, f64, String) = if location.trim().is_empty() {
+        let body: serde_json::Value = agent
+            .get("https://ipapi.co/json/")
+            .call()
+            .map_err(|e| format!("IP geolocation failed: {e}"))?
+            .into_json()
+            .map_err(|e| e.to_string())?;
+        let lat = body["latitude"].as_f64().ok_or("no latitude in IP lookup")?;
+        let lon = body["longitude"].as_f64().ok_or("no longitude in IP lookup")?;
+        let city = body["city"].as_str().unwrap_or("").to_string();
+        let region = body["region_code"].as_str().unwrap_or("").to_string();
+        let label = if region.is_empty() { city } else { format!("{city}, {region}") };
+        (lat, lon, label)
+    } else {
+        let body: serde_json::Value = agent
+            .get("https://geocoding-api.open-meteo.com/v1/search")
+            .query("name", location.trim())
+            .query("count", "1")
+            .call()
+            .map_err(|e| format!("Geocoding failed: {e}"))?
+            .into_json()
+            .map_err(|e| e.to_string())?;
+        let hit = body["results"]
+            .get(0)
+            .ok_or_else(|| format!("No location found for \"{}\"", location.trim()))?;
+        let lat = hit["latitude"].as_f64().ok_or("no latitude in geocoding result")?;
+        let lon = hit["longitude"].as_f64().ok_or("no longitude in geocoding result")?;
+        let name = hit["name"].as_str().unwrap_or(location.trim()).to_string();
+        let admin1 = hit["admin1"].as_str().unwrap_or("").to_string();
+        let label = if admin1.is_empty() { name } else { format!("{name}, {admin1}") };
+        (lat, lon, label)
+    };
+
+    let forecast: serde_json::Value = agent
+        .get("https://api.open-meteo.com/v1/forecast")
+        .query("latitude", &lat.to_string())
+        .query("longitude", &lon.to_string())
+        .query("current", "temperature_2m,weather_code,wind_speed_10m")
+        .query("temperature_unit", "fahrenheit")
+        .query("wind_speed_unit", "mph")
+        .call()
+        .map_err(|e| format!("Forecast request failed: {e}"))?
+        .into_json()
+        .map_err(|e| e.to_string())?;
+
+    let current = &forecast["current"];
+    let temp_f = current["temperature_2m"]
+        .as_f64()
+        .ok_or("no temperature in forecast response")?;
+    let wind_mph = current["wind_speed_10m"].as_f64().unwrap_or(0.0);
+    let code = current["weather_code"].as_i64().unwrap_or(-1);
+
+    serde_json::to_string(&serde_json::json!({
+        "tempF": temp_f.round() as i64,
+        "condition": wmo_condition(code),
+        "windMph": wind_mph.round() as i64,
+        "label": label,
+    }))
+    .map_err(|e| e.to_string())
+}
+
 /// Run `claude -p <prompt>` headless in the project's repo dir, write the
 /// result to `<project>/<output_file>` (overwriting it), and emit
 /// `"schedule-ran"` so the UI can show it if the project is open.
@@ -5172,6 +5295,9 @@ pub fn run() {
             save_briefing,
             read_briefing_prompt,
             save_briefing_prompt,
+            read_weather_location,
+            save_weather_location,
+            get_weather,
             update_wake_schedule,
             read_claude_sessions,
             save_claude_sessions,

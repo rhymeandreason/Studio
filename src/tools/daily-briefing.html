@@ -152,6 +152,9 @@
       <label class="label" for="sources">Briefing prompt</label>
       <textarea id="sources" class="field" rows="4"
         placeholder="Anything — e.g. a warm morning briefing with top news, or 'Write a haiku about today's weather in Woodacre, CA.'"></textarea>
+      <label class="label" for="weather-location">Weather location</label>
+      <input id="weather-location" class="field" type="text"
+        placeholder="Blank = auto-detect from IP — e.g. Woodacre, CA" />
       <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--space-2);">
         <span class="text-xs text-muted">Saved to ~/Projects/briefing-prompt.txt · output is Markdown</span>
         <button id="run-prompt-btn" class="btn btn-primary">
@@ -226,12 +229,20 @@
           : escapeHtml(markdown || "");
       }
 
-      function buildPrompt(userPrompt, meetings) {
+      function buildPrompt(userPrompt, meetings, weather) {
         const lines = [
           `Today is ${new Date().toLocaleDateString(undefined, {
             weekday: "long", month: "long", day: "numeric", year: "numeric",
           })}.`,
         ];
+        if (weather) {
+          lines.push(
+            "",
+            `Current weather in ${weather.label}: ${weather.tempF}°F, ` +
+              `${weather.condition.toLowerCase()}, wind ${weather.windMph} mph. ` +
+              "Treat this as fact — don't look up or guess weather elsewhere.",
+          );
+        }
         if (meetings.length) {
           lines.push("", "My calendar today (use only if relevant to the request):");
           lines.push(...meetings.map((m) => `- ${m.time} ${m.title}`));
@@ -263,11 +274,16 @@
         } catch {}
         renderMeetings(meetings);
 
+        let weather = null;
+        try {
+          weather = JSON.parse(await invoke("get_weather", { location: $("weather-location").value || "" }));
+        } catch {}
+
         const prompt = ($("sources").value || DEFAULT_PROMPT).trim();
         try {
           const markdown = await invoke("run_claude_prompt", {
             projectPath: "",
-            prompt: buildPrompt(prompt, meetings),
+            prompt: buildPrompt(prompt, meetings, weather),
             model: MODEL,
           });
           renderBody(markdown);
@@ -330,14 +346,23 @@
         invoke("read_briefing_prompt")
           .then((v) => { $("sources").value = v || ""; })
           .catch(() => {});
+        invoke("read_weather_location")
+          .then((v) => { $("weather-location").value = v || ""; })
+          .catch(() => {});
       }
       $("sources").addEventListener("change", () => {
         if (hasTauri) invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
       });
+      $("weather-location").addEventListener("change", () => {
+        if (hasTauri) invoke("save_weather_location", { content: $("weather-location").value }).catch(() => {});
+      });
       // Force a regenerate with the current prompt (saving it first so the file
       // matches what just ran).
       $("run-prompt-btn").addEventListener("click", async () => {
-        if (hasTauri) await invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
+        if (hasTauri) {
+          await invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
+          await invoke("save_weather_location", { content: $("weather-location").value }).catch(() => {});
+        }
         refresh();
       });
 
