@@ -257,25 +257,41 @@
     // For in-person Tasks, estimate travel time from the configured origin and
     // set lead time = ETA + buffer. Cached per origin/mode (notify.transitKey)
     // so we geocode once; skipped if the user hand-edited the lead time.
+    function transitNotify(notify, eta, buffer, mode, key) {
+      return {
+        ...(notify || {}),
+        etaMinutes: eta,
+        leadMinutes: eta + buffer,
+        reason: `${eta} min ${mode} + ${buffer} min buffer`,
+        transitKey: key,
+      };
+    }
+
     async function applyTransit(tasks) {
       if (!config.origin) return;
+      const buffer = config.buffer || 0;
       for (const t of tasks) {
         const isInPerson = t.inPerson || (t.location && !t.online);
         if (!isInPerson || !t.location || t.notify?.leadEdited) continue;
-        // Key includes the destination so editing an address recomputes.
+        // Trip identity (origin/mode/destination) — not the buffer, so a
+        // buffer change doesn't force a re-query.
         const key = `${config.origin}|${config.mode}|${t.location}`;
-        if (t.notify?.transitKey === key) continue; // already computed for this trip
         try {
+          // Same trip with a stored ETA: if only the buffer changed, re-add it
+          // locally (no geocoding/network). A missing etaMinutes (Task cached
+          // before that field existed) falls through to a fresh query.
+          const cachedEta = t.notify?.transitKey === key ? t.notify?.etaMinutes : undefined;
+          if (typeof cachedEta === "number") {
+            if (t.notify.leadMinutes !== cachedEta + buffer) {
+              t.notify = transitNotify(t.notify, cachedEta, buffer, config.mode, key);
+              await invoke("save_task", { id: t.id, data: JSON.stringify(t) });
+            }
+            continue;
+          }
           const res = JSON.parse(await invoke("transit_eta",
             { from: config.origin, to: t.location, mode: config.mode }));
-          const buffer = config.buffer || 0;
           if (typeof res.minutes === "number") {
-            t.notify = {
-              ...(t.notify || {}),
-              leadMinutes: res.minutes + buffer,
-              reason: `${res.minutes} min ${config.mode} + ${buffer} min buffer`,
-              transitKey: key,
-            };
+            t.notify = transitNotify(t.notify, res.minutes, buffer, config.mode, key);
           } else {
             // Couldn't resolve the address — surface it, and cache so we don't
             // re-query every sync (a new address changes the key and retries).
