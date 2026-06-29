@@ -57,6 +57,7 @@
       margin-bottom: 12px;
       background: var(--elevated);
       box-shadow: var(--shadow-sm);
+      cursor: pointer;
       transition: box-shadow var(--dur-fast, .15s) var(--ease-standard, ease),
                   transform var(--dur-fast, .15s) var(--ease-standard, ease);
     }
@@ -95,6 +96,9 @@
     }
     .badge.online { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
 
+    .cal-mark { display: inline-flex; align-items: center; color: var(--text-muted); }
+    .cal-mark .mi { font-size: 15px; }
+
     .task .lead {
       flex: 0 0 auto;
       display: flex;
@@ -125,9 +129,11 @@
       border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
       flex-wrap: wrap;
     }
-    #addForm.open { display: flex; }
+    #addForm.open { display: flex; flex-wrap: wrap; }
     #addForm .field { flex: 1 1 160px; }
     #addForm input[type="datetime-local"] { flex: 0 0 auto; }
+    #formHint { flex-basis: 100%; }
+    #formHint:empty { display: none; }
 
     #settingsForm {
       display: none;
@@ -172,6 +178,7 @@
     <input type="datetime-local" class="field" id="addWhen" />
     <button class="btn btn-primary" id="addSave">Add</button>
     <button class="btn btn-ghost" id="addCancel">Cancel</button>
+    <div id="formHint" class="text-xs text-muted"></div>
   </div>
 
   <div id="list"><div id="empty">Loading…</div></div>
@@ -238,6 +245,10 @@
         if (!t) continue;
         liveIds.add(t.id);
         const prev = byId[t.id];
+        // If the user edited this event in the tool, they've taken manual
+        // control — leave their version untouched (it stays "live" so it isn't
+        // deleted, but the event's fields don't overwrite it).
+        if (prev?.userEdited) continue;
         // Keep a lead time the user changed, or one we computed from transit,
         // so a resync doesn't reset it to the default.
         if (prev?.notify?.leadEdited || prev?.notify?.transitKey) t.notify = prev.notify;
@@ -344,11 +355,23 @@
 
     function taskRow(t, start) {
       const row = el("div", "task");
+      row.title = "Click to edit";
+      row.addEventListener("click", () => openForm(t));
       row.appendChild(el("div", "when", { textContent: timeFmt.format(start) }));
 
       const body = el("div", "body");
       body.appendChild(el("div", "name", { textContent: t.title }));
       const meta = el("div", "meta");
+
+      // Mark calendar-sourced tasks so it's clear edits need care.
+      if (t.source === "calendar") {
+        const cal = el("span", "cal-mark");
+        cal.innerHTML = '<span class="mi mi-sm">event</span>';
+        cal.title = t.userEdited
+          ? "From your calendar · edited — sync won't overwrite it"
+          : "From your calendar · editing takes manual control";
+        meta.appendChild(cal);
+      }
 
       if (t.online) {
         meta.appendChild(el("span", "badge online", { textContent: "Online" }));
@@ -357,6 +380,7 @@
           const a = el("a", "", { textContent: "Join link", href: "#" });
           a.addEventListener("click", (e) => {
             e.preventDefault();
+            e.stopPropagation(); // don't open the editor
             // Use open_path (the `open` command), not the opener plugin —
             // tool-* windows aren't granted opener:allow-open-url.
             invoke("open_path", { path: link }).catch((err) => console.warn(err));
@@ -379,6 +403,7 @@
       input.type = "number";
       input.min = "0";
       input.value = t.notify?.leadMinutes ?? DEFAULT_LEAD;
+      input.addEventListener("click", (e) => e.stopPropagation());
       input.addEventListener("change", async () => {
         const v = Math.max(0, parseInt(input.value, 10) || 0);
         t.notify = { ...(t.notify || {}), leadMinutes: v, leadEdited: true };
@@ -392,7 +417,8 @@
       const del = el("button", "btn btn-icon");
       del.innerHTML = '<span class="mi">delete</span>';
       del.title = "Delete task";
-      del.addEventListener("click", async () => {
+      del.addEventListener("click", async (e) => {
+        e.stopPropagation(); // don't open the editor
         await invoke("delete_task", { id: t.id });
         refresh();
       });
@@ -415,32 +441,80 @@
       }
     }
 
-    // Manual add.
+    // Shared add / edit form. editingId is null for a new Task.
     const form = document.getElementById("addForm");
-    document.getElementById("addBtn").addEventListener("click", () => form.classList.toggle("open"));
-    document.getElementById("addCancel").addEventListener("click", () => form.classList.remove("open"));
+    const $title = document.getElementById("addTitle");
+    const $url = document.getElementById("addUrl");
+    const $when = document.getElementById("addWhen");
+    let editingId = null;
+
+    // ISO → value for <input type="datetime-local"> (local time, no zone).
+    function toLocalInput(iso) {
+      const d = new Date(iso);
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    // Open the form for a new Task (task=null) or to edit an existing one.
+    function openForm(task) {
+      editingId = task?.id ?? null;
+      $title.value = task?.title ?? "";
+      $url.value = task ? (task.actions?.find((a) => a.kind === "url")?.target || task.location || "") : "";
+      $when.value = task?.start ? toLocalInput(task.start) : "";
+      document.getElementById("addSave").textContent = task ? "Save" : "Add";
+      document.getElementById("formHint").textContent =
+        task?.source === "calendar" && !task?.userEdited
+          ? "Saving your edits takes manual control of this event — calendar sync won't overwrite it afterward."
+          : "";
+      form.classList.add("open");
+      $title.focus();
+    }
+    function closeForm() {
+      editingId = null;
+      form.classList.remove("open");
+      $title.value = $url.value = $when.value = "";
+      document.getElementById("formHint").textContent = "";
+    }
+
+    document.getElementById("addBtn").addEventListener("click", () => {
+      if (form.classList.contains("open")) closeForm();
+      else openForm(null);
+    });
+    document.getElementById("addCancel").addEventListener("click", closeForm);
+
     document.getElementById("addSave").addEventListener("click", async () => {
-      const title = document.getElementById("addTitle").value.trim();
-      const raw = document.getElementById("addUrl").value.trim();
-      const when = document.getElementById("addWhen").value;
+      const title = $title.value.trim();
+      const raw = $url.value.trim();
+      const when = $when.value;
       if (!title || !when) return;
       const isUrl = /^https?:\/\//i.test(raw);
-      const t = {
-        id: "man-" + genId(),
-        source: "manual",
+      const fields = {
         title,
         start: new Date(when).toISOString(),
         location: isUrl ? "" : raw,
-        actions: isUrl ? [{ kind: "url", target: raw }] : [],
         online: isUrl,
         inPerson: !!raw && !isUrl,
-        notify: { leadMinutes: DEFAULT_LEAD, reason: "" },
       };
-      await invoke("save_task", { id: t.id, data: JSON.stringify(t) });
-      document.getElementById("addTitle").value = "";
-      document.getElementById("addUrl").value = "";
-      document.getElementById("addWhen").value = "";
-      form.classList.remove("open");
+
+      if (editingId) {
+        const existing = (await loadTasks()).find((t) => t.id === editingId);
+        if (existing) {
+          const updated = { ...existing, ...fields, userEdited: true };
+          // Replace the primary join link / clear it for in-person.
+          updated.actions = isUrl ? [{ kind: "url", target: raw }] : (raw ? [] : (existing.actions || []));
+          await invoke("save_task", { id: editingId, data: JSON.stringify(updated) });
+        }
+      } else {
+        const t = {
+          id: "man-" + genId(),
+          source: "manual",
+          ...fields,
+          actions: isUrl ? [{ kind: "url", target: raw }] : [],
+          notify: { leadMinutes: DEFAULT_LEAD, reason: "" },
+        };
+        await invoke("save_task", { id: t.id, data: JSON.stringify(t) });
+      }
+      closeForm();
       refresh();
     });
 
