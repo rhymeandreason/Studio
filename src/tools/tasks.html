@@ -131,7 +131,7 @@
     }
     #addForm.open { display: flex; flex-wrap: wrap; }
     #addForm .field { flex: 1 1 160px; }
-    #addForm input[type="datetime-local"] { flex: 0 0 auto; }
+    #addForm input[type="date"], #addForm input[type="time"] { flex: 0 0 auto; }
     #formHint { flex-basis: 100%; }
     #formHint:empty { display: none; }
 
@@ -175,7 +175,8 @@
   <div id="addForm">
     <input class="field" id="addTitle" placeholder="Title" />
     <input class="field" id="addUrl" placeholder="Link or location (optional)" />
-    <input type="datetime-local" class="field" id="addWhen" />
+    <input type="date" class="field" id="addDate" />
+    <input type="time" class="field" id="addTime" />
     <button class="btn btn-primary" id="addSave">Add</button>
     <button class="btn btn-ghost" id="addCancel">Cancel</button>
     <div id="formHint" class="text-xs text-muted"></div>
@@ -445,14 +446,18 @@
     const form = document.getElementById("addForm");
     const $title = document.getElementById("addTitle");
     const $url = document.getElementById("addUrl");
-    const $when = document.getElementById("addWhen");
+    const $date = document.getElementById("addDate");
+    const $time = document.getElementById("addTime");
     let editingId = null;
 
-    // ISO → value for <input type="datetime-local"> (local time, no zone).
-    function toLocalInput(iso) {
+    // ISO → local date (YYYY-MM-DD) and time (HH:mm) input values.
+    function toLocalParts(iso) {
       const d = new Date(iso);
       const p = (n) => String(n).padStart(2, "0");
-      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+      return {
+        date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
+        time: `${p(d.getHours())}:${p(d.getMinutes())}`,
+      };
     }
 
     // Open the form for a new Task (task=null) or to edit an existing one.
@@ -460,7 +465,9 @@
       editingId = task?.id ?? null;
       $title.value = task?.title ?? "";
       $url.value = task ? (task.actions?.find((a) => a.kind === "url")?.target || task.location || "") : "";
-      $when.value = task?.start ? toLocalInput(task.start) : "";
+      const parts = task?.start ? toLocalParts(task.start) : { date: "", time: "" };
+      $date.value = parts.date;
+      $time.value = parts.time;
       document.getElementById("addSave").textContent = task ? "Save" : "Add";
       document.getElementById("formHint").textContent =
         task?.source === "calendar" && !task?.userEdited
@@ -472,7 +479,7 @@
     function closeForm() {
       editingId = null;
       form.classList.remove("open");
-      $title.value = $url.value = $when.value = "";
+      $title.value = $url.value = $date.value = $time.value = "";
       document.getElementById("formHint").textContent = "";
     }
 
@@ -485,12 +492,11 @@
     document.getElementById("addSave").addEventListener("click", async () => {
       const title = $title.value.trim();
       const raw = $url.value.trim();
-      const when = $when.value;
-      if (!title || !when) return;
+      if (!title || !$date.value || !$time.value) return;
       const isUrl = /^https?:\/\//i.test(raw);
       const fields = {
         title,
-        start: new Date(when).toISOString(),
+        start: new Date(`${$date.value}T${$time.value}`).toISOString(),
         location: isUrl ? "" : raw,
         online: isUrl,
         inPerson: !!raw && !isUrl,
