@@ -71,6 +71,14 @@ fn main() {
     println!("cargo:rustc-env=CALREAD_BIN={}", cr_bin.display());
     println!("cargo:rerun-if-changed={cr_src}");
 
+    // Travel-time helper for in-person Tasks (CLGeocoder + MKDirections ETA).
+    // See docs/tasks.md.
+    let tr_src = "swift/transit.swift";
+    let tr_bin = Path::new(&out_dir).join("transit");
+    swiftc(tr_src, &tr_bin, "macosx11.0");
+    println!("cargo:rustc-env=TRANSIT_BIN={}", tr_bin.display());
+    println!("cargo:rerun-if-changed={tr_src}");
+
     tauri_build::build();
 }
 

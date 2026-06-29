@@ -2188,6 +2188,7 @@ fn repo_scripts(repo: String) -> RepoScripts {
 const WINBOUNDS_BIN: &str = env!("WINBOUNDS_BIN");
 const DAYAGENDA_BIN: &str = env!("DAYAGENDA_BIN");
 const CALREAD_BIN: &str = env!("CALREAD_BIN");
+const TRANSIT_BIN: &str = env!("TRANSIT_BIN");
 
 /// Today's calendar events as a JSON array string:
 /// `[{"time":"10:00–10:30","title":"…","location":"…"}]` (EventKit, via the
@@ -2287,6 +2288,40 @@ fn delete_task(app: AppHandle, id: String) -> Result<(), String> {
         std::fs::remove_file(path).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Travel time (minutes) between two addresses for in-person Tasks, via the
+/// `transit` Swift helper (CLGeocoder + MKDirections). Returns its JSON —
+/// `{"minutes":N,"mode":"driving"}` or `{"error":"…"}`. `mode` is
+/// "driving" (default) or "walking".
+#[tauri::command]
+async fn transit_eta(from: String, to: String, mode: Option<String>) -> Result<String, String> {
+    let out = Command::new(TRANSIT_BIN)
+        .arg(&from)
+        .arg(&to)
+        .arg(mode.unwrap_or_else(|| "driving".into()))
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+/// Tasks settings (origin address, travel mode, buffer) for transit estimates —
+/// app config dir / tasks-config.json. Returns "{}" if unset.
+#[tauri::command]
+fn read_tasks_config(app: AppHandle) -> Result<String, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    Ok(std::fs::read_to_string(dir.join("tasks-config.json")).unwrap_or_else(|_| "{}".into()))
+}
+
+#[tauri::command]
+fn save_tasks_config(app: AppHandle, data: String) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("tasks-config.json"), data).map_err(|e| e.to_string())
 }
 
 /// Return the frontmost non-utility window's info as "app,title,x,y,w,h".
@@ -5612,6 +5647,9 @@ pub fn run() {
             list_tasks,
             save_task,
             delete_task,
+            transit_eta,
+            read_tasks_config,
+            save_tasks_config,
             read_briefing,
             save_briefing,
             read_briefing_prompt,

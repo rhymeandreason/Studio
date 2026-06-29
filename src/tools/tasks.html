@@ -118,6 +118,21 @@
     #addForm.open { display: flex; }
     #addForm .field { flex: 1 1 160px; }
     #addForm input[type="datetime-local"] { flex: 0 0 auto; }
+
+    #settingsForm {
+      display: none;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+    }
+    #settingsForm.open { display: flex; }
+    /* kit .field is width:100%; constrain so the row lays out side by side */
+    #settingsForm #cfgOrigin { flex: 1 1 260px; min-width: 0; width: auto; }
+    #settingsForm #cfgMode { flex: 0 0 auto; width: auto; }
+    #settingsForm #cfgBuffer { width: 56px; }
+    #settingsForm #cfgSave { flex: 0 0 auto; }
   </style>
 </head>
 
@@ -125,8 +140,21 @@
   <header>
     <span class="title">Tasks</span>
     <button class="btn btn-ghost" id="addBtn"><span class="material-symbols-rounded">add</span>Task</button>
+    <button class="btn btn-ghost" id="settingsBtn" title="Transit settings"><span class="material-symbols-rounded">tune</span></button>
     <button class="btn btn-ghost" id="refreshBtn"><span class="material-symbols-rounded">refresh</span>Sync</button>
   </header>
+
+  <div id="settingsForm">
+    <input class="field" id="cfgOrigin" placeholder="Home / origin address (for in-person travel time)" />
+    <select class="field" id="cfgMode">
+      <option value="driving">Driving</option>
+      <option value="walking">Walking</option>
+    </select>
+    <label class="text-xs" style="display:flex;align-items:center;gap:6px;color:var(--text-muted)">
+      Buffer <input type="number" class="field" id="cfgBuffer" min="0" style="width:56px" /> min
+    </label>
+    <button class="btn btn-primary" id="cfgSave">Save</button>
+  </div>
 
   <div id="addForm">
     <input class="field" id="addTitle" placeholder="Title" />
@@ -200,8 +228,9 @@
         if (!t) continue;
         liveIds.add(t.id);
         const prev = byId[t.id];
-        // Keep a lead time the user changed on this calendar Task.
-        if (prev?.notify?.leadEdited) t.notify = prev.notify;
+        // Keep a lead time the user changed, or one we computed from transit,
+        // so a resync doesn't reset it to the default.
+        if (prev?.notify?.leadEdited || prev?.notify?.transitKey) t.notify = prev.notify;
         await invoke("save_task", { id: t.id, data: JSON.stringify(t) });
       }
 
@@ -216,6 +245,46 @@
     async function loadTasks() {
       try { return JSON.parse(await invoke("list_tasks")); }
       catch (e) { console.warn("list_tasks failed", e); return []; }
+    }
+
+    // Transit settings (origin/mode/buffer) for in-person lead times.
+    let config = { origin: "", mode: "driving", buffer: 5 };
+    async function loadConfig() {
+      try { config = { origin: "", mode: "driving", buffer: 5, ...JSON.parse(await invoke("read_tasks_config")) }; }
+      catch (e) { console.warn("read_tasks_config failed", e); }
+    }
+
+    // For in-person Tasks, estimate travel time from the configured origin and
+    // set lead time = ETA + buffer. Cached per origin/mode (notify.transitKey)
+    // so we geocode once; skipped if the user hand-edited the lead time.
+    async function applyTransit(tasks) {
+      if (!config.origin) return;
+      for (const t of tasks) {
+        const isInPerson = t.inPerson || (t.location && !t.online);
+        if (!isInPerson || !t.location || t.notify?.leadEdited) continue;
+        // Key includes the destination so editing an address recomputes.
+        const key = `${config.origin}|${config.mode}|${t.location}`;
+        if (t.notify?.transitKey === key) continue; // already computed for this trip
+        try {
+          const res = JSON.parse(await invoke("transit_eta",
+            { from: config.origin, to: t.location, mode: config.mode }));
+          const buffer = config.buffer || 0;
+          if (typeof res.minutes === "number") {
+            t.notify = {
+              ...(t.notify || {}),
+              leadMinutes: res.minutes + buffer,
+              reason: `${res.minutes} min ${config.mode} + ${buffer} min buffer`,
+              transitKey: key,
+            };
+          } else {
+            // Couldn't resolve the address — surface it, and cache so we don't
+            // re-query every sync (a new address changes the key and retries).
+            t.notify = { ...(t.notify || {}), reason: "couldn't estimate travel — check the address", transitKey: key };
+          }
+          t.inPerson = true;
+          await invoke("save_task", { id: t.id, data: JSON.stringify(t) });
+        } catch (e) { console.warn("transit failed for", t.title, e); }
+      }
     }
 
     const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric" });
@@ -306,8 +375,9 @@
       if (!hasTauri || busy) return;
       busy = true;
       try {
-        let stored = await loadTasks();
+        const stored = await loadTasks();
         await syncCalendar(stored);
+        await applyTransit(await loadTasks());
         render(await loadTasks());
       } finally {
         busy = false;
@@ -345,8 +415,27 @@
 
     document.getElementById("refreshBtn").addEventListener("click", refresh);
 
+    // Transit settings.
+    const settingsForm = document.getElementById("settingsForm");
+    document.getElementById("settingsBtn").addEventListener("click", () => settingsForm.classList.toggle("open"));
+    document.getElementById("cfgSave").addEventListener("click", async () => {
+      config = {
+        origin: document.getElementById("cfgOrigin").value.trim(),
+        mode: document.getElementById("cfgMode").value,
+        buffer: Math.max(0, parseInt(document.getElementById("cfgBuffer").value, 10) || 0),
+      };
+      await invoke("save_tasks_config", { data: JSON.stringify(config) });
+      settingsForm.classList.remove("open");
+      refresh(); // recompute transit with the new origin/mode/buffer
+    });
+    function fillSettings() {
+      document.getElementById("cfgOrigin").value = config.origin || "";
+      document.getElementById("cfgMode").value = config.mode || "driving";
+      document.getElementById("cfgBuffer").value = config.buffer ?? 5;
+    }
+
     if (hasTauri) {
-      refresh();
+      loadConfig().then(() => { fillSettings(); refresh(); });
     } else {
       document.getElementById("list").innerHTML =
         '<div id="empty">Open inside Studio to read your calendar.</div>';
