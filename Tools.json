@@ -10,5 +10,6 @@
   { "file": "image-editor.html", "name": "Image Editor" },
   { "file": "window-size.html", "name": "Window Size" },
   { "file": "file-directory.html", "name": "File Directory" },
-  { "file": "modes.html", "name": "Modes" }
+  { "file": "modes.html", "name": "Modes" },
+  { "file": "tasks.html", "name": "Tasks" }
 ]

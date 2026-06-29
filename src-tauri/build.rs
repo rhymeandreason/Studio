@@ -63,6 +63,14 @@ fn main() {
     println!("cargo:rustc-env=DAYAGENDA_BIN={}", ag_bin.display());
     println!("cargo:rerun-if-changed={ag_src}");
 
+    // Calendar reader for Tasks (EventKit → next 7 days as rich JSON). macOS 14+
+    // for requestFullAccessToEvents. See docs/tasks.md.
+    let cr_src = "swift/calread.swift";
+    let cr_bin = Path::new(&out_dir).join("calread");
+    swiftc(cr_src, &cr_bin, "macosx14.0");
+    println!("cargo:rustc-env=CALREAD_BIN={}", cr_bin.display());
+    println!("cargo:rerun-if-changed={cr_src}");
+
     tauri_build::build();
 }
 

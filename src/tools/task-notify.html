@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../kit/kit.css" />
+  <script type="module" src="../kit/components.js"></script>
+  <style>
+    /* Transparent window — only the card shows; corners reveal the desktop. */
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: transparent;
+      overflow: hidden;
+      font-family: var(--sans);
+    }
+    #card {
+      box-sizing: border-box;
+      height: 100%;
+      margin: 6px;
+      padding: 14px 16px;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border, rgba(255,255,255,0.10));
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #eyebrow {
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    #title { font-size: 15px; font-weight: 600; line-height: 1.25; }
+    #sub { font-size: 12px; color: var(--text-muted); }
+    #buttons {
+      margin-top: auto;
+      display: flex;
+      gap: 6px;
+      padding-top: 8px;
+    }
+    #buttons .btn { flex: 0 0 auto; }
+    #primary { flex: 1 1 auto; }
+  </style>
+</head>
+
+<body>
+  <div id="card">
+    <div id="eyebrow">Upcoming</div>
+    <div id="title">…</div>
+    <div id="sub"></div>
+    <div id="buttons">
+      <button class="btn btn-primary" id="primary">Join</button>
+      <button class="btn btn-ghost" id="snooze">Snooze</button>
+      <button class="btn btn-ghost" id="dismiss">Dismiss</button>
+    </div>
+  </div>
+
+  <script type="module">
+    const { invoke } = window.__TAURI__.core;
+    const { getCurrentWindow } = window.__TAURI__.window;
+    const win = getCurrentWindow();
+
+    const id = new URLSearchParams(location.search).get("id");
+    const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+
+    let task = null;
+
+    async function load() {
+      const all = JSON.parse(await invoke("list_tasks"));
+      task = all.find((t) => t.id === id);
+      if (!task) { win.close(); return; }
+      render();
+    }
+
+    function render() {
+      document.getElementById("title").textContent = task.title || "Task";
+      const when = task.start ? timeFmt.format(new Date(task.start)) : "";
+      const primary = document.getElementById("primary");
+
+      if (task.online) {
+        document.getElementById("sub").textContent = when ? `Online · ${when}` : "Online";
+        primary.textContent = "Join";
+      } else if (task.inPerson || task.location) {
+        document.getElementById("sub").textContent =
+          [task.location, when].filter(Boolean).join(" · ");
+        primary.textContent = "Leave now";
+        if (task.notify?.reason) document.getElementById("eyebrow").textContent = task.notify.reason;
+      } else {
+        document.getElementById("sub").textContent = when;
+        primary.textContent = task.actions?.length ? "Open" : "OK";
+      }
+    }
+
+    // Run the Task's actions: URLs in the default browser, apps via `open -a`,
+    // Studio tools via open_tool. (open_path opens http(s) URLs too.)
+    async function runActions() {
+      for (const a of task.actions || []) {
+        try {
+          if (a.kind === "url") await invoke("open_path", { path: a.target });
+          else if (a.kind === "app") await invoke("open_app", { name: a.target });
+          else if (a.kind === "tool") await invoke("open_tool", { file: a.target });
+        } catch (e) { console.warn("action failed", a, e); }
+      }
+    }
+
+    document.getElementById("primary").addEventListener("click", async () => {
+      await runActions();
+      win.close();
+    });
+
+    document.getElementById("dismiss").addEventListener("click", () => win.close());
+
+    document.getElementById("snooze").addEventListener("click", async () => {
+      // Re-fire in 1 min: the background watcher fires again once snoozeUntil
+      // elapses (snooze overrides the once-fired guard).
+      task.snoozeUntil = new Date(Date.now() + 60 * 1000).toISOString();
+      await invoke("save_task", { id: task.id, data: JSON.stringify(task) });
+      win.close();
+    });
+
+    load();
+  </script>
+</body>
+
+</html>

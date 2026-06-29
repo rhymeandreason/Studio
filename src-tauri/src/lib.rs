@@ -2187,6 +2187,7 @@ fn repo_scripts(repo: String) -> RepoScripts {
 
 const WINBOUNDS_BIN: &str = env!("WINBOUNDS_BIN");
 const DAYAGENDA_BIN: &str = env!("DAYAGENDA_BIN");
+const CALREAD_BIN: &str = env!("CALREAD_BIN");
 
 /// Today's calendar events as a JSON array string:
 /// `[{"time":"10:00–10:30","title":"…","location":"…"}]` (EventKit, via the
@@ -2203,6 +2204,89 @@ async fn day_agenda() -> Result<String, String> {
     } else {
         Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
     }
+}
+
+/// Next 7 days of calendar events as a rich JSON array string (EventKit, via the
+/// `calread` Swift helper) — `[{"id","title","start","end","allDay","location",
+/// "notes","url"}]`. Returns `"[]"` if calendar access is denied or there are no
+/// events. Drives the Tasks subsystem (see docs/tasks.md).
+#[tauri::command]
+async fn cal_read() -> Result<String, String> {
+    let out = Command::new(CALREAD_BIN)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+// ---- Tasks store (app config dir / tasks/<id>.json) ------------------------
+// Global, not project-bound — a directory of per-Task JSON files so Claude can
+// author/edit one Task without racing Studio's writes. See docs/tasks.md.
+
+/// Directory holding per-Task JSON files.
+fn tasks_dir(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join("tasks"))
+}
+
+/// Reject ids that aren't a plain slug, so a Task id can't escape tasks_dir.
+fn safe_task_id(id: &str) -> Result<(), String> {
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err("invalid task id".into());
+    }
+    Ok(())
+}
+
+/// All Tasks as a JSON array string (each file's contents, parsed). Skips files
+/// that don't parse. Returns "[]" if the dir is missing.
+#[tauri::command]
+fn list_tasks(app: AppHandle) -> Result<String, String> {
+    let dir = tasks_dir(&app).ok_or("no app config dir")?;
+    let mut items: Vec<serde_json::Value> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            if let Ok(text) = std::fs::read_to_string(&path) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                    items.push(val);
+                }
+            }
+        }
+    }
+    serde_json::to_string(&items).map_err(|e| e.to_string())
+}
+
+/// Write one Task file (pretty-printed). `id` names the file; `data` is its JSON.
+#[tauri::command]
+fn save_task(app: AppHandle, id: String, data: String) -> Result<(), String> {
+    safe_task_id(&id)?;
+    let dir = tasks_dir(&app).ok_or("no app config dir")?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    // Re-serialize so we both validate the JSON and store it pretty.
+    let val: serde_json::Value = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    let text = serde_json::to_string_pretty(&val).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(format!("{id}.json")), text).map_err(|e| e.to_string())
+}
+
+/// Delete one Task file. Missing file is not an error (idempotent).
+#[tauri::command]
+fn delete_task(app: AppHandle, id: String) -> Result<(), String> {
+    safe_task_id(&id)?;
+    let dir = tasks_dir(&app).ok_or("no app config dir")?;
+    let path = dir.join(format!("{id}.json"));
+    if path.exists() {
+        std::fs::remove_file(path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 /// Return the frontmost non-utility window's info as "app,title,x,y,w,h".
@@ -4215,6 +4299,146 @@ fn start_scheduler(app: &AppHandle) {
     });
 }
 
+/// Background watcher for Tasks (docs/tasks.md): every 30s, pop a notification
+/// card for any Task whose lead time has arrived. Independent of the Tasks tool
+/// being open. Mirrors `start_scheduler`.
+fn start_task_watcher(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || loop {
+        fire_due_tasks(&app);
+        std::thread::sleep(std::time::Duration::from_secs(30));
+    });
+}
+
+/// Scan Task files; for each whose notification time has arrived — and which
+/// hasn't already fired (respecting an active snooze) — pop an always-on-top
+/// card and stamp `firedAt` so it fires exactly once. Cards linger until the
+/// user acts; we don't auto-dismiss. A stale cutoff (meeting end, or start+15m)
+/// avoids popping cards long after a meeting began (e.g. on app launch).
+fn fire_due_tasks(app: &AppHandle) {
+    use chrono::Utc;
+    let dir = match tasks_dir(app) {
+        Some(d) => d,
+        None => return,
+    };
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    let now = Utc::now();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        let mut task: serde_json::Value = match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let id = task
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if id.is_empty() {
+            continue;
+        }
+
+        let Some(start) = task
+            .get("start")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.with_timezone(&Utc))
+        else {
+            continue;
+        };
+        let lead = task
+            .get("notify")
+            .and_then(|n| n.get("leadMinutes"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(2);
+        let fire_at = start - chrono::Duration::minutes(lead);
+        let cutoff = task
+            .get("end")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.with_timezone(&Utc))
+            .unwrap_or(start + chrono::Duration::minutes(15));
+
+        // Snooze overrides "already fired": while snoozing, skip; once the
+        // snooze elapses, fire again regardless of firedAt.
+        if let Some(snooze) = task
+            .get("snoozeUntil")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.with_timezone(&Utc))
+        {
+            if now < snooze {
+                continue;
+            }
+        } else if task.get("firedAt").is_some() {
+            continue; // fired once, no re-nag
+        }
+
+        if now < fire_at || now > cutoff {
+            continue;
+        }
+
+        // Fire: pop the card (on the main thread — this is a worker thread) and
+        // record that we did, clearing any elapsed snooze.
+        let app2 = app.clone();
+        let id2 = id.clone();
+        let _ = app.run_on_main_thread(move || open_task_notification_window(&app2, &id2));
+        task["firedAt"] = serde_json::json!(now.to_rfc3339());
+        if let Some(obj) = task.as_object_mut() {
+            obj.remove("snoozeUntil");
+        }
+        let _ = std::fs::write(&path, serde_json::to_string_pretty(&task).unwrap_or(text));
+    }
+}
+
+/// Build (or focus) a Task notification card — a small, undecorated,
+/// always-on-top window at the top-right of the primary monitor. Labeled
+/// `tool-task-notify-<id>` so it inherits the `tool-*` capability (invoke +
+/// window controls). Must be called on the main thread.
+fn open_task_notification_window(app: &AppHandle, id: &str) {
+    let label = format!("tool-task-notify-{id}");
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return;
+    }
+    let url = format!("tools/task-notify.html?id={id}");
+    if let Ok(win) = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
+        .inner_size(340.0, 150.0)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .visible(false)
+        .build()
+    {
+        if let Ok(Some(mon)) = win.primary_monitor() {
+            let sz = mon.size();
+            let ws = win.outer_size().unwrap_or_default();
+            let margin = 16i32;
+            let x = (sz.width as i32 - ws.width as i32 - margin).max(0);
+            let y = 16 + margin; // clear of the menu bar
+            let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+        }
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+}
+
 fn run_due_schedules(app: &AppHandle) {
     use chrono::{Datelike, Local};
     let now = Local::now();
@@ -5384,6 +5608,10 @@ pub fn run() {
             run_schedule_now,
             run_claude_prompt,
             day_agenda,
+            cal_read,
+            list_tasks,
+            save_task,
+            delete_task,
             read_briefing,
             save_briefing,
             read_briefing_prompt,
@@ -5586,6 +5814,9 @@ pub fn run() {
 
             // Periodically run any due scheduled `claude -p` tasks.
             start_scheduler(&handle);
+
+            // Periodically pop notification cards for due Tasks (docs/tasks.md).
+            start_task_watcher(&handle);
 
             // Periodically refresh the tray's RAM-usage label.
             start_ram_label_refresh(&handle);
