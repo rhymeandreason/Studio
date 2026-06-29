@@ -459,6 +459,19 @@ margin-top:20px;
       $("status").textContent = text;
     }
 
+    // Fetched fresh on every open/refresh, independent of the briefing-text
+    // cache gate below — it's cheap, real data with no LLM involved, so there's
+    // no reason to ever show a stale image just because today's text briefing
+    // was already cached.
+    async function refreshPotd() {
+      let potd = null;
+      try {
+        potd = JSON.parse(await invoke("get_picture_of_day"));
+      } catch {}
+      renderPotd(potd);
+      return potd;
+    }
+
     let refreshing = false;
 
     async function refresh() {
@@ -480,11 +493,7 @@ margin-top:20px;
         }));
       } catch {}
 
-      let potd = null;
-      try {
-        potd = JSON.parse(await invoke("get_picture_of_day"));
-      } catch {}
-      renderPotd(potd);
+      const potd = await refreshPotd();
 
       const prompt = ($("sources").value || DEFAULT_PROMPT).trim();
       try {
@@ -609,7 +618,14 @@ margin-top:20px;
     // open just displays it. Only generate when today's doesn't exist yet
     // (so the scheduled 7am open — the first of the day — is what generates).
     (async () => {
-      if (!(await loadCache())) refresh();
+      const cachedToday = await loadCache();
+      if (!cachedToday) {
+        refresh();
+      } else {
+        // refresh() already covers the picture of the day when it runs; when
+        // the cache short-circuits it, fetch a live one anyway.
+        refreshPotd();
+      }
     })();
 
   </script>
