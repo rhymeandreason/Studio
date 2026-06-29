@@ -339,24 +339,33 @@
     function revealCard(card) {
       const fullH = card.offsetHeight; // natural size before we collapse it
       const fullW = card.offsetWidth;
-      const DOT = 10;
+      const DOT = 10; // dot width
+      const LINE = 10; // line/dot height during the widen phase (half as tall)
       const startScale = DOT / fullW; // a true 10px-wide dot
-      const radius = getComputedStyle(card).borderRadius;
+      const cs = getComputedStyle(card);
+      const radius = cs.borderRadius;
+      const padT = cs.paddingTop;
+      const padB = cs.paddingBottom;
+      const bColor = cs.borderTopColor; // restored as the card grows
       const kids = [...card.children];
       card.style.transformOrigin = "top center";
       card.style.overflow = "hidden";
+      card.style.boxSizing = "border-box"; // so `height` is the whole box, not + padding
+      card.style.boxShadow = "none"; // no drop shadow until the reveal finishes
       kids.forEach((ch) => (ch.style.opacity = "0")); // hidden until the card grows
 
-      // The card itself is the dot. Phases (offsets), with a hold between:
-      //   0–0.45  10px dot widens to a full-width line  (smooth in-out)
+      // The card itself is the dot. Padding is collapsed to 0 during the widen
+      // (otherwise the 16px top/bottom padding keeps it ~37px tall), then
+      // restored as the card grows. Phases (offsets), with a hold between:
+      //   0–0.45  dot widens to a full-width line  (smooth in-out)
       //   0.45–0.55  hold on the line
-      //   0.55–1  the line grows to full card height     (gentle settle)
+      //   0.55–1  the line grows to full card height (gentle settle)
       const anim = card.animate(
         [
-          { height: DOT + "px", transform: `scaleX(${startScale})`, borderRadius: "10px", easing: "cubic-bezier(0.45, 0, 0.55, 1)" },
-          { height: DOT + "px", transform: "scaleX(1)", borderRadius: "10px", offset: 0.45 },
-          { height: DOT + "px", transform: "scaleX(1)", borderRadius: "10px", offset: 0.55, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
-          { height: fullH + "px", transform: "scaleX(1)", borderRadius: radius },
+          { height: LINE + "px", paddingTop: "0px", paddingBottom: "0px", transform: `scaleX(${startScale})`, borderRadius: "10px", borderColor: "transparent", easing: "cubic-bezier(0.45, 0, 0.55, 1)" },
+          { height: LINE + "px", paddingTop: "0px", paddingBottom: "0px", transform: "scaleX(1)", borderRadius: "10px", borderColor: "transparent", offset: 0.45 },
+          { height: LINE + "px", paddingTop: "0px", paddingBottom: "0px", transform: "scaleX(1)", borderRadius: "10px", borderColor: "transparent", offset: 0.55, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+          { height: fullH + "px", paddingTop: padT, paddingBottom: padB, transform: "scaleX(1)", borderRadius: radius, borderColor: bColor },
         ],
         { duration: 800, fill: "backwards" },
       );
@@ -368,7 +377,8 @@
         );
       });
       const clear = () => {
-        card.style.overflow = card.style.height = card.style.transform = card.style.transformOrigin = card.style.borderRadius = "";
+        card.style.overflow = card.style.height = card.style.transform = card.style.transformOrigin =
+          card.style.borderRadius = card.style.boxSizing = card.style.paddingTop = card.style.paddingBottom = card.style.boxShadow = card.style.borderColor = "";
       };
       anim.onfinish = clear;
       anim.oncancel = clear;
