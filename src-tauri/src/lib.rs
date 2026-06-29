@@ -585,6 +585,7 @@ fn tool_style(filename: &str) -> ToolStyle {
         "file-directory.html" => s(350.0, 640.0, true, Chrome::Custom, Tint::Paper),
         "modes.html" => s(320.0, 480.0, true, Chrome::NativeTint, Tint::Paper),
         "kit-gallery.html" => s(900.0, 640.0, true, Chrome::NativeTint, Tint::Paper),
+        "daily-briefing.html" => s(1080.0, 760.0, true, Chrome::NativeTint, Tint::Paper),
         _ => s(900.0, 640.0, false, Chrome::Native, Tint::None),
     }
 }
