@@ -26,7 +26,10 @@ Then a local `<style>` for tool-specific overrides only — never rewrite what k
 
 **Tokens over hardcoding:** use `var(--bg)`, `var(--surface)`, `var(--text)`, `var(--accent)`, `var(--radius)` etc. for colors and radii — never hardcode them. (There is no `--space-*` scale; follow the kit and use raw px for spacing.)
 
-**Icons:** `<span class="material-symbols-rounded">icon_name</span>` (font loaded by `tokens.css`).
+**Icons:** `<span class="mi">icon_name</span>` (Material Symbols Rounded font +
+the `.mi` class are defined in `tokens.css`; add `.mi-sm` for 16px). Note: the
+class is `.mi`, **not** `material-symbols-rounded` — that class isn't defined, so
+the icon name renders as plain text.
 
 [`kit-gallery.html`](../src/tools/kit-gallery.html) (Tools → Design System) is the living reference. 
 

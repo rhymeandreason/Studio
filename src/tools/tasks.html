@@ -29,6 +29,9 @@
       border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
     }
     header .title { font-size: 18px; font-weight: 600; margin-right: auto; }
+    /* Round filled "add" button. */
+    #addBtn { width: 34px; height: 34px; border-radius: 50%; padding: 0; flex: 0 0 auto; }
+    #addBtn .mi { font-size: 20px; }
 
     #list {
       flex: 1 1 auto;
@@ -139,9 +142,9 @@
 <body>
   <header>
     <span class="title">Tasks</span>
-    <button class="btn btn-ghost" id="addBtn"><span class="material-symbols-rounded">add</span>Task</button>
-    <button class="btn btn-ghost" id="settingsBtn" title="Transit settings"><span class="material-symbols-rounded">tune</span></button>
-    <button class="btn btn-ghost" id="refreshBtn"><span class="material-symbols-rounded">refresh</span>Sync</button>
+    <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Transit settings"><span class="mi">tune</span></button>
+    <button class="btn btn-ghost btn-icon" id="refreshBtn" title="Sync calendar"><span class="mi">refresh</span></button>
+    <button class="btn btn-primary" id="addBtn" title="Add task"><span class="mi">add</span></button>
   </header>
 
   <div id="settingsForm">
@@ -380,7 +383,7 @@
 
       const actions = el("div", "actions");
       const del = el("button", "btn btn-icon");
-      del.innerHTML = '<span class="material-symbols-rounded">delete</span>';
+      del.innerHTML = '<span class="mi">delete</span>';
       del.title = "Delete task";
       del.addEventListener("click", async () => {
         await invoke("delete_task", { id: t.id });
