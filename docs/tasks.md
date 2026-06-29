@@ -184,7 +184,9 @@ main-window tab.
 2. ✅ **Persistent notification window** — `start_task_watcher`/`fire_due_tasks`
    (30s background thread) + `src/tools/task-notify.html`. Always-on-top card
    top-right; fires at `start − leadMinutes`; Join / Snooze / Dismiss.
-3. **`studio-tasks` skill** — Claude authors/edits Task files. *(next)*
+3. ✅ **`studio-tasks` skill** — `skills/studio-tasks/SKILL.md`, symlinked into
+   `~/.claude/skills/`. Documents the Task JSON shape + the
+   `app_config_dir/tasks/` path so Claude can author/enrich Tasks directly.
 4. **`transit` helper + in-person flow** — ETA-driven lead time, "Leave now."
 
 1–2 give the working meeting-notifier; 3–4 add the Claude brain and transit.
