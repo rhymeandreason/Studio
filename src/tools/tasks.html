@@ -9,7 +9,11 @@
   <link rel="stylesheet" href="../kit/kit.css" />
   <script type="module" src="../kit/components.js"></script>
   <style>
-    html, body { height: 100%; }
+    html,
+    body {
+      height: 100%;
+    }
+
     body {
       margin: 0;
       font-family: var(--sans);
@@ -26,12 +30,27 @@
       align-items: center;
       gap: 10px;
       padding: 16px 20px 12px;
-      border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+      border-bottom: 1px solid var(--hairline, rgba(255, 255, 255, 0.08));
     }
-    header .title { font-size: 18px; font-weight: 600; margin-right: auto; }
+
+    header .title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-right: auto;
+    }
+
     /* Round filled "add" button. */
-    #addBtn { width: 34px; height: 34px; border-radius: 50%; padding: 0; flex: 0 0 auto; }
-    #addBtn .mi { font-size: 20px; }
+    #addBtn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      padding: 0;
+      flex: 0 0 auto;
+    }
+
+    #addBtn .mi {
+      font-size: 20px;
+    }
 
     #list {
       flex: 1 1 auto;
@@ -59,9 +78,12 @@
       box-shadow: var(--shadow-sm);
       cursor: pointer;
       transition: box-shadow var(--dur-fast, .15s) var(--ease-standard, ease),
-                  transform var(--dur-fast, .15s) var(--ease-standard, ease);
+        transform var(--dur-fast, .15s) var(--ease-standard, ease);
     }
-    .flip:hover .face.front { box-shadow: var(--shadow-md); }
+
+    .flip:hover .face.front {
+      box-shadow: var(--shadow-md);
+    }
 
     /* Flip card: front = task display, back = inline editor. The container's
        height is set in JS (front height normally, back height when flipped) so
@@ -72,35 +94,73 @@
       perspective: 1600px;
       transition: height 0.5s cubic-bezier(0.16, 1, 0.3, 1);
     }
+
     .flip-inner {
       position: relative;
       height: 100%;
       transform-style: preserve-3d;
       transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .flip.flipped .flip-inner { transform: rotateY(180deg); }
+
+    .flip.flipped .flip-inner {
+      transform: rotateY(180deg);
+    }
+
     .flip .face {
       position: absolute;
-      inset: 0 0 auto 0; /* top/left/right; height grows with content */
+      inset: 0 0 auto 0;
+      /* top/left/right; height grows with content */
       margin-bottom: 0;
       backface-visibility: hidden;
       -webkit-backface-visibility: hidden;
     }
-    .flip .face.back { transform: rotateY(180deg); }
+
+    .flip .face.back {
+      transform: rotateY(180deg);
+    }
+
     /* Back face holds a wrapping editor form. */
-    .edit-form { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
-    .edit-form .field { flex: 1 1 160px; }
-    .edit-form input[type="date"], .edit-form input[type="time"] { flex: 0 0 auto; }
-    .edit-form .form-hint { flex-basis: 100%; }
-    .edit-form .form-hint:empty { display: none; }
+    .edit-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .edit-form .field {
+      flex: 1 1 160px;
+    }
+
+    .edit-form input[type="date"],
+    .edit-form input[type="time"] {
+      flex: 0 0 auto;
+    }
+
+    .edit-form .form-hint {
+      flex-basis: 100%;
+    }
+
+    .edit-form .form-hint:empty {
+      display: none;
+    }
+
     .task .when {
       flex: 0 0 70px;
       font-variant-numeric: tabular-nums;
       font-size: 13px;
       color: var(--text);
     }
-    .task .body { flex: 1 1 auto; min-width: 0; }
-    .task .name { font-size: 14px; font-weight: 500; }
+
+    .task .body {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .task .name {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
     .task .meta {
       margin-top: 3px;
       font-size: 12px;
@@ -110,8 +170,15 @@
       align-items: center;
       gap: 8px;
     }
-    .task .meta a { color: var(--accent); text-decoration: none; }
-    .task .meta a:hover { text-decoration: underline; }
+
+    .task .meta a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .task .meta a:hover {
+      text-decoration: underline;
+    }
 
     .badge {
       font-size: 10px;
@@ -119,13 +186,24 @@
       text-transform: uppercase;
       padding: 2px 6px;
       border-radius: 5px;
-      background: rgba(255,255,255,0.08);
+      background: rgba(255, 255, 255, 0.08);
       color: var(--text-muted);
     }
-    .badge.online { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
 
-    .cal-mark { display: inline-flex; align-items: center; color: var(--text-muted); }
-    .cal-mark .mi { font-size: 15px; }
+    .badge.online {
+      background: color-mix(in srgb, var(--accent) 22%, transparent);
+      color: var(--accent);
+    }
+
+    .cal-mark {
+      display: inline-flex;
+      align-items: center;
+      color: var(--text-muted);
+    }
+
+    .cal-mark .mi {
+      font-size: 15px;
+    }
 
     /* Card-reveal animation: a 10px dot widens to a full-width line, holds, then
        grows to full height. Two runtime values come in as custom properties:
@@ -140,31 +218,66 @@
       transform-origin: top center;
       animation: card-reveal 800ms;
     }
-    .revealing > * { animation: card-reveal-fade 800ms ease-out; }
+
+    .revealing>* {
+      animation: card-reveal-fade 800ms ease-out;
+    }
 
     @keyframes card-reveal {
       0% {
-        height: 10px; padding-top: 0; padding-bottom: 0;
-        transform: scaleX(var(--reveal-scale)); border-radius: 10px;
-        border-color: transparent; box-shadow: none;
-        animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); /* widen */
+        height: 10px;
+        padding-top: 0;
+        padding-bottom: 0;
+        transform: scaleX(var(--reveal-scale));
+        border-radius: 10px;
+        border-color: transparent;
+        box-shadow: none;
+        animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
+        /* widen */
       }
-      45%, 55% {
-        height: 10px; padding-top: 0; padding-bottom: 0;
-        transform: scaleX(1); border-radius: 10px;
-        border-color: transparent; box-shadow: none;
-        animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); /* then grow */
+
+      45%,
+      55% {
+        height: 10px;
+        padding-top: 0;
+        padding-bottom: 0;
+        transform: scaleX(1);
+        border-radius: 10px;
+        border-color: transparent;
+        box-shadow: none;
+        animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+        /* then grow */
       }
+
       100% {
-        height: var(--reveal-h); padding-top: 16px; padding-bottom: 16px;
-        transform: scaleX(1); border-radius: var(--radius-lg, 12px);
-        border-color: var(--hairline); box-shadow: var(--shadow-sm);
+        height: var(--reveal-h);
+        padding-top: 16px;
+        padding-bottom: 16px;
+        transform: scaleX(1);
+        border-radius: var(--radius-lg, 12px);
+        border-color: var(--hairline);
+        box-shadow: var(--shadow-sm);
       }
     }
-    @keyframes card-reveal-fade { 0%, 60% { opacity: 0; } 100% { opacity: 1; } }
+
+    @keyframes card-reveal-fade {
+
+      0%,
+      60% {
+        opacity: 0;
+      }
+
+      100% {
+        opacity: 1;
+      }
+    }
 
     @media (prefers-reduced-motion: reduce) {
-      .revealing, .revealing > * { animation: none; }
+
+      .revealing,
+      .revealing>* {
+        animation: none;
+      }
     }
 
     .task .lead {
@@ -175,12 +288,18 @@
       font-size: 12px;
       color: var(--text-muted);
     }
+
     .task .lead input {
       width: 48px;
       padding: 3px 6px;
       text-align: right;
     }
-    .task .actions { flex: 0 0 auto; display: flex; gap: 4px; }
+
+    .task .actions {
+      flex: 0 0 auto;
+      display: flex;
+      gap: 4px;
+    }
 
     #empty {
       text-align: center;
@@ -201,11 +320,28 @@
       box-shadow: var(--shadow-sm);
       flex-wrap: wrap;
     }
-    #addForm.open { display: flex; flex-wrap: wrap; }
-    #addForm .field { flex: 1 1 160px; }
-    #addForm input[type="date"], #addForm input[type="time"] { flex: 0 0 auto; }
-    #formHint { flex-basis: 100%; }
-    #formHint:empty { display: none; }
+
+    #addForm.open {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    #addForm .field {
+      flex: 1 1 160px;
+    }
+
+    #addForm input[type="date"],
+    #addForm input[type="time"] {
+      flex: 0 0 auto;
+    }
+
+    #formHint {
+      flex-basis: 100%;
+    }
+
+    #formHint:empty {
+      display: none;
+    }
 
     #settingsForm {
       display: none;
@@ -213,14 +349,33 @@
       flex-wrap: wrap;
       gap: 8px;
       padding: 12px 20px;
-      border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+      border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
     }
-    #settingsForm.open { display: flex; }
+
+    #settingsForm.open {
+      display: flex;
+    }
+
     /* kit .field is width:100%; constrain so the row lays out side by side */
-    #settingsForm #cfgOrigin { flex: 1 1 260px; min-width: 0; width: auto; }
-    #settingsForm #cfgMode { flex: 0 0 auto; width: auto; }
-    #settingsForm #cfgBuffer { width: 56px; }
-    #settingsForm #cfgSave { flex: 0 0 auto; }
+    #settingsForm #cfgOrigin {
+      flex: 1 1 260px;
+      min-width: 0;
+      width: auto;
+    }
+
+    #settingsForm #cfgMode {
+      flex: 0 0 auto;
+      width: auto;
+    }
+
+    #settingsForm #cfgBuffer {
+      width: 56px;
+    }
+
+    #settingsForm #cfgSave {
+      flex: 0 0 auto;
+    }
+
   </style>
 </head>
 
@@ -254,10 +409,15 @@
     <div id="formHint" class="text-xs text-muted"></div>
   </div>
 
-  <div id="list"><div id="empty">Loading…</div></div>
+  <div id="list">
+    <div id="empty">Loading…</div>
+  </div>
 
   <script type="module">
-    import { el, genId } from "../dom.js";
+    import {
+      el,
+      genId
+    } from "../dom.js";
 
     const hasTauri = !!window.__TAURI__;
     const invoke = hasTauri ? window.__TAURI__.core.invoke : null;
@@ -285,7 +445,10 @@
       if (ev.allDay) return null;
       const join = findJoinLink(ev);
       const actions = [];
-      if (join) actions.push({ kind: "url", target: join });
+      if (join) actions.push({
+        kind: "url",
+        target: join
+      });
       const inPerson = !join && ev.location && ev.location.trim();
       return {
         id: calId(ev.id),
@@ -298,7 +461,10 @@
         actions,
         online: !!join,
         inPerson: !!inPerson,
-        notify: { leadMinutes: DEFAULT_LEAD, reason: "" },
+        notify: {
+          leadMinutes: DEFAULT_LEAD,
+          reason: ""
+        },
       };
     }
 
@@ -307,8 +473,12 @@
     // time. Manual Tasks are never touched. Cancelled events' Tasks are removed.
     async function syncCalendar(stored) {
       let events = [];
-      try { events = JSON.parse(await invoke("cal_read")); }
-      catch (e) { console.warn("cal_read failed", e); return; }
+      try {
+        events = JSON.parse(await invoke("cal_read"));
+      } catch (e) {
+        console.warn("cal_read failed", e);
+        return;
+      }
 
       const byId = Object.fromEntries(stored.map((t) => [t.id, t]));
       const liveIds = new Set();
@@ -325,27 +495,48 @@
         // Keep a lead time the user changed, or one we computed from transit,
         // so a resync doesn't reset it to the default.
         if (prev?.notify?.leadEdited || prev?.notify?.transitKey) t.notify = prev.notify;
-        await invoke("save_task", { id: t.id, data: JSON.stringify(t) });
+        await invoke("save_task", {
+          id: t.id,
+          data: JSON.stringify(t)
+        });
       }
 
       // Remove calendar Tasks whose event no longer exists (cancelled / aged out).
       for (const t of stored) {
         if (t.source === "calendar" && !liveIds.has(t.id)) {
-          await invoke("delete_task", { id: t.id });
+          await invoke("delete_task", {
+            id: t.id
+          });
         }
       }
     }
 
     async function loadTasks() {
-      try { return JSON.parse(await invoke("list_tasks")); }
-      catch (e) { console.warn("list_tasks failed", e); return []; }
+      try {
+        return JSON.parse(await invoke("list_tasks"));
+      } catch (e) {
+        console.warn("list_tasks failed", e);
+        return [];
+      }
     }
 
     // Transit settings (origin/mode/buffer) for in-person lead times.
-    let config = { origin: "", mode: "driving", buffer: 5 };
+    let config = {
+      origin: "",
+      mode: "driving",
+      buffer: 5
+    };
     async function loadConfig() {
-      try { config = { origin: "", mode: "driving", buffer: 5, ...JSON.parse(await invoke("read_tasks_config")) }; }
-      catch (e) { console.warn("read_tasks_config failed", e); }
+      try {
+        config = {
+          origin: "",
+          mode: "driving",
+          buffer: 5,
+          ...JSON.parse(await invoke("read_tasks_config"))
+        };
+      } catch (e) {
+        console.warn("read_tasks_config failed", e);
+      }
     }
 
     // For in-person Tasks, estimate travel time from the configured origin and
@@ -378,27 +569,49 @@
           if (typeof cachedEta === "number") {
             if (t.notify.leadMinutes !== cachedEta + buffer) {
               t.notify = transitNotify(t.notify, cachedEta, buffer, config.mode, key);
-              await invoke("save_task", { id: t.id, data: JSON.stringify(t) });
+              await invoke("save_task", {
+                id: t.id,
+                data: JSON.stringify(t)
+              });
             }
             continue;
           }
-          const res = JSON.parse(await invoke("transit_eta",
-            { from: config.origin, to: t.location, mode: config.mode }));
+          const res = JSON.parse(await invoke("transit_eta", {
+            from: config.origin,
+            to: t.location,
+            mode: config.mode
+          }));
           if (typeof res.minutes === "number") {
             t.notify = transitNotify(t.notify, res.minutes, buffer, config.mode, key);
           } else {
             // Couldn't resolve the address — surface it, and cache so we don't
             // re-query every sync (a new address changes the key and retries).
-            t.notify = { ...(t.notify || {}), reason: "couldn't estimate travel — check the address", transitKey: key };
+            t.notify = {
+              ...(t.notify || {}),
+              reason: "couldn't estimate travel — check the address",
+              transitKey: key
+            };
           }
           t.inPerson = true;
-          await invoke("save_task", { id: t.id, data: JSON.stringify(t) });
-        } catch (e) { console.warn("transit failed for", t.title, e); }
+          await invoke("save_task", {
+            id: t.id,
+            data: JSON.stringify(t)
+          });
+        } catch (e) {
+          console.warn("transit failed for", t.title, e);
+        }
       }
     }
 
-    const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric" });
-    const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+    const dayFmt = new Intl.DateTimeFormat(undefined, {
+      weekday: "long",
+      month: "short",
+      day: "numeric"
+    });
+    const timeFmt = new Intl.DateTimeFormat(undefined, {
+      hour: "numeric",
+      minute: "2-digit"
+    });
     const dayKey = (d) => d.toDateString();
 
     // Card-reveal animation: a 10px dot widens to a full-width line, then grows
@@ -406,6 +619,7 @@
     // just added or edited. JS only supplies the two runtime values and toggles
     // the class; the keyframes handle the rest and the card reverts on end.
     let revealId = null;
+
     function revealCard(card) {
       card.style.setProperty("--reveal-h", card.offsetHeight + "px");
       card.style.setProperty("--reveal-scale", 10 / card.offsetWidth);
@@ -428,7 +642,10 @@
         .sort((a, b) => new Date(a.start) - new Date(b.start));
 
       if (!upcoming.length) {
-        list.appendChild(el("div", "", { id: "empty", textContent: "No upcoming tasks." }));
+        list.appendChild(el("div", "", {
+          id: "empty",
+          textContent: "No upcoming tasks."
+        }));
         return;
       }
 
@@ -437,7 +654,9 @@
         const start = new Date(t.start);
         const key = dayKey(start);
         if (key !== lastDay) {
-          list.appendChild(el("div", "day-head", { textContent: dayFmt.format(start) }));
+          list.appendChild(el("div", "day-head", {
+            textContent: dayFmt.format(start)
+          }));
           lastDay = key;
         }
         const flip = taskRow(t, start);
@@ -479,43 +698,62 @@
 
     function buildFront(t, start) {
       const row = el("div", "task face front");
-      row.appendChild(el("div", "when", { textContent: timeFmt.format(start) }));
+      row.appendChild(el("div", "when", {
+        textContent: timeFmt.format(start)
+      }));
 
       const body = el("div", "body");
-      body.appendChild(el("div", "name", { textContent: t.title }));
+      body.appendChild(el("div", "name", {
+        textContent: t.title
+      }));
       const meta = el("div", "meta");
 
       // Mark calendar-sourced tasks so it's clear edits need care.
       if (t.source === "calendar") {
         const cal = el("span", "cal-mark");
         cal.innerHTML = '<span class="mi mi-sm">event</span>';
-        cal.title = t.userEdited
-          ? "From your calendar · edited — sync won't overwrite it"
-          : "From your calendar · editing takes manual control";
+        cal.title = t.userEdited ?
+          "From your calendar · edited — sync won't overwrite it" :
+          "From your calendar · editing takes manual control";
         meta.appendChild(cal);
       }
 
       if (t.online) {
-        meta.appendChild(el("span", "badge online", { textContent: "Online" }));
+        meta.appendChild(el("span", "badge online", {
+          textContent: "Online"
+        }));
         const link = t.actions?.find((a) => a.kind === "url")?.target;
         if (link) {
-          const a = el("a", "", { textContent: "Join link", href: "#" });
+          const a = el("a", "", {
+            textContent: "Join link",
+            href: "#"
+          });
           a.addEventListener("click", (e) => {
             e.preventDefault();
             e.stopPropagation(); // don't open the editor
             // Use open_path (the `open` command), not the opener plugin —
             // tool-* windows aren't granted opener:allow-open-url.
-            invoke("open_path", { path: link }).catch((err) => console.warn(err));
+            invoke("open_path", {
+              path: link
+            }).catch((err) => console.warn(err));
           });
           meta.appendChild(a);
         }
       } else if (t.inPerson || t.location) {
-        meta.appendChild(el("span", "badge", { textContent: "In person" }));
-        if (t.location) meta.appendChild(el("span", "", { textContent: t.location }));
+        meta.appendChild(el("span", "badge", {
+          textContent: "In person"
+        }));
+        if (t.location) meta.appendChild(el("span", "", {
+          textContent: t.location
+        }));
       } else if (t.source === "manual") {
-        meta.appendChild(el("span", "badge", { textContent: "Manual" }));
+        meta.appendChild(el("span", "badge", {
+          textContent: "Manual"
+        }));
       }
-      if (t.notify?.reason) meta.appendChild(el("span", "", { textContent: t.notify.reason }));
+      if (t.notify?.reason) meta.appendChild(el("span", "", {
+        textContent: t.notify.reason
+      }));
       body.appendChild(meta);
       row.appendChild(body);
 
@@ -528,11 +766,20 @@
       input.addEventListener("click", (e) => e.stopPropagation());
       input.addEventListener("change", async () => {
         const v = Math.max(0, parseInt(input.value, 10) || 0);
-        t.notify = { ...(t.notify || {}), leadMinutes: v, leadEdited: true };
-        await invoke("save_task", { id: t.id, data: JSON.stringify(t) });
+        t.notify = {
+          ...(t.notify || {}),
+          leadMinutes: v,
+          leadEdited: true
+        };
+        await invoke("save_task", {
+          id: t.id,
+          data: JSON.stringify(t)
+        });
       });
       lead.appendChild(input);
-      lead.appendChild(el("span", "", { textContent: "min before" }));
+      lead.appendChild(el("span", "", {
+        textContent: "min before"
+      }));
       row.appendChild(lead);
 
       const actions = el("div", "actions");
@@ -541,7 +788,9 @@
       del.title = "Delete task";
       del.addEventListener("click", async (e) => {
         e.stopPropagation(); // don't open the editor
-        await invoke("delete_task", { id: t.id });
+        await invoke("delete_task", {
+          id: t.id
+        });
         refresh();
       });
       actions.appendChild(del);
@@ -556,7 +805,9 @@
       const back = el("div", "task face back");
       const form = el("div", "edit-form");
 
-      const title = el("input", "field edit-title", { value: t.title || "" });
+      const title = el("input", "field edit-title", {
+        value: t.title || ""
+      });
       title.placeholder = "Title";
       const link = el("input", "field", {
         value: t.actions?.find((a) => a.kind === "url")?.target || t.location || "",
@@ -566,12 +817,19 @@
       date.type = "date";
       const time = el("input", "field");
       time.type = "time";
-      const parts = t.start ? toLocalParts(t.start) : { date: "", time: "" };
+      const parts = t.start ? toLocalParts(t.start) : {
+        date: "",
+        time: ""
+      };
       date.value = parts.date;
       time.value = parts.time;
 
-      const save = el("button", "btn btn-primary", { textContent: "Save" });
-      const cancel = el("button", "btn btn-ghost", { textContent: "Cancel" });
+      const save = el("button", "btn btn-primary", {
+        textContent: "Save"
+      });
+      const cancel = el("button", "btn btn-ghost", {
+        textContent: "Cancel"
+      });
       const hint = el("div", "form-hint text-xs text-muted");
       if (t.source === "calendar" && !t.userEdited) {
         hint.textContent = "Saving takes manual control — calendar sync won't overwrite it.";
@@ -591,8 +849,14 @@
           inPerson: !!raw && !isUrl,
           userEdited: true,
         };
-        updated.actions = isUrl ? [{ kind: "url", target: raw }] : (raw ? [] : (t.actions || []));
-        await invoke("save_task", { id: t.id, data: JSON.stringify(updated) });
+        updated.actions = isUrl ? [{
+          kind: "url",
+          target: raw
+        }] : (raw ? [] : (t.actions || []));
+        await invoke("save_task", {
+          id: t.id,
+          data: JSON.stringify(updated)
+        });
         refresh();
       });
       cancel.addEventListener("click", () => closeFlip(flip, front));
@@ -639,18 +903,22 @@
       editingId = task?.id ?? null;
       $title.value = task?.title ?? "";
       $url.value = task ? (task.actions?.find((a) => a.kind === "url")?.target || task.location || "") : "";
-      const parts = task?.start ? toLocalParts(task.start) : { date: "", time: "" };
+      const parts = task?.start ? toLocalParts(task.start) : {
+        date: "",
+        time: ""
+      };
       $date.value = parts.date;
       $time.value = parts.time;
       document.getElementById("addSave").textContent = task ? "Save" : "Add";
       document.getElementById("formHint").textContent =
-        task?.source === "calendar" && !task?.userEdited
-          ? "Saving your edits takes manual control of this event — calendar sync won't overwrite it afterward."
-          : "";
+        task?.source === "calendar" && !task?.userEdited ?
+        "Saving your edits takes manual control of this event — calendar sync won't overwrite it afterward." :
+        "";
       form.classList.add("open");
       revealCard(form);
       $title.focus();
     }
+
     function closeForm() {
       editingId = null;
       form.classList.remove("open");
@@ -680,10 +948,20 @@
       if (editingId) {
         const existing = (await loadTasks()).find((t) => t.id === editingId);
         if (existing) {
-          const updated = { ...existing, ...fields, userEdited: true };
+          const updated = {
+            ...existing,
+            ...fields,
+            userEdited: true
+          };
           // Replace the primary join link / clear it for in-person.
-          updated.actions = isUrl ? [{ kind: "url", target: raw }] : (raw ? [] : (existing.actions || []));
-          await invoke("save_task", { id: editingId, data: JSON.stringify(updated) });
+          updated.actions = isUrl ? [{
+            kind: "url",
+            target: raw
+          }] : (raw ? [] : (existing.actions || []));
+          await invoke("save_task", {
+            id: editingId,
+            data: JSON.stringify(updated)
+          });
           revealId = editingId;
         }
       } else {
@@ -691,10 +969,19 @@
           id: "man-" + genId(),
           source: "manual",
           ...fields,
-          actions: isUrl ? [{ kind: "url", target: raw }] : [],
-          notify: { leadMinutes: DEFAULT_LEAD, reason: "" },
+          actions: isUrl ? [{
+            kind: "url",
+            target: raw
+          }] : [],
+          notify: {
+            leadMinutes: DEFAULT_LEAD,
+            reason: ""
+          },
         };
-        await invoke("save_task", { id: t.id, data: JSON.stringify(t) });
+        await invoke("save_task", {
+          id: t.id,
+          data: JSON.stringify(t)
+        });
         revealId = t.id;
       }
       closeForm();
@@ -712,10 +999,13 @@
         mode: document.getElementById("cfgMode").value,
         buffer: Math.max(0, parseInt(document.getElementById("cfgBuffer").value, 10) || 0),
       };
-      await invoke("save_tasks_config", { data: JSON.stringify(config) });
+      await invoke("save_tasks_config", {
+        data: JSON.stringify(config)
+      });
       settingsForm.classList.remove("open");
       refresh(); // recompute transit with the new origin/mode/buffer
     });
+
     function fillSettings() {
       document.getElementById("cfgOrigin").value = config.origin || "";
       document.getElementById("cfgMode").value = config.mode || "driving";
@@ -723,11 +1013,15 @@
     }
 
     if (hasTauri) {
-      loadConfig().then(() => { fillSettings(); refresh(); });
+      loadConfig().then(() => {
+        fillSettings();
+        refresh();
+      });
     } else {
       document.getElementById("list").innerHTML =
         '<div id="empty">Open inside Studio to read your calendar.</div>';
     }
+
   </script>
 </body>
 
