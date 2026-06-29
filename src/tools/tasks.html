@@ -49,13 +49,20 @@
 
     .task {
       display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 12px 14px;
-      border: 1px solid var(--border, rgba(255,255,255,0.08));
-      border-radius: var(--radius, 10px);
-      margin-bottom: 8px;
-      background: var(--surface, rgba(255,255,255,0.03));
+      align-items: center;
+      gap: 14px;
+      padding: 16px 18px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-lg, 12px);
+      margin-bottom: 12px;
+      background: var(--elevated);
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow var(--dur-fast, .15s) var(--ease-standard, ease),
+                  transform var(--dur-fast, .15s) var(--ease-standard, ease);
+    }
+    .task:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-1px);
     }
     .task .when {
       flex: 0 0 70px;
