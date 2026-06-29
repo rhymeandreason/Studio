@@ -84,15 +84,17 @@ sync (id = `cal-<sanitized eventId>`). If you edit one:
 When the user asks you to "set up" or "get ready for" a meeting:
 1. Read its Task file (or the user's description) — note online vs in-person.
 2. **Online:** add the relevant working links to `actions` (the agenda doc, the
-   Figma file, a Studio tool like `notes.html`). Keep the existing join link.
+   Figma file, a Studio tool like `daily-notes.html`). Keep the existing join link.
 3. **In-person:** Studio auto-fills travel time from the user's configured origin
    (set in the Tasks tool's transit settings) — it sets `notify.leadMinutes =
-   ETA + buffer`, a `notify.reason` like `"28 min driving + 5 min buffer"`, and
-   `notify.transitKey` (the origin/mode it was computed for). To **override**
-   (different start point, extra padding, a stop on the way), set your own
-   `notify.leadMinutes` **and** `notify.leadEdited: true` so the auto-transit pass
-   leaves it alone. If the user gives you an address Studio can't resolve, ask
-   for a nearby landmark or their own time estimate and state your assumption.
+   ETA + buffer` and a `notify.reason` like `"28 min driving + 5 min buffer"`. It
+   also stores two **Studio-managed** fields you should not set or edit:
+   `notify.etaMinutes` (raw travel time) and `notify.transitKey` (the
+   origin/mode/destination it was computed for). To **override** (different start
+   point, extra padding, a stop on the way), set your own `notify.leadMinutes`
+   **and** `notify.leadEdited: true` so the auto-transit pass leaves it alone. If
+   the user gives you an address Studio can't resolve, ask for a nearby landmark
+   or their own time estimate and state your assumption.
 
 After writing a file, the change is picked up automatically — tell the user it's
 set and when the card will fire.
