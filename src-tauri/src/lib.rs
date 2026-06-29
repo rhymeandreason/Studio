@@ -4655,6 +4655,98 @@ fn get_weather(location: String) -> Result<String, String> {
     .map_err(|e| e.to_string())
 }
 
+/// Decode the handful of HTML/XML entities the Commons feed actually uses.
+/// Not a general entity decoder — just enough for `&amp; &lt; &gt; &quot;
+/// &#039;`, which is all this feed emits.
+fn unescape_entities(s: &str) -> String {
+    s.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#039;", "'")
+}
+
+/// Strip HTML tags, leaving just the text content.
+fn strip_tags(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Today's Wikimedia Commons "Picture of the Day" as a JSON object string:
+/// `{"imageUrl":"https://…","blurb":"Flower of a Geranium…","pageUrl":"https://…"}`.
+/// Used by the Daily Briefing tool to put a real image + caption under the
+/// generated body. The feed is a flat RSS list of recent days (oldest first)
+/// rather than "just today", so we take the last `<item>`.
+#[tauri::command]
+fn get_picture_of_day() -> Result<String, String> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(5))
+        .timeout_read(std::time::Duration::from_secs(10))
+        .build();
+
+    let rss = agent
+        .get("https://commons.wikimedia.org/w/api.php?action=featuredfeed&feed=potd&feedformat=rss&language=en")
+        // Wikimedia's API etiquette policy blocks generic/empty User-Agents —
+        // a descriptive one keeps this from 403ing.
+        .set("User-Agent", "Studio-DailyBriefing/1.0 (desktop app; single user)")
+        .call()
+        .map_err(|e| format!("Commons feed request failed: {e}"))?
+        .into_string()
+        .map_err(|e| e.to_string())?;
+
+    let item_start = rss.rfind("<item>").ok_or("no <item> in Commons feed")?;
+    let item = &rss[item_start..];
+    let item_end = item.find("</item>").map(|i| i + "</item>".len()).unwrap_or(item.len());
+    let item = &item[..item_end];
+
+    let page_url = item
+        .find("<link>")
+        .and_then(|s| item[s..].find("</link>").map(|e| (s + "<link>".len(), s + e)))
+        .map(|(s, e)| item[s..e].trim().to_string());
+
+    let desc_start = item.find("<description>").ok_or("no <description> in Commons feed item")?
+        + "<description>".len();
+    let desc_end = item[desc_start..]
+        .find("</description>")
+        .ok_or("unterminated <description> in Commons feed item")?
+        + desc_start;
+    let desc_html = unescape_entities(&item[desc_start..desc_end]);
+
+    let img_start = desc_html.find("<img ").ok_or("no <img> in Commons feed description")?;
+    let src_start = desc_html[img_start..]
+        .find("src=\"")
+        .map(|i| img_start + i + "src=\"".len())
+        .ok_or("no src attr on <img>")?;
+    let src_end = desc_html[src_start..]
+        .find('"')
+        .map(|i| src_start + i)
+        .ok_or("unterminated src attr")?;
+    let image_url = desc_html[src_start..src_end].to_string();
+
+    let blurb = desc_html
+        .find("class=\"description")
+        .and_then(|s| desc_html[s..].find('>').map(|i| s + i + 1))
+        .and_then(|s| desc_html[s..].find("</div>").map(|e| (s, s + e)))
+        .map(|(s, e)| strip_tags(&desc_html[s..e]))
+        .unwrap_or_default();
+
+    serde_json::to_string(&serde_json::json!({
+        "imageUrl": image_url,
+        "blurb": blurb,
+        "pageUrl": page_url,
+    }))
+    .map_err(|e| e.to_string())
+}
+
 /// Run `claude -p <prompt>` headless in the project's repo dir, write the
 /// result to `<project>/<output_file>` (overwriting it), and emit
 /// `"schedule-ran"` so the UI can show it if the project is open.
@@ -5298,6 +5390,7 @@ pub fn run() {
             read_weather_location,
             save_weather_location,
             get_weather,
+            get_picture_of_day,
             update_wake_schedule,
             read_claude_sessions,
             save_claude_sessions,

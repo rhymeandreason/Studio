@@ -1,383 +1,610 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Daily Briefing</title>
-    <link rel="stylesheet" href="../tokens.css" />
-    <link rel="stylesheet" href="../kit/kit.css" />
-    <script type="module" src="../kit/components.js"></script>
-    <script src="../vendor/marked.min.js"></script>
-    <style>
-      /* Spacing scale — tokens.css/kit.css don't define --space-*, so set them
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Briefing</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../kit/kit.css" />
+  <script type="module" src="../kit/components.js"></script>
+  <script src="../vendor/marked.min.js"></script>
+  <style>
+    /* Spacing scale — tokens.css/kit.css don't define --space-*, so set them
          here (matching the kit's px rhythm) instead of letting them collapse. */
-      :root {
-        --space-1: 4px;
-        --space-2: 8px;
-        --space-3: 12px;
-        --space-4: 18px;
-        --space-5: 28px;
-        --space-6: 40px;
-      }
-      body {
-        margin: 0;
-        padding: clamp(28px, 6vw, 56px);
-        display: flex;
-        flex-direction: column;
-        gap: clamp(28px, 5vw, 48px);
-        min-height: 100vh;
-        box-sizing: border-box;
-        background: var(--bg);
-        color: var(--text);
-      }
+    :root {
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 18px;
+      --space-5: 28px;
+      --space-6: 40px;
+    }
 
-      /* ── Masthead ───────────────────────────────────────────────── */
-      .brief-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: var(--space-4);
-      }
-      .brief-weekday {
-        font-family: var(--sans);
-        font-weight: 600;
-        line-height: 0.92;
-        letter-spacing: -0.02em;
-        font-size: clamp(44px, 11vw, 92px);
-        text-transform: uppercase;
-      }
-      .brief-date {
-        margin-top: 0.35em;
-        font-size: clamp(13px, 2vw, 16px);
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-        color: var(--accent);
-      }
-      .brief-actions { display: flex; gap: var(--space-2); flex: 0 0 auto; }
+    html,
+    body {
+      height: 100%;
+    }
 
-      /* ── Section framing ────────────────────────────────────────── */
-      .brief-section { display: flex; flex-direction: column; gap: var(--space-4); }
-      .brief-section.is-hidden { display: none; }
-      .section-label {
-        font-size: 12px;
-        letter-spacing: 0.26em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        padding-bottom: var(--space-2);
-        border-bottom: 1px solid var(--hairline-strong);
-      }
-      .brief-list { display: flex; flex-direction: column; }
+    body {
+      margin: 0;
+      padding: clamp(28px, 6vw, 56px);
+      display: flex;
+      flex-direction: column;
+      gap: clamp(28px, 5vw, 48px);
+      box-sizing: border-box;
+      background: var(--bg);
+      color: var(--text);
+    }
 
-      /* ── Meetings ───────────────────────────────────────────────── */
-      .meeting {
-        display: flex;
-        align-items: baseline;
-        gap: var(--space-4);
-        padding: var(--space-3) 0;
-        border-bottom: 1px solid var(--hairline);
-      }
-      .meeting:last-child { border-bottom: none; }
-      .meeting__time {
-        flex: 0 0 auto;
-        min-width: 8.5ch;
-        font-family: var(--mono);
-        font-size: 14px;
-        color: var(--accent);
-        font-variant-numeric: tabular-nums;
-      }
-      .meeting__title { flex: 1 1 auto; font-size: clamp(18px, 2.4vw, 24px); line-height: 1.25; }
-      .meeting__loc { color: var(--text-muted); font-size: 0.7em; }
+    /* ── Masthead ───────────────────────────────────────────────── */
+    .brief-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-4);
+    }
 
-      /* ── Freeform Markdown body (poster scale) ──────────────────── */
-      .md-body {
-        font-size: clamp(19px, 2.6vw, 26px);
-        line-height: 1.5;
-        letter-spacing: -0.005em;
-        max-width: 32ch;
-      }
-      .md-body.is-loading { opacity: 0.4; }
-      .md-body > :first-child { margin-top: 0; }
-      .md-body > :last-child { margin-bottom: 0; }
-      .md-body > * + * { margin-top: 0.7em; }
-      .md-body h1, .md-body h2, .md-body h3 {
-        font-weight: 600;
-        line-height: 1.05;
-        letter-spacing: -0.02em;
-        margin-top: 0.6em;
-      }
-      .md-body h1 { font-size: 1.7em; }
-      .md-body h2 { font-size: 1.3em; }
-      .md-body h3 { font-size: 1.1em; }
-      .md-body ul, .md-body ol { padding-left: 1.1em; }
-      .md-body li + li { margin-top: 0.3em; }
-      .md-body a { color: var(--accent); text-underline-offset: 3px; }
-      .md-body strong { font-weight: 600; }
-      .md-body em { font-style: italic; color: var(--text-muted); }
-      .md-body blockquote {
-        border-left: 3px solid var(--accent-soft);
-        padding-left: var(--space-4);
-        color: var(--text-muted);
-        font-style: italic;
-      }
-      .md-body pre {
-        background: var(--surface);
-        padding: var(--space-3);
-        border-radius: var(--radius);
-        overflow-x: auto;
-        font-size: 0.7em;
-      }
-      .md-body code { font-family: var(--mono); }
-      .md-body hr { border: none; border-top: 1px solid var(--hairline-strong); margin: 1em 0; }
+    .brief-weekday {
+      font-family: var(--sans);
+      font-weight: 600;
+      line-height: 0.92;
+      letter-spacing: -0.02em;
+      font-size: clamp(38px, 14vw, 56px);
+      word-break: break-word;
+      text-transform: uppercase;
+    }
 
-      .brief-empty { opacity: 0.55; }
-      .brief-error { color: var(--rose); white-space: pre-wrap; font-size: 15px; }
+    .brief-date {
+      margin-top: 0.35em;
+      font-size: clamp(13px, 2vw, 16px);
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
 
-      /* ── Settings ───────────────────────────────────────────────── */
-      .settings { display: none; flex-direction: column; gap: var(--space-3); }
-      .settings.is-open { display: flex; }
+    .brief-actions {
+      display: flex;
+      gap: var(--space-2);
+      flex: 0 0 auto;
+    }
 
-      #status { margin-top: auto; }
-    </style>
-  </head>
-  <body>
-    <div class="brief-head">
-      <div class="brief-masthead">
-        <div id="weekday" class="brief-weekday"></div>
-        <div id="date" class="brief-date"></div>
+    /* ── Two-column layout ─────────────────────────────────────── */
+    .brief-columns {
+      display: flex;
+      gap: var(--space-6);
+      align-items: stretch;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .brief-col-left {
+      flex: 1 1 50%;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-5);
+      overflow-y: auto;
+    }
+
+    .brief-col-right {
+      flex: 1 1 50%;
+      min-width: 0;
+      overflow-y: auto;
+      padding-right: var(--space-4);
+    }
+
+    /* ── Section framing ────────────────────────────────────────── */
+    .brief-section {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .brief-section.is-hidden {
+      display: none;
+    }
+
+    .section-label {
+      font-size: 12px;
+      letter-spacing: 0.26em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding-bottom: var(--space-2);
+      border-bottom: 1px solid var(--hairline-strong);
+    }
+
+    .brief-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Meetings ───────────────────────────────────────────────── */
+    .meeting {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-4);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--hairline);
+    }
+
+    .meeting:last-child {
+      border-bottom: none;
+    }
+
+    .meeting__time {
+      flex: 0 0 auto;
+      min-width: 8.5ch;
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meeting__title {
+      flex: 1 1 auto;
+      font-size: clamp(18px, 2.4vw, 24px);
+      line-height: 1.25;
+    }
+
+    .meeting__loc {
+      color: var(--text-muted);
+      font-size: 0.7em;
+    }
+
+    /* ── Freeform Markdown body (poster scale) ──────────────────── */
+    .md-body {
+      font-size: clamp(19px, 2.6vw, 26px);
+      line-height: 1.5;
+      letter-spacing: -0.005em;
+      max-width: 32ch;
+    }
+
+    .md-body.is-loading {
+      opacity: 0.4;
+    }
+
+    .md-body> :first-child {
+      margin-top: 0;
+    }
+
+    .md-body> :last-child {
+      margin-bottom: 0;
+    }
+
+    .md-body>*+* {
+      margin-top: 0.7em;
+    }
+
+    .md-body h1,
+    .md-body h2,
+    .md-body h3 {
+      font-weight: 600;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      margin-top: 0.6em;
+    }
+
+    .md-body h1 {
+      font-size: 1.7em;
+    }
+
+    .md-body h2 {
+      font-size: 1.3em;
+    }
+
+    .md-body h3 {
+      font-size: 1.1em;
+    }
+
+    .md-body ul,
+    .md-body ol {
+      padding-left: 1.1em;
+    }
+
+    .md-body li+li {
+      margin-top: 0.3em;
+    }
+
+    .md-body a {
+      color: var(--accent);
+      text-underline-offset: 3px;
+    }
+
+    .md-body strong {
+      font-weight: 600;
+    }
+
+    .md-body em {
+      font-style: italic;
+      color: var(--text-muted);
+    }
+
+    .md-body blockquote {
+      border-left: 3px solid var(--accent-soft);
+      padding-left: var(--space-4);
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    .md-body pre {
+      background: var(--surface);
+      padding: var(--space-3);
+      border-radius: var(--radius);
+      overflow-x: auto;
+      font-size: 0.7em;
+    }
+
+    .md-body code {
+      font-family: var(--mono);
+    }
+
+    .md-body hr {
+      border: none;
+      border-top: 1px solid var(--hairline-strong);
+      margin: 1em 0;
+    }
+
+    /* ── Wikimedia Picture of the Day ──────────────────────────── */
+    .potd {
+      display: none;
+      flex-direction: column;
+      gap: var(--space-2);
+      max-width: 32ch;
+    }
+
+    .potd.is-visible {
+      display: flex;
+    }
+
+    .potd img {
+      width: 100%;
+      border-radius: var(--radius);
+      display: block;
+    }
+
+    .potd__blurb {
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+
+    .potd__blurb a {
+      color: var(--accent);
+    }
+
+    .brief-empty {
+      opacity: 0.55;
+    }
+
+    .brief-error {
+      color: var(--rose);
+      white-space: pre-wrap;
+      font-size: 15px;
+    }
+
+    /* ── Settings ───────────────────────────────────────────────── */
+    .settings {
+      display: none;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .settings.is-open {
+      display: flex;
+    }
+
+    .brief-col-left #status {
+      margin-top: auto;
+    }
+
+  </style>
+</head>
+
+<body>
+  <div class="brief-columns">
+    <div class="brief-col-left">
+      <div class="brief-head">
+        <div class="brief-masthead">
+          <div id="weekday" class="brief-weekday"></div>
+          <div id="date" class="brief-date"></div>
+        </div>
+        <div id="tab-hint" class="text-xs text-muted">Tab to edit</div>
       </div>
-      <div id="tab-hint" class="text-xs text-muted">Tab to edit</div>
+
+      <div id="settings" class="settings card">
+        <label class="label" for="sources">Briefing prompt</label>
+        <textarea id="sources" class="field" rows="4" placeholder="Anything — e.g. a warm morning briefing with top news, or 'Write a haiku about today's weather in Woodacre, CA.'"></textarea>
+        <label class="label" for="weather-location">Weather location</label>
+        <input id="weather-location" class="field" type="text" placeholder="Blank = auto-detect from IP — e.g. Woodacre, CA" />
+        <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--space-2);">
+          <span class="text-xs text-muted">Saved to ~/Projects/briefing-prompt.txt · output is Markdown</span>
+          <button id="run-prompt-btn" class="btn btn-primary">
+            <span class="material-symbols-rounded">bolt</span> Run with this prompt
+          </button>
+        </div>
+      </div>
+
+      <div id="meetings-section" class="brief-section is-hidden">
+        <div class="section-label">Today's meetings</div>
+        <div id="meetings" class="brief-list"></div>
+      </div>
+
+      <div id="status" class="text-xs text-muted"></div>
     </div>
 
-    <div id="settings" class="settings card">
-      <label class="label" for="sources">Briefing prompt</label>
-      <textarea id="sources" class="field" rows="4"
-        placeholder="Anything — e.g. a warm morning briefing with top news, or 'Write a haiku about today's weather in Woodacre, CA.'"></textarea>
-      <label class="label" for="weather-location">Weather location</label>
-      <input id="weather-location" class="field" type="text"
-        placeholder="Blank = auto-detect from IP — e.g. Woodacre, CA" />
-      <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--space-2);">
-        <span class="text-xs text-muted">Saved to ~/Projects/briefing-prompt.txt · output is Markdown</span>
-        <button id="run-prompt-btn" class="btn btn-primary">
-          <span class="material-symbols-rounded">bolt</span> Run with this prompt
-        </button>
+    <div class="brief-col-right">
+      <div class="brief-section">
+        <div id="body" class="md-body is-loading">Loading…</div>
+        <div id="potd" class="potd">
+          <img id="potd-img" alt="Wikimedia Commons picture of the day" />
+          <div id="potd-blurb" class="potd__blurb"></div>
+        </div>
       </div>
     </div>
+  </div>
 
-    <div id="meetings-section" class="brief-section is-hidden">
-      <div class="section-label">Today's meetings</div>
-      <div id="meetings" class="brief-list"></div>
-    </div>
+  <script type="module">
+    const hasTauri = !!window.__TAURI__;
+    const invoke = hasTauri ? window.__TAURI__.core.invoke : null;
 
-    <div class="brief-section">
-      <div id="body" class="md-body is-loading">Loading…</div>
-    </div>
+    // Used when ~/Projects/briefing-prompt.txt is empty.
+    const DEFAULT_PROMPT =
+      "Write a warm, concise morning briefing: a one-line greeting, then the " +
+      "top 3 Hacker News stories with one-line summaries, then one design or " +
+      "engineering article worth reading today (with links).";
+    const MODEL = "haiku";
+    // Cache is a global file at ~/Projects/today.json (read_briefing /
+    // save_briefing); the editable prompt is ~/Projects/briefing-prompt.txt
+    // (read_briefing_prompt / save_briefing_prompt).
 
-    <div id="status" class="text-xs text-muted"></div>
+    const $ = (id) => document.getElementById(id);
 
-    <script type="module">
-      const hasTauri = !!window.__TAURI__;
-      const invoke = hasTauri ? window.__TAURI__.core.invoke : null;
+    function todayStr() {
+      return new Date().toISOString().slice(0, 10);
+    }
 
-      // Used when ~/Projects/briefing-prompt.txt is empty.
-      const DEFAULT_PROMPT =
-        "Write a warm, concise morning briefing: a one-line greeting, then the " +
-        "top 3 Hacker News stories with one-line summaries, then one design or " +
-        "engineering article worth reading today (with links).";
-      const MODEL = "haiku";
-      // Cache is a global file at ~/Projects/today.json (read_briefing /
-      // save_briefing); the editable prompt is ~/Projects/briefing-prompt.txt
-      // (read_briefing_prompt / save_briefing_prompt).
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"]/g, (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;"
+        } [c]));
+    }
 
-      const $ = (id) => document.getElementById(id);
-
-      function todayStr() {
-        return new Date().toISOString().slice(0, 10);
+    function renderMeetings(meetings) {
+      const section = $("meetings-section");
+      const box = $("meetings");
+      box.innerHTML = "";
+      // Calendar-driven section, independent of the prompt — hide it entirely
+      // when there's nothing today so a non-briefing prompt isn't cluttered.
+      if (!meetings || meetings.length === 0) {
+        section.classList.add("is-hidden");
+        return;
       }
-
-      function escapeHtml(s) {
-        return String(s).replace(/[&<>"]/g, (c) =>
-          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+      section.classList.remove("is-hidden");
+      for (const m of meetings) {
+        const row = document.createElement("div");
+        row.className = "meeting";
+        const loc = m.location ? `<span class="meeting__loc">· ${escapeHtml(m.location)}</span>` : "";
+        row.innerHTML =
+          `<span class="meeting__time">${escapeHtml(m.time || "")}</span>` +
+          `<span class="meeting__title">${escapeHtml(m.title || "")} ${loc}</span>`;
+        box.appendChild(row);
       }
+    }
 
-      function renderMeetings(meetings) {
-        const section = $("meetings-section");
-        const box = $("meetings");
-        box.innerHTML = "";
-        // Calendar-driven section, independent of the prompt — hide it entirely
-        // when there's nothing today so a non-briefing prompt isn't cluttered.
-        if (!meetings || meetings.length === 0) {
-          section.classList.add("is-hidden");
-          return;
-        }
-        section.classList.remove("is-hidden");
-        for (const m of meetings) {
-          const row = document.createElement("div");
-          row.className = "meeting";
-          const loc = m.location ? `<span class="meeting__loc">· ${escapeHtml(m.location)}</span>` : "";
-          row.innerHTML =
-            `<span class="meeting__time">${escapeHtml(m.time || "")}</span>` +
-            `<span class="meeting__title">${escapeHtml(m.title || "")} ${loc}</span>`;
-          box.appendChild(row);
-        }
+    function renderBody(markdown) {
+      const el = $("body");
+      el.classList.remove("is-loading");
+      el.innerHTML = window.marked ?
+        window.marked.parse(markdown || "", {
+          breaks: true
+        }) :
+        escapeHtml(markdown || "");
+    }
+
+    function renderPotd(potd) {
+      const box = $("potd");
+      if (!potd || !potd.imageUrl) {
+        box.classList.remove("is-visible");
+        return;
       }
+      box.classList.add("is-visible");
+      $("potd-img").src = potd.imageUrl;
+      const blurb = escapeHtml(potd.blurb || "");
+      $("potd-blurb").innerHTML = potd.pageUrl ?
+        `${blurb} — <a href="${escapeHtml(potd.pageUrl)}" target="_blank" rel="noreferrer">Wikimedia Commons</a>` :
+        blurb;
+    }
 
-      function renderBody(markdown) {
-        const el = $("body");
-        el.classList.remove("is-loading");
-        el.innerHTML = window.marked
-          ? window.marked.parse(markdown || "", { breaks: true })
-          : escapeHtml(markdown || "");
-      }
-
-      function buildPrompt(userPrompt, meetings, weather) {
-        const lines = [
-          `Today is ${new Date().toLocaleDateString(undefined, {
+    function buildPrompt(userPrompt, meetings, weather) {
+      const lines = [
+        `Today is ${new Date().toLocaleDateString(undefined, {
             weekday: "long", month: "long", day: "numeric", year: "numeric",
           })}.`,
-        ];
-        if (weather) {
-          lines.push(
-            "",
-            `Current weather in ${weather.label}: ${weather.tempF}°F, ` +
-              `${weather.condition.toLowerCase()}, wind ${weather.windMph} mph. ` +
-              "Treat this as fact — don't look up or guess weather elsewhere.",
-          );
-        }
-        if (meetings.length) {
-          lines.push("", "My calendar today (use only if relevant to the request):");
-          lines.push(...meetings.map((m) => `- ${m.time} ${m.title}`));
-        }
+      ];
+      if (weather) {
         lines.push(
           "",
-          userPrompt,
-          "",
-          "Respond in Markdown. Output only the content itself — no preamble, no explanation, no code fence around the whole thing.",
+          `Current weather in ${weather.label}: ${weather.tempF}°F, ` +
+          `${weather.condition.toLowerCase()}, wind ${weather.windMph} mph. ` +
+          "Treat this as fact — don't look up or guess weather elsewhere.",
         );
-        return lines.join("\n");
       }
-
-      function setStatus(text) {
-        $("status").textContent = text;
+      if (meetings.length) {
+        lines.push("", "My calendar today (use only if relevant to the request):");
+        lines.push(...meetings.map((m) => `- ${m.time} ${m.title}`));
       }
+      lines.push(
+        "",
+        userPrompt,
+        "",
+        "Respond in Markdown. Output only the content itself — no preamble, no explanation, no code fence around the whole thing.",
+      );
+      return lines.join("\n");
+    }
 
-      let refreshing = false;
+    function setStatus(text) {
+      $("status").textContent = text;
+    }
 
-      async function refresh() {
-        if (!hasTauri || refreshing) return;
-        refreshing = true;
-        setStatus("Refreshing…");
+    let refreshing = false;
 
-        // Meetings are fast — render them first.
-        let meetings = [];
-        try {
-          meetings = JSON.parse(await invoke("day_agenda"));
-        } catch {}
-        renderMeetings(meetings);
+    async function refresh() {
+      if (!hasTauri || refreshing) return;
+      refreshing = true;
+      setStatus("Refreshing…");
 
-        let weather = null;
-        try {
-          weather = JSON.parse(await invoke("get_weather", { location: $("weather-location").value || "" }));
-        } catch {}
+      // Meetings are fast — render them first.
+      let meetings = [];
+      try {
+        meetings = JSON.parse(await invoke("day_agenda"));
+      } catch {}
+      renderMeetings(meetings);
 
-        const prompt = ($("sources").value || DEFAULT_PROMPT).trim();
-        try {
-          const markdown = await invoke("run_claude_prompt", {
-            projectPath: "",
-            prompt: buildPrompt(prompt, meetings, weather),
-            model: MODEL,
-          });
-          renderBody(markdown);
-          await invoke("save_briefing", {
-            content: JSON.stringify({ date: todayStr(), markdown, meetings }, null, 2),
-          });
-          setStatus(`Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
-        } catch (e) {
-          setStatus("");
-          $("body").classList.remove("is-loading");
-          $("body").innerHTML =
-            `<div class="brief-error">Couldn't generate briefing:\n${escapeHtml(e.message || String(e))}</div>`;
-        } finally {
-          refreshing = false;
-        }
+      let weather = null;
+      try {
+        weather = JSON.parse(await invoke("get_weather", {
+          location: $("weather-location").value || ""
+        }));
+      } catch {}
+
+      let potd = null;
+      try {
+        potd = JSON.parse(await invoke("get_picture_of_day"));
+      } catch {}
+      renderPotd(potd);
+
+      const prompt = ($("sources").value || DEFAULT_PROMPT).trim();
+      try {
+        const markdown = await invoke("run_claude_prompt", {
+          projectPath: "",
+          prompt: buildPrompt(prompt, meetings, weather),
+          model: MODEL,
+        });
+        renderBody(markdown);
+        await invoke("save_briefing", {
+          content: JSON.stringify({
+            date: todayStr(),
+            markdown,
+            meetings,
+            potd
+          }, null, 2),
+        });
+        setStatus(`Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
+      } catch (e) {
+        setStatus("");
+        $("body").classList.remove("is-loading");
+        $("body").innerHTML =
+          `<div class="brief-error">Couldn't generate briefing:\n${escapeHtml(e.message || String(e))}</div>`;
+      } finally {
+        refreshing = false;
       }
+    }
 
-      // Render the cached briefing if present. Returns true only when today's
-      // briefing already exists — the signal that we should NOT regenerate.
-      async function loadCache() {
-        if (!hasTauri) return false;
-        try {
-          const raw = await invoke("read_briefing");
-          const cached = raw ? JSON.parse(raw) : null;
-          if (cached && typeof cached.markdown === "string") {
-            renderMeetings(cached.meetings || []);
-            renderBody(cached.markdown);
-            if (cached.date === todayStr()) {
-              setStatus("Today's briefing.");
-              return true;
-            }
-            setStatus("Yesterday's briefing — refresh to update.");
+    // Render the cached briefing if present. Returns true only when today's
+    // briefing already exists — the signal that we should NOT regenerate.
+    async function loadCache() {
+      if (!hasTauri) return false;
+      try {
+        const raw = await invoke("read_briefing");
+        const cached = raw ? JSON.parse(raw) : null;
+        if (cached && typeof cached.markdown === "string") {
+          renderMeetings(cached.meetings || []);
+          renderBody(cached.markdown);
+          renderPotd(cached.potd || null);
+          if (cached.date === todayStr()) {
+            setStatus("Today's briefing.");
+            return true;
           }
-        } catch {}
-        return false;
-      }
-
-      // Masthead date
-      $("weekday").textContent = new Date().toLocaleDateString(undefined, { weekday: "long" });
-      $("date").textContent = new Date().toLocaleDateString(undefined, {
-        month: "long", day: "numeric", year: "numeric",
-      });
-
-      // Settings — Tab toggles the edit view (and focuses the prompt when
-      // opening). Closing while the textarea has focus blurs it, which fires
-      // the change handler that saves the prompt.
-      function toggleSettings() {
-        const open = $("settings").classList.toggle("is-open");
-        $("tab-hint").textContent = open ? "Tab to close" : "Tab to edit";
-        if (open) $("sources").focus();
-        else $("sources").blur();
-      }
-      window.addEventListener("keydown", (e) => {
-        if (e.key === "Tab") {
-          e.preventDefault();
-          toggleSettings();
+          setStatus("Yesterday's briefing — refresh to update.");
         }
-      });
-      if (hasTauri) {
-        invoke("read_briefing_prompt")
-          .then((v) => { $("sources").value = v || ""; })
-          .catch(() => {});
-        invoke("read_weather_location")
-          .then((v) => { $("weather-location").value = v || ""; })
-          .catch(() => {});
-      }
-      $("sources").addEventListener("change", () => {
-        if (hasTauri) invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
-      });
-      $("weather-location").addEventListener("change", () => {
-        if (hasTauri) invoke("save_weather_location", { content: $("weather-location").value }).catch(() => {});
-      });
-      // Force a regenerate with the current prompt (saving it first so the file
-      // matches what just ran).
-      $("run-prompt-btn").addEventListener("click", async () => {
-        if (hasTauri) {
-          await invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
-          await invoke("save_weather_location", { content: $("weather-location").value }).catch(() => {});
-        }
-        refresh();
-      });
+      } catch {}
+      return false;
+    }
 
-      if (hasTauri) {
-        const { getCurrentWindow } = window.__TAURI__.window;
-        const { LogicalSize } = window.__TAURI__.dpi;
-        getCurrentWindow().setSize(new LogicalSize(720, 820));
-      }
+    // Masthead date
+    $("weekday").textContent = new Date().toLocaleDateString(undefined, {
+      weekday: "long"
+    });
+    $("date").textContent = new Date().toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
 
-      // The scheduled morning open generates the day's briefing; every later
-      // open just displays it. Only generate when today's doesn't exist yet
-      // (so the scheduled 7am open — the first of the day — is what generates).
-      (async () => {
-        if (!(await loadCache())) refresh();
-      })();
-    </script>
-  </body>
+    // Settings — Tab toggles the edit view (and focuses the prompt when
+    // opening). Closing while the textarea has focus blurs it, which fires
+    // the change handler that saves the prompt.
+    function toggleSettings() {
+      const open = $("settings").classList.toggle("is-open");
+      $("tab-hint").textContent = open ? "Tab to close" : "Tab to edit";
+      if (open) $("sources").focus();
+      else $("sources").blur();
+    }
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Tab") {
+        e.preventDefault();
+        toggleSettings();
+      }
+    });
+    if (hasTauri) {
+      invoke("read_briefing_prompt")
+        .then((v) => {
+          $("sources").value = v || "";
+        })
+        .catch(() => {});
+      invoke("read_weather_location")
+        .then((v) => {
+          $("weather-location").value = v || "";
+        })
+        .catch(() => {});
+    }
+    $("sources").addEventListener("change", () => {
+      if (hasTauri) invoke("save_briefing_prompt", {
+        content: $("sources").value
+      }).catch(() => {});
+    });
+    $("weather-location").addEventListener("change", () => {
+      if (hasTauri) invoke("save_weather_location", {
+        content: $("weather-location").value
+      }).catch(() => {});
+    });
+    // Force a regenerate with the current prompt (saving it first so the file
+    // matches what just ran).
+    $("run-prompt-btn").addEventListener("click", async () => {
+      if (hasTauri) {
+        await invoke("save_briefing_prompt", {
+          content: $("sources").value
+        }).catch(() => {});
+        await invoke("save_weather_location", {
+          content: $("weather-location").value
+        }).catch(() => {});
+      }
+      refresh();
+    });
+
+    if (hasTauri) {
+      const {
+        getCurrentWindow
+      } = window.__TAURI__.window;
+      const {
+        LogicalSize
+      } = window.__TAURI__.dpi;
+      getCurrentWindow().setSize(new LogicalSize(1080, 760));
+    }
+
+    // The scheduled morning open generates the day's briefing; every later
+    // open just displays it. Only generate when today's doesn't exist yet
+    // (so the scheduled 7am open — the first of the day — is what generates).
+    (async () => {
+      if (!(await loadCache())) refresh();
+    })();
+
+  </script>
+</body>
+
 </html>
