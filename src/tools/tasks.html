@@ -328,8 +328,13 @@
         meta.appendChild(el("span", "badge online", { textContent: "Online" }));
         const link = t.actions?.find((a) => a.kind === "url")?.target;
         if (link) {
-          const a = el("a", "", { textContent: "Join link", href: link });
-          a.target = "_blank";
+          const a = el("a", "", { textContent: "Join link", href: "#" });
+          a.addEventListener("click", (e) => {
+            e.preventDefault();
+            // Use open_path (the `open` command), not the opener plugin —
+            // tool-* windows aren't granted opener:allow-open-url.
+            invoke("open_path", { path: link }).catch((err) => console.warn(err));
+          });
           meta.appendChild(a);
         }
       } else if (t.inPerson || t.location) {
