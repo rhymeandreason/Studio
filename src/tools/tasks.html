@@ -724,7 +724,6 @@ border: 1 px solid var(--hairline);
       inner.append(front, back);
       flip.appendChild(inner);
 
-      front.title = "Click to edit";
       front.addEventListener("click", () => {
         flip.style.height = back.offsetHeight + "px";
         flip.classList.add("flipped");
