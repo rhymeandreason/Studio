@@ -291,11 +291,14 @@ aspect-ratio: 1/1;
         card.className = "gallery-card";
         const blurb = escapeHtml(item.blurb || "");
         const sourceLabel = escapeHtml(item.source || "Source");
+        const img = `<img src="${escapeHtml(item.imageUrl)}" alt="${sourceLabel}" />`;
         const blurbHtml = item.pageUrl
           ? `${blurb} — <a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer">${sourceLabel}</a>`
           : blurb;
         card.innerHTML =
-          `<img src="${escapeHtml(item.imageUrl)}" alt="${sourceLabel}" />` +
+          (item.pageUrl
+            ? `<a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer">${img}</a>`
+            : img) +
           `<div class="gallery-card__blurb">${blurbHtml}</div>`;
         box.appendChild(card);
       }
