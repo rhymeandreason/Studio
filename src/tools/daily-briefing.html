@@ -87,7 +87,7 @@ margin-bottom: 80px;
     .brief-list {
       display: flex;
       flex-direction: column;
-      border-top: 1px solid var(--hairline-strong);
+      //border-top: 1px solid var(--hairline-strong);
       padding-top: var(--space-5);
     }
 
@@ -96,8 +96,10 @@ margin-bottom: 80px;
       align-items: baseline;
       justify-content: center;
       gap: var(--space-3);
-      padding: var(--space-2) 0;
+padding: var(--space-6) 0;
 font-size: 20px;
+background-color: white;
+border-radius: var(--radius-lg);
     }
 
     .meeting__time {
@@ -469,19 +471,6 @@ padding-botton:100px;
       return items;
     }
 
-    // Fetched fresh on every open/refresh, independent of the briefing-text
-    // cache gate below — the calendar can change (or, as with the meetings
-    // time format, the code reading it can change) without today's text
-    // briefing needing to regenerate.
-    async function refreshMeetings() {
-      let meetings = [];
-      try {
-        meetings = JSON.parse(await invoke("day_agenda"));
-      } catch {}
-      renderMeetings(meetings);
-      return meetings;
-    }
-
     let refreshing = false;
 
     async function refresh() {
@@ -489,7 +478,12 @@ padding-botton:100px;
       refreshing = true;
       setStatus("Refreshing…");
 
-      const meetings = await refreshMeetings();
+      // Meetings are fast — render them first.
+      let meetings = [];
+      try {
+        meetings = JSON.parse(await invoke("day_agenda"));
+      } catch {}
+      renderMeetings(meetings);
 
       let weather = null;
       try {
@@ -626,9 +620,8 @@ padding-botton:100px;
       if (!cachedToday) {
         refresh();
       } else {
-        // refresh() already covers these when it runs; when the cache
-        // short-circuits it, fetch live ones anyway.
-        refreshMeetings();
+        // refresh() already covers the gallery when it runs; when the cache
+        // short-circuits it, fetch a live one anyway.
         refreshGallery();
       }
     })();
