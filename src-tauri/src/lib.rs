@@ -2191,7 +2191,7 @@ const CALREAD_BIN: &str = env!("CALREAD_BIN");
 const TRANSIT_BIN: &str = env!("TRANSIT_BIN");
 
 /// Today's calendar events as a JSON array string:
-/// `[{"time":"10:00–10:30","title":"…","location":"…"}]` (EventKit, via the
+/// `[{"time":"10:00 AM–10:30 AM","title":"…","location":"…"}]` (EventKit, via the
 /// `dayagenda` Swift helper). Returns `"[]"` if calendar access is denied or
 /// there are no events; the calendar-access prompt (attributed to Studio) is
 /// shown by macOS on first call. Used by the Daily Briefing tool.

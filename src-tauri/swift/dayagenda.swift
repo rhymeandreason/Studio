@@ -1,7 +1,7 @@
 // dayagenda
 //
 // Prints today's calendar events as a JSON array:
-//   [{"time":"10:00–10:30","title":"…","location":"…"}]
+//   [{"time":"10:00 AM–10:30 AM","title":"…","location":"…"}]
 // All-day events use "All day"; events are sorted by start time. Prints "[]"
 // (and exits 0) if calendar access is denied or there are no events, so the
 // caller always gets valid JSON. The macOS calendar-access prompt is attributed
@@ -39,7 +39,7 @@ let pred = store.predicateForEvents(withStart: start, end: end, calendars: nil)
 let events = store.events(matching: pred).sorted { $0.startDate < $1.startDate }
 
 let df = DateFormatter()
-df.dateFormat = "HH:mm"
+df.dateFormat = "h:mm a"
 
 var items: [[String: String]] = []
 for ev in events {
