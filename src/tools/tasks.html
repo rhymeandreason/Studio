@@ -311,6 +311,31 @@
       width: 48px;
       padding: 3px 6px;
       text-align: right;
+      border: none;
+      position: relative;
+      left: 16px;
+      background: transparent;
+    }
+
+.task .lead input:hover {
+left: 5px;
+border: 1 px solid var(--hairline);
+}
+
+
+    /* Hide the number-input spinner arrows until the field is hovered/focused,
+       for a cleaner resting state. */
+    .task .lead input::-webkit-inner-spin-button,
+    .task .lead input::-webkit-outer-spin-button {
+      opacity: 0;
+      transition: opacity var(--dur-fast, .15s) var(--ease-standard, ease);
+    }
+
+    .task .lead input:hover::-webkit-inner-spin-button,
+    .task .lead input:focus::-webkit-inner-spin-button,
+    .task .lead input:hover::-webkit-outer-spin-button,
+    .task .lead input:focus::-webkit-outer-spin-button {
+      opacity: 1;
     }
 
     .task .actions {
