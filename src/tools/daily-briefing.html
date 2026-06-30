@@ -21,10 +21,6 @@
       --space-6: 40px;
     }
 
-    html,
-    body {
-      height: 100%;
-    }
 
     body {
       margin: 0;
@@ -48,9 +44,16 @@
       max-width: 640px;
       margin: 0 auto;
       width: 100%;
+      line-height: 5em;
+margin-bottom: 80px;
     }
 
-    .brief-masthead { display: flex; flex-direction: column; align-items: center; }
+    .brief-masthead {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
     .brief-weekday {
       font-family: var(--sans);
       font-weight: 600;
@@ -59,6 +62,7 @@
       font-size: clamp(40px, 8vw, 68px);
       text-transform: uppercase;
     }
+
     .brief-date {
       margin-top: var(--space-2);
       font-size: clamp(13px, 2vw, 16px);
@@ -68,8 +72,16 @@
     }
 
     /* ── Section framing ────────────────────────────────────────── */
-    .brief-section { display: flex; flex-direction: column; gap: var(--space-3); width: 100%; }
-    .brief-section.is-hidden { display: none; }
+    .brief-section {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      width: 100%;
+    }
+
+    .brief-section.is-hidden {
+      display: none;
+    }
 
     /* ── Meetings — centered single line per meeting ───────────────── */
     .brief-list {
@@ -78,6 +90,7 @@
       border-top: 1px solid var(--hairline-strong);
       padding-top: var(--space-3);
     }
+
     .meeting {
       display: flex;
       align-items: baseline;
@@ -85,6 +98,7 @@
       gap: var(--space-3);
       padding: var(--space-2) 0;
     }
+
     .meeting__time {
       flex: 0 0 auto;
       font-family: var(--mono);
@@ -92,33 +106,85 @@
       color: var(--accent);
       font-variant-numeric: tabular-nums;
     }
-    .meeting__title { font-size: 16px; line-height: 1.25; }
-    .meeting__loc { color: var(--text-muted); font-size: 0.7em; }
+
+    .meeting__title {
+      font-size: 16px;
+      line-height: 1.25;
+    }
+
+    .meeting__loc {
+      color: var(--text-muted);
+      font-size: 0.7em;
+    }
 
     /* ── Freeform Markdown body (poster scale, centered) ──────────── */
     .md-body {
       font-size: clamp(19px, 2.6vw, 26px);
-      line-height: 1.5;
+      line-height: 3em;
       letter-spacing: -0.005em;
     }
-    .md-body.is-loading { opacity: 0.4; }
-    .md-body > :first-child { margin-top: 0; }
-    .md-body > :last-child { margin-bottom: 0; }
-    .md-body > * + * { margin-top: 0.7em; }
-    .md-body h1, .md-body h2, .md-body h3 {
+
+    .md-body.is-loading {
+      opacity: 0.4;
+    }
+
+    .md-body> :first-child {
+      margin-top: 0;
+    }
+
+    .md-body> :last-child {
+      margin-bottom: 0;
+    }
+
+    .md-body>*+* {
+      margin-top: 0.7em;
+    }
+
+    .md-body h1,
+    .md-body h2,
+    .md-body h3 {
       font-weight: 600;
       line-height: 1.05;
       letter-spacing: -0.02em;
       margin-top: 0.6em;
     }
-    .md-body h1 { font-size: 1.7em; }
-    .md-body h2 { font-size: 1.3em; }
-    .md-body h3 { font-size: 1.1em; }
-    .md-body ul, .md-body ol { padding-left: 0; list-style-position: inside; }
-    .md-body li + li { margin-top: 0.3em; }
-    .md-body a { color: var(--accent); text-underline-offset: 3px; }
-    .md-body strong { font-weight: 600; }
-    .md-body em { font-style: italic; color: var(--text-muted); }
+
+    .md-body h1 {
+      font-size: 1.7em;
+    }
+
+    .md-body h2 {
+      font-size: 1.3em;
+    }
+
+    .md-body h3 {
+      font-size: 1.1em;
+    }
+
+    .md-body ul,
+    .md-body ol {
+      padding-left: 0;
+      list-style-position: inside;
+    }
+
+    .md-body li+li {
+      margin-top: 0.3em;
+    }
+
+    .md-body a {
+      color: var(--accent);
+      text-underline-offset: 3px;
+    }
+
+    .md-body strong {
+      font-weight: 600;
+    }
+
+    .md-body em {
+      font-style: italic;
+      color: var(--text-muted);
+    }
+
     .md-body blockquote {
       border-left: 3px solid var(--accent-soft);
       padding-left: var(--space-4);
@@ -126,6 +192,7 @@
       font-style: italic;
       text-align: left;
     }
+
     .md-body pre {
       background: var(--surface);
       padding: var(--space-3);
@@ -134,18 +201,41 @@
       font-size: 0.7em;
       text-align: left;
     }
-    .md-body code { font-family: var(--mono); }
-    .md-body hr { border: none; border-top: 1px solid var(--hairline-strong); margin: 1em 0; }
 
-    .brief-empty { opacity: 0.55; }
-    .brief-error { color: var(--rose); white-space: pre-wrap; font-size: 15px; text-align: left; }
+    .md-body code {
+      font-family: var(--mono);
+    }
+
+    .md-body hr {
+      border: none;
+      border-top: 1px solid var(--hairline-strong);
+      margin: 1em 0;
+    }
+
+    .brief-empty {
+      opacity: 0.55;
+    }
+
+    .brief-error {
+      color: var(--rose);
+      white-space: pre-wrap;
+      font-size: 15px;
+      text-align: left;
+    }
 
     /* ── Gallery: simple 3-column flex row ──────────────────────── */
-    .gallery-section { display: flex; flex-direction: column; gap: var(--space-3); }
+    .gallery-section {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+padding-botton:100px;
+    }
+
     .gallery-row {
       display: flex;
       gap: var(--space-4);
     }
+
     .gallery-card {
       flex: 1 1 0;
       min-width: 0;
@@ -153,15 +243,17 @@
       flex-direction: column;
       gap: var(--space-2);
     }
+
     .gallery-card img {
       width: 100%;
       //aspect-ratio: 4 / 3;
-aspect-ratio: 1/1;
+      aspect-ratio: 1/1;
       object-fit: cover;
       border-radius: var(--radius);
       display: block;
       background: var(--surface);
     }
+
     .gallery-card__blurb {
       font-size: 13px;
       line-height: 1.45;
@@ -171,7 +263,10 @@ aspect-ratio: 1/1;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
-    .gallery-card__blurb a { color: var(--accent); }
+
+    .gallery-card__blurb a {
+      color: var(--accent);
+    }
 
     /* ── Settings — floating overlay (Tab to toggle) ───────────────── */
     .settings {
@@ -185,9 +280,15 @@ aspect-ratio: 1/1;
       z-index: 10;
       box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
     }
-    .settings.is-open { display: flex; }
 
-    #status { text-align: center; }
+    .settings.is-open {
+      display: flex;
+    }
+
+    #status {
+      text-align: center;
+    }
+
   </style>
 </head>
 
@@ -246,7 +347,12 @@ aspect-ratio: 1/1;
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"]/g, (c) =>
-        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;"
+        } [c]));
     }
 
     function renderMeetings(meetings) {
@@ -274,9 +380,11 @@ aspect-ratio: 1/1;
     function renderBody(markdown) {
       const el = $("body");
       el.classList.remove("is-loading");
-      el.innerHTML = window.marked
-        ? window.marked.parse(markdown || "", { breaks: true })
-        : escapeHtml(markdown || "");
+      el.innerHTML = window.marked ?
+        window.marked.parse(markdown || "", {
+          breaks: true
+        }) :
+        escapeHtml(markdown || "");
     }
 
     // Gallery is a generic strip of { imageUrl, blurb, pageUrl, source }
@@ -292,13 +400,13 @@ aspect-ratio: 1/1;
         const blurb = escapeHtml(item.blurb || "");
         const sourceLabel = escapeHtml(item.source || "Source");
         const img = `<img src="${escapeHtml(item.imageUrl)}" alt="${sourceLabel}" />`;
-        const blurbHtml = item.pageUrl
-          ? `${blurb} — <a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer">${sourceLabel}</a>`
-          : blurb;
+        const blurbHtml = item.pageUrl ?
+          `${blurb} — <a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer">${sourceLabel}</a>` :
+          blurb;
         card.innerHTML =
-          (item.pageUrl
-            ? `<a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer">${img}</a>`
-            : img) +
+          (item.pageUrl ?
+            `<a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer">${img}</a>` :
+            img) +
           `<div class="gallery-card__blurb">${blurbHtml}</div>`;
         box.appendChild(card);
       }
@@ -314,8 +422,8 @@ aspect-ratio: 1/1;
         lines.push(
           "",
           `Current weather in ${weather.label}: ${weather.tempF}°F, ` +
-            `${weather.condition.toLowerCase()}, wind ${weather.windMph} mph. ` +
-            "Treat this as fact — don't look up or guess weather elsewhere.",
+          `${weather.condition.toLowerCase()}, wind ${weather.windMph} mph. ` +
+          "Treat this as fact — don't look up or guess weather elsewhere.",
         );
       }
       if (meetings.length) {
@@ -344,13 +452,19 @@ aspect-ratio: 1/1;
       try {
         const potd = JSON.parse(await invoke("get_picture_of_day"));
         if (potd && potd.imageUrl) {
-          items.push({ ...potd, source: "Wikimedia Commons" });
+          items.push({
+            ...potd,
+            source: "Wikimedia Commons"
+          });
         }
       } catch {}
       try {
         const colossal = JSON.parse(await invoke("get_colossal_items"));
         for (const item of colossal || []) {
-          if (item && item.imageUrl) items.push({ ...item, source: "Colossal" });
+          if (item && item.imageUrl) items.push({
+            ...item,
+            source: "Colossal"
+          });
         }
       } catch {}
       renderGallery(items);
@@ -373,7 +487,9 @@ aspect-ratio: 1/1;
 
       let weather = null;
       try {
-        weather = JSON.parse(await invoke("get_weather", { location: $("weather-location").value || "" }));
+        weather = JSON.parse(await invoke("get_weather", {
+          location: $("weather-location").value || ""
+        }));
       } catch {}
 
       const gallery = await refreshGallery();
@@ -387,7 +503,12 @@ aspect-ratio: 1/1;
         });
         renderBody(markdown);
         await invoke("save_briefing", {
-          content: JSON.stringify({ date: todayStr(), markdown, meetings, gallery }, null, 2),
+          content: JSON.stringify({
+            date: todayStr(),
+            markdown,
+            meetings,
+            gallery
+          }, null, 2),
         });
         setStatus(`Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
       } catch (e) {
@@ -422,9 +543,13 @@ aspect-ratio: 1/1;
     }
 
     // Masthead date
-    $("weekday").textContent = new Date().toLocaleDateString(undefined, { weekday: "long" });
+    $("weekday").textContent = new Date().toLocaleDateString(undefined, {
+      weekday: "long"
+    });
     $("date").textContent = new Date().toLocaleDateString(undefined, {
-      month: "long", day: "numeric", year: "numeric",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
     });
 
     // Settings — Tab toggles the floating panel (and focuses the prompt when
@@ -443,31 +568,47 @@ aspect-ratio: 1/1;
     });
     if (hasTauri) {
       invoke("read_briefing_prompt")
-        .then((v) => { $("sources").value = v || ""; })
+        .then((v) => {
+          $("sources").value = v || "";
+        })
         .catch(() => {});
       invoke("read_weather_location")
-        .then((v) => { $("weather-location").value = v || ""; })
+        .then((v) => {
+          $("weather-location").value = v || "";
+        })
         .catch(() => {});
     }
     $("sources").addEventListener("change", () => {
-      if (hasTauri) invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
+      if (hasTauri) invoke("save_briefing_prompt", {
+        content: $("sources").value
+      }).catch(() => {});
     });
     $("weather-location").addEventListener("change", () => {
-      if (hasTauri) invoke("save_weather_location", { content: $("weather-location").value }).catch(() => {});
+      if (hasTauri) invoke("save_weather_location", {
+        content: $("weather-location").value
+      }).catch(() => {});
     });
     // Force a regenerate with the current prompt (saving it first so the file
     // matches what just ran).
     $("run-prompt-btn").addEventListener("click", async () => {
       if (hasTauri) {
-        await invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
-        await invoke("save_weather_location", { content: $("weather-location").value }).catch(() => {});
+        await invoke("save_briefing_prompt", {
+          content: $("sources").value
+        }).catch(() => {});
+        await invoke("save_weather_location", {
+          content: $("weather-location").value
+        }).catch(() => {});
       }
       refresh();
     });
 
     if (hasTauri) {
-      const { getCurrentWindow } = window.__TAURI__.window;
-      const { LogicalSize } = window.__TAURI__.dpi;
+      const {
+        getCurrentWindow
+      } = window.__TAURI__.window;
+      const {
+        LogicalSize
+      } = window.__TAURI__.dpi;
       getCurrentWindow().setSize(new LogicalSize(820, 880));
     }
 
@@ -484,6 +625,7 @@ aspect-ratio: 1/1;
         refreshGallery();
       }
     })();
+
   </script>
 </body>
 
