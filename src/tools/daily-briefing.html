@@ -31,326 +31,198 @@
       padding: clamp(28px, 6vw, 56px);
       display: flex;
       flex-direction: column;
-      gap: clamp(28px, 5vw, 48px);
+      gap: var(--space-6);
       box-sizing: border-box;
       background: var(--bg);
       color: var(--text);
+      overflow-y: auto;
     }
 
-    /* ── Masthead ───────────────────────────────────────────────── */
-    .brief-head {
+    /* ── Top section: date, body, meetings — all centered ─────────── */
+    .brief-top {
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: var(--space-4);
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: var(--space-5);
+      max-width: 640px;
+      margin: 0 auto;
+      width: 100%;
     }
 
+    .brief-masthead { display: flex; flex-direction: column; align-items: center; }
     .brief-weekday {
       font-family: var(--sans);
       font-weight: 600;
       line-height: 0.92;
       letter-spacing: -0.02em;
-      font-size: clamp(38px, 14vw, 56px);
-      word-break: break-word;
+      font-size: clamp(40px, 8vw, 68px);
       text-transform: uppercase;
     }
-
     .brief-date {
-      margin-top: 20px;;
+      margin-top: var(--space-2);
       font-size: clamp(13px, 2vw, 16px);
       letter-spacing: 0.22em;
       text-transform: uppercase;
       color: var(--accent);
     }
 
-    .brief-actions {
-      display: flex;
-      gap: var(--space-2);
-      flex: 0 0 auto;
-    }
-
-    /* ── Two-column layout ─────────────────────────────────────── */
-    .brief-columns {
-      display: flex;
-      gap: var(--space-6);
-      align-items: stretch;
-      flex: 1;
-      min-height: 0;
-    }
-
-    .brief-col-left {
-      flex: 1 1 50%;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-5);
-      overflow-y: auto;
-    }
-
-    .brief-col-right {
-      flex: 1 1 50%;
-      min-width: 0;
-      overflow-y: auto;
-      padding: var(--space-5);
-    }
-
     /* ── Section framing ────────────────────────────────────────── */
-    .brief-section {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-4);
-    }
+    .brief-section { display: flex; flex-direction: column; gap: var(--space-3); width: 100%; }
+    .brief-section.is-hidden { display: none; }
 
-    .brief-section.is-hidden {
-      display: none;
-    }
-
-    .section-label {
-      font-size: 12px;
-      letter-spacing: 0.26em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      padding-bottom: var(--space-2);
-      border-bottom: 1px solid var(--hairline-strong);
-    }
-
+    /* ── Meetings — centered single line per meeting ───────────────── */
     .brief-list {
       display: flex;
       flex-direction: column;
-border-top: 1px solid var(--hairline-strong);
-margin-top:40px;
+      border-top: 1px solid var(--hairline-strong);
+      padding-top: var(--space-3);
     }
-
-    /* ── Meetings ───────────────────────────────────────────────── */
     .meeting {
       display: flex;
       align-items: baseline;
-      gap: var(--space-4);
-      padding: var(--space-3) 0;
-      border-bottom: 1px solid var(--hairline);
+      justify-content: center;
+      gap: var(--space-3);
+      padding: var(--space-2) 0;
     }
-
-    .meeting:last-child {
-      border-bottom: none;
-    }
-
     .meeting__time {
       flex: 0 0 auto;
-      min-width: 8.5ch;
       font-family: var(--mono);
-      font-size: 14px;
+      font-size: 13px;
       color: var(--accent);
       font-variant-numeric: tabular-nums;
     }
+    .meeting__title { font-size: 16px; line-height: 1.25; }
+    .meeting__loc { color: var(--text-muted); font-size: 0.7em; }
 
-    .meeting__title {
-      flex: 1 1 auto;
-      font-size: clamp(18px, 2.4vw, 20px);
-      line-height: 1.25;
-    }
-
-    .meeting__loc {
-      color: var(--text-muted);
-      font-size: 0.7em;
-    }
-
-    /* ── Freeform Markdown body (poster scale) ──────────────────── */
+    /* ── Freeform Markdown body (poster scale, centered) ──────────── */
     .md-body {
       font-size: clamp(19px, 2.6vw, 26px);
       line-height: 1.5;
       letter-spacing: -0.005em;
-      max-width: 32ch;
-//color:var(--text-muted);
     }
-
-    .md-body.is-loading {
-      opacity: 0.4;
-    }
-
-    .md-body> :first-child {
-      margin-top: 0;
-    }
-
-    .md-body> :last-child {
-      margin-bottom: 0;
-    }
-
-    .md-body>*+* {
-      margin-top: 0.7em;
-    }
-
-    .md-body h1,
-    .md-body h2,
-    .md-body h3 {
+    .md-body.is-loading { opacity: 0.4; }
+    .md-body > :first-child { margin-top: 0; }
+    .md-body > :last-child { margin-bottom: 0; }
+    .md-body > * + * { margin-top: 0.7em; }
+    .md-body h1, .md-body h2, .md-body h3 {
       font-weight: 600;
       line-height: 1.05;
       letter-spacing: -0.02em;
       margin-top: 0.6em;
     }
-
-    .md-body h1 {
-      font-size: 1.7em;
-    }
-
-    .md-body h2 {
-      font-size: 1.3em;
-    }
-
-    .md-body h3 {
-      font-size: 1.1em;
-    }
-
-    .md-body ul,
-    .md-body ol {
-      padding-left: 1.1em;
-    }
-
-    .md-body li+li {
-      margin-top: 0.3em;
-    }
-
-    .md-body a {
-      color: var(--accent);
-      text-underline-offset: 3px;
-    }
-
-    .md-body strong {
-      font-weight: 600;
-    }
-
-    .md-body em {
-      font-style: italic;
-      color: var(--text-muted);
-    }
-
+    .md-body h1 { font-size: 1.7em; }
+    .md-body h2 { font-size: 1.3em; }
+    .md-body h3 { font-size: 1.1em; }
+    .md-body ul, .md-body ol { padding-left: 0; list-style-position: inside; }
+    .md-body li + li { margin-top: 0.3em; }
+    .md-body a { color: var(--accent); text-underline-offset: 3px; }
+    .md-body strong { font-weight: 600; }
+    .md-body em { font-style: italic; color: var(--text-muted); }
     .md-body blockquote {
       border-left: 3px solid var(--accent-soft);
       padding-left: var(--space-4);
       color: var(--text-muted);
       font-style: italic;
+      text-align: left;
     }
-
     .md-body pre {
       background: var(--surface);
       padding: var(--space-3);
       border-radius: var(--radius);
       overflow-x: auto;
       font-size: 0.7em;
+      text-align: left;
     }
+    .md-body code { font-family: var(--mono); }
+    .md-body hr { border: none; border-top: 1px solid var(--hairline-strong); margin: 1em 0; }
 
-    .md-body code {
-      font-family: var(--mono);
+    .brief-empty { opacity: 0.55; }
+    .brief-error { color: var(--rose); white-space: pre-wrap; font-size: 15px; text-align: left; }
+
+    /* ── Gallery: horizontal strip of image cards ──────────────────── */
+    .gallery-section { display: flex; flex-direction: column; gap: var(--space-3); }
+    .gallery-row {
+      display: flex;
+      gap: var(--space-4);
+      overflow-x: auto;
+      padding-bottom: var(--space-2);
     }
-
-    .md-body hr {
-      border: none;
-      border-top: 1px solid var(--hairline-strong);
-      margin: 1em 0;
-    }
-
-    /* ── Wikimedia Picture of the Day ──────────────────────────── */
-    .potd {
-      display: none;
+    .gallery-card {
+      flex: 0 0 240px;
+      display: flex;
       flex-direction: column;
       gap: var(--space-2);
-margin-top:20px;
-      width:100%;
     }
-
-    .potd.is-visible {
-      display: flex;
-    }
-
-    .potd img {
-      width: 100%;
+    .gallery-card img {
+      width: 240px;
+      height: 180px;
+      object-fit: cover;
       border-radius: var(--radius);
       display: block;
+      background: var(--surface);
     }
-
-    .potd__blurb {
-      font-size: 14px;
-      line-height: 1.5;
+    .gallery-card__blurb {
+      font-size: 13px;
+      line-height: 1.45;
       color: var(--text-muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
+    .gallery-card__blurb a { color: var(--accent); }
 
-    .potd__blurb a {
-      color: var(--accent);
-    }
-
-    .brief-empty {
-      opacity: 0.55;
-    }
-
-    .brief-error {
-      color: var(--rose);
-      white-space: pre-wrap;
-      font-size: 15px;
-    }
-
-    /* ── Settings ───────────────────────────────────────────────── */
+    /* ── Settings — floating overlay (Tab to toggle) ───────────────── */
     .settings {
       display: none;
       flex-direction: column;
       gap: var(--space-3);
+      position: fixed;
+      top: var(--space-4);
+      right: var(--space-4);
+      width: 320px;
+      z-index: 10;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
     }
+    .settings.is-open { display: flex; }
 
-    .settings.is-open {
-      display: flex;
-    }
-
-    .brief-col-left #status {
-      margin-top: auto;
-    }
-
+    #status { text-align: center; }
   </style>
 </head>
 
 <body>
-  <div class="brief-columns">
-    <div class="brief-col-left">
-      <div class="brief-head">
-        <div class="brief-masthead">
-          <div id="weekday" class="brief-weekday"></div>
-          <div id="date" class="brief-date"></div>
-        </div>
-<!--
-        <div id="tab-hint" class="text-xs text-muted">Tab to edit</div>
--->
-      </div>
-
-      <div id="settings" class="settings card">
-        <label class="label" for="sources">Briefing prompt</label>
-        <textarea id="sources" class="field" rows="4" placeholder="Anything — e.g. a warm morning briefing with top news, or 'Write a haiku about today's weather in Woodacre, CA.'"></textarea>
-        <label class="label" for="weather-location">Weather location</label>
-        <input id="weather-location" class="field" type="text" placeholder="Blank = auto-detect from IP — e.g. Woodacre, CA" />
-        <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--space-2);">
-          <span class="text-xs text-muted">Saved to ~/Projects/briefing-prompt.txt · output is Markdown</span>
-          <button id="run-prompt-btn" class="btn btn-primary">
-            <span class="material-symbols-rounded">bolt</span> Run with this prompt
-          </button>
-        </div>
-      </div>
-
-      <div id="meetings-section" class="brief-section is-hidden">
-<!--
-        <div class="section-label">Today's meetings</div>
--->
-        <div id="meetings" class="brief-list"></div>
-      </div>
-
-      <div id="status" class="text-xs text-muted"></div>
-    </div>
-
-    <div class="brief-col-right">
-      <div class="brief-section">
-        <div id="body" class="md-body is-loading">Loading…</div>
-        <div id="potd" class="potd">
-          <img id="potd-img" alt="Wikimedia Commons picture of the day" />
-          <div id="potd-blurb" class="potd__blurb"></div>
-        </div>
-      </div>
+  <div id="settings" class="settings card">
+    <label class="label" for="sources">Briefing prompt</label>
+    <textarea id="sources" class="field" rows="4" placeholder="Anything — e.g. a warm morning briefing with top news, or 'Write a haiku about today's weather in Woodacre, CA.'"></textarea>
+    <label class="label" for="weather-location">Weather location</label>
+    <input id="weather-location" class="field" type="text" placeholder="Blank = auto-detect from IP — e.g. Woodacre, CA" />
+    <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--space-2);">
+      <span class="text-xs text-muted">Saved to ~/Projects/briefing-prompt.txt · output is Markdown</span>
+      <button id="run-prompt-btn" class="btn btn-primary">
+        <span class="material-symbols-rounded">bolt</span> Run with this prompt
+      </button>
     </div>
   </div>
+
+  <div class="brief-top">
+    <div class="brief-masthead">
+      <div id="weekday" class="brief-weekday"></div>
+      <div id="date" class="brief-date"></div>
+    </div>
+
+    <div id="body" class="md-body is-loading">Loading…</div>
+
+    <div id="meetings-section" class="brief-section is-hidden">
+      <div id="meetings" class="brief-list"></div>
+    </div>
+  </div>
+
+  <div class="gallery-section">
+    <div id="gallery" class="gallery-row"></div>
+  </div>
+
+  <div id="status" class="text-xs text-muted"></div>
 
   <script type="module">
     const hasTauri = !!window.__TAURI__;
@@ -374,12 +246,7 @@ margin-top:20px;
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"]/g, (c) =>
-        ({
-          "&": "&amp;",
-          "<": "&lt;",
-          ">": "&gt;",
-          '"': "&quot;"
-        } [c]));
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     }
 
     function renderMeetings(meetings) {
@@ -407,25 +274,31 @@ margin-top:20px;
     function renderBody(markdown) {
       const el = $("body");
       el.classList.remove("is-loading");
-      el.innerHTML = window.marked ?
-        window.marked.parse(markdown || "", {
-          breaks: true
-        }) :
-        escapeHtml(markdown || "");
+      el.innerHTML = window.marked
+        ? window.marked.parse(markdown || "", { breaks: true })
+        : escapeHtml(markdown || "");
     }
 
-    function renderPotd(potd) {
-      const box = $("potd");
-      if (!potd || !potd.imageUrl) {
-        box.classList.remove("is-visible");
-        return;
+    // Gallery is a generic strip of { imageUrl, blurb, pageUrl, source }
+    // items — the Wikimedia picture of the day is the first source, with
+    // room for more (e.g. media-of-the-day from other feeds) later.
+    function renderGallery(items) {
+      const box = $("gallery");
+      box.innerHTML = "";
+      for (const item of items || []) {
+        if (!item || !item.imageUrl) continue;
+        const card = document.createElement("div");
+        card.className = "gallery-card";
+        const blurb = escapeHtml(item.blurb || "");
+        const sourceLabel = escapeHtml(item.source || "Source");
+        const blurbHtml = item.pageUrl
+          ? `${blurb} — <a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer">${sourceLabel}</a>`
+          : blurb;
+        card.innerHTML =
+          `<img src="${escapeHtml(item.imageUrl)}" alt="${sourceLabel}" />` +
+          `<div class="gallery-card__blurb">${blurbHtml}</div>`;
+        box.appendChild(card);
       }
-      box.classList.add("is-visible");
-      $("potd-img").src = potd.imageUrl;
-      const blurb = escapeHtml(potd.blurb || "");
-      $("potd-blurb").innerHTML = potd.pageUrl ?
-        `${blurb} — <a href="${escapeHtml(potd.pageUrl)}" target="_blank" rel="noreferrer">Wikimedia Commons</a>` :
-        blurb;
     }
 
     function buildPrompt(userPrompt, meetings, weather) {
@@ -438,8 +311,8 @@ margin-top:20px;
         lines.push(
           "",
           `Current weather in ${weather.label}: ${weather.tempF}°F, ` +
-          `${weather.condition.toLowerCase()}, wind ${weather.windMph} mph. ` +
-          "Treat this as fact — don't look up or guess weather elsewhere.",
+            `${weather.condition.toLowerCase()}, wind ${weather.windMph} mph. ` +
+            "Treat this as fact — don't look up or guess weather elsewhere.",
         );
       }
       if (meetings.length) {
@@ -460,16 +333,19 @@ margin-top:20px;
     }
 
     // Fetched fresh on every open/refresh, independent of the briefing-text
-    // cache gate below — it's cheap, real data with no LLM involved, so there's
-    // no reason to ever show a stale image just because today's text briefing
-    // was already cached.
-    async function refreshPotd() {
-      let potd = null;
+    // cache gate below — it's cheap, real data with no LLM involved, so
+    // there's no reason to ever show a stale gallery just because today's
+    // text briefing was already cached.
+    async function refreshGallery() {
+      const items = [];
       try {
-        potd = JSON.parse(await invoke("get_picture_of_day"));
+        const potd = JSON.parse(await invoke("get_picture_of_day"));
+        if (potd && potd.imageUrl) {
+          items.push({ ...potd, source: "Wikimedia Commons" });
+        }
       } catch {}
-      renderPotd(potd);
-      return potd;
+      renderGallery(items);
+      return items;
     }
 
     let refreshing = false;
@@ -488,12 +364,10 @@ margin-top:20px;
 
       let weather = null;
       try {
-        weather = JSON.parse(await invoke("get_weather", {
-          location: $("weather-location").value || ""
-        }));
+        weather = JSON.parse(await invoke("get_weather", { location: $("weather-location").value || "" }));
       } catch {}
 
-      const potd = await refreshPotd();
+      const gallery = await refreshGallery();
 
       const prompt = ($("sources").value || DEFAULT_PROMPT).trim();
       try {
@@ -504,12 +378,7 @@ margin-top:20px;
         });
         renderBody(markdown);
         await invoke("save_briefing", {
-          content: JSON.stringify({
-            date: todayStr(),
-            markdown,
-            meetings,
-            potd
-          }, null, 2),
+          content: JSON.stringify({ date: todayStr(), markdown, meetings, gallery }, null, 2),
         });
         setStatus(`Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
       } catch (e) {
@@ -532,7 +401,7 @@ margin-top:20px;
         if (cached && typeof cached.markdown === "string") {
           renderMeetings(cached.meetings || []);
           renderBody(cached.markdown);
-          renderPotd(cached.potd || null);
+          renderGallery(cached.gallery || []);
           if (cached.date === todayStr()) {
             setStatus("");
             return true;
@@ -544,21 +413,16 @@ margin-top:20px;
     }
 
     // Masthead date
-    $("weekday").textContent = new Date().toLocaleDateString(undefined, {
-      weekday: "long"
-    });
+    $("weekday").textContent = new Date().toLocaleDateString(undefined, { weekday: "long" });
     $("date").textContent = new Date().toLocaleDateString(undefined, {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
+      month: "long", day: "numeric", year: "numeric",
     });
 
-    // Settings — Tab toggles the edit view (and focuses the prompt when
+    // Settings — Tab toggles the floating panel (and focuses the prompt when
     // opening). Closing while the textarea has focus blurs it, which fires
     // the change handler that saves the prompt.
     function toggleSettings() {
       const open = $("settings").classList.toggle("is-open");
-      $("tab-hint").textContent = open ? "Tab to close" : "Tab to edit";
       if (open) $("sources").focus();
       else $("sources").blur();
     }
@@ -570,48 +434,32 @@ margin-top:20px;
     });
     if (hasTauri) {
       invoke("read_briefing_prompt")
-        .then((v) => {
-          $("sources").value = v || "";
-        })
+        .then((v) => { $("sources").value = v || ""; })
         .catch(() => {});
       invoke("read_weather_location")
-        .then((v) => {
-          $("weather-location").value = v || "";
-        })
+        .then((v) => { $("weather-location").value = v || ""; })
         .catch(() => {});
     }
     $("sources").addEventListener("change", () => {
-      if (hasTauri) invoke("save_briefing_prompt", {
-        content: $("sources").value
-      }).catch(() => {});
+      if (hasTauri) invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
     });
     $("weather-location").addEventListener("change", () => {
-      if (hasTauri) invoke("save_weather_location", {
-        content: $("weather-location").value
-      }).catch(() => {});
+      if (hasTauri) invoke("save_weather_location", { content: $("weather-location").value }).catch(() => {});
     });
     // Force a regenerate with the current prompt (saving it first so the file
     // matches what just ran).
     $("run-prompt-btn").addEventListener("click", async () => {
       if (hasTauri) {
-        await invoke("save_briefing_prompt", {
-          content: $("sources").value
-        }).catch(() => {});
-        await invoke("save_weather_location", {
-          content: $("weather-location").value
-        }).catch(() => {});
+        await invoke("save_briefing_prompt", { content: $("sources").value }).catch(() => {});
+        await invoke("save_weather_location", { content: $("weather-location").value }).catch(() => {});
       }
       refresh();
     });
 
     if (hasTauri) {
-      const {
-        getCurrentWindow
-      } = window.__TAURI__.window;
-      const {
-        LogicalSize
-      } = window.__TAURI__.dpi;
-      getCurrentWindow().setSize(new LogicalSize(1080, 760));
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const { LogicalSize } = window.__TAURI__.dpi;
+      getCurrentWindow().setSize(new LogicalSize(820, 880));
     }
 
     // The scheduled morning open generates the day's briefing; every later
@@ -622,12 +470,11 @@ margin-top:20px;
       if (!cachedToday) {
         refresh();
       } else {
-        // refresh() already covers the picture of the day when it runs; when
-        // the cache short-circuits it, fetch a live one anyway.
-        refreshPotd();
+        // refresh() already covers the gallery when it runs; when the cache
+        // short-circuits it, fetch a live one anyway.
+        refreshGallery();
       }
     })();
-
   </script>
 </body>
 
