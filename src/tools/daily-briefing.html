@@ -344,6 +344,12 @@
           items.push({ ...potd, source: "Wikimedia Commons" });
         }
       } catch {}
+      try {
+        const colossal = JSON.parse(await invoke("get_colossal_items"));
+        for (const item of colossal || []) {
+          if (item && item.imageUrl) items.push({ ...item, source: "Colossal" });
+        }
+      } catch {}
       renderGallery(items);
       return items;
     }

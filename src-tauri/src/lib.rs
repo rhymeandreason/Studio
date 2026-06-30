@@ -4915,15 +4915,47 @@ fn get_weather(location: String) -> Result<String, String> {
     .map_err(|e| e.to_string())
 }
 
-/// Decode the handful of HTML/XML entities the Commons feed actually uses.
-/// Not a general entity decoder — just enough for `&amp; &lt; &gt; &quot;
-/// &#039;`, which is all this feed emits.
+/// Decode HTML/XML entities found in RSS feed text: the standard named ones
+/// plus numeric (`&#8217;`) and hex (`&#x2019;`) character references — RSS
+/// titles commonly use numeric entities for curly quotes/dashes.
 fn unescape_entities(s: &str) -> String {
-    s.replace("&amp;", "&")
+    let named = s
+        .replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&#039;", "'")
+        .replace("&apos;", "'");
+
+    let mut out = String::with_capacity(named.len());
+    let mut rest = named.as_str();
+    while let Some(amp) = rest.find('&') {
+        out.push_str(&rest[..amp]);
+        let tail = &rest[amp..];
+        let parsed = tail.find(';').filter(|&semi| semi <= 10).and_then(|semi| {
+            let body = &tail[1..semi];
+            let code = body.strip_prefix('#').and_then(|n| {
+                if let Some(hex) = n.strip_prefix('x').or_else(|| n.strip_prefix('X')) {
+                    u32::from_str_radix(hex, 16).ok()
+                } else {
+                    n.parse::<u32>().ok()
+                }
+            });
+            code.and_then(char::from_u32).map(|c| (c, semi + 1))
+        });
+        match parsed {
+            Some((c, len)) => {
+                out.push(c);
+                rest = &tail[len..];
+            }
+            None => {
+                out.push('&');
+                rest = &tail[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Strip HTML tags, leaving just the text content.
@@ -5005,6 +5037,83 @@ fn get_picture_of_day() -> Result<String, String> {
         "pageUrl": page_url,
     }))
     .map_err(|e| e.to_string())
+}
+
+/// Extract an RSS `<tag>…</tag>` element's text content, unwrapping a
+/// `<![CDATA[…]]>` block if present (most WordPress feeds wrap `<title>` /
+/// `<description>` in one), else HTML-unescaping it.
+fn tag_text(item: &str, tag: &str) -> Option<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let start = item.find(&open)? + open.len();
+    let end = item[start..].find(&close)? + start;
+    let raw = item[start..end].trim();
+    if let Some(rest) = raw.strip_prefix("<![CDATA[") {
+        let cdata_end = rest.find("]]>").unwrap_or(rest.len());
+        Some(rest[..cdata_end].to_string())
+    } else {
+        Some(unescape_entities(raw))
+    }
+}
+
+/// Given an RSS item's (already CDATA-unwrapped) HTML description, return the
+/// image src and text of its first `<p>` — Colossal's feed opens each post's
+/// description with `<p><img .../>blurb text…</p>` followed by boilerplate
+/// paragraphs ("Become a Colossal Member…") we don't want.
+fn first_paragraph_image_and_text(html: &str) -> (Option<String>, String) {
+    let Some(p_start) = html.find("<p>") else { return (None, String::new()) };
+    let inner_start = p_start + "<p>".len();
+    let Some(rel_end) = html[inner_start..].find("</p>") else { return (None, String::new()) };
+    let inner = &html[inner_start..inner_start + rel_end];
+
+    let image_url = inner.find("<img ").and_then(|i| {
+        let src_start = inner[i..].find("src=\"")? + i + "src=\"".len();
+        let src_end = inner[src_start..].find('"')? + src_start;
+        Some(inner[src_start..src_end].to_string())
+    });
+
+    (image_url, strip_tags(inner).trim().to_string())
+}
+
+/// The 2 latest posts from Colossal's RSS feed (art/craft/visual-culture
+/// blog) as a JSON array of `{imageUrl, blurb, pageUrl, title}`. Used by the
+/// Daily Briefing gallery alongside the Wikimedia picture of the day.
+#[tauri::command]
+fn get_colossal_items() -> Result<String, String> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(5))
+        .timeout_read(std::time::Duration::from_secs(10))
+        .build();
+
+    let rss = agent
+        .get("https://www.thisiscolossal.com/feed/")
+        .set("User-Agent", "Studio-DailyBriefing/1.0 (desktop app; single user)")
+        .call()
+        .map_err(|e| format!("Colossal feed request failed: {e}"))?
+        .into_string()
+        .map_err(|e| e.to_string())?;
+
+    let mut items = Vec::new();
+    for chunk in rss.split("<item>").skip(1).take(2) {
+        let item_end = chunk.find("</item>").unwrap_or(chunk.len());
+        let item = &chunk[..item_end];
+
+        let title = tag_text(item, "title").unwrap_or_default();
+        let page_url = tag_text(item, "link").unwrap_or_default();
+        let desc = tag_text(item, "description").unwrap_or_default();
+        let (image_url, blurb) = first_paragraph_image_and_text(&desc);
+
+        if let Some(image_url) = image_url {
+            items.push(serde_json::json!({
+                "imageUrl": image_url,
+                "blurb": if blurb.is_empty() { title.clone() } else { blurb },
+                "pageUrl": page_url,
+                "title": title,
+            }));
+        }
+    }
+
+    serde_json::to_string(&items).map_err(|e| e.to_string())
 }
 
 /// Run `claude -p <prompt>` headless in the project's repo dir, write the
@@ -5658,6 +5767,7 @@ pub fn run() {
             save_weather_location,
             get_weather,
             get_picture_of_day,
+            get_colossal_items,
             update_wake_schedule,
             read_claude_sessions,
             save_claude_sessions,
