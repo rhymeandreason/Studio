@@ -136,6 +136,11 @@
       flex: 0 0 auto;
     }
 
+    .edit-form .edit-delete {
+      margin-left: auto;
+      color: var(--danger, #d9534f);
+    }
+
     .edit-form .form-hint {
       flex-basis: 100%;
     }
@@ -145,7 +150,11 @@
     }
 
     .task .when {
-      flex: 0 0 70px;
+      flex: 0 0 78px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 5px;
       font-variant-numeric: tabular-nums;
       font-size: 13px;
       color: var(--text);
@@ -193,6 +202,12 @@
     .badge.online {
       background: color-mix(in srgb, var(--accent) 22%, transparent);
       color: var(--accent);
+    }
+
+    .badge.inperson {
+      background: color-mix(in srgb, var(--warning, #e0a458) 26%, transparent);
+      color: var(--warning, #e0a458);
+      font-weight: 600;
     }
 
     .cal-mark {
@@ -698,9 +713,11 @@
 
     function buildFront(t, start) {
       const row = el("div", "task face front");
-      row.appendChild(el("div", "when", {
+      const when = el("div", "when");
+      when.appendChild(el("div", "time", {
         textContent: timeFmt.format(start)
       }));
+      row.appendChild(when);
 
       const body = el("div", "body");
       body.appendChild(el("div", "name", {
@@ -719,7 +736,7 @@
       }
 
       if (t.online) {
-        meta.appendChild(el("span", "badge online", {
+        when.appendChild(el("span", "badge online", {
           textContent: "Online"
         }));
         const link = t.actions?.find((a) => a.kind === "url")?.target;
@@ -740,14 +757,14 @@
           meta.appendChild(a);
         }
       } else if (t.inPerson || t.location) {
-        meta.appendChild(el("span", "badge", {
+        when.appendChild(el("span", "badge inperson", {
           textContent: "In person"
         }));
         if (t.location) meta.appendChild(el("span", "", {
           textContent: t.location
         }));
       } else if (t.source === "manual") {
-        meta.appendChild(el("span", "badge", {
+        when.appendChild(el("span", "badge", {
           textContent: "Manual"
         }));
       }
@@ -781,20 +798,6 @@
         textContent: "min before"
       }));
       row.appendChild(lead);
-
-      const actions = el("div", "actions");
-      const del = el("button", "btn btn-icon");
-      del.innerHTML = '<span class="mi">delete</span>';
-      del.title = "Delete task";
-      del.addEventListener("click", async (e) => {
-        e.stopPropagation(); // don't open the editor
-        await invoke("delete_task", {
-          id: t.id
-        });
-        refresh();
-      });
-      actions.appendChild(del);
-      row.appendChild(actions);
       return row;
     }
 
@@ -830,6 +833,15 @@
       const cancel = el("button", "btn btn-ghost", {
         textContent: "Cancel"
       });
+      const del = el("button", "btn btn-icon edit-delete");
+      del.innerHTML = '<span class="mi">delete</span>';
+      del.title = "Delete task";
+      del.addEventListener("click", async () => {
+        await invoke("delete_task", {
+          id: t.id
+        });
+        refresh();
+      });
       const hint = el("div", "form-hint text-xs text-muted");
       if (t.source === "calendar" && !t.userEdited) {
         hint.textContent = "Saving takes manual control — calendar sync won't overwrite it.";
@@ -861,7 +873,7 @@
       });
       cancel.addEventListener("click", () => closeFlip(flip, front));
 
-      form.append(title, link, date, time, save, cancel, hint);
+      form.append(title, link, date, time, save, cancel, del, hint);
       back.appendChild(form);
       return back;
     }
