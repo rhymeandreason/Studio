@@ -103,7 +103,11 @@
     async function runActions() {
       for (const a of task.actions || []) {
         try {
-          if (a.kind === "url") await invoke("open_path", { path: a.target });
+          if (a.kind === "url") {
+            const cmd = /meet\.google\.com/i.test(a.target) ? "open_in_chrome" : "open_path";
+            const arg = cmd === "open_in_chrome" ? { url: a.target } : { path: a.target };
+            await invoke(cmd, arg);
+          }
           else if (a.kind === "app") await invoke("open_app", { name: a.target });
           else if (a.kind === "tool") await invoke("open_tool", { file: a.target });
         } catch (e) { console.warn("action failed", a, e); }
