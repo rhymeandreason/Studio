@@ -777,9 +777,12 @@ border: 1 px solid var(--hairline);
             e.stopPropagation(); // don't open the editor
             // Use open_path (the `open` command), not the opener plugin —
             // tool-* windows aren't granted opener:allow-open-url.
-            invoke("open_path", {
-              path: link
-            }).catch((err) => console.warn(err));
+            const isMeet = /meet\.google\.com/i.test(link);
+            if (isMeet) {
+              invoke("open_in_chrome", { url: link }).catch((err) => console.warn(err));
+            } else {
+              invoke("open_path", { path: link }).catch((err) => console.warn(err));
+            }
           });
           meta.appendChild(a);
         }

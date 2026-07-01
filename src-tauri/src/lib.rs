@@ -2117,6 +2117,15 @@ fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn open_in_chrome(url: String) -> Result<(), String> {
+    Command::new("open")
+        .args(["-a", "Google Chrome", &url])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Open a file in this Studio repo's source tree at a given line in Zed.
 /// `file` is a path relative to the repo root (e.g. "src/styles.css").
 #[tauri::command]
@@ -5808,6 +5817,7 @@ pub fn run() {
             edited_thumb,
             save_edited_thumb,
             open_path,
+            open_in_chrome,
             app_icon,
             open_in_zed,
             open_app,
