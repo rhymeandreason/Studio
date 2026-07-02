@@ -105,6 +105,15 @@
     gap: 10px;
     min-height: 0;
   }
+
+  /* ---- compact layout: narrow window hides the left column and collapses
+     Prettify/Wrap to icon-only buttons (labels stay in the title attr). ---- */
+  @media (max-width: 650px) {
+    #tree-col { display: none; }
+    #prettify .btn-label,
+    #wrap-btn .btn-label { display: none; }
+    #prettify, #wrap-btn { width: 30px; padding: 0; gap: 0; }
+  }
   .panel-card {
     /* Translucent white over the tint → the soft tinted-card look (à la the
        Git window; --card from window-chrome.css). The code card stays solid
@@ -411,8 +420,8 @@
         <span id="dirty" title="Unsaved changes"></span>
     </div>
     <div class="tb-group">
-        <button class="btn btn-ghost" id="prettify"><span class="mi">format_align_left</span>Prettify</button>
-        <button class="btn btn-ghost" id="wrap-btn"><span class="mi">wrap_text</span>Wrap</button>
+        <button class="btn btn-ghost" id="prettify" title="Prettify"><span class="mi">format_align_left</span><span class="btn-label">Prettify</span></button>
+        <button class="btn btn-ghost" id="wrap-btn" title="Wrap"><span class="mi">wrap_text</span><span class="btn-label">Wrap</span></button>
     </div>
     <div class="tb-group">
         <button class="btn btn-icon-only" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span><span class="stale-dot"></span></button>
