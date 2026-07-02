@@ -11,23 +11,15 @@ promote-to-canonical are still ahead. Related: [tools.md](tools.md),
 
 ## Why
 
-Design is moving to **generate-then-edit**: Claude generates a first version, the
-designer edits from there. Leverage shifts from *executing* a design to
-**directing the generator** — chiefly keeping output from going generic. Artifacts
-are how you steer: the value isn't an asset to copy, it's a **spec that biases the
-next generation**. Tune a token, and you tune everything Claude makes after.
+Design is generate-then-edit: Claude drafts, the designer steers. An artifact
+isn't an asset to copy — it's a **spec that biases the next generation**; tune
+a token and you tune everything Claude makes after.
 
-**Key fact: Claude and the tools meet at the artifact, not the GUI.** "Claude
-makes 5 brand variants" = Claude *writes five brand-kit JSON files in the format
-the Brand Explorer reads* — not clicking a UI. The shared format is the integration:
-
-- **Claude** authors them (runs in the project folder via the companion, knows the
-  format from the `studio-artifacts` skill).
-- **Tools** edit them (open-on-artifact, save back).
-- **Studio** watches the folder, previews them, launches the editor.
-
-A rare tool needing real computation (e.g. extract-palette-from-image) could
-expose a headless core later; read/write is enough so far.
+**Key fact: Claude and the tools meet at the artifact, not the GUI.** "Make 5
+brand variants" = write five brand-kit JSONs in the format the Brand Explorer
+reads. Claude authors them (knows the format from the `studio-artifacts`
+skill), tools edit them (open-on-artifact, save back), Studio watches the
+folder, previews, and launches the editor.
 
 ## Model
 
@@ -62,16 +54,14 @@ expose a headless core later; read/write is enough so far.
   in `src/deck/`. A deck embeds its `theme` inline; themes can also be saved as
   their own reusable `theme` artifacts. Full detail — layouts, per-slide options,
   color schemes, presets-as-files, editing UX, export — in **[slides.md](slides.md)**.
-- **diagram kind** — the Diagram tool (`src/tools/diagram.html`) on a shared SVG
-  renderer (`src/diagram/render.js`): templated concept diagrams (flow, compare,
-  2×2 matrix, venn, timeline, hierarchy) themed with the same theme shape as
-  decks, drag-nudgeable, exportable as SVG, and embeddable live in slides via
-  image slots. Detail in **[diagrams.md](diagrams.md)**.
+- **diagram kind** — the Diagram tool + shared SVG renderer (`src/diagram/`):
+  six templated concept diagrams, deck-theme styling, drag nudges, SVG export,
+  live slide embeds. Detail in **[diagrams.md](diagrams.md)**.
 - **Studio Claude Artifacts/Code toggle** — picks Claude's cwd (project folder vs
   git repo); defaults to the project folder so artifacts land where the panel
   reads them. See [claude-window.md](claude-window.md).
 
-## Workflow (the vision)
+## Workflow (the vision — mostly ahead of the code; "Built" above is what exists)
 
 | Stage | Driver | Artifact |
 |---|---|---|

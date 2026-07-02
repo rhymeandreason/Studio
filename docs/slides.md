@@ -47,40 +47,21 @@ re-derives the scheme palette in `deckSchemePalette`).
 - **`slides[]`** — each has a `layout` plus that layout's slots, and optional
   per-slide modifiers.
 
-### Layouts and slots
-Defined across a few coordinated places in `slides.html` (the `LAYOUTS` map,
-`renderSlide`'s switch in `render.js`, the `.l-*` CSS, `layoutIcon`,
-`SLIDE_DEFAULTS`, `PRIMARY_BODY`). Current set:
+### Layouts, slots, per-slide modifiers
+Eight layouts (`title`, `section`, `title-body`, `two-col`, `three-col`,
+`quote`, `image-full`, `image-text`) plus modifiers (`colorScheme`,
+`headingSize`/`bodySize`, `imageFit`, `listStyle`, `columns`). **The
+slot-by-slot contract is in `skills/studio-artifacts/SKILL.md`** — that's the
+canonical format doc; **change a saved shape → update the skill.**
 
-| layout | slots |
-|---|---|
-| `title` | `title`, `subtitle` |
-| `section` | `title`, optional `image` (full-bleed bg), optional `caption` |
-| `title-body` | `title`, `body` (+ `columns`: 1/2) |
-| `two-col` | `title`, `left`, `right` |
-| `three-col` | `title`, `left`, `middle`, `right` |
-| `quote` | `quote`, `attribution` |
-| `image-full` | `image`, optional `caption` |
-| `image-text` | `title`, `image`, `body`, optional `caption` |
-
-Body-type slots (`body`/`left`/`middle`/`right`) are **Markdown** (bold, lists,
-links, `##`/`###`, blockquote, `code`, `---`; `**bold**` → accent color). `image`
-slots are **project-relative paths** (e.g. `media/x.png`) — or a **diagram
-artifact ref** (`artifacts/diagram/x.json`), which renders live re-themed to
-the deck and inlines as SVG in exports (see [diagrams.md](diagrams.md)).
-
-### Per-slide modifiers
-- **`colorScheme`** — `light` (default) / `soft` / `dark` / `accent` / `accent2`.
-  Each derives a full palette from the theme's 6 colors (`colorScheme()` in
-  render.js); `section` defaults to `accent`.
-- **`headingSize`** `s`/`m`/`l`/`xl` and **`bodySize`** `s`/`m`/`l` — scale from
-  the theme's `headingSize`/`bodySize` base; each layout sets a default heading
-  level (`HEADING_DEFAULT`).
-- **`imageFit`** `cover`/`contain`, **`listStyle`** `bullets`/`cards`,
-  **`columns`** 1/2 (title-body).
-
-The format is mirrored for Claude in `skills/studio-artifacts/SKILL.md` — **change
-a saved shape → update the skill.**
+Non-obvious:
+- Adding a layout touches coordinated places: the `LAYOUTS` map, `layoutIcon`,
+  `SLIDE_DEFAULTS`, `PRIMARY_BODY` (slides.html) + `renderSlide`'s switch and
+  the `.l-*` CSS (src/deck/).
+- Body-type slots are Markdown; `**bold**` renders in the accent color.
+- `image` slots take project-relative paths — or a **diagram artifact ref**
+  (`artifacts/diagram/x.json`), rendered live re-themed to the deck and
+  inlined as SVG in exports (see [diagrams.md](diagrams.md)).
 
 ## Themes
 
@@ -141,11 +122,5 @@ page) so the browser's Save-as-PDF works on it. The slide CSS is fetched from
 `render.css` at export time. PDF is intentionally browser-print only (no in-tool
 button).
 
-## Files
-- `src/deck/render.js`, `render.css`, `themes/*.json` + `index.json`
-- `src/tools/slides.html`, `src/tools/theme-editor.html`
-- `src/artifacts.js` (panel registration + preview cards)
-- `skills/studio-artifacts/SKILL.md` (format docs for Claude)
-- Rust: reuses `save_export_dir`, `save_artifact` / `overwrite_artifact` /
-  `read_artifact` / `list_artifacts`, `list_media` / `import_media` /
-  `paste_image` / `read_image_data` (`src-tauri/src/lib.rs`).
+Rust: no new commands — reuses `save_export_dir`, the artifact commands, and
+`list_media` / `import_media` / `paste_image` / `read_image_data`.

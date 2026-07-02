@@ -141,103 +141,50 @@ entry — never the builders.
   its own draggable bar, close control, and rounded corners via the shared kit
   module (below). This is the target style for most project tools.
 
-### Custom chrome (the `Custom` recipe)
+### Custom chrome — the recipe
 
-Two halves — flip the table entry **and** convert the HTML; do both or the tool
-opens with no way to drag or close it.
+For new tools and migrations alike (Code Editor was the first migration —
+`git show 1591afb` is the reference diff). Do the whole list in one pass; a
+half-done tool opens with no way to drag or close it.
 
-1. **Rust:** set the tool's `chrome` to `Chrome::Custom` in `tool_style`, with a
-   `tint` (`Project` for project-scoped tools, `Paper`/`None` for globals) and
-   `empty_title: true`. `apply_tool_chrome` then builds it with
-   `decorations(false).transparent(true).shadow(false)` and passes the resolved
-   color through as `?color=`. `cargo check` after.
+1. **Rust:** point the tool's arm in `tool_style()` at `Chrome::Custom`, pick
+   its `tint` (`Project` for project-scoped tools, `Paper`/`None` for globals),
+   set `empty_title: true`. Don't touch the builders — `apply_tool_chrome`
+   already does `decorations(false).transparent(true).shadow(false)` and passes
+   the resolved color as `?color=`. `cargo check`.
 
    > `shadow(false)` is required: the native macOS shadow is drawn around the
    > *square* window bounds and reads as a 1px black border / square corners.
 
-2. **HTML:** opt into the kit window chrome —
+2. **HTML:** link `../kit/window-chrome.css` after kit.css, `import
+   "../kit/window-chrome.js"` in the module script, and mark the top bar
+   `data-window-bar`. The module reads `?color=` → sets `--titlebar-tint` /
+   `--window-color`, makes the bar a Tauri drag region (buttons inside still
+   click), injects the `.window-close` dot (into a `[data-window-close]`
+   element if the tool marks one, else at the bar's left edge), wires
+   Cmd/Ctrl+W, and rounds the corners. Remove any hand-rolled close button,
+   Cmd+W handler, `data-tauri-drag-region`, or local titlebar/corner CSS —
+   the module owns those now.
 
-   ```html
-   <link rel="stylesheet" href="../kit/window-chrome.css" />
-   ...
-   <script type="module" src="../kit/window-chrome.js"></script>
-   ```
+3. **Move the background off `html`/`body`** — the step every migration needs
+   and the easiest to forget: a background there propagates to the square
+   viewport (CSS "canvas background" quirk) and **ignores border-radius**, so
+   corners stay square. Make `html`/`body` transparent and paint the opaque
+   fill on the content rows *inside* body (Code Editor: `#main`); body's
+   `overflow:hidden` clip is what rounds them. Every region of the window must
+   be covered by an opaque child or the desktop shows through.
 
-   and mark the tool's top bar element `data-window-bar`. The module reads
-   `?color=` → sets `--titlebar-tint`/`--window-color`, makes the bar a Tauri
-   drag region (buttons inside still click), injects a `.window-close` dot,
-   wires Cmd/Ctrl+W, and rounds the corners. The dot is prepended into a
-   `[data-window-close]` element if the tool marks one (so it groups with that
-   element's buttons), otherwise at the bar's left edge. Tools that retint
-   dynamically (Code Editor, per open file) just set `--titlebar-tint`
-   themselves later.
+4. **Runtime retint** (optional): `?color=` is applied automatically; a tool
+   that retints later (Code Editor, per open file) sets `--titlebar-tint` on
+   `documentElement` itself.
 
-3. **Rounded corners gotcha:** a background on `html`/`body` propagates to the
-   square viewport (CSS "canvas background" quirk) and **ignores
-   border-radius** — so corners stay square. Keep `html`/`body` **transparent**
-   (window-chrome.css does this) and paint the opaque surface on the content
-   rows *inside* body (e.g. Code Editor sets `#main { background: var(--bg) }`);
-   body's `overflow:hidden` clip then rounds them, and the transparent corner
-   pixels reveal the desktop.
+5. **Test in the running app** (restart for the Rust change): no traffic
+   lights, draggable bar, close dot + Cmd+W, rounded corners with no black
+   edge, tint matches the project.
 
 The needed window permissions (`core:window:allow-start-dragging`,
-`allow-close`, `allow-minimize`) are already granted to all `tool-*` windows in
-`src-tauri/capabilities/tools.json`.
-
-### Migrating an existing tool to Custom chrome
-
-A worked checklist for converting a tool that currently uses `Native` or
-`NativeTint` (Code Editor was the first — `git show 1591afb` is the reference
-diff). Do the whole list in one pass; a half-migrated tool opens with no way to
-drag or close it.
-
-1. **`tool_style` entry (Rust).** Add/point the tool's match arm in
-   `tool_style()` to `Chrome::Custom`, pick its `tint`
-   (`Tint::Project` for project-scoped tools, `Tint::Paper`/`Tint::None` for
-   globals), and set `empty_title: true`. Don't touch the builders — they
-   already route through `apply_tool_chrome`. Run `cargo check`.
-
-2. **Kit includes (HTML `<head>`).** After `kit.css`:
-   ```html
-   <link rel="stylesheet" href="../kit/window-chrome.css" />
-   ```
-   and inside the tool's module script (or a new `<script type="module">`):
-   ```js
-   import "../kit/window-chrome.js";
-   ```
-
-3. **Mark the title bar.** Put `data-window-bar` on the element that should be
-   the draggable bar — almost always the existing top toolbar/header. The
-   module turns it into a drag region, injects the `.window-close` dot as its
-   first child, and tints it via `--titlebar-tint`. Buttons inside still click.
-   Remove any hand-rolled close button, Cmd+W handler, or `data-tauri-drag-region`
-   you may have added before — the module owns all of that now.
-
-4. **Move the background off `html`/`body`.** This is the step every migration
-   needs and the easiest to forget (see the rounded-corners gotcha above). Find
-   where the tool paints its window background — usually `body { background: … }`
-   — and:
-   - change `body` (and `html` if set) to `background: transparent;`
-   - give the opaque fill to the content row(s) that fill the body instead
-     (Code Editor moved it to `#main`). Every region of the window must be
-     covered by an opaque child, or the desktop will show through.
-   - confirm `body` still has `overflow: hidden` (window-chrome.css sets the
-     `border-radius`; the clip is what rounds the children).
-
-5. **Drop now-dead local CSS.** Remove any local `body`/toolbar rules that
-   window-chrome.css now provides (corner radius, bar background, the old
-   `.window-close`/titlebar styles). Keep tool-specific layout (flex, padding,
-   borders) on the bar.
-
-6. **Tint source.** If the tool only needs the launch color, you're done —
-   `?color=` is applied by the module. If it retints at runtime (like the
-   editor per open file), set `document.documentElement.style
-   .setProperty("--titlebar-tint", hex)` whenever the color changes.
-
-7. **Test in the running app** (reload the window for HTML/CSS; restart
-   `npm run tauri dev` for the Rust change): no traffic lights, draggable bar,
-   working close dot + Cmd+W, rounded corners with no black edge, and the tint
-   matches the project.
+`allow-close`, `allow-minimize`) are already granted to all `tool-*` windows
+in `src-tauri/capabilities/tools.json`.
 
 ### Color / tint
 
