@@ -301,10 +301,27 @@
     .task .lead {
       flex: 0 0 auto;
       display: flex;
-      align-items: center;
-      gap: 5px;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
       font-size: 12px;
       color: var(--text-muted);
+    }
+
+    .task .lead-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .task .notify-at {
+      font-size: 11px;
+      color: var(--text-muted);
+      opacity: 0.7;
+    }
+
+    .task .notify-at:empty {
+      display: none;
     }
 
     .task .lead input {
@@ -592,18 +609,28 @@ border: 1 px solid var(--hairline);
         leadMinutes: eta + buffer,
         reason: `${eta} min ${mode} + ${buffer} min buffer`,
         transitKey: key,
+        // A fresh transit estimate is authoritative again — drop any stale
+        // manual-lead override left over from a previous (different) address.
+        leadEdited: false,
       };
     }
 
-    async function applyTransit(tasks) {
+    // Estimate travel time for in-person Tasks. Runs the queries sequentially
+    // (geocoding is slow) and calls onUpdate after each task it changes so the
+    // caller can re-render progressively. Meant to run in the background.
+    async function applyTransit(tasks, onUpdate) {
       if (!config.origin) return;
       const buffer = config.buffer || 0;
       for (const t of tasks) {
         const isInPerson = t.inPerson || (t.location && !t.online);
-        if (!isInPerson || !t.location || t.notify?.leadEdited) continue;
+        if (!isInPerson || !t.location) continue;
         // Trip identity (origin/mode/destination) — not the buffer, so a
         // buffer change doesn't force a re-query.
         const key = `${config.origin}|${config.mode}|${t.location}`;
+        // Respect a hand-edited lead ONLY while it's still for this exact trip.
+        // If the destination changed (key mismatch), the override is stale —
+        // recompute against the new address.
+        if (t.notify?.leadEdited && t.notify?.transitKey === key) continue;
         try {
           // Same trip with a stored ETA: if only the buffer changed, re-add it
           // locally (no geocoding/network). A missing etaMinutes (Task cached
@@ -616,6 +643,7 @@ border: 1 px solid var(--hairline);
                 id: t.id,
                 data: JSON.stringify(t)
               });
+              if (onUpdate) await onUpdate();
             }
             continue;
           }
@@ -640,6 +668,7 @@ border: 1 px solid var(--hairline);
             id: t.id,
             data: JSON.stringify(t)
           });
+          if (onUpdate) await onUpdate();
         } catch (e) {
           console.warn("transit failed for", t.title, e);
         }
@@ -806,11 +835,29 @@ border: 1 px solid var(--hairline);
 
       // Editable lead time.
       const lead = el("div", "lead");
+      const leadRow = el("div", "lead-row");
       const input = el("input", "field");
       input.type = "number";
       input.min = "0";
       input.value = t.notify?.leadMinutes ?? DEFAULT_LEAD;
       input.addEventListener("click", (e) => e.stopPropagation());
+
+      // For in-person events, show the actual notification time under the lead
+      // (start − lead), so it's clear when the "leave now" alert will fire.
+      const isInPerson = t.inPerson || (t.location && !t.online);
+      const notifyAt = el("div", "notify-at");
+      const updateNotifyAt = (mins) => {
+        if (!isInPerson || !start) {
+          notifyAt.textContent = "";
+          return;
+        }
+        const at = new Date(start.getTime() - mins * 60000);
+        notifyAt.textContent = timeFmt.format(at);
+      };
+      updateNotifyAt(t.notify?.leadMinutes ?? DEFAULT_LEAD);
+
+      input.addEventListener("input", () =>
+        updateNotifyAt(Math.max(0, parseInt(input.value, 10) || 0)));
       input.addEventListener("change", async () => {
         const v = Math.max(0, parseInt(input.value, 10) || 0);
         t.notify = {
@@ -818,15 +865,18 @@ border: 1 px solid var(--hairline);
           leadMinutes: v,
           leadEdited: true
         };
+        updateNotifyAt(v);
         await invoke("save_task", {
           id: t.id,
           data: JSON.stringify(t)
         });
       });
-      lead.appendChild(input);
-      lead.appendChild(el("span", "", {
+      leadRow.appendChild(input);
+      leadRow.appendChild(el("span", "", {
         textContent: "min before"
       }));
+      lead.appendChild(leadRow);
+      lead.appendChild(notifyAt);
       row.appendChild(lead);
       return row;
     }
@@ -882,13 +932,22 @@ border: 1 px solid var(--hairline);
         if (!ttl || !date.value || !time.value) return;
         const raw = link.value.trim();
         const isUrl = /^https?:\/\//i.test(raw);
+        const newLocation = isUrl ? "" : raw;
+        // A changed destination invalidates any cached travel estimate — drop
+        // the transit fields so the old location's ETA/lead doesn't linger.
+        let notify = t.notify;
+        if (newLocation !== (t.location || "")) {
+          const { etaMinutes, transitKey, reason, leadEdited, ...rest } = t.notify || {};
+          notify = rest;
+        }
         const updated = {
           ...t,
           title: ttl,
           start: new Date(`${date.value}T${time.value}`).toISOString(),
-          location: isUrl ? "" : raw,
+          location: newLocation,
           online: isUrl,
           inPerson: !!raw && !isUrl,
+          notify,
           userEdited: true,
         };
         updated.actions = isUrl ? [{
@@ -915,10 +974,28 @@ border: 1 px solid var(--hairline);
       try {
         const stored = await loadTasks();
         await syncCalendar(stored);
-        await applyTransit(await loadTasks());
-        render(await loadTasks());
+        render(await loadTasks()); // show tasks immediately
       } finally {
         busy = false;
+      }
+      // Travel estimates geocode + hit the network, so run them in the
+      // background and re-render as each resolves — the list never blocks on it.
+      runTransit();
+    }
+
+    let transitBusy = false;
+    async function runTransit() {
+      if (!hasTauri || transitBusy) return;
+      transitBusy = true;
+      try {
+        await applyTransit(await loadTasks(), async () => {
+          // Don't stomp a card the user is mid-edit on (flipped to the editor).
+          if (!document.querySelector(".flip.flipped")) render(await loadTasks());
+        });
+      } catch (e) {
+        console.warn("transit pass failed", e);
+      } finally {
+        transitBusy = false;
       }
     }
 
