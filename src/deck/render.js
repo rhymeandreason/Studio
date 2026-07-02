@@ -68,8 +68,18 @@ export function renderSlide(slide, theme, resolved = {}) {
 
   const fit = slide.imageFit || "cover";
   const bodyCls = slide.listStyle === "cards" ? "deck-body cards" : "deck-body";
+  // A resolved value can be a URL (data:/https:) or inline SVG markup — the
+  // Slides tool resolves diagram-artifact refs to a live SVG render, which is
+  // inlined so it inherits page fonts and serializes verbatim into exports.
+  const isSvg = (v) => typeof v === "string" && /^\s*<svg/i.test(v);
+  // Unlike photos, a diagram shouldn't be cropped — default to contain unless
+  // the slide explicitly asks for cover.
+  const svgFit = slide.imageFit || "contain";
+  const svgBox = (markup, cls = "") =>
+    `<div class="svg-media ${cls}">${markup.replace(/<svg/i, `<svg preserveAspectRatio="xMidYMid ${svgFit === "cover" ? "slice" : "meet"}"`)}</div>`;
   const img = (ref, ph) => {
     const url = resolved[ref];
+    if (isSvg(url)) return svgBox(url);
     return url ? `<img src="${url}" style="object-fit:${fit}">` : `<div class="img-placeholder">${ph}</div>`;
   };
 
@@ -81,7 +91,8 @@ export function renderSlide(slide, theme, resolved = {}) {
       inner = `<div class="slide__inner l-title"><h1 data-slot="title">${esc(slide.title)}</h1>${slide.subtitle?`<div class="subtitle" data-slot="subtitle">${esc(slide.subtitle)}</div>`:""}</div>`; break;
     case "section":
       { const url = resolved[slide.image];
-        const bg = url ? `<img class="section-bg" src="${url}"><div class="section-scrim"></div>` : "";
+        const media = isSvg(url) ? svgBox(url, "section-bg") : `<img class="section-bg" src="${url}">`;
+        const bg = url ? `${media}<div class="section-scrim"></div>` : "";
         inner = `<div class="slide__inner l-section${url?' has-bg':''}">${bg}<h1 data-slot="title">${esc(slide.title)}</h1>${slide.caption?`<div class="section-cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div>`; }
       break;
     case "title-body":
@@ -96,7 +107,10 @@ export function renderSlide(slide, theme, resolved = {}) {
       inner = `<div class="slide__inner l-quote"><blockquote data-slot="quote">${esc(slide.quote)}</blockquote>${slide.attribution?`<div class="attr">— <span data-slot="attribution">${esc(slide.attribution)}</span></div>`:""}</div>`; break;
     case "image-full":
       { const url = resolved[slide.image];
-        inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${url?`<img class="full-img" src="${url}" style="object-fit:${fit}">`:`<div class="img-placeholder" style="height:100%">No image</div>`}${slide.caption?`<div class="cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div>`; }
+        const media = isSvg(url) ? svgBox(url, "full-svg")
+          : url ? `<img class="full-img" src="${url}" style="object-fit:${fit}">`
+          : `<div class="img-placeholder" style="height:100%">No image</div>`;
+        inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${media}${slide.caption?`<div class="cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div>`; }
       break;
     case "image-text":
       inner = `<div class="slide__inner l-image-text"><div class="split"><div class="split-media">${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}${slide.caption?`<div class="split-cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div><div class="split-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="body">${md(slide.body)}</div></div></div></div>`; break;

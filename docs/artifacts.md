@@ -62,6 +62,11 @@ expose a headless core later; read/write is enough so far.
   in `src/deck/`. A deck embeds its `theme` inline; themes can also be saved as
   their own reusable `theme` artifacts. Full detail — layouts, per-slide options,
   color schemes, presets-as-files, editing UX, export — in **[slides.md](slides.md)**.
+- **diagram kind** — the Diagram tool (`src/tools/diagram.html`) on a shared SVG
+  renderer (`src/diagram/render.js`): templated concept diagrams (flow, compare,
+  2×2 matrix, venn, timeline, hierarchy) themed with the same theme shape as
+  decks, drag-nudgeable, exportable as SVG, and embeddable live in slides via
+  image slots. Detail in **[diagrams.md](diagrams.md)**.
 - **Studio Claude Artifacts/Code toggle** — picks Claude's cwd (project folder vs
   git repo); defaults to the project folder so artifacts land where the panel
   reads them. See [claude-window.md](claude-window.md).

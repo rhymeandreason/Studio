@@ -44,6 +44,9 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
   `code-preview.html`. [docs/code-editor.md](docs/code-editor.md)
 - **Slides** (presentation builder: `presentation` + `theme` artifacts, shared
   renderer in `src/deck/`, Slides + Theme editor tools) — [docs/slides.md](docs/slides.md)
+- **Diagrams** (`diagram` artifacts: templated concept diagrams — flow, compare,
+  2×2, venn, timeline, hierarchy — shared SVG renderer in `src/diagram/`,
+  embeddable live in slides) — [docs/diagrams.md](docs/diagrams.md)
 - **Interaction model** (shared selection + keyboard) — `selection.js` /
   `keymap.js`. [docs/interaction-spec.md](docs/interaction-spec.md)
 

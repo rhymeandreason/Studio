@@ -1,6 +1,6 @@
 ---
 name: studio-artifacts
-description: Create or edit Studio design artifacts — brand kits (font pairings + color palettes), slide decks/presentations, and other design specs stored as JSON under a project's artifacts/ folder. Use when asked to generate, brainstorm, or modify brand kits, palettes, presentations/slides, or design directions for a Studio project.
+description: Create or edit Studio design artifacts — brand kits (font pairings + color palettes), slide decks/presentations, diagrams (flow, compare, 2x2 matrix, venn, timeline, hierarchy), and other design specs stored as JSON under a project's artifacts/ folder. Use when asked to generate, brainstorm, or modify brand kits, palettes, presentations/slides, diagrams, or design directions for a Studio project.
 ---
 
 # Studio design artifacts
@@ -156,3 +156,70 @@ tool's Theme tab lists saved themes alongside the built-in presets. Shape:
 Same shape as a presentation's `theme` (minus `kind`/`name`/`savedAt`), so a
 theme file's fields can be copied straight into a deck's `theme`. Make a set of
 themes genuinely distinct (mood, type personality, color temperature).
+
+### diagram — a concept diagram (flow, compare, matrix, venn, timeline, hierarchy)
+- **Path:** `artifacts/diagram/<slug>.json`
+
+Edited in the **Diagram** tool; the Artifacts panel previews it live. A diagram
+renders as a themed 1200×675 SVG. It can also be placed on a slide: set any
+image slot to the diagram's project-relative path
+(e.g. `"image": "artifacts/diagram/design-process.json"`) — the Slides tool
+renders it live and **re-themes it with the deck's theme** so it always matches.
+
+```json
+{
+  "kind": "diagram",
+  "version": 1,
+  "name": "Design process",
+  "title": "The double diamond",
+  "template": "flow",
+  "theme": {
+    "fonts": {
+      "heading": { "family": "Fraunces", "weight": 600 },
+      "body": { "family": "Newsreader", "weight": 400 }
+    },
+    "colors": { "bg": "#f7f5f0", "surface": "#efece5", "text": "#2a2a28", "muted": "#6e6154", "accent": "#a85a4a", "accent2": "#3f5e5a" }
+  },
+  "colorScheme": "light",
+  "data": {
+    "direction": "right",
+    "nodes": [
+      { "id": "a", "label": "Research", "detail": "Interviews, field notes" },
+      { "id": "b", "label": "Synthesize", "detail": "Patterns & insights" },
+      { "id": "c", "label": "Prototype" }
+    ],
+    "links": [
+      { "from": "a", "to": "b" },
+      { "from": "b", "to": "c" },
+      { "from": "c", "to": "b", "label": "iterate" }
+    ]
+  },
+  "savedAt": "2026-07-02T18:00:00Z"
+}
+```
+
+Rules:
+- `kind` must be exactly `diagram`. `theme` has the same contract as a
+  presentation's theme (fonts + 6 colors). `title` is an optional heading drawn
+  on the canvas; `colorScheme` is the same `light`/`soft`/`dark`/`accent`/
+  `accent2` derivation slides use.
+- `template` picks the layout, and `data` holds that template's content:
+  - `flow` → `data.direction` (`"right"` default or `"down"`),
+    `data.nodes: [{ id, label, detail? }]`,
+    `data.links: [{ from, to, label? }]` (node ids; back-links draw as return
+    arrows — good for "iterate" loops). Layout is automatic (layered by links).
+  - `compare` → `data.items: [{ title, points: [strings] }]` — 2–4 panels;
+    exactly 2 gets a "vs" badge.
+  - `matrix` → `data.x: { low, high }`, `data.y: { low, high }` (axis end
+    labels), `data.items: [{ label, x, y }]` with `x`/`y` as 0–1 fractions
+    (0,0 = bottom-left).
+  - `venn` → `data.sets: [{ label }]` (2 or 3), optional `data.overlapLabel`.
+  - `timeline` → `data.events: [{ time?, label, detail? }]`, drawn left to
+    right, labels alternating above/below the line.
+  - `hierarchy` → `data.root: { label, children: [{ label, children? }] }` —
+    a tree, root on top.
+- Optional `offsets` maps element ids to `{ dx, dy }` pixel nudges the designer
+  made by dragging — **preserve it when editing**, don't generate it yourself.
+- Keep labels short (2–4 words) and put elaboration in `detail`/`points`;
+  diagrams are for slides and should read at a glance.
+- `savedAt` = current ISO 8601 timestamp; `version` = 1.

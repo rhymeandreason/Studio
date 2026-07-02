@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagram</title>
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<script type="module" src="../kit/components.js"></script>
+<style>
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* Two columns: stage · inspector (mirrors the Slides tool, minus the reel). */
+  .stage-wrap { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .stage-bar { padding: 12px 14px; border-bottom: 1px solid var(--hairline); display: flex; align-items: center; gap: 8px; }
+  .stage-bar input.title {
+    border: none; background: transparent; color: var(--text);
+    font-family: var(--serif); font-size: 13px; flex: 1 1 auto; min-width: 0;
+  }
+  .stage-scroll { flex: 1 1 auto; overflow: auto; display: grid; place-items: center; padding: 28px; position: relative; }
+  /* Fixed 1200×675 diagram canvas, scaled to fit. */
+  .canvas {
+    width: 1200px; height: 675px;
+    transform-origin: center;
+    box-shadow: 0 6px 30px rgba(0,0,0,.18);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .canvas svg { width: 100%; height: 100%; display: block; }
+  .canvas [data-el] { cursor: grab; }
+  .canvas [data-el]:hover { filter: brightness(.985); }
+  body.nudging, body.nudging .canvas [data-el] { cursor: grabbing; }
+  .status { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-height: 14px; padding: 0 14px 12px; }
+
+  /* In-place label editor (dblclick a shape). */
+  .label-edit {
+    position: fixed; z-index: 40; box-sizing: border-box;
+    border: 1.5px solid var(--accent); border-radius: 6px;
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans); text-align: center;
+    outline: none; box-shadow: 0 4px 18px rgba(0,0,0,.2);
+  }
+
+  .inspector { flex: 0 0 300px; border-left: 1px solid var(--hairline); display: flex; flex-direction: column; overflow-y: auto; }
+  .insp-tabs { display: flex; border-bottom: 1px solid var(--hairline); position: sticky; top: 0; background: var(--bg); z-index: 1; padding-top: 16px; }
+  .insp-tab { flex: 1; padding: 11px 0; border: none; background: transparent; cursor: pointer; font-family: var(--sans); font-size: 12px; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .insp-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .insp-sec { padding: 14px; border-bottom: 1px solid var(--hairline); display: flex; flex-direction: column; gap: 10px; }
+  .insp-sec h3 { font-family: var(--serif); font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+  .field-label { font-size: 11px; color: var(--text-soft); margin-bottom: 3px; display: block; letter-spacing: .05em; }
+  input, textarea, select, .field { font-family: system-ui, sans-serif; }
+  .insp-sec textarea.field { min-height: 64px; resize: vertical; line-height: 1.4; }
+  .hint { font-size: 11px; color: var(--text-soft); line-height: 1.45; }
+
+  .tpl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 12px; }
+  .tpl-cell { display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
+  .tpl-opt { aspect-ratio: 16 / 9; border: 1px solid var(--hairline-strong); border-radius: var(--radius-sm); background: var(--elevated); overflow: hidden; }
+  .tpl-cell.active .tpl-opt { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .tpl-opt svg { width: 100%; height: 100%; display: block; }
+  .tpl-cell__name { text-align: center; font-size: 10px; color: var(--text-muted); font-family: system-ui; }
+  .tpl-cell.active .tpl-cell__name { color: var(--accent); }
+
+  .scheme-chips { display: flex; gap: 8px; }
+  .scheme-chip { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--hairline-strong); cursor: pointer; display: grid; place-items: center; padding: 0; }
+  .scheme-chip span { font-family: var(--serif); font-size: 15px; line-height: 1; }
+  .scheme-chip.active { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Item-list rows (steps, events, links…). */
+  .item-row { display: flex; gap: 6px; align-items: center; }
+  .item-row .field { min-width: 0; height: 30px; padding: 0 8px; font-size: 12px; }
+  .item-row .grow { flex: 1 1 auto; }
+  .item-row .half { flex: 1 1 50%; }
+  .item-row select.field { flex: 1 1 40%; padding-right: 20px; }
+  .item-row .arrow { color: var(--text-soft); font-size: 12px; flex: 0 0 auto; }
+  .item-rm { flex: 0 0 auto; border: none; background: transparent; color: var(--text-soft); cursor: pointer; padding: 2px; border-radius: 4px; display: grid; place-items: center; }
+  .item-rm:hover { color: var(--accent); background: var(--elevated); }
+  .item-block { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--hairline); border-radius: var(--radius-sm); }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; min-width: 0; }
+
+  /* Theme cards (chips + font names — lighter than the Slides preview cards). */
+  .theme-cards { display: flex; flex-direction: column; gap: 8px; }
+  .theme-card { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: var(--radius-sm); cursor: pointer; }
+  .theme-card:hover { border-color: var(--hairline-strong); }
+  .theme-card.active { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .theme-card__ag { width: 42px; height: 34px; border-radius: 5px; border: 1px solid var(--hairline); display: grid; place-items: center; font-size: 17px; flex: 0 0 auto; }
+  .theme-card__meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .theme-card__name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .theme-card__chips { display: flex; gap: 3px; }
+  .theme-card__chips span { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
+  .theme-card__edit { border: none; background: transparent; color: var(--text-soft); cursor: pointer; padding: 4px; border-radius: 5px; display: grid; place-items: center; }
+  .theme-card__edit:hover { color: var(--accent); background: var(--elevated); }
+</style>
+</head>
+<body>
+  <div class="stage-wrap">
+    <div class="stage-bar">
+      <input class="title" id="dg-name" value="Untitled diagram" spellcheck="false" />
+      <button class="btn btn-ghost" id="copy-svg"><span class="mi mi-sm">content_copy</span> Copy SVG</button>
+      <button class="btn btn-ghost" id="export-svg"><span class="mi mi-sm">download</span> SVG</button>
+      <button class="btn btn-secondary" id="save-as">Save as…</button>
+    </div>
+    <div class="stage-scroll">
+      <div class="canvas" id="canvas"></div>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="inspector" id="inspector"></div>
+
+  <script type="module">
+    import { renderDiagram, diagramSvgText, matrixInset, TEMPLATES, TEMPLATE_DEFAULTS, DIAGRAM_DEFAULT_THEME, DW, DH } from "../diagram/render.js";
+    import { colorScheme, SCHEMES, loadPresets } from "../deck/render.js";
+    const invoke = window.__TAURI__?.core?.invoke;
+
+    if (window.__TAURI__) {
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const { LogicalSize } = window.__TAURI__.dpi;
+      getCurrentWindow().setSize(new LogicalSize(1280, 760));
+    }
+
+    // ---------- State ----------
+    let state = {
+      name: "Untitled diagram",
+      title: "",
+      template: "flow",
+      theme: structuredClone(DIAGRAM_DEFAULT_THEME),
+      colorScheme: "light",
+      transparentBg: false,
+      data: structuredClone(TEMPLATE_DEFAULTS["flow"]),
+      offsets: {},
+    };
+    // Switching templates parks the outgoing template's data/offsets here so
+    // nothing is lost while exploring; only the active pair is saved.
+    const parked = {};
+    let inspectorTab = "design";
+    let selectedId = null;
+    let activePath = null;
+    let projectRoot = null;
+    let PRESETS = [];
+
+    // ---------- Fonts (lazy Google Fonts) ----------
+    const loadedFonts = new Set();
+    function loadFont(family, weight) {
+      if (!family) return;
+      const key = `${family}@${weight || ""}`;
+      if (loadedFonts.has(key)) return; loadedFonts.add(key);
+      const l = document.createElement("link");
+      l.rel = "stylesheet";
+      l.href = "https://fonts.googleapis.com/css2?family=" + family.replace(/ /g, "+") +
+               (weight ? `:wght@${weight}` : "") + "&display=swap";
+      document.head.appendChild(l);
+    }
+    function loadThemeFonts(t) {
+      loadFont(t.fonts.heading.family, t.fonts.heading.weight);
+      loadFont(t.fonts.body.family, t.fonts.body.weight);
+    }
+
+    // ---------- Stage ----------
+    const canvas = document.getElementById("canvas");
+    const statusEl = document.getElementById("status");
+    let scale = 1;
+
+    function renderStage() {
+      canvas.innerHTML = "";
+      canvas.appendChild(renderDiagram(state));
+      drawSelection();
+      fitCanvas();
+    }
+    function fitCanvas() {
+      const wrap = canvas.parentElement;
+      scale = Math.min((wrap.clientWidth - 56) / DW, (wrap.clientHeight - 56) / DH, 1);
+      canvas.style.transform = `scale(${scale})`;
+      canvas.style.margin = `${(DH * scale - DH) / 2}px ${(DW * scale - DW) / 2}px`;
+    }
+    window.addEventListener("resize", fitCanvas);
+
+    // Dashed ring around the selected element.
+    function drawSelection() {
+      const svg = canvas.querySelector("svg");
+      if (!svg || !selectedId) return;
+      const el = svg.querySelector(`[data-el="${CSS.escape(selectedId)}"]`);
+      if (!el) { selectedId = null; return; }
+      const b = el.getBBox();
+      const m = el.getAttribute("transform")?.match(/translate\(([-\d.]+)[ ,]([-\d.]+)\)/);
+      const dx = m ? +m[1] : 0, dy = m ? +m[2] : 0;
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      ring.setAttribute("x", b.x + dx - 6); ring.setAttribute("y", b.y + dy - 6);
+      ring.setAttribute("width", b.width + 12); ring.setAttribute("height", b.height + 12);
+      ring.setAttribute("rx", 10);
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", colorScheme(state.theme.colors, state.colorScheme).accent);
+      ring.setAttribute("stroke-dasharray", "5 4");
+      ring.setAttribute("stroke-width", "1.5");
+      ring.style.pointerEvents = "none";
+      svg.appendChild(ring);
+    }
+
+    // ---------- Canvas interactions: select · drag-nudge · dblclick-edit ------
+    canvas.addEventListener("pointerdown", (e) => {
+      const g = e.target.closest("[data-el]");
+      if (!g) { selectedId = null; renderStage(); return; }
+      const id = g.dataset.el;
+      selectedId = id;
+      renderStage();
+      startNudge(e, id);
+    });
+
+    function startNudge(e, id) {
+      const startX = e.clientX, startY = e.clientY;
+      const isMatrixItem = state.template === "matrix" && id.startsWith("i:");
+      const inset = isMatrixItem ? matrixInset(state) : null;
+      const item = isMatrixItem ? state.data.items[+id.slice(2)] : null;
+      const start = isMatrixItem
+        ? { x: item?.x ?? 0.5, y: item?.y ?? 0.5 }
+        : { ...(state.offsets[id] || { dx: 0, dy: 0 }) };
+      let moved = false;
+      const onMove = (ev) => {
+        const dx = (ev.clientX - startX) / scale, dy = (ev.clientY - startY) / scale;
+        if (!moved) { if (Math.hypot(dx * scale, dy * scale) < 4) return; moved = true; document.body.classList.add("nudging"); }
+        if (isMatrixItem && item) {
+          // Matrix pills are positioned semantically — dragging edits x/y.
+          item.x = Math.min(1, Math.max(0, start.x + dx / inset.w));
+          item.y = Math.min(1, Math.max(0, start.y - dy / inset.h));
+        } else {
+          state.offsets[id] = { dx: Math.round(start.dx + dx), dy: Math.round(start.dy + dy) };
+        }
+        renderStage();
+      };
+      const onUp = () => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        document.body.classList.remove("nudging");
+        if (moved) {
+          // A zero nudge is no nudge.
+          const o = state.offsets[id];
+          if (o && !o.dx && !o.dy) delete state.offsets[id];
+          renderInspector(); scheduleSave();
+        }
+      };
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+    }
+
+    // Where each element's editable label lives, per element-id prefix.
+    function labelBinding(id) {
+      const d = state.data;
+      if (id.startsWith("n:")) { const n = (d.nodes || []).find(x => String(x.id) === id.slice(2)); return n && { get: () => n.label, set: v => n.label = v }; }
+      if (id.startsWith("c:")) { const it = d.items?.[+id.slice(2)]; return it && { get: () => it.title, set: v => it.title = v }; }
+      if (id.startsWith("i:")) { const it = d.items?.[+id.slice(2)]; return it && { get: () => it.label, set: v => it.label = v }; }
+      if (id === "s:overlap") return { get: () => d.overlapLabel, set: v => d.overlapLabel = v };
+      if (id.startsWith("s:")) { const s = d.sets?.[+id.slice(2)]; return s && { get: () => s.label, set: v => s.label = v }; }
+      if (id.startsWith("e:")) { const ev = d.events?.[+id.slice(2)]; return ev && { get: () => ev.label, set: v => ev.label = v }; }
+      if (id.startsWith("h:")) { const n = treeNodeAt(id.slice(2)); return n && { get: () => n.label, set: v => n.label = v }; }
+      return null;
+    }
+    function treeNodeAt(path) {
+      const parts = path.split(".").slice(1);   // leading "0" = the root itself
+      let n = state.data.root;
+      for (const p of parts) n = n?.children?.[+p];
+      return n;
+    }
+
+    canvas.addEventListener("dblclick", (e) => {
+      const g = e.target.closest("[data-el]");
+      if (!g) return;
+      const bind = labelBinding(g.dataset.el);
+      if (!bind) return;
+      const r = g.getBoundingClientRect();
+      const input = document.createElement("input");
+      input.className = "label-edit";
+      input.value = bind.get() || "";
+      input.style.left = r.left + "px";
+      input.style.top = (r.top + r.height / 2 - 17) + "px";
+      input.style.width = Math.max(120, r.width) + "px";
+      input.style.height = "34px";
+      input.style.fontSize = "14px";
+      document.body.appendChild(input);
+      input.focus(); input.select();
+      let done = false;
+      const commit = (apply) => {
+        if (done) return; done = true;
+        if (apply) { bind.set(input.value); renderAll(); }
+        input.remove();
+      };
+      input.addEventListener("blur", () => commit(true));
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") { ev.preventDefault(); commit(true); }
+        if (ev.key === "Escape") { ev.preventDefault(); commit(false); }
+      });
+    });
+
+    // Delete the selected element (Backspace/Delete outside a field).
+    window.addEventListener("keydown", (e) => {
+      if (e.key !== "Backspace" && e.key !== "Delete") return;
+      const t = e.target;
+      if (t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
+      if (!selectedId) return;
+      e.preventDefault();
+      deleteElement(selectedId);
+    });
+    function deleteElement(id) {
+      const d = state.data;
+      if (id.startsWith("n:")) {
+        const nid = id.slice(2);
+        d.nodes = (d.nodes || []).filter(n => String(n.id) !== nid);
+        d.links = (d.links || []).filter(l => String(l.from) !== nid && String(l.to) !== nid);
+      } else if (id.startsWith("c:") || id.startsWith("i:")) {
+        d.items?.splice(+id.slice(2), 1);
+      } else if (id === "s:overlap") { delete d.overlapLabel; }
+      else if (id.startsWith("s:")) { d.sets?.splice(+id.slice(2), 1); }
+      else if (id.startsWith("e:")) { d.events?.splice(+id.slice(2), 1); }
+      else if (id.startsWith("h:")) {
+        const parts = id.slice(2).split(".").slice(1);
+        if (!parts.length) return;   // never delete the root
+        const last = +parts.pop();
+        let n = d.root;
+        for (const p of parts) n = n?.children?.[+p];
+        n?.children?.splice(last, 1);
+      }
+      delete state.offsets[id];
+      selectedId = null;
+      renderAll();
+    }
+
+    // ---------- Inspector ----------
+    const inspector = document.getElementById("inspector");
+    function sec(title) { const s = document.createElement("div"); s.className = "insp-sec"; const h = document.createElement("h3"); h.textContent = title; s.appendChild(h); return s; }
+    function fieldRow(label, value, oninput, ph) {
+      const wrap = document.createElement("div");
+      const lab = document.createElement("label"); lab.className = "field-label"; lab.textContent = label;
+      const inp = document.createElement("input"); inp.className = "field"; inp.value = value || "";
+      if (ph) inp.placeholder = ph;
+      inp.oninput = () => { oninput(inp.value); scheduleRender(); };
+      wrap.append(lab, inp);
+      return wrap;
+    }
+    function rmBtn(onclick) {
+      const b = document.createElement("button");
+      b.className = "item-rm"; b.title = "Remove";
+      b.innerHTML = `<span class="mi mi-sm">close</span>`;
+      b.onclick = onclick;
+      return b;
+    }
+    function addBtn(label, onclick) {
+      const b = document.createElement("button");
+      b.className = "btn btn-secondary";
+      b.innerHTML = `<span class="mi mi-sm">add</span> ${label}`;
+      b.onclick = onclick;
+      return b;
+    }
+
+    function renderInspector() {
+      inspector.innerHTML = "";
+      const tabs = document.createElement("div"); tabs.className = "insp-tabs";
+      for (const [id, label] of [["design", "Design"], ["theme", "Theme"]]) {
+        const b = document.createElement("button");
+        b.className = "insp-tab" + (inspectorTab === id ? " active" : "");
+        b.textContent = label;
+        b.onclick = () => { inspectorTab = id; renderInspector(); };
+        tabs.appendChild(b);
+      }
+      inspector.appendChild(tabs);
+      if (inspectorTab === "theme") { inspector.appendChild(themeSection()); return; }
+
+      // Template picker
+      const tplSec = sec("Template");
+      const grid = document.createElement("div"); grid.className = "tpl-grid";
+      for (const [key, def] of Object.entries(TEMPLATES)) {
+        const cell = document.createElement("div");
+        cell.className = "tpl-cell" + (state.template === key ? " active" : "");
+        cell.innerHTML = `<div class="tpl-opt">${tplIcon(key)}</div><div class="tpl-cell__name">${def.name}</div>`;
+        cell.onclick = () => switchTemplate(key);
+        grid.appendChild(cell);
+      }
+      tplSec.appendChild(grid);
+      inspector.appendChild(tplSec);
+
+      // Color scheme
+      const colorSec = sec("Color");
+      const chips = document.createElement("div"); chips.className = "scheme-chips";
+      for (const v of SCHEMES) {
+        const pal = colorScheme(state.theme.colors, v);
+        const chip = document.createElement("button");
+        chip.className = "scheme-chip" + (v === state.colorScheme ? " active" : "");
+        chip.title = v[0].toUpperCase() + v.slice(1);
+        chip.style.background = pal.bg;
+        chip.innerHTML = `<span style="color:${pal.text}">A</span>`;
+        chip.onclick = () => { state.colorScheme = v; renderAll(); };
+        chips.appendChild(chip);
+      }
+      colorSec.appendChild(chips);
+      inspector.appendChild(colorSec);
+
+      // Content — the diagram title + the active template's form.
+      const content = sec("Content");
+      content.appendChild(fieldRow("Title (optional)", state.title, v => state.title = v));
+      CONTENT_FORMS[state.template]?.(content);
+      inspector.appendChild(content);
+
+      // Layout — nudge reset + export background.
+      const layoutSec = sec("Layout");
+      const n = Object.keys(state.offsets).length;
+      const hintEl = document.createElement("div"); hintEl.className = "hint";
+      hintEl.textContent = state.template === "matrix"
+        ? "Drag pills on the canvas to place them. Double-click any shape to rename it."
+        : "Drag shapes on the canvas to nudge them off the template grid. Double-click to rename.";
+      layoutSec.appendChild(hintEl);
+      if (n) {
+        const reset = document.createElement("button");
+        reset.className = "btn btn-secondary";
+        reset.innerHTML = `<span class="mi mi-sm">restart_alt</span> Reset layout (${n} nudge${n === 1 ? "" : "s"})`;
+        reset.onclick = () => { state.offsets = {}; renderAll(); };
+        layoutSec.appendChild(reset);
+      }
+      const tr = document.createElement("label");
+      tr.style.cssText = "display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);cursor:pointer;";
+      tr.innerHTML = `<input type="checkbox" ${state.transparentBg ? "checked" : ""}/> Transparent background on export`;
+      tr.querySelector("input").onchange = (e) => { state.transparentBg = e.target.checked; scheduleSave(); };
+      layoutSec.appendChild(tr);
+      inspector.appendChild(layoutSec);
+    }
+
+    // Park the outgoing template's data so switching back restores it.
+    function switchTemplate(next) {
+      if (next === state.template) return;
+      parked[state.template] = { data: state.data, offsets: state.offsets };
+      const p = parked[next];
+      state.data = p ? p.data : structuredClone(TEMPLATE_DEFAULTS[next]);
+      state.offsets = p ? p.offsets : {};
+      state.template = next;
+      selectedId = null;
+      renderAll();
+    }
+
+    // ---------- Per-template content forms ----------
+    const CONTENT_FORMS = {
+      "flow": (root) => {
+        const d = state.data;
+        d.nodes ||= []; d.links ||= [];
+        const dir = document.createElement("div");
+        dir.innerHTML = `<label class="field-label">Direction</label>`;
+        const sel = document.createElement("select"); sel.className = "field";
+        sel.innerHTML = `<option value="right">Left to right</option><option value="down">Top to bottom</option>`;
+        sel.value = d.direction === "down" ? "down" : "right";
+        sel.onchange = () => { d.direction = sel.value; renderAll(); };
+        dir.appendChild(sel); root.appendChild(dir);
+
+        root.appendChild(Object.assign(document.createElement("label"), { className: "field-label", textContent: "Steps" }));
+        d.nodes.forEach((node, i) => {
+          const row = document.createElement("div"); row.className = "item-row";
+          const lab = document.createElement("input"); lab.className = "field grow"; lab.value = node.label || ""; lab.placeholder = "Label";
+          lab.oninput = () => { node.label = lab.value; scheduleRender(); };
+          const det = document.createElement("input"); det.className = "field grow"; det.value = node.detail || ""; det.placeholder = "Detail";
+          det.oninput = () => { node.detail = det.value; scheduleRender(); };
+          row.append(lab, det, rmBtn(() => deleteElement("n:" + node.id)));
+          root.appendChild(row);
+        });
+        root.appendChild(addBtn("Step", () => {
+          let k = d.nodes.length + 1, id;
+          do { id = "s" + k++; } while (d.nodes.some(n => String(n.id) === id));
+          const last = d.nodes[d.nodes.length - 1];
+          d.nodes.push({ id, label: "Step " + (d.nodes.length + 1) });
+          if (last) d.links.push({ from: last.id, to: id });
+          renderAll();
+        }));
+
+        root.appendChild(Object.assign(document.createElement("label"), { className: "field-label", textContent: "Arrows" }));
+        const nodeOpts = d.nodes.map(n => `<option value="${String(n.id).replace(/"/g, "&quot;")}">${(n.label || n.id)}</option>`).join("");
+        d.links.forEach((link, i) => {
+          const row = document.createElement("div"); row.className = "item-row";
+          const from = document.createElement("select"); from.className = "field"; from.innerHTML = nodeOpts; from.value = String(link.from);
+          const to = document.createElement("select"); to.className = "field"; to.innerHTML = nodeOpts; to.value = String(link.to);
+          from.onchange = () => { link.from = from.value; renderAll(); };
+          to.onchange = () => { link.to = to.value; renderAll(); };
+          const arr = document.createElement("span"); arr.className = "arrow"; arr.textContent = "→";
+          const lab = document.createElement("input"); lab.className = "field"; lab.style.flex = "1 1 34%"; lab.value = link.label || ""; lab.placeholder = "label";
+          lab.oninput = () => { link.label = lab.value; scheduleRender(); };
+          row.append(from, arr, to, lab, rmBtn(() => { d.links.splice(i, 1); renderAll(); }));
+          root.appendChild(row);
+        });
+        const btns = document.createElement("div"); btns.className = "row";
+        btns.appendChild(addBtn("Arrow", () => {
+          if (d.nodes.length < 2) return;
+          d.links.push({ from: d.nodes[0].id, to: d.nodes[1].id });
+          renderAll();
+        }));
+        const chain = document.createElement("button");
+        chain.className = "btn btn-secondary"; chain.textContent = "Chain steps";
+        chain.title = "Replace all arrows with a simple step 1 → 2 → 3 chain";
+        chain.onclick = () => {
+          d.links = d.nodes.slice(1).map((n, i) => ({ from: d.nodes[i].id, to: n.id }));
+          renderAll();
+        };
+        btns.appendChild(chain);
+        root.appendChild(btns);
+      },
+
+      "compare": (root) => {
+        const d = state.data;
+        d.items ||= [];
+        d.items.forEach((it, i) => {
+          const block = document.createElement("div"); block.className = "item-block";
+          const head = document.createElement("div"); head.className = "item-row";
+          const title = document.createElement("input"); title.className = "field grow"; title.value = it.title || ""; title.placeholder = "Title";
+          title.oninput = () => { it.title = title.value; scheduleRender(); };
+          head.append(title, rmBtn(() => { d.items.splice(i, 1); renderAll(); }));
+          const points = document.createElement("textarea"); points.className = "field";
+          points.placeholder = "One point per line";
+          points.value = (it.points || []).join("\n");
+          points.oninput = () => { it.points = points.value.split("\n").filter(Boolean); scheduleRender(); };
+          block.append(head, points);
+          root.appendChild(block);
+        });
+        if (d.items.length < 4) root.appendChild(addBtn("Item", () => { d.items.push({ title: "Option " + String.fromCharCode(65 + d.items.length), points: [] }); renderAll(); }));
+      },
+
+      "matrix": (root) => {
+        const d = state.data;
+        d.x ||= {}; d.y ||= {}; d.items ||= [];
+        const axes = document.createElement("div"); axes.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+        const axisRow = (label, obj) => {
+          const r = document.createElement("div"); r.className = "item-row";
+          const tag = document.createElement("span"); tag.className = "arrow"; tag.textContent = label; tag.style.width = "12px";
+          const low = document.createElement("input"); low.className = "field half"; low.placeholder = "low"; low.value = obj.low || "";
+          const high = document.createElement("input"); high.className = "field half"; high.placeholder = "high"; high.value = obj.high || "";
+          low.oninput = () => { obj.low = low.value; scheduleRender(); };
+          high.oninput = () => { obj.high = high.value; scheduleRender(); };
+          r.append(tag, low, high);
+          return r;
+        };
+        axes.append(axisRow("X", d.x), axisRow("Y", d.y));
+        root.appendChild(axes);
+        root.appendChild(Object.assign(document.createElement("label"), { className: "field-label", textContent: "Items — drag on the canvas to place" }));
+        d.items.forEach((it, i) => {
+          const row = document.createElement("div"); row.className = "item-row";
+          const lab = document.createElement("input"); lab.className = "field grow"; lab.value = it.label || ""; lab.placeholder = "Label";
+          lab.oninput = () => { it.label = lab.value; scheduleRender(); };
+          row.append(lab, rmBtn(() => { d.items.splice(i, 1); renderAll(); }));
+          root.appendChild(row);
+        });
+        root.appendChild(addBtn("Item", () => { d.items.push({ label: "New item", x: 0.5, y: 0.5 }); renderAll(); }));
+      },
+
+      "venn": (root) => {
+        const d = state.data;
+        d.sets ||= [];
+        d.sets.forEach((s, i) => {
+          const row = document.createElement("div"); row.className = "item-row";
+          const lab = document.createElement("input"); lab.className = "field grow"; lab.value = s.label || ""; lab.placeholder = "Set " + (i + 1);
+          lab.oninput = () => { s.label = lab.value; scheduleRender(); };
+          row.append(lab, rmBtn(() => { d.sets.splice(i, 1); renderAll(); }));
+          root.appendChild(row);
+        });
+        if (d.sets.length < 3) root.appendChild(addBtn("Set", () => { d.sets.push({ label: "Set " + (d.sets.length + 1) }); renderAll(); }));
+        root.appendChild(fieldRow("Overlap label", d.overlapLabel, v => d.overlapLabel = v, "what the intersection means"));
+      },
+
+      "timeline": (root) => {
+        const d = state.data;
+        d.events ||= [];
+        d.events.forEach((ev, i) => {
+          const block = document.createElement("div"); block.className = "item-block";
+          const r1 = document.createElement("div"); r1.className = "item-row";
+          const time = document.createElement("input"); time.className = "field"; time.style.flex = "0 0 84px"; time.placeholder = "When"; time.value = ev.time || "";
+          time.oninput = () => { ev.time = time.value; scheduleRender(); };
+          const lab = document.createElement("input"); lab.className = "field grow"; lab.placeholder = "Label"; lab.value = ev.label || "";
+          lab.oninput = () => { ev.label = lab.value; scheduleRender(); };
+          r1.append(time, lab, rmBtn(() => { d.events.splice(i, 1); renderAll(); }));
+          const det = document.createElement("input"); det.className = "field"; det.placeholder = "Detail (optional)"; det.value = ev.detail || "";
+          det.oninput = () => { ev.detail = det.value; scheduleRender(); };
+          block.append(r1, det);
+          root.appendChild(block);
+        });
+        root.appendChild(addBtn("Event", () => { d.events.push({ time: "", label: "Event " + (d.events.length + 1) }); renderAll(); }));
+      },
+
+      "hierarchy": (root) => {
+        const d = state.data;
+        const lab = document.createElement("label"); lab.className = "field-label"; lab.textContent = "Tree — two spaces per level";
+        const ta = document.createElement("textarea"); ta.className = "field"; ta.style.minHeight = "160px"; ta.spellcheck = false;
+        ta.value = treeToText(d.root);
+        ta.oninput = () => { d.root = textToTree(ta.value); scheduleRender(); };
+        root.append(lab, ta);
+      },
+    };
+
+    function treeToText(n, depth = 0) {
+      if (!n) return "";
+      return "  ".repeat(depth) + (n.label || "") + "\n" + (n.children || []).map(c => treeToText(c, depth + 1)).join("");
+    }
+    function textToTree(text) {
+      const lines = text.split("\n").filter(l => l.trim());
+      if (!lines.length) return { label: "" };
+      const parse = (line) => ({ depth: Math.floor(line.match(/^ */)[0].length / 2), label: line.trim() });
+      const root = { label: parse(lines[0]).label, children: [] };
+      const stack = [{ node: root, depth: 0 }];
+      for (const line of lines.slice(1)) {
+        const { depth, label } = parse(line);
+        const node = { label, children: [] };
+        while (stack.length > 1 && stack[stack.length - 1].depth >= depth) stack.pop();
+        const parent = stack[stack.length - 1].node;
+        (parent.children ||= []).push(node);
+        stack.push({ node, depth: Math.max(depth, stack[stack.length - 1].depth + 1) });
+      }
+      const prune = (n) => { if (n.children && !n.children.length) delete n.children; (n.children || []).forEach(prune); return n; };
+      return prune(root);
+    }
+
+    // ---------- Theme tab ----------
+    function themeSection() {
+      const s = sec("Theme");
+      const editBtn = document.createElement("button");
+      editBtn.className = "btn btn-secondary"; editBtn.innerHTML = `<span class="mi mi-sm">edit</span> Edit theme`;
+      editBtn.onclick = () => invoke?.("open_tool", { file: "theme-editor.html", query: "theme=" + encodeURIComponent(JSON.stringify(state.theme)) });
+      s.appendChild(editBtn);
+
+      const projWrap = document.createElement("div"); projWrap.className = "theme-cards";
+      s.appendChild(projWrap);
+      loadProjectThemes(projWrap);
+
+      const lab = document.createElement("div"); lab.className = "field-label"; lab.textContent = "Presets"; lab.style.marginTop = "4px";
+      s.appendChild(lab);
+      const presetWrap = document.createElement("div"); presetWrap.className = "theme-cards";
+      PRESETS.forEach(p => presetWrap.appendChild(themeCard(p)));
+      s.appendChild(presetWrap);
+      return s;
+    }
+    function themeCard(p, editPath) {
+      loadFont(p.fonts.heading.family, p.fonts.heading.weight);
+      const card = document.createElement("div");
+      card.className = "theme-card" + (p.name === state.theme.name && p.colors.bg === state.theme.colors.bg ? " active" : "");
+      const chips = ["bg", "surface", "text", "muted", "accent", "accent2"]
+        .filter(k => p.colors[k]).map(k => `<span style="background:${p.colors[k]}"></span>`).join("");
+      card.innerHTML =
+        `<div class="theme-card__ag" style="background:${p.colors.bg};color:${p.colors.text};font-family:'${p.fonts.heading.family}',serif;font-weight:${p.fonts.heading.weight}">Ag</div>` +
+        `<div class="theme-card__meta"><div class="theme-card__name">${p.name}</div><div class="theme-card__chips">${chips}</div></div>`;
+      if (editPath) {
+        const edit = document.createElement("button");
+        edit.className = "theme-card__edit"; edit.title = "Edit theme";
+        edit.innerHTML = `<span class="mi mi-sm">edit</span>`;
+        edit.onclick = (e) => { e.stopPropagation(); invoke?.("open_tool", { file: "theme-editor.html", query: "artifact=" + encodeURIComponent(editPath) }); };
+        card.appendChild(edit);
+      }
+      card.onclick = () => {
+        state.theme = structuredClone({ fonts: p.fonts, colors: p.colors, headingSize: p.headingSize, bodySize: p.bodySize, name: p.name });
+        loadThemeFonts(state.theme);
+        renderAll();
+      };
+      return card;
+    }
+    async function loadProjectThemes(container) {
+      if (!invoke || !projectRoot) return;
+      let items = [];
+      try { items = (await invoke("list_artifacts", { projectPath: projectRoot })).filter(a => a.kind === "theme"); }
+      catch { return; }
+      for (const it of items) {
+        try {
+          const data = JSON.parse(it.content);
+          if (data.fonts && data.colors) container.appendChild(themeCard(data, it.path));
+        } catch {}
+      }
+    }
+
+    // ---------- Template icons (mini schematics) ----------
+    function tplIcon(key) {
+      const a = "var(--accent)", g = "var(--hairline-strong)";
+      const box = (x, y, w, h, f, rx = 2) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${f}"/>`;
+      const line = (x1, y1, x2, y2, s, w = 1.6) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${s}" stroke-width="${w}"/>`;
+      let inner = "";
+      switch (key) {
+        case "flow": inner = box(8, 22, 22, 13, g) + line(30, 28, 39, 28, a) + box(39, 22, 22, 13, g) + line(61, 28, 70, 28, a) + box(70, 22, 22, 13, g); break;
+        case "compare": inner = box(12, 10, 32, 36, g) + box(56, 10, 32, 36, g) + `<circle cx="50" cy="28" r="6.5" fill="${a}"/>`; break;
+        case "matrix": inner = line(50, 8, 50, 48, g) + line(14, 28, 86, 28, g) + box(24, 13, 16, 8, a, 4) + box(62, 34, 16, 8, a, 4); break;
+        case "venn": inner = `<circle cx="40" cy="28" r="16" fill="${a}" opacity=".45"/><circle cx="60" cy="28" r="16" fill="${g}" opacity=".8"/>`; break;
+        case "timeline": inner = line(10, 28, 90, 28, g) + [24, 50, 76].map(x => `<circle cx="${x}" cy="28" r="3.5" fill="${a}"/>`).join("") + box(16, 10, 16, 6, g) + box(42, 40, 16, 6, g) + box(68, 10, 16, 6, g); break;
+        case "hierarchy": inner = box(40, 8, 20, 10, a) + line(50, 18, 50, 24, g) + line(26, 24, 74, 24, g) + line(26, 24, 26, 30, g) + line(50, 24, 50, 30, g) + line(74, 24, 74, 30, g) + box(16, 30, 20, 10, g) + box(40, 30, 20, 10, g) + box(64, 30, 20, 10, g); break;
+      }
+      return `<svg viewBox="0 0 100 56" preserveAspectRatio="none">${inner}</svg>`;
+    }
+
+    // ---------- Render orchestration ----------
+    let renderTimer;
+    function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(renderStage, 120); scheduleSave(); }
+    function renderAll() { renderStage(); renderInspector(); scheduleSave(); }
+
+    document.getElementById("dg-name").oninput = (e) => { state.name = e.target.value; scheduleSave(); };
+
+    // ---------- Save (artifact JSON) ----------
+    function buildDoc() {
+      return {
+        kind: "diagram", version: 1, name: state.name || "Untitled diagram",
+        title: state.title || undefined,
+        template: state.template,
+        theme: state.theme,
+        colorScheme: state.colorScheme,
+        transparentBg: state.transparentBg || undefined,
+        data: state.data,
+        offsets: Object.keys(state.offsets).length ? state.offsets : undefined,
+        savedAt: new Date().toISOString(),
+      };
+    }
+    let booted = false, saveTimer = null, saving = false, saveAgain = false, lastSaved = "";
+    function snapshot() {
+      return JSON.stringify({ name: state.name, title: state.title, template: state.template, theme: state.theme, colorScheme: state.colorScheme, transparentBg: state.transparentBg, data: state.data, offsets: state.offsets });
+    }
+    function scheduleSave() {
+      if (!booted || !invoke) return;
+      if (snapshot() === lastSaved) return;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(autoSave, 700);
+    }
+    async function autoSave() {
+      if (saving) { saveAgain = true; return; }
+      saving = true;
+      const snap = snapshot();
+      try {
+        const content = JSON.stringify(buildDoc(), null, 2);
+        if (activePath) {
+          await invoke("overwrite_artifact", { path: activePath, content });
+        } else {
+          const p = await invoke("save_artifact", { kind: "diagram", name: state.name || "Untitled diagram", content });
+          activePath = p; deriveProjectRoot(p);
+        }
+        lastSaved = snap;
+        statusEl.textContent = "Saved " + new Date().toLocaleTimeString();
+      } catch (e) { statusEl.textContent = "Save failed: " + e; }
+      saving = false;
+      if (saveAgain) { saveAgain = false; autoSave(); }
+    }
+    document.getElementById("save-as").onclick = async () => {
+      const content = JSON.stringify(buildDoc(), null, 2);
+      if (invoke) {
+        try {
+          const p = await invoke("save_artifact", { kind: "diagram", name: state.name || "Untitled diagram", content });
+          activePath = p; deriveProjectRoot(p); statusEl.textContent = "Saved → " + p;
+        } catch (e) { statusEl.textContent = "Save failed: " + e; }
+      } else {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+        a.download = (state.name || "diagram").replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".json";
+        a.click();
+      }
+    };
+
+    // ---------- SVG export ----------
+    function svgText() { return diagramSvgText(buildDoc(), { transparent: state.transparentBg }); }
+    document.getElementById("export-svg").onclick = async () => {
+      const filename = (state.name || "diagram").replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".svg";
+      const content = svgText();
+      if (invoke) {
+        try { const p = await invoke("save_tool_export", { filename, content }); statusEl.textContent = "SVG → " + p; }
+        catch (e) { if (e !== "__cancelled__") statusEl.textContent = "Export failed: " + e; }
+      } else {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([content], { type: "image/svg+xml" }));
+        a.download = filename; a.click();
+      }
+    };
+    // Clipboard write stays synchronous in the gesture (no await before it).
+    document.getElementById("copy-svg").onclick = () => {
+      navigator.clipboard.writeText(svgText())
+        .then(() => statusEl.textContent = "SVG copied to clipboard")
+        .catch((e) => statusEl.textContent = "Copy failed: " + e);
+    };
+
+    // ---------- Boot + live reload ----------
+    function deriveProjectRoot(p) { const m = p.match(/^(.*)\/artifacts\//); projectRoot = m ? m[1] : null; }
+
+    function adopt(data) {
+      if (data.template && TEMPLATES[data.template]) state.template = data.template;
+      if (data.theme) state.theme = data.theme;
+      if (data.data) state.data = data.data;
+      state.offsets = data.offsets || {};
+      if (data.name != null) state.name = data.name;
+      state.title = data.title || "";
+      if (data.colorScheme) state.colorScheme = data.colorScheme;
+      state.transparentBg = !!data.transparentBg;
+    }
+
+    function initArtifactWatch() {
+      if (!invoke || !window.__TAURI__?.event) return;
+      window.__TAURI__.event.listen("fs-changed", async () => {
+        if (inspectorTab === "theme") renderInspector();
+        if (!activePath || saving) return;
+        if (snapshot() !== lastSaved) return;    // local unsaved edits win
+        let data;
+        try { data = JSON.parse(await invoke("read_artifact", { path: activePath })); }
+        catch { return; }
+        const probe = JSON.stringify({ name: data.name, title: data.title || "", template: data.template, theme: data.theme, colorScheme: data.colorScheme || "light", transparentBg: !!data.transparentBg, data: data.data, offsets: data.offsets || {} });
+        if (probe === lastSaved) return;         // our own write / unrelated file
+        adopt(data);
+        lastSaved = snapshot();
+        document.getElementById("dg-name").value = state.name;
+        loadThemeFonts(state.theme);
+        selectedId = null;
+        renderAll();
+        statusEl.textContent = "Reloaded from disk " + new Date().toLocaleTimeString();
+      });
+    }
+
+    async function boot() {
+      PRESETS = await loadPresets();
+      const path = new URLSearchParams(location.search).get("artifact");
+      if (path && invoke) {
+        try {
+          adopt(JSON.parse(await invoke("read_artifact", { path })));
+          activePath = path; deriveProjectRoot(path);
+        } catch (e) { statusEl.textContent = "Couldn't load diagram: " + e; }
+      }
+      document.getElementById("dg-name").value = state.name;
+      loadThemeFonts(state.theme);
+      initArtifactWatch();
+      // devinspect touches window.__TAURI__ at module eval — import it only
+      // inside Studio so the tool still opens in a plain browser for testing.
+      if (window.__TAURI__) import("../devinspect.js").then((m) => m.initDevInspect()).catch(() => {});
+      renderAll();
+      lastSaved = snapshot();
+      booted = true;
+    }
+    boot();
+  </script>
+</body>
+</html>

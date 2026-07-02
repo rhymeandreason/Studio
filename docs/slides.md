@@ -65,7 +65,9 @@ Defined across a few coordinated places in `slides.html` (the `LAYOUTS` map,
 
 Body-type slots (`body`/`left`/`middle`/`right`) are **Markdown** (bold, lists,
 links, `##`/`###`, blockquote, `code`, `---`; `**bold**` → accent color). `image`
-slots are **project-relative paths** (e.g. `media/x.png`).
+slots are **project-relative paths** (e.g. `media/x.png`) — or a **diagram
+artifact ref** (`artifacts/diagram/x.json`), which renders live re-themed to
+the deck and inlines as SVG in exports (see [diagrams.md](diagrams.md)).
 
 ### Per-slide modifiers
 - **`colorScheme`** — `light` (default) / `soft` / `dark` / `accent` / `accent2`.

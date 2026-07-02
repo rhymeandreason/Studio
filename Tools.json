@@ -5,6 +5,7 @@
   { "file": "kit-gallery.html", "name": "Design System" },
   { "file": "brand-explorer.html", "name": "Brand Explorer" },
   { "file": "slides.html", "name": "Slides" },
+  { "file": "diagram.html", "name": "Diagram" },
   { "file": "theme-editor.html", "name": "Theme Editor" },
 { "file": "code-editor.html", "name": "Code Editor" },
   { "file": "image-editor.html", "name": "Image Editor" },

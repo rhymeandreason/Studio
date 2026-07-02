@@ -213,6 +213,7 @@
   <script type="module">
     import { initDevInspect } from "../devinspect.js";
     import { renderSlide as renderSlideBase, colorScheme, SCHEMES, HEADING_DEFAULT, loadPresets } from "../deck/render.js";
+    import { renderDiagram } from "../diagram/render.js";
     const marked = window.marked;
     const invoke = window.__TAURI__?.core?.invoke;
     const esc = (s) => (s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -307,6 +308,11 @@
     // ---------- Image resolution ----------
     // Slides store images as project-relative paths (e.g. "media/x.png"). The
     // tool window can't load project files directly, so fetch a data URL via Rust.
+    // A diagram-artifact ref (artifacts/diagram/x.json) resolves to inline SVG
+    // markup instead — rendered live with the DECK's theme, so embedded
+    // diagrams always match the deck.
+    const isDiagramRef = (rel) => /^artifacts\/diagram\/[^/]+\.json$/.test(rel || "");
+    const svgDataUrl = (markup) => "data:image/svg+xml;utf8," + encodeURIComponent(markup);
     async function resolveImage(rel) {
       if (!rel) return null;
       if (/^data:|^https?:/.test(rel)) return rel;
@@ -314,10 +320,23 @@
       if (!invoke || !projectRoot) return null;
       try {
         const abs = projectRoot + "/" + rel.replace(/^\//, "");
+        if (isDiagramRef(rel)) {
+          const data = JSON.parse(await invoke("read_artifact", { path: abs }));
+          const markup = renderDiagram(data, { theme: state.theme }).outerHTML;
+          imgCache.set(rel, markup);
+          return markup;
+        }
         const url = await invoke("read_image_data", { path: abs });
         imgCache.set(rel, url);
         return url;
       } catch { return null; }
+    }
+    // Diagram renders bake in the deck theme — drop them when the theme changes
+    // or a diagram file changes on disk. Returns true if any were cached.
+    function clearDiagramCache() {
+      let had = false;
+      for (const k of [...imgCache.keys()]) if (isDiagramRef(k)) { imgCache.delete(k); had = true; }
+      return had;
     }
 
     // Convert an absolute path (returned by import_media / list_media / paste_image)
@@ -352,14 +371,30 @@
       let items = [];
       try { items = (await invoke("list_media", { path: projectRoot })).filter(m => m.kind === "image"); }
       catch (e) { grid.innerHTML = `<div class="picker-empty">Couldn't read media: ${e}</div>`; return; }
-      if (!items.length) { grid.innerHTML = `<div class="picker-empty">No images in this project's media/ folder yet. Drop or paste one onto a slide, or add via Studio's Media tab.</div>`; return; }
-      for (const m of items) {
-        const tile = document.createElement("div"); tile.className = "picker-tile";
-        tile.innerHTML = `<span>${m.name}</span>`;
-        const rel = toRel(m.path);
-        resolveImage(rel).then(u => { if (u) { const img = document.createElement("img"); img.src = u; tile.prepend(img); } });
-        tile.onclick = () => { onPick(rel); close(); };
-        grid.appendChild(tile);
+      // Diagram artifacts render live (with the deck theme) wherever an image can go.
+      let diagrams = [];
+      try { diagrams = (await invoke("list_artifacts", { projectPath: projectRoot })).filter(a => a.kind === "diagram"); }
+      catch {}
+      if (!items.length && !diagrams.length) { grid.innerHTML = `<div class="picker-empty">No images in this project's media/ folder yet. Drop or paste one onto a slide, or add via Studio's Media tab.</div>`; return; }
+      const tile = (name, rel) => {
+        const t = document.createElement("div"); t.className = "picker-tile";
+        t.innerHTML = `<span>${name}</span>`;
+        resolveImage(rel).then(u => {
+          if (!u) return;
+          const img = document.createElement("img");
+          img.src = /^\s*<svg/i.test(u) ? svgDataUrl(u) : u;
+          t.prepend(img);
+        });
+        t.onclick = () => { onPick(rel); close(); };
+        grid.appendChild(t);
+      };
+      for (const m of items) tile(m.name, toRel(m.path));
+      if (diagrams.length) {
+        const lab = document.createElement("div");
+        lab.textContent = "Diagrams — live, re-themed to match the deck";
+        lab.style.cssText = "grid-column:1/-1;font-size:11px;color:var(--text-soft);letter-spacing:.05em;align-self:end;";
+        grid.appendChild(lab);
+        for (const d of diagrams) tile(d.name, toRel(d.path));
       }
     }
 
@@ -658,7 +693,7 @@
         const tag = document.createElement("span"); tag.className = "label"; tag.textContent = imgSlot[1];
         ctl.appendChild(tag);
         const prev = document.createElement("img"); prev.className = "preview";
-        resolveImage(slide[key]).then(u => { if (u) prev.src = u; });
+        resolveImage(slide[key]).then(u => { if (u) prev.src = /^\s*<svg/i.test(u) ? svgDataUrl(u) : u; });
         const nameEl = document.createElement("div"); nameEl.className = "img-name";
         nameEl.textContent = slide[key] ? slide[key].split("/").pop() : "No image";
         if (!slide[key]) nameEl.classList.add("img-name--empty");
@@ -723,7 +758,7 @@
       const meta = document.createElement("div"); meta.className = "theme-card__meta";
       meta.innerHTML = `<div class="theme-card__name">${p.name}</div><div class="theme-card__chips">${["bg","surface","text","muted","accent","accent2"].filter(k=>p.colors[k]).map(k=>`<span style="background:${p.colors[k]}"></span>`).join("")}</div>`;
       card.append(preview, meta);
-      card.onclick = () => { appliedThemeKey = key; state.theme = structuredClone(p); loadThemeFonts(state.theme); renderAll(); };
+      card.onclick = () => { appliedThemeKey = key; state.theme = structuredClone(p); loadThemeFonts(state.theme); clearDiagramCache(); renderAll(); };
       requestAnimationFrame(() => { stage.style.transform = `scale(${preview.clientWidth/1280})`; });
       return card;
     }
@@ -904,7 +939,10 @@
       const resolved = {};
       for (const s of state.slides) {
         if (s.image) {
-          if (mode==="assets") {
+          if (isDiagramRef(s.image)) {
+            // Diagrams inline as SVG markup in both modes — no asset to copy.
+            resolved[s.image] = await resolveImage(s.image);
+          } else if (mode==="assets") {
             if (!seen.has(s.image)) {
               const base = s.image.split("/").pop().replace(/[^a-z0-9._-]/gi,"_");
               let name = base, n=1;
@@ -1029,6 +1067,8 @@
       window.__TAURI__.event.listen("fs-changed", async () => {
         // A theme artifact may have been added/edited — refresh the Theme tab.
         if (inspectorTab === "theme") renderInspector();
+        // An embedded diagram may have been edited — re-render from disk.
+        if (clearDiagramCache()) { renderStage(); renderReel(); }
         if (!activePath || saving) return;
         if (snapshot() !== lastSaved) return;     // local has unsaved edits — don't overwrite
         let data;

@@ -6,6 +6,7 @@
 import { state } from "./state.js";
 import { el, mi } from "./dom.js";
 import { createSelection } from "./selection.js";
+import { renderDiagram } from "./diagram/render.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -36,12 +37,14 @@ const EDITOR = {
   "brand-kit": "brand-explorer.html",
   "presentation": "slides.html",
   "theme": "theme-editor.html",
+  "diagram": "diagram.html",
 };
 
 const KIND_LABEL = {
   "brand-kit": "Brand kits",
   "presentation": "Presentations",
   "theme": "Themes",
+  "diagram": "Diagrams",
 };
 
 let _renderGen = 0;
@@ -77,6 +80,12 @@ export async function renderArtifacts() {
     invoke("open_tool", { file: EDITOR["theme"], query: null }),
   );
   toolbar.appendChild(newThemeBtn);
+  const newDiagramBtn = el("button", "btn-add", { type: "button" });
+  newDiagramBtn.innerHTML = `<span class="mi mi-sm">add</span>Diagram`;
+  newDiagramBtn.addEventListener("click", () =>
+    invoke("open_tool", { file: EDITOR["diagram"], query: null }),
+  );
+  toolbar.appendChild(newDiagramBtn);
   root.appendChild(toolbar);
 
   let items = [];
@@ -134,7 +143,9 @@ function artifactCard(item) {
         ? presentationPreview(data)
         : item.kind === "theme"
           ? themePreview(data)
-          : el("div", "artifact__preview"),
+          : item.kind === "diagram"
+            ? diagramPreview(data)
+            : el("div", "artifact__preview"),
   );
 
   const open = () => {
@@ -291,6 +302,27 @@ export function presentationPreview(data) {
     sub.style.overflow = "hidden";
     sub.style.textOverflow = "ellipsis";
     wrap.appendChild(sub);
+  }
+  return wrap;
+}
+
+// --- Diagram preview: the real renderer, scaled to the card ------------------
+export function diagramPreview(data) {
+  const wrap = el("div", "artifact__preview artifact__preview--diagram");
+  wrap.style.padding = "0";
+  wrap.style.overflow = "hidden";
+  const fonts = data.theme?.fonts;
+  if (fonts?.heading) loadGoogleFont(fonts.heading.family, fonts.heading.weight);
+  if (fonts?.body) loadGoogleFont(fonts.body.family, fonts.body.weight);
+  try {
+    const svg = renderDiagram(data);
+    svg.style.width = "100%";
+    svg.style.height = "100%";
+    // Fill the card (crop edges) rather than letterbox — it's a thumbnail.
+    svg.setAttribute("preserveAspectRatio", "xMidYMid slice");
+    wrap.appendChild(svg);
+  } catch {
+    wrap.appendChild(el("span", "artifact-card__meta", { textContent: "diagram" }));
   }
   return wrap;
 }
