@@ -1120,7 +1120,7 @@ fn build_tools_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Res
                 }
                 "open_video" => {
                     if let Some(project) = app.state::<AppState>().active.lock().unwrap().clone() {
-                        let _ = open_video_window(app.clone(), project.path);
+                        let _ = open_video_window(app.clone(), project.path, None);
                     }
                 }
                 _ if id.starts_with(TOOL_PREFIX) => {
@@ -2532,7 +2532,7 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
                 }
                 Some("video") => {
                     let Some(path) = &target.tool_query else { continue };
-                    let _ = open_video_window(app.clone(), path.clone());
+                    let _ = open_video_window(app.clone(), path.clone(), None);
                 }
                 Some("claude") => {
                     let _ = open_claude_window(app.clone(), None, target.tool_query.clone());
@@ -5275,19 +5275,28 @@ fn video_label(path: &str) -> String {
     format!("video-{:x}", h.finish())
 }
 
-/// Open (or focus) the Video editor window for a project. The edit document is
-/// `<path>/video.json`, shared live with Claude Code. See docs/video-plan.md.
+/// Open (or focus) the Video editor window for a project. Edit documents live
+/// under `<path>/videos/`, shared live with Claude Code. `file` optionally
+/// selects which edit to show (a basename, e.g. from an Artifacts-panel card);
+/// an already-open window receives it as a `video-open-edit` event. See
+/// docs/video.md.
 #[tauri::command]
-fn open_video_window(app: AppHandle, path: String) -> Result<(), String> {
+fn open_video_window(app: AppHandle, path: String, file: Option<String>) -> Result<(), String> {
     let label = video_label(&path);
     track_tool_window(&label, "", Some(path.clone()), "video");
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.show();
         let _ = win.set_focus();
+        if let Some(f) = file {
+            let _ = app.emit_to(&label, "video-open-edit", f);
+        }
         return Ok(());
     }
     use tauri_plugin_window_state::{StateFlags, WindowExt};
-    let url = format!("video/index.html?path={}", url_encode(&path));
+    let mut url = format!("video/index.html?path={}", url_encode(&path));
+    if let Some(f) = &file {
+        url.push_str(&format!("&file={}", url_encode(f)));
+    }
     let win = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
         .title("")
         .inner_size(900.0, 640.0)

@@ -1387,9 +1387,18 @@ async function liveRefresh() {
 listen("fs-changed", liveRefresh);
 window.addEventListener("focus", liveRefresh);
 
+// Jump to a specific edit (Artifacts-panel card → already-open window).
+listen("video-open-edit", async (e) => {
+  const f = e.payload;
+  await refreshEditList();
+  if (f && edits.some((x) => x.file === f)) await openEdit(f);
+});
+
 async function init() {
   await populateAddMenu();
   await refreshEditList();
-  await ensureAnEdit();
+  const wanted = params.get("file");
+  if (wanted && edits.some((e) => e.file === wanted)) await openEdit(wanted);
+  else await ensureAnEdit();
 }
 init();

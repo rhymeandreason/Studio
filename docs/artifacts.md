@@ -60,6 +60,11 @@ folder, previews, and launches the editor.
 - **Studio Claude Artifacts/Code toggle** — picks Claude's cwd (project folder vs
   git repo); defaults to the project folder so artifacts land where the panel
   reads them. See [claude-window.md](claude-window.md).
+- **Videos group** — the panel also lists the project's video edits
+  (`videos/*.json` — same Claude-writable-JSON idea, different folder) as
+  preview cards (first-clip thumbnail / shader render, duration + clip count);
+  Open jumps to that edit in the Video window. Not in the multi-select model —
+  deletion lives in the Video window. See [video.md](video.md).
 
 ## Workflow (the vision — mostly ahead of the code; "Built" above is what exists)
 

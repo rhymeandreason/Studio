@@ -2,8 +2,12 @@
 
 A standalone companion window (like Git / Claude windows) for cutting
 multi-clip edits with animated text and shader backgrounds, exporting MP4s for
-YouTube / Reels / Square / Web. Launched from the Workspace tab;
-`open_video_window(path)` in `src-tauri/src/lib.rs`.
+YouTube / Reels / Square / Web. Launched from the Workspace tab or from an
+edit's card in the **Artifacts panel** (a "Videos" group: first-clip
+thumbnail via `quicklook_thumb`, or a live shader render; Open jumps to that
+edit). `open_video_window(path, file?)` in `src-tauri/src/lib.rs` — `file`
+targets a specific edit (`&file=` on first open, `video-open-edit` event when
+the window already exists).
 
 **The edit is a plain JSON file** — `<project>/videos/<edit>.json`. The GUI
 and Claude Code are two editors of the same file: the window saves debounced

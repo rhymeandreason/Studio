@@ -7,8 +7,9 @@ import { state } from "./state.js";
 import { el, mi } from "./dom.js";
 import { createSelection } from "./selection.js";
 import { renderDiagram } from "./diagram/render.js";
+import { createShaderRenderer } from "./video/shaders.js";
 
-const { invoke } = window.__TAURI__.core;
+const { invoke, convertFileSrc } = window.__TAURI__.core;
 
 // Selection — keyed by artifact path.
 export const artifactsSelection = createSelection({
@@ -86,6 +87,12 @@ export async function renderArtifacts() {
     invoke("open_tool", { file: EDITOR["diagram"], query: null }),
   );
   toolbar.appendChild(newDiagramBtn);
+  const newVideoBtn = el("button", "btn-add", { type: "button" });
+  newVideoBtn.innerHTML = `<span class="mi mi-sm">add</span>Video`;
+  newVideoBtn.addEventListener("click", () =>
+    invoke("open_video_window", { path: project.path, file: null }),
+  );
+  toolbar.appendChild(newVideoBtn);
   root.appendChild(toolbar);
 
   let items = [];
@@ -96,9 +103,15 @@ export async function renderArtifacts() {
     root.appendChild(emptyMsg("Couldn't read artifacts: " + err));
     return;
   }
+  // Video edits (videos/*.json) aren't artifacts on disk, but they're the same
+  // idea — Claude-writable design JSON with an editor — so they get a group too.
+  let videos = [];
+  try {
+    videos = await invoke("list_videos", { path: project.path });
+  } catch {}
   if (gen !== _renderGen) return;
 
-  if (!items.length) {
+  if (!items.length && !videos.length) {
     root.appendChild(
       emptyMsg(
         "No artifacts yet. Make one with “New brand kit”, or ask Studio Claude to generate some — it knows the format.",
@@ -122,6 +135,79 @@ export async function renderArtifacts() {
     grid.addEventListener("click", (e) => {
       if (e.target === grid) artifactsSelection.clear();
     });
+  }
+
+  if (videos.length) {
+    root.appendChild(el("div", "artifacts__kind", { textContent: "Videos" }));
+    const grid = el("div", "artifacts__grid");
+    for (const v of videos) grid.appendChild(videoCard(project, v));
+    root.appendChild(grid);
+  }
+}
+
+// --- Video cards: videos/<edit>.json, opened in the Video window -------------
+// Not part of the multi-select model (deletion lives in the Video window).
+function videoCard(project, v) {
+  const card = el("div", "artifact-card");
+  const prev = el("div", "artifact__preview artifact__preview--video");
+  prev.innerHTML = mi("movie"); // placeholder until the thumb loads
+  card.appendChild(prev);
+
+  const open = () =>
+    invoke("open_video_window", { path: project.path, file: v.file });
+
+  const foot = el("div", "artifact-card__foot");
+  const info = el("div", "artifact-card__info");
+  info.appendChild(el("span", "artifact-card__name", { textContent: v.name }));
+  const meta = el("span", "artifact-card__meta");
+  info.appendChild(meta);
+  foot.appendChild(info);
+  foot.appendChild(actionBtn("open_in_new", "Open", open, true));
+  card.appendChild(foot);
+  card.addEventListener("dblclick", open);
+
+  fillVideoPreview(prev, meta, project, v);
+  return card;
+}
+
+async function fillVideoPreview(prev, meta, project, v) {
+  let data;
+  try {
+    data = await invoke("read_video", { path: project.path, file: v.file });
+  } catch {
+    return;
+  }
+  const clips = Array.isArray(data.clips) ? data.clips : [];
+  const dur = clips.reduce(
+    (sum, c) =>
+      sum +
+      (c.kind === "shader"
+        ? Math.max(0.1, c.dur ?? 5)
+        : Math.max(0, (c.out ?? 0) - (c.in ?? 0))),
+    0,
+  );
+  const mm = Math.floor(dur / 60);
+  const ss = Math.floor(dur % 60);
+  meta.textContent = `${clips.length} clip${clips.length === 1 ? "" : "s"} · ${mm}:${String(ss).padStart(2, "0")}`;
+
+  const first = clips[0];
+  if (!first) return; // keep the movie-icon placeholder
+  if (first.kind === "shader") {
+    // Render the shader itself — the preview IS the first frame's look.
+    const r = createShaderRenderer();
+    const out = r?.render(first.effect, first.params, 1.0, 340, 240);
+    if (out) {
+      out.className = "artifact__preview-media";
+      prev.replaceChildren(out);
+    }
+  } else {
+    const abs = first.src.startsWith("/") ? first.src : `${project.path}/${first.src}`;
+    try {
+      const p = await invoke("quicklook_thumb", { path: abs, size: 340 });
+      const img = el("img", "artifact__preview-media");
+      img.src = convertFileSrc(p);
+      prev.replaceChildren(img);
+    } catch {} // keep the placeholder
   }
 }
 
