@@ -1,7 +1,13 @@
-// Video editor window. The whole edit is `<project>/video.json`, shared live
-// with Claude Code: we save (debounced) on every change and reload whenever the
-// file changes on disk (`fs-changed`). See docs/video-plan.md.
+// Video editor window. The whole edit is `<project>/videos/<edit>.json`,
+// shared live with Claude Code: we save (debounced) on every change and reload
+// when the file genuinely changes on disk (`fs-changed` / focus / the refresh
+// button). Text animations live in effects.js, shader backgrounds in
+// shaders.js — both are used verbatim by the export pipeline, which renders
+// overlay frames in this webview and hands them to the native compositor.
+// See docs/video.md.
 import { initDevInspect } from "../devinspect.js";
+import { TEXT_EFFECTS, drawCaption, clearCaptionCache } from "./effects.js";
+import { SHADERS, shaderDefaults, createShaderRenderer } from "./shaders.js";
 initDevInspect();
 
 const { invoke, convertFileSrc } = window.__TAURI__.core;
@@ -16,6 +22,7 @@ const $project = document.getElementById("project");
 const $docsel = document.getElementById("docsel");
 const $newdoc = document.getElementById("newdoc");
 const $deldoc = document.getElementById("deldoc");
+const $refresh = document.getElementById("refresh");
 const $stage = document.getElementById("stage");
 const $frame = document.getElementById("frame");
 const $placeholder = document.getElementById("placeholder");
@@ -30,6 +37,8 @@ function showActive() {
   els[curEl].classList.add("active");
   els[curEl ^ 1].classList.remove("active");
 }
+const $shaderCv = document.getElementById("shaderCv");
+const previewShader = createShaderRenderer($shaderCv);
 
 // Size the preview frame to the export aspect ratio, fit within the stage.
 // (Sized explicitly in px — a flex item with only aspect-ratio and absolutely
@@ -78,35 +87,49 @@ const $playhead = document.getElementById("playhead");
 const $inspector = document.getElementById("inspector");
 const $toast = document.getElementById("toast");
 
-$project.textContent = projectName;
+$project.append(projectName);
 $project.title = projectPath;
 document.title = `Video — ${projectName}`;
 
 let doc = { version: 1, preset: "youtube", hdr: "sdr", clips: [], text: [] };
 let currentFile = null; // basename of the open edit under videos/
 let edits = []; // [{ file, name, modified }]
-let activeIdx = 0; // which clip is loaded into the <video> element
+let activeIdx = 0; // which timeline segment is current
 let playhead = 0; // global timeline position, seconds
 let sel = null; // current selection: { type:"clip"|"text", id }
 let dragging = false; // suppress scrub during block drag/trim
 
 // ── Persistence ────────────────────────────────────────────────────────────
-let saveTimer;
-let writingSelf = false; // suppress the fs-changed echo from our own write
+// `lastPersisted` is the JSON of the doc as it exists ON DISK (last read or
+// written). Live reloads compare against it, so our own write echo — and any
+// fs-changed for an unrelated file — never clobbers the UI. While an edit is
+// pending (dirty / debounce timer armed), auto-reload is skipped entirely:
+// the local doc is the newer truth and is about to be written.
+let saveTimer = null;
+let dirty = false;
 function scheduleVideoSave() {
   if (!currentFile) return;
+  dirty = true;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    writingSelf = true;
-    try {
-      await invoke("write_video", { path: projectPath, file: currentFile, doc });
-    } catch (e) {
-      toast(String(e));
-    }
-    // Let the FSEvents echo land before re-enabling reload.
-    setTimeout(() => (writingSelf = false), 250);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    flushSave();
   }, 400);
 }
+
+async function flushSave() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  if (!currentFile || !dirty) return;
+  try {
+    await invoke("write_video", { path: projectPath, file: currentFile, doc });
+    lastPersisted = JSON.stringify(doc);
+    dirty = false;
+  } catch (e) {
+    toast(String(e));
+  }
+}
+let lastPersisted = "";
 
 // ── Edit documents (multiple per project) ───────────────────────────────────
 function renderDocSel() {
@@ -147,6 +170,7 @@ $deldoc.addEventListener("click", async () => {
   try {
     await invoke("delete_video", { path: projectPath, file: currentFile });
     currentFile = null;
+    dirty = false;
     await refreshEditList();
     if (edits.length) await openEdit(edits[0].file);
     else await ensureAnEdit();
@@ -155,24 +179,56 @@ $deldoc.addEventListener("click", async () => {
   }
 });
 
-async function openEdit(file) {
+// Explicit reload — for pulling in edits made directly to the file. Discards
+// any not-yet-saved local change by design (it's the "reload from file" button).
+$refresh.addEventListener("click", async () => {
+  if (!currentFile) return;
+  dirty = false;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  await refreshEditList();
+  await openEdit(currentFile, { keepPosition: true });
+  toast("Reloaded from file");
+});
+
+// Normalize a freshly-read doc in place (defaults + legacy migrations).
+function normalizeDoc(d) {
+  if (!d.clips) d.clips = [];
+  if (!d.text) d.text = [];
+  for (const c of d.clips) {
+    if (isShader(c) && !c.params) c.params = shaderDefaults(c.effect);
+  }
+  // Migrate legacy height-fraction sizes (≤ 1) to output pixels.
+  for (const l of d.text) {
+    if ((l.size ?? 0) > 0 && l.size <= 1) l.size = Math.round(l.size * presetDims().h);
+  }
+}
+
+async function openEdit(file, { keepPosition = false } = {}) {
   currentFile = file;
-  activeIdx = 0;
-  playhead = 0;
-  sel = null;
   try {
     doc = await invoke("read_video", { path: projectPath, file });
   } catch (e) {
     toast(String(e));
     return;
   }
-  if (!doc.clips) doc.clips = [];
-  if (!doc.text) doc.text = [];
-  // Migrate legacy height-fraction sizes (≤ 1) to output pixels.
-  for (const l of doc.text) {
-    if ((l.size ?? 0) > 0 && l.size <= 1) l.size = Math.round(l.size * presetDims().h);
+  lastPersisted = JSON.stringify(doc);
+  dirty = false;
+  normalizeDoc(doc);
+  clearCaptionCache();
+  if (keepPosition) {
+    playhead = Math.min(playhead, totalDur());
+    if (sel) {
+      const pool = sel.type === "clip" ? clips() : text();
+      if (!pool.some((x) => x.id === sel.id)) sel = null;
+    }
+    activeIdx = segAt(playhead)?.idx ?? 0;
+  } else {
+    activeIdx = 0;
+    playhead = 0;
+    sel = null;
   }
-  capCache.clear();
+  setPlaying(false);
   renderDocSel();
   render();
 }
@@ -201,7 +257,9 @@ function relSrc(abs) {
 }
 
 const clips = () => doc.clips || (doc.clips = []);
-const clipDur = (c) => Math.max(0, (c.out ?? 0) - (c.in ?? 0));
+const isShader = (c) => c?.kind === "shader";
+const clipDur = (c) =>
+  isShader(c) ? Math.max(0.1, c.dur ?? 5) : Math.max(0, (c.out ?? 0) - (c.in ?? 0));
 
 // ── Rendering ───────────────────────────────────────────────────────────────
 function fmt(t) {
@@ -228,12 +286,12 @@ function layout() {
   });
 }
 
-// Map a global time → which clip + the source `currentTime` to seek to.
-function globalToClip(t) {
+// Which segment a global time falls in (+ the source time for video clips).
+function segAt(t) {
   const segs = layout();
   for (let i = 0; i < segs.length; i++) {
     if (t < segs[i].end || i === segs.length - 1) {
-      return { idx: i, src: (clips()[i].in ?? 0) + (t - segs[i].start) };
+      return { idx: i, seg: segs[i], src: (clips()[i].in ?? 0) + (t - segs[i].start) };
     }
   }
   return null;
@@ -248,13 +306,14 @@ function render() {
   for (const el of els) el.style.display = has ? "" : "none";
   if (has) {
     if (activeIdx >= clips().length) activeIdx = 0;
-    loadClip(activeIdx, false);
+    enterSegment(activeIdx, false);
   } else {
     for (const el of els) {
       el.removeAttribute("src");
       el.dataset.src = "";
       el.dataset.clip = "";
     }
+    $shaderCv.classList.remove("active");
   }
   $preset.value = doc.preset || "youtube";
   setFrameAspect();
@@ -271,13 +330,24 @@ function renderTimeline() {
   const segs = layout();
   $clipLane.innerHTML = "";
   segs.forEach((s, i) => {
+    const c = clips()[i];
     const b = document.createElement("div");
-    b.className = "block" + (sel?.type === "clip" && sel.id === clips()[i].id ? " sel" : "");
+    b.className =
+      "block" +
+      (isShader(c) ? " block--shader" : "") +
+      (sel?.type === "clip" && sel.id === c.id ? " sel" : "");
     b.style.left = (s.start / total) * 100 + "%";
     b.style.width = (s.dur / total) * 100 + "%";
     const label = document.createElement("span");
     label.className = "label";
-    label.textContent = clips()[i].src.split("/").pop();
+    if (isShader(c)) {
+      const mi = document.createElement("span");
+      mi.className = "mi";
+      mi.textContent = "blur_on";
+      label.append(mi, SHADERS[c.effect]?.label || c.effect);
+    } else {
+      label.textContent = c.src.split("/").pop();
+    }
     const hl = document.createElement("div");
     hl.className = "handle l";
     const hr = document.createElement("div");
@@ -351,90 +421,11 @@ function positionPlayhead() {
   $playhead.style.left = pad + (playhead / total) * w + "px";
 }
 
-// ── Captions: a single rendering path shared by preview + export ─────────────
-// Each caption is drawn to a 2D canvas; the preview composites those canvases
-// and the export embeds the SAME images (rendered at output resolution) so the
-// baked result is pixel-identical. Animations are geometric (opacity / slide /
-// reveal-clip) and apply to the image in both places.
-const CAP = { weight: 700, padXEm: 0.4, padYEm: 0.26, radiusEm: 0.2, slideFrac: 0.03 };
-const capCache = new Map(); // layer id -> { sig, canvas, w, h, edges }
-
+// ── Overlay (captions) — drawn by effects.js, shared with export ────────────
 // Font size in OUTPUT pixels. Values ≤ 1 are treated as legacy height-fractions.
 function fontPxOutput(l) {
   const s = l.size ?? 72;
   return s <= 1 ? s * presetDims().h : s;
-}
-
-function roundRectPath(ctx, x, y, w, h, r) {
-  r = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-// Render a caption to a canvas at the given font pixel size. Returns the canvas,
-// its size, and word-boundary x-fractions (for the word-by-word reveal).
-function makeCaptionCanvas(l, fontPx) {
-  const family = `"${l.font || "Futura"}", "Avenir Next", system-ui, sans-serif`;
-  const fontStr = `${CAP.weight} ${fontPx}px ${family}`;
-  const lines = String(l.text ?? "").split("\n");
-  const c = document.createElement("canvas");
-  const ctx = c.getContext("2d");
-  ctx.font = fontStr;
-  let textW = 0;
-  for (const ln of lines) textW = Math.max(textW, ctx.measureText(ln || " ").width);
-  const lineH = fontPx * 1.2;
-  const padX = fontPx * CAP.padXEm;
-  const padY = fontPx * CAP.padYEm;
-  const w = Math.max(1, Math.ceil(textW + padX * 2));
-  const h = Math.max(1, Math.ceil(lineH * lines.length + padY * 2));
-  c.width = w;
-  c.height = h;
-  ctx.font = fontStr; // reset after resize
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  if (l.bg) {
-    roundRectPath(ctx, 0, 0, w, h, fontPx * CAP.radiusEm);
-    ctx.fillStyle = l.bg;
-    ctx.fill();
-  }
-  ctx.fillStyle = l.color || "#ffffff";
-  lines.forEach((ln, i) => ctx.fillText(ln, w / 2, padY + lineH * (i + 0.5)));
-
-  // Word-boundary x-fractions (single-line layout, centered) for the reveal.
-  const words = String(l.text ?? "").split(/\s+/).filter(Boolean);
-  const textLeft = (w - textW) / 2;
-  const edges = words.map((_, i) => {
-    const prefix = words.slice(0, i + 1).join(" ");
-    return Math.min(1, (textLeft + ctx.measureText(prefix).width) / w);
-  });
-  edges.push(1);
-  return { canvas: c, w, h, edges };
-}
-
-function getCaption(l, fontPx) {
-  const sig = [l.text, Math.round(fontPx), l.color, l.bg, l.font].join("|");
-  const hit = capCache.get(l.id);
-  if (hit && hit.sig === sig) return hit;
-  const entry = { sig, ...makeCaptionCanvas(l, fontPx) };
-  capCache.set(l.id, entry);
-  return entry;
-}
-
-// Reveal fraction (of image width) at local time `lt` for words/typewriter.
-function revealFraction(l, lt, dur, edges) {
-  const anim = l.anim;
-  if (anim === "typewriter") return Math.min(1, lt / dur);
-  if (anim === "words") {
-    const n = Math.max(1, edges.length - 1);
-    const shown = Math.min(n, Math.floor((lt / dur) * n) + 1);
-    return edges[shown - 1];
-  }
-  return 1;
 }
 
 function renderOverlay() {
@@ -449,49 +440,73 @@ function renderOverlay() {
     const s = l.start ?? 0;
     const e = l.end ?? 0;
     if (playhead < s || playhead > e) continue;
-    drawCaption(ctx, l, playhead - s, e - s, FW, FH, scale);
+    drawCaption(ctx, l, playhead - s, e - s, FW, FH, fontPxOutput(l) * scale);
   }
 }
 
-function drawCaption(ctx, l, lt, dur, FW, FH, scale) {
-  const { canvas, w, h, edges } = getCaption(l, fontPxOutput(l) * scale);
-  const cx = (l.x ?? 0.5) * FW;
-  const cy = (l.y ?? 0.85) * FH;
-  let left = cx - w / 2;
-  let top = cy - h / 2;
-  const anim = l.anim || "none";
-  const into = Math.min(0.4, dur / 3);
-  const p = into > 0 ? Math.min(1, lt / into) : 1;
-  let alpha = 1;
-  let dx = 0;
-  let dy = 0;
-  if (anim === "fade") {
-    const out = dur - into;
-    alpha = lt < into ? lt / into : lt > out ? Math.max(0, (dur - lt) / into) : 1;
-  } else if (anim === "slide") {
-    alpha = p;
-    const off = (1 - p) * FH * CAP.slideFrac;
-    const dir = l.from || "bottom";
-    dx = dir === "left" ? -off : dir === "right" ? off : 0;
-    dy = dir === "top" ? -off : dir === "bottom" ? off : 0;
+// ── Playback ────────────────────────────────────────────────────────────────
+// One master clock: in a video segment the active <video> element drives the
+// playhead (frame-accurate); in a shader segment there is no media clock, so
+// the rAF loop advances the playhead by wall time and renders the shader.
+let playing = false;
+let rafId = null;
+let lastTick = 0;
+
+function setPlaying(v) {
+  if (playing === v) return;
+  playing = v;
+  $play.innerHTML = `<span class="mi">${v ? "pause" : "play_arrow"}</span>`;
+  const c = clips()[activeIdx];
+  if (v) {
+    lastTick = performance.now();
+    if (c && !isShader(c)) activeVid().play();
+    if (!rafId) rafId = requestAnimationFrame(tick);
+  } else {
+    activeVid().pause();
   }
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  if (anim === "words" || anim === "typewriter") {
-    const f = revealFraction(l, lt, dur, edges);
-    ctx.beginPath();
-    ctx.rect(left + dx, top + dy, w * f, h);
-    ctx.clip();
-  }
-  ctx.drawImage(canvas, left + dx, top + dy, w, h);
-  ctx.restore();
 }
 
-// ── Playback (double-buffered, global-time driven) ──────────────────────────
+function tick(ts) {
+  if (!playing) {
+    rafId = null;
+    return;
+  }
+  const c = clips()[activeIdx];
+  if (!c) {
+    setPlaying(false);
+    rafId = null;
+    return;
+  }
+  if (isShader(c)) {
+    playhead += (ts - lastTick) / 1000;
+    const seg = layout()[activeIdx];
+    if (seg && playhead >= seg.end) advance();
+    else renderShaderFrame();
+  } else {
+    syncFromVideo();
+  }
+  lastTick = ts;
+  positionPlayhead();
+  renderOverlay();
+  updateTime();
+  rafId = playing ? requestAnimationFrame(tick) : null;
+}
+
+// Render the current shader segment's frame into the preview canvas.
+function renderShaderFrame() {
+  const c = clips()[activeIdx];
+  if (!isShader(c) || !previewShader) return;
+  const seg = layout()[activeIdx];
+  const local = Math.max(0, playhead - (seg?.start ?? 0));
+  const FW = Math.max(1, Math.round($frame.clientWidth));
+  const FH = Math.max(1, Math.round($frame.clientHeight));
+  previewShader.render(c.effect, c.params, local, FW, FH);
+}
+
 // Load clip `idx` into a given element and (optionally) seek to its in-point.
 function loadInto(el, idx, { play = false } = {}) {
   const c = clips()[idx];
-  if (!c) return;
+  if (!c || isShader(c)) return;
   el.dataset.clip = String(idx);
   const url = convertFileSrc(absSrc(c.src));
   if (el.dataset.src !== url) {
@@ -514,102 +529,114 @@ function loadInto(el, idx, { play = false } = {}) {
   }
 }
 
-// Preload the clip after `idx` into the standby element (paused, pre-seeked).
+// Preload the next VIDEO clip after `idx` into the standby element (paused,
+// pre-seeked) — shader segments between need no preload.
 function preloadNext(idx) {
-  const n = idx + 1;
-  if (n < clips().length) loadInto(standbyVid(), n, { play: false });
+  const n = clips().findIndex((c, j) => j > idx && !isShader(c));
+  if (n >= 0) loadInto(standbyVid(), n, { play: false });
 }
 
-// Jump the active element to clip `i` (used for scrub/select/initial load).
-function loadClip(i, keepPlaying) {
+// Make segment `i` current (used for scrub/select/initial load/boundaries).
+function enterSegment(i, keepPlaying) {
   activeIdx = i;
-  loadInto(activeVid(), i, { play: keepPlaying });
-  showActive();
+  const c = clips()[i];
+  if (!c) return;
+  if (isShader(c)) {
+    activeVid().pause();
+    for (const el of els) el.classList.remove("active");
+    $shaderCv.classList.add("active");
+    renderShaderFrame();
+  } else {
+    $shaderCv.classList.remove("active");
+    loadInto(activeVid(), i, { play: keepPlaying });
+    showActive();
+  }
   preloadNext(i);
 }
 
-// Swap to the preloaded standby element at a clip boundary — no black frame.
+// Move to the next segment at a boundary. Video→video swaps to the preloaded
+// standby element so no black frame shows.
 function advance() {
   const next = activeIdx + 1;
   if (next >= clips().length) {
-    activeVid().pause();
+    playhead = totalDur();
+    setPlaying(false);
     return;
   }
-  const wasPlaying = !activeVid().paused;
-  const old = activeVid();
-  const sb = standbyVid();
-  if (parseInt(sb.dataset.clip) !== next) loadInto(sb, next, { play: false });
-  old.pause();
-  curEl ^= 1; // standby becomes active
-  activeIdx = next;
-  showActive();
-  if (wasPlaying) activeVid().play();
-  preloadNext(next); // preload next+1 into the now-standby (old active)
-}
-
-// Seek the whole timeline to a global time.
-function seekGlobal(t) {
-  const total = totalDur();
-  playhead = Math.max(0, Math.min(total, t));
-  const m = globalToClip(playhead);
-  if (!m) return;
-  const wasPlaying = !activeVid().paused;
-  if (m.idx !== activeIdx) loadClip(m.idx, wasPlaying);
-  const v = activeVid();
-  if (v.readyState >= 1) {
-    try {
-      v.currentTime = m.src;
-    } catch {}
+  const c = clips()[next];
+  playhead = layout()[next].start;
+  if (isShader(c)) {
+    activeVid().pause();
+    activeIdx = next;
+    for (const el of els) el.classList.remove("active");
+    $shaderCv.classList.add("active");
+    renderShaderFrame();
+    preloadNext(next);
+  } else {
+    $shaderCv.classList.remove("active");
+    const sb = standbyVid();
+    if (parseInt(sb.dataset.clip) !== next) loadInto(sb, next, { play: false });
+    activeVid().pause();
+    curEl ^= 1; // standby becomes active
+    activeIdx = next;
+    showActive();
+    if (playing) activeVid().play();
+    preloadNext(next); // preload the next video into the now-standby element
   }
-  positionPlayhead();
-  renderOverlay();
-  updateTime();
 }
 
-$play.addEventListener("click", () => {
-  const v = activeVid();
-  if (v.paused) v.play();
-  else v.pause();
-});
-let rafId = null;
-// Listeners on both elements; only the active one drives the UI.
-for (const el of els) {
-  el.addEventListener("play", (e) => {
-    if (e.target !== activeVid()) return;
-    $play.textContent = "❚❚ Pause";
-    if (!rafId) rafId = requestAnimationFrame(frame);
-  });
-  el.addEventListener("pause", (e) => {
-    if (e.target !== activeVid()) return;
-    $play.textContent = "▶︎ Play";
-  });
-  // `timeupdate` is a coarse (~4 Hz) backstop; the rAF loop does smooth work.
-  el.addEventListener("timeupdate", (e) => {
-    if (e.target === activeVid()) syncPlayhead();
-  });
-  el.addEventListener("loadedmetadata", () => applyVidTransform(el));
-}
-
-function frame() {
-  syncPlayhead();
-  rafId = activeVid().paused ? null : requestAnimationFrame(frame);
-}
-
-function syncPlayhead() {
+// Read the active video's clock; advance at the clip's out-point.
+function syncFromVideo() {
   let c = clips()[activeIdx];
   if (!c) return;
   const v = activeVid();
   if (v.currentTime >= (c.out ?? v.duration)) {
     advance();
     c = clips()[activeIdx];
-    if (!c) return;
+    if (!c || isShader(c)) return;
   }
   const seg = layout()[activeIdx];
   if (seg) playhead = seg.start + Math.max(0, activeVid().currentTime - (c.in ?? 0));
+}
+
+// Seek the whole timeline to a global time.
+function seekGlobal(t) {
+  const total = totalDur();
+  playhead = Math.max(0, Math.min(total, t));
+  const m = segAt(playhead);
+  if (!m) return;
+  if (m.idx !== activeIdx) enterSegment(m.idx, playing);
+  const c = clips()[m.idx];
+  if (isShader(c)) {
+    renderShaderFrame();
+  } else {
+    const v = activeVid();
+    if (v.readyState >= 1) {
+      try {
+        v.currentTime = m.src;
+      } catch {}
+    }
+  }
   positionPlayhead();
   renderOverlay();
   updateTime();
 }
+
+for (const el of els) {
+  el.addEventListener("loadedmetadata", () => applyVidTransform(el));
+}
+
+$play.addEventListener("click", () => {
+  if (!playing && playhead >= totalDur() - 0.01) seekGlobal(0); // replay from the top
+  setPlaying(!playing);
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key !== " ") return;
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+  e.preventDefault();
+  if (!$play.disabled) $play.click();
+});
 
 function updateTime() {
   $time.textContent = `${fmt(playhead)} / ${fmt(totalDur())}`;
@@ -655,9 +682,28 @@ function startTrim(e, i, edge) {
   e.preventDefault();
   const c = clips()[i];
   const startX = e.clientX;
-  const orig = edge === "in" ? c.in ?? 0 : c.out ?? 0;
   const pps = pxPerSecond();
   selectClip(c);
+  if (isShader(c)) {
+    // Both handles just resize a generator clip (duration is its only length).
+    const orig = clipDur(c);
+    const sign = edge === "in" ? -1 : 1;
+    const move = (ev) => {
+      c.dur = Math.max(0.5, orig + (sign * (ev.clientX - startX)) / pps);
+      renderTimeline();
+      updateTime();
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      scheduleVideoSave();
+      seekGlobal(layout()[i]?.start ?? 0);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return;
+  }
+  const orig = edge === "in" ? c.in ?? 0 : c.out ?? 0;
   const move = (ev) => {
     let v = orig + (ev.clientX - startX) / pps;
     if (edge === "in") c.in = Math.max(0, Math.min(v, (c.out ?? 0) - 0.1));
@@ -678,6 +724,7 @@ function startTrim(e, i, edge) {
 
 // Keep out within the source duration (probe if we don't know it yet).
 async function clampClipOut(c) {
+  if (isShader(c)) return;
   if (!c.srcDur) c.srcDur = await probeDuration(absSrc(c.src));
   if (c.srcDur && c.out > c.srcDur) {
     c.out = c.srcDur;
@@ -791,46 +838,139 @@ function selectedClip() {
   return sel?.type === "clip" ? clips().find((c) => c.id === sel.id) : null;
 }
 
-function renderClipInspector(clip) {
-  $inspector.hidden = false;
-  $inspector.innerHTML = "";
-  const label = document.createElement("label");
-  label.textContent = clip.src.split("/").pop();
-  label.className = "full";
-  $inspector.append(label);
+// Inspector field helpers — kit-styled controls wired to save + re-render.
+function inspectorField(label, node, full) {
+  if (full) {
+    node.classList.add("full");
+    $inspector.append(node);
+  } else {
+    const l = document.createElement("label");
+    l.textContent = label;
+    $inspector.append(l, node);
+  }
+}
+function fieldInput(val, on, type = "text", attrs = {}) {
+  const el = document.createElement("input");
+  el.className = "field";
+  el.type = type;
+  Object.assign(el, attrs);
+  el.value = val;
+  el.addEventListener("input", () => {
+    on(type === "number" ? parseFloat(el.value) : el.value);
+    scheduleVideoSave();
+    renderTimeline();
+    renderOverlay();
+  });
+  return el;
+}
+function fieldColor(val, on) {
+  const el = document.createElement("studio-color");
+  el.setAttribute("value", val);
+  el.addEventListener("input", () => {
+    on(el.value);
+    scheduleVideoSave();
+    renderOverlay();
+    renderShaderFrame();
+  });
+  return el;
+}
+function fieldSelect(options, current, on) {
+  const s = document.createElement("select");
+  s.className = "field";
+  for (const [value, label] of options) {
+    const o = document.createElement("option");
+    o.value = value;
+    o.textContent = label;
+    if (value === current) o.selected = true;
+    s.append(o);
+  }
+  s.addEventListener("change", () => on(s.value));
+  return s;
+}
 
-  const rotLabel = document.createElement("label");
-  rotLabel.textContent = "Rotate";
+function renderVideoClipInspector(clip) {
+  const name = document.createElement("label");
+  name.textContent = clip.src.split("/").pop();
+  name.className = "full";
+  $inspector.append(name);
+
   const row = document.createElement("div");
-  row.style.display = "flex";
-  row.style.gap = "6px";
+  row.className = "row";
   const setRotate = (deg) => {
-    clip.rotate = (((deg % 360) + 360) % 360);
+    clip.rotate = ((deg % 360) + 360) % 360;
     scheduleVideoSave();
     applyVidTransform(activeVid());
     renderOverlay();
-    renderClipInspector(clip);
+    renderInspector();
   };
-  const ccw = document.createElement("button");
-  ccw.textContent = "⟲ 90°";
-  ccw.title = "Rotate counter-clockwise";
-  ccw.addEventListener("click", () => setRotate((clip.rotate || 0) - 90));
-  const cw = document.createElement("button");
-  cw.textContent = "⟳ 90°";
-  cw.title = "Rotate clockwise";
-  cw.addEventListener("click", () => setRotate((clip.rotate || 0) + 90));
+  const mkRot = (icon, title, delta) => {
+    const b = document.createElement("button");
+    b.className = "btn btn-icon";
+    b.title = title;
+    b.innerHTML = `<span class="mi">${icon}</span>`;
+    b.addEventListener("click", () => setRotate((clip.rotate || 0) + delta));
+    return b;
+  };
   const cur = document.createElement("span");
-  cur.style.alignSelf = "center";
-  cur.style.color = "var(--ink-dim)";
+  cur.className = "text-xs";
   cur.textContent = `${clip.rotate || 0}°`;
-  row.append(ccw, cw, cur);
-  $inspector.append(rotLabel, row);
+  row.append(mkRot("rotate_left", "Rotate counter-clockwise", -90), mkRot("rotate_right", "Rotate clockwise", 90), cur);
+  inspectorField("Rotate", row);
+}
+
+function renderShaderClipInspector(clip) {
+  const def = SHADERS[clip.effect];
+  inspectorField(
+    "Background",
+    fieldSelect(
+      Object.entries(SHADERS).map(([id, d]) => [id, d.label]),
+      clip.effect,
+      (v) => {
+        clip.effect = v;
+        clip.params = { ...shaderDefaults(v), ...clip.params };
+        scheduleVideoSave();
+        renderTimeline();
+        renderShaderFrame();
+        renderInspector();
+      }
+    )
+  );
+  inspectorField(
+    "Duration (s)",
+    fieldInput(clipDur(clip), (v) => (clip.dur = Math.max(0.5, v || 0.5)), "number", {
+      min: 0.5,
+      step: 0.5,
+    })
+  );
+  if (!def) return;
+  if (!clip.params) clip.params = shaderDefaults(clip.effect);
+  for (const p of def.params) {
+    const cur = clip.params[p.key] ?? p.default;
+    if (p.type === "color") {
+      inspectorField(p.label, fieldColor(cur, (v) => (clip.params[p.key] = v)));
+    } else {
+      const input = fieldInput(cur, (v) => (clip.params[p.key] = v), "number", {
+        min: p.min ?? 0,
+        max: p.max ?? 10,
+        step: p.step ?? 0.1,
+      });
+      input.addEventListener("input", renderShaderFrame);
+      inspectorField(p.label, input);
+    }
+  }
 }
 
 function renderInspector() {
+  $inspector.innerHTML = "";
   const clip = selectedClip();
   if (clip) {
-    renderClipInspector(clip);
+    $inspector.hidden = false;
+    if (isShader(clip)) renderShaderClipInspector(clip);
+    else renderVideoClipInspector(clip);
+    appendDeleteButton(() => {
+      const i = clips().findIndex((c) => c.id === clip.id);
+      if (i >= 0) removeClip(i);
+    }, "Delete clip");
     return;
   }
   const tx = selectedText();
@@ -839,76 +979,63 @@ function renderInspector() {
     return;
   }
   $inspector.hidden = false;
-  $inspector.innerHTML = "";
-  const field = (label, node, full) => {
-    const l = document.createElement("label");
-    l.textContent = label;
-    if (full) {
-      node.classList.add("full");
-      $inspector.append(node);
-    } else {
-      $inspector.append(l, node);
-    }
-  };
-  const input = (val, on, type = "text") => {
-    const el = document.createElement("input");
-    el.type = type;
-    el.value = val;
-    el.addEventListener("input", () => {
-      on(type === "number" ? parseFloat(el.value) : el.value);
-      scheduleVideoSave();
-      renderTimeline();
-      renderOverlay();
-    });
-    return el;
-  };
-  const txt = input(tx.text || "", (v) => (tx.text = v));
-  field("Text", txt, true);
 
-  const animSel = document.createElement("select");
-  for (const a of ["none", "fade", "slide", "words", "typewriter"]) {
-    const o = document.createElement("option");
-    o.value = a;
-    o.textContent = a;
-    if ((tx.anim || "none") === a) o.selected = true;
-    animSel.append(o);
+  inspectorField("Text", fieldInput(tx.text || "", (v) => (tx.text = v)), true);
+
+  inspectorField(
+    "Animation",
+    fieldSelect(
+      Object.entries(TEXT_EFFECTS).map(([id, e]) => [id, e.label]),
+      tx.anim || "none",
+      (v) => {
+        tx.anim = v;
+        scheduleVideoSave();
+        renderOverlay();
+        renderInspector(); // effect-specific fields (from / highlight)
+      }
+    )
+  );
+
+  if ((tx.anim || "none") === "slide") {
+    inspectorField(
+      "From",
+      fieldSelect(
+        ["bottom", "top", "left", "right"].map((d) => [d, d]),
+        tx.from || "bottom",
+        (v) => {
+          tx.from = v;
+          scheduleVideoSave();
+          renderOverlay();
+        }
+      )
+    );
   }
-  animSel.addEventListener("change", () => {
-    tx.anim = animSel.value;
-    scheduleVideoSave();
-    renderOverlay();
-  });
-  field("Animation", animSel);
-
-  const fromSel = document.createElement("select");
-  for (const d of ["bottom", "top", "left", "right"]) {
-    const o = document.createElement("option");
-    o.value = d;
-    o.textContent = d;
-    if ((tx.from || "bottom") === d) o.selected = true;
-    fromSel.append(o);
+  if (tx.anim === "karaoke") {
+    inspectorField("Highlight", fieldColor(tx.hi || "#ffd23f", (v) => (tx.hi = v)));
   }
-  fromSel.addEventListener("change", () => {
-    tx.from = fromSel.value;
-    scheduleVideoSave();
-    renderOverlay();
-  });
-  field("From", fromSel);
 
-  field("X", input(tx.x ?? 0.5, (v) => (tx.x = v), "number"));
-  field("Y", input(tx.y ?? 0.85, (v) => (tx.y = v), "number"));
-  field("Size (px)", input(Math.round(fontPxOutput(tx)), (v) => (tx.size = v), "number"));
-  field("Color", input(tx.color || "#ffffff", (v) => (tx.color = v), "color"));
+  inspectorField("X", fieldInput(tx.x ?? 0.5, (v) => (tx.x = v), "number", { step: 0.01 }));
+  inspectorField("Y", fieldInput(tx.y ?? 0.85, (v) => (tx.y = v), "number", { step: 0.01 }));
+  inspectorField(
+    "Size (px)",
+    fieldInput(Math.round(fontPxOutput(tx)), (v) => (tx.size = v), "number", { min: 8 })
+  );
+  inspectorField("Color", fieldColor(tx.color || "#ffffff", (v) => (tx.color = v)));
 
-  const del = document.createElement("button");
-  del.className = "del";
-  del.textContent = "Delete text layer";
-  del.addEventListener("click", () => {
+  appendDeleteButton(() => {
     doc.text = text().filter((t) => t.id !== tx.id);
     sel = null;
     scheduleVideoSave();
     render();
-  });
+  }, "Delete text layer");
+}
+
+function appendDeleteButton(onDelete, label) {
+  const del = document.createElement("button");
+  del.className = "btn btn-ghost full";
+  del.style.justifySelf = "start";
+  del.innerHTML = `<span class="mi mi-sm">delete</span>${label}`;
+  del.addEventListener("click", onDelete);
   $inspector.append(del);
 }
 
@@ -940,6 +1067,7 @@ window.addEventListener("resize", () => {
   positionPlayhead();
   setFrameAspect();
   for (const el of els) if (el.readyState >= 1) applyVidTransform(el);
+  renderShaderFrame();
   renderOverlay();
 });
 
@@ -947,6 +1075,9 @@ window.addEventListener("resize", () => {
 $preset.addEventListener("change", () => {
   doc.preset = $preset.value;
   scheduleVideoSave();
+  setFrameAspect();
+  renderShaderFrame();
+  renderOverlay();
 });
 
 // Render dimensions for each preset. "web" follows the first clip's source
@@ -965,35 +1096,71 @@ function presetDims() {
   }
 }
 
-function buildSpec() {
+const EXPORT_FPS = 30;
+
+// Render the overlay frame sequence at output resolution: shader-clip pixels
+// (opaque) + text layers (transparent elsewhere), drawn by the SAME effects.js
+// / shaders.js code as the preview — so the baked result matches exactly.
+// Frames with nothing on them are skipped (the compositor treats missing
+// frames as fully transparent).
+async function renderOverlayFrames(dir, dims, onProgress) {
+  const total = totalDur();
+  const count = Math.ceil(total * EXPORT_FPS);
+  const cv = document.createElement("canvas");
+  cv.width = dims.w;
+  cv.height = dims.h;
+  const ctx = cv.getContext("2d");
+  const shader = createShaderRenderer();
+  const segs = layout();
+  for (let i = 0; i < count; i++) {
+    const t = (i + 0.5) / EXPORT_FPS;
+    ctx.clearRect(0, 0, dims.w, dims.h);
+    let drew = false;
+    const seg = segs.find((s) => t >= s.start && t < s.end);
+    if (seg && isShader(seg.c) && shader) {
+      const out = shader.render(seg.c.effect, seg.c.params, t - seg.start, dims.w, dims.h);
+      if (out) {
+        ctx.drawImage(out, 0, 0);
+        drew = true;
+      }
+    }
+    for (const l of text()) {
+      const s = l.start ?? 0;
+      const e = l.end ?? 0;
+      if (t < s || t > e) continue;
+      drawCaption(ctx, l, t - s, e - s, dims.w, dims.h, fontPxOutput(l));
+      drew = true;
+    }
+    if (drew) {
+      await invoke("save_export_frame", { dir, idx: i, data: cv.toDataURL("image/png") });
+    }
+    if (i % 15 === 0) {
+      onProgress(i / count);
+      await new Promise((r) => requestAnimationFrame(r)); // keep the UI alive
+    }
+  }
+  return count;
+}
+
+function buildSpec(framesDir) {
   const d = presetDims();
   return {
     width: d.w,
     height: d.h,
     fit: doc.fit || "contain",
-    clips: clips().map((c) => ({
-      src: absSrc(c.src),
-      in: c.in ?? 0,
-      out: c.out ?? 0,
-      rotate: c.rotate || 0,
-    })),
-    // Render each caption at OUTPUT resolution and embed the PNG; the exporter
-    // composites these images directly so it matches the preview exactly.
-    text: text().map((l) => {
-      const { canvas, w, h, edges } = makeCaptionCanvas(l, fontPxOutput(l));
-      return {
-        image: canvas.toDataURL("image/png"),
-        w,
-        h,
-        x: l.x ?? 0.5,
-        y: l.y ?? 0.85,
-        start: l.start ?? 0,
-        end: l.end ?? 0,
-        anim: l.anim || "none",
-        from: l.from || "bottom",
-        edges,
-      };
-    }),
+    fps: EXPORT_FPS,
+    framesDir,
+    clips: clips().map((c) =>
+      isShader(c)
+        ? { kind: "gap", dur: clipDur(c) }
+        : {
+            kind: "video",
+            src: absSrc(c.src),
+            in: c.in ?? 0,
+            out: c.out ?? 0,
+            rotate: c.rotate || 0,
+          }
+    ),
   };
 }
 
@@ -1025,22 +1192,27 @@ $export.addEventListener("click", async () => {
   if (!dst) return;
 
   // Flush any pending edit so the export matches what's on screen.
-  try {
-    await invoke("write_video", { path: projectPath, file: currentFile, doc });
-  } catch {}
+  await flushSave();
 
   exporting = true;
   $export.disabled = true;
-  $export.textContent = "Exporting…";
+  const exportLabel = $export.innerHTML;
+  setPlaying(false);
   try {
-    await invoke("export_video", { spec: buildSpec(), dst });
+    const dims = presetDims();
+    const framesDir = await invoke("create_export_frames_dir");
+    await renderOverlayFrames(framesDir, dims, (p) => {
+      $export.textContent = `Rendering ${Math.round(p * 100)}%`;
+    });
+    $export.textContent = "Exporting…";
+    await invoke("export_video", { spec: buildSpec(framesDir), dst });
     toast("Exported ✓ — revealed in Finder");
   } catch (e) {
     toast("Export failed: " + e);
   } finally {
     exporting = false;
     $export.disabled = false;
-    $export.textContent = "Export";
+    $export.innerHTML = exportLabel;
   }
 });
 
@@ -1070,6 +1242,17 @@ async function populateAddMenu() {
     opt.textContent = v.name;
     $addsel.append(opt);
   }
+  // Shader generator clips — animated backgrounds, no source file.
+  const sep = document.createElement("option");
+  sep.disabled = true;
+  sep.textContent = "—— backgrounds ——";
+  $addsel.append(sep);
+  for (const [id, def] of Object.entries(SHADERS)) {
+    const opt = document.createElement("option");
+    opt.value = "__shader__:" + id;
+    opt.textContent = def.label;
+    $addsel.append(opt);
+  }
 }
 
 async function browseForClip() {
@@ -1096,6 +1279,22 @@ $addsel.addEventListener("change", async () => {
   let abs = $addsel.value;
   $addsel.value = "";
   if (!abs) return;
+  if (abs.startsWith("__shader__:")) {
+    const effect = abs.slice("__shader__:".length);
+    const c = {
+      id: "c" + Math.random().toString(36).slice(2, 8),
+      kind: "shader",
+      effect,
+      params: shaderDefaults(effect),
+      dur: 5,
+    };
+    clips().push(c);
+    activeIdx = clips().length - 1;
+    scheduleVideoSave();
+    render();
+    selectClip(c);
+    return;
+  }
   if (abs === "__browse__") {
     abs = await browseForClip();
     if (!abs) return;
@@ -1162,17 +1361,28 @@ function toast(msg) {
 }
 
 // ── Live reload (Claude Code edits files under videos/ on disk) ─────────────
-// Two triggers: the global `fs-changed` event (live, while focused elsewhere)
-// and window focus (reliable belt-and-suspenders, like the Git window). Both
-// re-list the edits and reload the current doc.
+// Triggered by the global `fs-changed` event and window focus. Reloads ONLY
+// when the file's content actually differs from what we last read/wrote —
+// never while a local edit is pending — so UI edits can't be clobbered by our
+// own write echo or by unrelated project file changes. The titlebar refresh
+// button force-reloads regardless.
 async function liveRefresh() {
-  if (writingSelf) return;
+  if (dirty || saveTimer || exporting) return; // local edits win; save is imminent
   await refreshEditList();
-  if (currentFile && edits.some((e) => e.file === currentFile)) {
-    await openEdit(currentFile);
-  } else {
+  if (!currentFile || !edits.some((e) => e.file === currentFile)) {
     await ensureAnEdit();
+    return;
   }
+  let fresh;
+  try {
+    fresh = await invoke("read_video", { path: projectPath, file: currentFile });
+  } catch {
+    return;
+  }
+  if (dirty || saveTimer) return; // an edit landed while we were reading
+  const s = JSON.stringify(fresh);
+  if (s === lastPersisted) return; // no real change (e.g. our own write echo)
+  await openEdit(currentFile, { keepPosition: true });
 }
 listen("fs-changed", liveRefresh);
 window.addEventListener("focus", liveRefresh);

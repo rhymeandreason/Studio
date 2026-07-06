@@ -4,71 +4,32 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Video</title>
+    <link rel="stylesheet" href="../tokens.css" />
+    <link rel="stylesheet" href="../kit/kit.css" />
+    <script type="module" src="../kit/components.js"></script>
     <style>
-      :root {
-        --bg: #15171c;
-        --ink: #f3f1ea;
-        --ink-dim: rgba(243, 241, 234, 0.55);
-        --line: rgba(243, 241, 234, 0.14);
-        --card: rgba(255, 255, 255, 0.06);
-        --card-strong: rgba(255, 255, 255, 0.12);
-        --accent: #ffd23f;
-      }
-      * { box-sizing: border-box; }
-      html, body { height: 100%; margin: 0; }
+      /* Tool-specific styles only — buttons/fields/labels come from kit.css. */
+      html, body { height: 100%; }
       body {
-        background: var(--bg);
-        color: var(--ink);
-        font: 13px/1.4 "Futura", "Avenir Next", system-ui, sans-serif;
         display: flex;
         flex-direction: column;
         overflow: hidden;
         user-select: none;
       }
-      .titlebar {
-        height: 34px;
-        flex: 0 0 34px;
-        display: flex;
+      /* Native transparent title bar: leave room for the traffic lights. */
+      .title-strip { padding-left: 78px; border-bottom: none; flex: 0 0 34px; }
+      .title-strip .project {
+        font-weight: 600;
+        color: var(--text);
+        display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 0 14px;
-      }
-      .titlebar .project {
-        font-weight: 700;
-        letter-spacing: 0.02em;
-        flex: 0 1 auto;
+        gap: 6px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .titlebar .project::before { content: "🎬 "; }
-      .titlebar .spacer { flex: 1 1 auto; }
-      .docsel {
-        -webkit-appearance: none;
-        appearance: none;
-        border: none;
-        border-radius: 7px;
-        background: var(--card-strong);
-        color: var(--ink);
-        font: inherit;
-        font-weight: 600;
-        padding: 4px 8px;
-        max-width: 220px;
-        cursor: pointer;
-      }
-      .iconbtn {
-        border: none;
-        border-radius: 7px;
-        background: transparent;
-        color: var(--ink);
-        font: inherit;
-        font-size: 14px;
-        line-height: 1;
-        cursor: pointer;
-        padding: 4px 7px;
-        opacity: 0.7;
-      }
-      .iconbtn:hover { opacity: 1; background: var(--card-strong); }
+      .title-strip .spacer { flex: 1 1 auto; }
+      .title-strip select.field { width: auto; max-width: 220px; }
       main {
         flex: 1 1 auto;
         display: flex;
@@ -77,24 +38,19 @@
         padding: 4px 14px 12px;
         gap: 10px;
       }
-      /* Preview keeps a 16:9 box; the video letterboxes inside. */
+      /* Preview stage: black, letterboxes the export-aspect frame inside. */
       .stage {
         position: relative;
         flex: 1 1 auto;
         min-height: 120px;
         background: #000;
-        border-radius: 10px;
+        border-radius: var(--radius);
         overflow: hidden;
         display: flex;
         align-items: center;
         justify-content: center;
       }
-      /* The export-aspect frame, letterboxed within the (window-sized) stage. */
-      .frame {
-        position: relative;
-        background: #000;
-        overflow: hidden;
-      }
+      .frame { position: relative; background: #000; overflow: hidden; }
       /* Videos are centered and sized/rotated by JS (per clip rotation + fit). */
       .stage .vid {
         position: absolute;
@@ -104,48 +60,36 @@
         opacity: 0;
       }
       .stage .vid.active { opacity: 1; }
+      /* Shader generator clips render here, filling the frame. */
+      .stage .shadercv {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: none;
+      }
+      .stage .shadercv.active { display: block; }
       .stage .placeholder {
-        color: var(--ink-dim);
+        color: var(--text-soft);
         font-style: italic;
         text-align: center;
         padding: 20px;
       }
-      .controls {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
+      .overlay { position: absolute; inset: 0; pointer-events: none; }
+      .controls { display: flex; align-items: center; gap: 8px; }
       .controls .time {
-        font-variant-numeric: tabular-nums;
-        font-family: "SF Mono", ui-monospace, monospace;
+        font-family: var(--mono);
         font-size: 12px;
-        color: var(--ink-dim);
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
       }
-      /* Caption/title overlay over the preview (preview of the baked look). */
-      .overlay {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        overflow: hidden;
-      }
-      .overlay .lyr {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        white-space: pre-wrap;
-        text-align: center;
-        font-family: "Futura", "Avenir Next", system-ui, sans-serif;
-        font-weight: 700;
-        line-height: 1.15;
-        padding: 0.15em 0.45em;
-        border-radius: 0.2em;
-        max-width: 92%;
-      }
-      /* Timeline: a clip lane + a text lane, with a draggable playhead. */
+      .controls select.field { width: auto; }
+      /* Timeline: a clip lane + stacked text lanes, with a draggable playhead. */
       .timeline {
         position: relative;
         flex: 0 0 auto;
-        background: var(--card);
-        border-radius: 10px;
+        background: var(--surface);
+        border-radius: var(--radius);
         padding: 6px;
         display: flex;
         flex-direction: column;
@@ -155,56 +99,55 @@
       .lane {
         position: relative;
         height: 42px;
-        border-radius: 7px;
-        background: rgba(0, 0, 0, 0.25);
+        border-radius: var(--radius-sm);
+        background: var(--hairline);
       }
-      /* Text tracks: one stacked lane per row of non-overlapping layers. */
-      .texttracks {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
+      .texttracks { display: flex; flex-direction: column; gap: 4px; }
       .lane--text { height: 26px; }
       .block {
         position: absolute;
         top: 3px;
         bottom: 3px;
-        border-radius: 6px;
-        background: var(--card-strong);
+        border-radius: var(--radius-sm);
+        background: var(--elevated);
+        border: 1px solid var(--hairline);
         overflow: hidden;
         cursor: grab;
         display: flex;
         align-items: center;
         font-size: 11px;
+        color: var(--text);
       }
-      .block.sel { outline: 2px solid var(--accent); z-index: 2; }
+      .block.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); z-index: 2; }
+      .block--shader { background: var(--accent-soft); }
       .block .label {
         padding: 0 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         pointer-events: none;
       }
+      .block .label .mi { font-size: 13px; color: var(--text-muted); }
       .block .handle {
         position: absolute;
         top: 0;
         bottom: 0;
         width: 9px;
         cursor: ew-resize;
-        background: rgba(255, 255, 255, 0.18);
+        background: var(--hairline-strong);
       }
-      .block .handle.l { left: 0; border-radius: 6px 0 0 6px; }
-      .block .handle.r { right: 0; border-radius: 0 6px 6px 0; }
-      .lane--text .block {
-        background: rgba(255, 210, 63, 0.35);
-      }
-      .lane--text .block.sel { background: rgba(255, 210, 63, 0.55); }
+      .block .handle.l { left: 0; }
+      .block .handle.r { right: 0; }
+      .lane--text .block { background: var(--sage-soft); }
       .playhead {
         position: absolute;
         top: 4px;
         bottom: 4px;
         width: 2px;
-        background: var(--accent);
+        background: var(--rose);
         pointer-events: none;
         z-index: 3;
         left: 6px;
@@ -215,7 +158,7 @@
         top: -3px;
         left: -4px;
         border: 5px solid transparent;
-        border-top-color: var(--accent);
+        border-top-color: var(--rose);
       }
       /* Wide invisible grab target so the thin playhead is easy to drag. */
       .playhead .grab {
@@ -228,76 +171,54 @@
         cursor: ew-resize;
       }
       .timeline.scrubbing { cursor: ew-resize; }
-      /* Inspector for the selected text layer. */
+      /* Inspector for the selected clip / text layer. */
       .inspector {
         flex: 0 0 auto;
-        background: var(--card);
-        border-radius: 10px;
-        padding: 8px 10px;
+        background: var(--surface);
+        border-radius: var(--radius);
+        padding: 10px 12px;
         display: grid;
         grid-template-columns: auto 1fr auto 1fr;
-        gap: 6px 8px;
+        gap: 8px 10px;
         align-items: center;
         font-size: 12px;
       }
-      .inspector label { color: var(--ink-dim); }
-      .inspector .full { grid-column: 1 / -1; }
-      .inspector input, .inspector select {
-        width: 100%;
-        border: none;
-        border-radius: 6px;
-        background: var(--card-strong);
-        color: var(--ink);
-        font: inherit;
-        padding: 5px 7px;
-        outline: none;
-      }
-      .inspector input[type="color"] { padding: 2px; height: 26px; }
-      .inspector .del {
-        grid-column: 1 / -1;
-        justify-self: start;
-        background: transparent;
-        color: var(--ink-dim);
-        padding: 4px 0;
-      }
-      button, select {
-        border: none;
-        border-radius: 9px;
-        font: inherit;
+      .inspector > label {
+        font-size: 11.5px;
         font-weight: 600;
-        cursor: pointer;
-        padding: 7px 12px;
-        color: var(--ink);
-        background: var(--card-strong);
+        color: var(--text-muted);
       }
-      button.primary { background: var(--accent); color: #1a1a1a; }
-      button:disabled { opacity: 0.35; cursor: default; }
-      select { -webkit-appearance: none; appearance: none; }
+      .inspector .full { grid-column: 1 / -1; }
+      .inspector .row { display: flex; align-items: center; gap: 6px; }
       .toast {
         position: fixed;
         left: 50%;
         bottom: 12px;
         transform: translateX(-50%);
-        background: var(--ink);
+        background: var(--text);
         color: var(--bg);
         padding: 6px 12px;
-        border-radius: 8px;
+        border-radius: var(--radius-sm);
         font-size: 12px;
         opacity: 0;
-        transition: opacity 0.2s;
+        transition: opacity var(--dur-base);
         pointer-events: none;
         max-width: 90%;
+        z-index: 10;
       }
       .toast.show { opacity: 1; }
     </style>
   </head>
   <body>
-    <div class="titlebar" data-tauri-drag-region>
-      <span class="project" id="project" data-tauri-drag-region></span>
-      <select class="docsel" id="docsel" title="Switch edit"></select>
-      <button class="iconbtn" id="newdoc" title="New video">＋</button>
+    <div class="title-strip" data-tauri-drag-region>
+      <span class="project" id="project" data-tauri-drag-region
+        ><span class="mi">movie</span></span
+      >
+      <select class="field" id="docsel" title="Switch edit"></select>
+      <button class="btn-icon-s" id="newdoc" title="New video"><span class="mi">add</span></button>
+      <button class="btn-icon-s" id="refresh" title="Reload from file"><span class="mi">refresh</span></button>
       <span class="spacer" data-tauri-drag-region></span>
-      <button class="iconbtn" id="deldoc" title="Delete this edit">🗑</button>
+      <button class="btn-icon-s" id="deldoc" title="Delete this edit"><span class="mi">delete</span></button>
     </div>
     <main>
       <div class="stage" id="stage">
@@ -310,22 +231,27 @@
                boundaries don't flash black. -->
           <video class="vid" id="vidA" playsinline></video>
           <video class="vid" id="vidB" playsinline></video>
+          <canvas class="shadercv" id="shaderCv"></canvas>
           <canvas class="overlay" id="overlay"></canvas>
         </div>
       </div>
       <div class="controls">
-        <button id="play" disabled>▶︎ Play</button>
+        <button class="btn btn-icon" id="play" disabled title="Play/pause">
+          <span class="mi">play_arrow</span>
+        </button>
         <span class="time" id="time">0:00 / 0:00</span>
-        <span class="spacer" style="flex:1 1 auto"></span>
-        <button id="addtext">＋ Text</button>
-        <select id="addsel"><option value="">+ Add clip…</option></select>
-        <select id="preset" title="Export format">
+        <span class="spacer" style="flex: 1 1 auto"></span>
+        <button class="btn-add" id="addtext"><span class="mi mi-sm">text_fields</span>Text</button>
+        <select class="field" id="addsel"><option value="">+ Add clip…</option></select>
+        <select class="field" id="preset" title="Export format">
           <option value="youtube">YouTube 16:9</option>
           <option value="reels">Reels 9:16</option>
           <option value="square">Square 1:1</option>
           <option value="web">Web (source)</option>
         </select>
-        <button id="export" class="primary">Export</button>
+        <button id="export" class="btn btn-primary">
+          <span class="mi mi-sm">movie_edit</span>Export
+        </button>
       </div>
       <div class="timeline" id="timeline">
         <div class="lane" id="clipLane"></div>

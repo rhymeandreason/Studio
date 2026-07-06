@@ -46,6 +46,9 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
   renderer in `src/deck/`, Slides + Theme editor tools) — [docs/slides.md](docs/slides.md)
 - **Diagrams** (`diagram` artifacts: templated concept diagrams, SVG renderer
   in `src/diagram/`, embeddable live in slides) — [docs/diagrams.md](docs/diagrams.md)
+- **Video editor** (multi-clip edits as `videos/*.json`, text-animation +
+  shader-background registries in `src/video/`, native export) —
+  [docs/video.md](docs/video.md)
 - **Interaction model** (shared selection + keyboard) — `selection.js` /
   `keymap.js`. [docs/interaction-spec.md](docs/interaction-spec.md)
 

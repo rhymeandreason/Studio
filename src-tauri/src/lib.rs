@@ -1802,10 +1802,42 @@ fn delete_video(path: String, file: String) -> Result<(), String> {
     std::fs::remove_file(videos_dir(&path).join(&file)).map_err(|e| e.to_string())
 }
 
+/// Create a temp directory for the frontend's rendered overlay frames (one
+/// export's worth; removed by `export_video` when the export finishes).
+#[tauri::command]
+fn create_export_frames_dir() -> Result<String, String> {
+    let dir = std::env::temp_dir().join(format!(
+        "studio-vidframes-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0)
+    ));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+/// Save one overlay frame (PNG data URL from the export canvas) into a frames
+/// dir made by `create_export_frames_dir`. Frames are named f%06d.png; missing
+/// indices mean "fully transparent" to the compositor.
+#[tauri::command]
+fn save_export_frame(dir: String, idx: u32, data: String) -> Result<(), String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let dir_path = std::path::PathBuf::from(&dir);
+    if !dir_path.starts_with(std::env::temp_dir()) {
+        return Err("frames dir must be under the temp dir".into());
+    }
+    let b64 = data.split(',').nth(1).ok_or("bad data URL")?;
+    let bytes = STANDARD.decode(b64).map_err(|e| e.to_string())?;
+    std::fs::write(dir_path.join(format!("f{idx:06}.png")), bytes).map_err(|e| e.to_string())
+}
+
 /// Render an edit to an MP4 via the native AVFoundation helper. `spec` is the
-/// fully-resolved export spec (absolute clip paths, render width/height, text
-/// layers — built by the frontend); `dst` is the chosen output file. Streams
-/// `video-export-progress` events (0..1) and returns the output path on done.
+/// fully-resolved export spec (absolute clip paths, render width/height/fps,
+/// and the overlay frames dir rendered by the frontend); `dst` is the chosen
+/// output file. Streams `video-export-progress` events (0..1) and returns the
+/// output path on done.
 #[tauri::command]
 fn export_video(app: AppHandle, spec: serde_json::Value, dst: String) -> Result<String, String> {
     use std::io::{BufRead, BufReader};
@@ -1839,6 +1871,13 @@ fn export_video(app: AppHandle, spec: serde_json::Value, dst: String) -> Result<
     }
     let _ = child.wait();
     let _ = std::fs::remove_file(&tmp);
+    // Overlay frames are single-use; clean them up (guard: temp dir only).
+    if let Some(frames) = spec.get("framesDir").and_then(|v| v.as_str()) {
+        let p = std::path::PathBuf::from(frames);
+        if p.starts_with(std::env::temp_dir()) {
+            let _ = std::fs::remove_dir_all(&p);
+        }
+    }
 
     if let Some(e) = err {
         return Err(e);
@@ -5806,6 +5845,8 @@ pub fn run() {
             write_video,
             create_video,
             delete_video,
+            create_export_frames_dir,
+            save_export_frame,
             export_video,
             open_video_window,
             get_memory_stats,

@@ -1,7 +1,10 @@
 # Video editor — design plan
 
-> Status: **planned, not yet built.** This is the implementation plan for
-> Studio's video editor. Once built, the living reference moves to `video.md`.
+> Status: **built — historical.** This was the implementation plan for
+> Studio's video editor; the living reference is [video.md](video.md). Notable
+> departures from this plan: text/shader effects are authored once in JS/GLSL
+> (`src/video/effects.js` / `shaders.js`) and export bakes webview-rendered
+> overlay frames instead of Core Animation layers.
 
 ## Context
 
