@@ -380,9 +380,10 @@ async function selectOnly(item) {
   const cur = getEditItem();
   if (cur && cur.path !== item.path) await flushEditSave();
   document.getElementById("side-name").textContent = item.name;
-  if (editorSidebarEnabled) {
+  const appRight = document.getElementById("app-right");
+  if (editorSidebarEnabled && appRight.hidden) {
     document.getElementById("media-side").hidden = false;
-    document.getElementById("app-right").hidden = false;
+    appRight.hidden = false;
     invoke("set_window_width", { width: window.innerWidth + 320 });
   }
 
