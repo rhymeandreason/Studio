@@ -383,7 +383,7 @@ async function selectOnly(item) {
   if (editorSidebarEnabled) {
     document.getElementById("media-side").hidden = false;
     document.getElementById("app-right").hidden = false;
-    invoke("set_window_width", { width: Math.max(window.innerWidth, 1220) });
+    invoke("set_window_width", { width: window.innerWidth + 320 });
   }
 
   moveEditor(document.getElementById("media-side-editor"));
@@ -434,7 +434,7 @@ async function trashMedia(paths) {
     if (appRight && !appRight.hidden) {
       document.getElementById("media-side").hidden = true;
       appRight.hidden = true;
-      invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+      invoke("set_window_width", { width: window.innerWidth - 320 });
     }
   }
 
@@ -828,7 +828,7 @@ async function loadMedia(path) {
     state.activeItem = null;
     document.getElementById("media-side").hidden = true;
     document.getElementById("app-right").hidden = true;
-    invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+    invoke("set_window_width", { width: window.innerWidth - 320 });
 
   }
 
@@ -922,7 +922,7 @@ async function closeInlineEditor() {
   if (appRight && !appRight.hidden) {
     document.getElementById("media-side").hidden = true;
     appRight.hidden = true;
-    invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+    invoke("set_window_width", { width: window.innerWidth - 320 });
   }
 
   clearEditor();
@@ -1176,11 +1176,11 @@ function setEditorSidebar(enabled) {
   if (!enabled && state.activeItem) {
     document.getElementById("media-side").hidden = true;
     document.getElementById("app-right").hidden = true;
-    invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+    invoke("set_window_width", { width: window.innerWidth - 320 });
   } else if (enabled && state.activeItem) {
     document.getElementById("media-side").hidden = false;
     document.getElementById("app-right").hidden = false;
-    invoke("set_window_width", { width: Math.max(window.innerWidth, 1220) });
+    invoke("set_window_width", { width: window.innerWidth + 320 });
   }
 }
 

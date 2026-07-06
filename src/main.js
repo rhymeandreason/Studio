@@ -471,7 +471,7 @@ async function showOverview() {
   if (appRight && !appRight.hidden) {
     appRight.hidden = true;
     document.getElementById("media-side").hidden = true;
-    invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+    invoke("set_window_width", { width: window.innerWidth - 320 });
   }
 }
 
@@ -513,7 +513,7 @@ export function selectTab(name) {
     if (appRight && !appRight.hidden) {
       appRight.hidden = true;
       document.getElementById("media-side").hidden = true;
-      invoke("set_window_width", { width: Math.max(window.innerWidth - 320, 900) });
+      invoke("set_window_width", { width: window.innerWidth - 320 });
     }
   } else if (state.activeItem && mediaSelection.has(state.activeItem.path) && state.editorSidebarEnabled) {
     // Returning to media: re-open the editor column for the selection that
@@ -522,7 +522,7 @@ export function selectTab(name) {
     if (appRight && appRight.hidden) {
       document.getElementById("media-side").hidden = false;
       appRight.hidden = false;
-      invoke("set_window_width", { width: Math.max(window.innerWidth, 1220) });
+      invoke("set_window_width", { width: window.innerWidth + 320 });
     }
   }
 }
