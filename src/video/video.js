@@ -227,6 +227,7 @@ async function openEdit(file, { keepPosition = false } = {}) {
     activeIdx = 0;
     playhead = 0;
     sel = null;
+    timelineSpan = 0; // fresh doc → fit the timeline to its content again
   }
   setPlaying(false);
   renderDocSel();
@@ -271,6 +272,15 @@ function fmt(t) {
 
 function totalDur() {
   return clips().reduce((sum, c) => sum + clipDur(c), 0);
+}
+
+// The timeline's visible span: grows with content but never auto-shrinks
+// while editing (trimming a clip shouldn't rescale everything under your
+// cursor). Resets when an edit is opened fresh.
+let timelineSpan = 0;
+function span() {
+  timelineSpan = Math.max(timelineSpan, totalDur());
+  return timelineSpan || 1;
 }
 
 const text = () => doc.text || (doc.text = []);
@@ -326,7 +336,7 @@ function render() {
 
 // ── Timeline rendering ──────────────────────────────────────────────────────
 function renderTimeline() {
-  const total = totalDur() || 1;
+  const total = span();
   const segs = layout();
   $clipLane.innerHTML = "";
   segs.forEach((s, i) => {
@@ -415,7 +425,7 @@ function assignTextRows() {
 }
 
 function positionPlayhead() {
-  const total = totalDur() || 1;
+  const total = span();
   const pad = 6; // .timeline padding
   const w = $timeline.clientWidth - pad * 2;
   $playhead.style.left = pad + (playhead / total) * w + "px";
@@ -648,7 +658,7 @@ function timeAtX(clientX) {
   const pad = 6;
   const w = r.width - pad * 2;
   const frac = Math.max(0, Math.min(1, (clientX - r.left - pad) / w));
-  return frac * (totalDur() || 0);
+  return frac * span(); // seekGlobal clamps to the actual content length
 }
 
 // Scrub by pressing anywhere on the timeline background (or grabbing the
@@ -674,7 +684,7 @@ $timeline.addEventListener("pointerdown", startScrub);
 
 function pxPerSecond() {
   const r = $timeline.getBoundingClientRect();
-  return (r.width - 12) / (totalDur() || 1);
+  return (r.width - 12) / span();
 }
 
 function startTrim(e, i, edge) {
@@ -745,7 +755,7 @@ function startClipDrag(e, i) {
     moved = true;
     // Determine drop index from cursor position across the clip lane.
     const segs = layout();
-    const total = totalDur() || 1;
+    const total = span(); // blocks are laid out against the span
     const r = $clipLane.getBoundingClientRect();
     const t = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * total;
     targetIdx = segs.findIndex((s) => t < (s.start + s.end) / 2);
@@ -964,7 +974,6 @@ function renderInspector() {
   $inspector.innerHTML = "";
   const clip = selectedClip();
   if (clip) {
-    $inspector.hidden = false;
     if (isShader(clip)) renderShaderClipInspector(clip);
     else renderVideoClipInspector(clip);
     appendDeleteButton(() => {
@@ -975,10 +984,12 @@ function renderInspector() {
   }
   const tx = selectedText();
   if (!tx) {
-    $inspector.hidden = true;
+    const hint = document.createElement("div");
+    hint.className = "inspector__hint";
+    hint.textContent = "Select a clip or text layer to edit it.";
+    $inspector.append(hint);
     return;
   }
-  $inspector.hidden = false;
 
   inspectorField("Text", fieldInput(tx.text || "", (v) => (tx.text = v)), true);
 

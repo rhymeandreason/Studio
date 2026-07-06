@@ -30,12 +30,20 @@
       }
       .title-strip .spacer { flex: 1 1 auto; }
       .title-strip select.field { width: auto; max-width: 220px; }
+      /* Main is a row: the editor column + the inspector sidebar. */
       main {
         flex: 1 1 auto;
         display: flex;
-        flex-direction: column;
         min-height: 0;
         padding: 4px 14px 12px;
+        gap: 12px;
+      }
+      .editor-col {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
         gap: 10px;
       }
       /* Preview stage: black, letterboxes the export-aspect frame inside. */
@@ -171,15 +179,17 @@
         cursor: ew-resize;
       }
       .timeline.scrubbing { cursor: ew-resize; }
-      /* Inspector for the selected clip / text layer. */
+      /* Inspector — right sidebar for the selected clip / text layer. */
       .inspector {
-        flex: 0 0 auto;
+        flex: 0 0 224px;
+        overflow-y: auto;
         background: var(--surface);
         border-radius: var(--radius);
-        padding: 10px 12px;
+        padding: 12px;
         display: grid;
-        grid-template-columns: auto 1fr auto 1fr;
-        gap: 8px 10px;
+        grid-template-columns: auto 1fr;
+        gap: 10px;
+        align-content: start;
         align-items: center;
         font-size: 12px;
       }
@@ -190,6 +200,12 @@
       }
       .inspector .full { grid-column: 1 / -1; }
       .inspector .row { display: flex; align-items: center; gap: 6px; }
+      .inspector__hint {
+        grid-column: 1 / -1;
+        color: var(--text-soft);
+        font-style: italic;
+        padding-top: 4px;
+      }
       .toast {
         position: fixed;
         left: 50%;
@@ -221,6 +237,7 @@
       <button class="btn-icon-s" id="deldoc" title="Delete this edit"><span class="mi">delete</span></button>
     </div>
     <main>
+      <div class="editor-col">
       <div class="stage" id="stage">
         <div class="placeholder" id="placeholder">No clips yet — add one below.</div>
         <!-- The frame is the export aspect ratio; clips fit/rotate inside it and
@@ -254,11 +271,12 @@
         </button>
       </div>
       <div class="timeline" id="timeline">
-        <div class="lane" id="clipLane"></div>
         <div class="texttracks" id="textLane"></div>
+        <div class="lane" id="clipLane"></div>
         <div class="playhead" id="playhead"><div class="grab"></div></div>
       </div>
-      <div class="inspector" id="inspector" hidden></div>
+      </div>
+      <aside class="inspector" id="inspector"></aside>
     </main>
     <div class="toast" id="toast"></div>
 
