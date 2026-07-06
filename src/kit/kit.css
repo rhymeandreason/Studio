@@ -148,6 +148,11 @@ body {
 .btn-icon-s.is-active {
     color: var(--text);
 }
+.btn-icon-s:disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
+}
 
 /* Add — dashed "add something" button for toolbars. */
 .btn-add {

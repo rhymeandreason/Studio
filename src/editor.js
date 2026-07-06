@@ -75,6 +75,15 @@ export function getCopiedEdits() {
 }
 export { ADJ_FIELDS };
 
+// Rotate the open item by a multiple of 90° (used by ed-rotl/ed-rotr and the
+// media grid's toolbar rotate buttons when the rotated item is open).
+export function bumpRotate(deltaDeg) {
+  if (!editState) return;
+  editState.rotate = ((editState.rotate + deltaDeg) % 360 + 360) % 360;
+  renderEditorPreview();
+  scheduleEditsSave();
+}
+
 // Detach the editor from its item (host is closing the editor or trashing the
 // file). Does not touch the DOM beyond what callers handle.
 export function clearEditor() {
@@ -1491,14 +1500,8 @@ export function initEditor() {
     renderEditorPreview();
     scheduleEditsSave();
   };
-  document.getElementById("ed-rotl").addEventListener("click", () => {
-    editState.rotate = (editState.rotate - 90 + 360) % 360;
-    apply();
-  });
-  document.getElementById("ed-rotr").addEventListener("click", () => {
-    editState.rotate = (editState.rotate + 90) % 360;
-    apply();
-  });
+  document.getElementById("ed-rotl").addEventListener("click", () => bumpRotate(-90));
+  document.getElementById("ed-rotr").addEventListener("click", () => bumpRotate(90));
   document.getElementById("ed-fliph").addEventListener("click", () => {
     editState.flipH = !editState.flipH;
     apply();

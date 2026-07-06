@@ -27,6 +27,7 @@ import {
   openWebExport,
   setEditStatus,
   shouldSuppressLightboxClick,
+  bumpRotate,
 } from "./editor.js";
 import { state } from "./state.js";
 import {
@@ -55,6 +56,38 @@ const mediaSelection = createSelection({
   onChange: () => updateSelectionUI(),
 });
 const mediaItemsByPath = new Map(); // path → MediaItem, refreshed by loadMedia
+// Absolute media path → number of video edits (videos/*.json) referencing it,
+// refreshed by loadMedia alongside the file listing. Backs the "used in N
+// edits" meta line on video tiles, a heads-up before a destructive rotate.
+const videoUsage = new Map();
+
+async function refreshVideoUsage(projectPath) {
+  videoUsage.clear();
+  let edits = [];
+  try {
+    edits = await invoke("list_videos", { path: projectPath });
+  } catch {
+    return;
+  }
+  await Promise.all(
+    edits.map(async (v) => {
+      let data;
+      try {
+        data = await invoke("read_video", { path: projectPath, file: v.file });
+      } catch {
+        return;
+      }
+      const clips = Array.isArray(data.clips) ? data.clips : [];
+      // Count each edit once per referenced file, even if it has multiple clips.
+      const refs = new Set();
+      for (const c of clips) {
+        if (!c.src) continue;
+        refs.add(c.src.startsWith("/") ? c.src : `${projectPath}/${c.src}`);
+      }
+      for (const abs of refs) videoUsage.set(abs, (videoUsage.get(abs) || 0) + 1);
+    }),
+  );
+}
 
 // Media sort (interaction-spec §8.2): added | edited | name | user, persisted
 // per project in .studio-media.json.
@@ -313,6 +346,9 @@ function updateSelbar() {
   document.getElementById("selbar").hidden = n === 0 || editorOwnsSelection;
   document.getElementById("sel-count").textContent = `${n} selected`;
   document.getElementById("sel-paste").disabled = !getCopiedEdits() || n === 0;
+  const rotatable = n > 0 || !!getEditItem();
+  document.getElementById("media-rotl").disabled = !rotatable;
+  document.getElementById("media-rotr").disabled = !rotatable;
 }
 
 // Repaint tile selection rings + the batch bar from mediaSelection.
@@ -411,6 +447,42 @@ async function trashMedia(paths) {
 
   for (const p of paths) mediaSelection.delete(p);
   updateSelbar();
+  if (mediaProjectPath) loadMedia(mediaProjectPath);
+}
+
+// Rotate the current selection (or the item open in the editor, if nothing's
+// selected) by a multiple of 90°, Finder-style. Images rotate non-destructively
+// via the edit sidecar (same field the editor's rotate buttons use); videos
+// have no such non-destructive layer in the grid, so the file itself is
+// losslessly rotated (remux, no re-encode) by rotate_video.
+async function rotateMedia(deltaDeg) {
+  const cur = getEditItem();
+  const paths = mediaSelection.size()
+    ? mediaSelection.get()
+    : cur
+      ? [cur.path]
+      : [];
+  const items = paths.map((p) => mediaItemsByPath.get(p)).filter(Boolean);
+  if (!items.length) return;
+
+  for (const item of items) {
+    if (item.kind === "image") {
+      if (cur && cur.path === item.path) {
+        bumpRotate(deltaDeg); // editor owns this item — let it save its own state
+        continue;
+      }
+      const existing = await invoke("read_edits", { path: item.path });
+      const rotate = (((existing.rotate ?? 0) + deltaDeg) % 360 + 360) % 360;
+      await invoke("save_edits", { path: item.path, edits: { version: 1, ...existing, rotate } });
+      invalidateThumb(item.path);
+    } else if (item.kind === "video") {
+      try {
+        await invoke("rotate_video", { path: item.path, degrees: deltaDeg });
+      } catch (err) {
+        console.error("Rotate video failed:", err);
+      }
+    }
+  }
   if (mediaProjectPath) loadMedia(mediaProjectPath);
 }
 
@@ -650,6 +722,10 @@ function buildMediaTile(item, edited) {
     const kb = item.file_size / 1024;
     metaParts.push(kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.round(kb)} KB`);
   }
+  if (item.kind === "video" && videoUsage.has(item.path)) {
+    const n = videoUsage.get(item.path);
+    metaParts.push(`used in ${n} edit${n === 1 ? "" : "s"}`);
+  }
   if (metaParts.length)
     tile.append(el("span", "mediatile__meta text-xs", { textContent: metaParts.join("  ·  ") }));
 
@@ -733,7 +809,10 @@ async function loadMedia(path) {
   mediaProjectPath = path;
   const grid = document.getElementById("media-grid");
   await loadMediaMeta(path);
-  const items = sortMediaItems(await invoke("list_media", { path }));
+  const [items] = await Promise.all([
+    invoke("list_media", { path }).then(sortMediaItems),
+    refreshVideoUsage(path),
+  ]);
 
   mediaItemsByPath.clear();
   for (const it of items) mediaItemsByPath.set(it.path, it);
@@ -1119,6 +1198,8 @@ function initMedia() {
   initEditor();
   initMediaSort();
   initGenerate();
+  document.getElementById("media-rotl").addEventListener("click", () => rotateMedia(-90));
+  document.getElementById("media-rotr").addEventListener("click", () => rotateMedia(90));
   document.getElementById("media-editor-toggle").addEventListener("change", (e) =>
     setEditorSidebar(e.target.checked)
   );

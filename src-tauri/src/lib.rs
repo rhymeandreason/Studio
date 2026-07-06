@@ -5741,6 +5741,29 @@ fn rename_media(old_path: String, new_name: String) -> Result<String, String> {
     Ok(new.to_string_lossy().to_string())
 }
 
+/// Rotate a video file in place by `degrees` (90/180/270 clockwise), losslessly
+/// (remux only, via vidrotate's AVFoundation passthrough export) — the same
+/// trick QuickTime/Finder use, so there's no re-encode/quality loss.
+#[tauri::command]
+fn rotate_video(path: String, degrees: i32) -> Result<(), String> {
+    let src = PathBuf::from(&path);
+    let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("mov");
+    let tmp = src.with_extension(format!("rotating.{ext}"));
+    let _ = std::fs::remove_file(&tmp);
+
+    let output = Command::new(env!("VIDROTATE_BIN"))
+        .arg(&src)
+        .arg(degrees.to_string())
+        .arg(&tmp)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(String::from_utf8_lossy(&output.stdout).trim().to_string());
+    }
+    std::fs::rename(&tmp, &src).map_err(|e| e.to_string())
+}
+
 /// Hide the macOS traffic-light buttons on a window while keeping its native
 /// frame, shadow, rounded corners, and title-bar dragging (so the project-color
 /// strip stays draggable). The main window uses titleBarStyle: Overlay, which
@@ -5906,6 +5929,7 @@ pub fn run() {
             trash_media,
             write_image,
             rename_media,
+            rotate_video,
             trash_project,
             set_window_width,
             open_git_window,

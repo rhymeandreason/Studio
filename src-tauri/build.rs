@@ -33,6 +33,13 @@ fn main() {
     println!("cargo:rustc-env=VIDEXPORT_BIN={}", vid_bin.display());
     println!("cargo:rerun-if-changed={vid_src}");
 
+    // Video rotate helper (AVFoundation passthrough remux with a transform).
+    let vrot_src = "swift/vidrotate.swift";
+    let vrot_bin = Path::new(&out_dir).join("vidrotate");
+    swiftc(vrot_src, &vrot_bin, "macosx11.0");
+    println!("cargo:rustc-env=VIDROTATE_BIN={}", vrot_bin.display());
+    println!("cargo:rerun-if-changed={vrot_src}");
+
     // App-icon helper (NSWorkspace icon → PNG), for Workspace app cards.
     let icon_src = "swift/appicon.swift";
     let icon_bin = Path::new(&out_dir).join("appicon");
