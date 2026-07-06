@@ -190,12 +190,18 @@ async function fillVideoPreview(prev, meta, project, v) {
   const ss = Math.floor(dur % 60);
   meta.textContent = `${clips.length} clip${clips.length === 1 ? "" : "s"} · ${mm}:${String(ss).padStart(2, "0")}`;
 
+  // "reels" is portrait output — letterbox the thumb instead of cropping it,
+  // so the preview reads as a vertical video rather than a cropped square.
+  const vertical = data.preset === "reels";
+  prev.classList.toggle("artifact__preview--vertical", vertical);
+
   const first = clips[0];
   if (!first) return; // keep the movie-icon placeholder
   if (first.kind === "shader") {
     // Render the shader itself — the preview IS the first frame's look.
     const r = createShaderRenderer();
-    const out = r?.render(first.effect, first.params, 1.0, 340, 240);
+    const [w, h] = vertical ? [180, 320] : [340, 240];
+    const out = r?.render(first.effect, first.params, 1.0, w, h);
     if (out) {
       out.className = "artifact__preview-media";
       prev.replaceChildren(out);
@@ -206,9 +212,32 @@ async function fillVideoPreview(prev, meta, project, v) {
       const p = await invoke("quicklook_thumb", { path: abs, size: 340 });
       const img = el("img", "artifact__preview-media");
       img.src = convertFileSrc(p);
+      // quicklook_thumb reflects the source file's raw orientation; the editor
+      // applies clip.rotate on top of that (see applyVidTransform in video.js),
+      // so the thumb needs the same rotation to match what the editor shows.
+      const rot = (((first.rotate || 0) % 360) + 360) % 360;
+      if (rot) {
+        img.onload = () => rotateThumb(img, prev, rot);
+      }
       prev.replaceChildren(img);
     } catch {} // keep the placeholder
   }
+}
+
+// Mirrors applyVidTransform's math (video.js) for a static <img>: rotate the
+// frame in place and swap its fitted footprint for 90°/270° rotations so it
+// still fills the (now letterboxed) preview box without spilling out of it.
+function rotateThumb(img, box, deg) {
+  const bw = box.clientWidth || 1;
+  const bh = box.clientHeight || 1;
+  const aspect = (img.naturalWidth || 16) / (img.naturalHeight || 9);
+  const w = deg === 90 || deg === 270 ? Math.min(bh, bw * aspect) : Math.min(bw, bh * aspect);
+  img.style.position = "absolute";
+  img.style.left = "50%";
+  img.style.top = "50%";
+  img.style.width = w + "px";
+  img.style.height = w / aspect + "px";
+  img.style.transform = `translate(-50%, -50%) rotate(${deg}deg)`;
 }
 
 function artifactCard(item) {

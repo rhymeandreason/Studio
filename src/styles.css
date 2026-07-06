@@ -2651,6 +2651,8 @@ td.ntable__total-cell {
     align-items: center;
     justify-content: center;
     background: #000;
+    position: relative;
+    overflow: hidden;
 }
 .artifact__preview--video > .mi { color: rgba(255, 255, 255, 0.35); font-size: 30px; }
 .artifact__preview-media {
@@ -2659,6 +2661,8 @@ td.ntable__total-cell {
     object-fit: cover;
     display: block;
 }
+/* Vertical (reels) clips: letterbox instead of cropping to a square. */
+.artifact__preview--vertical > .artifact__preview-media { object-fit: contain; }
 
 #claude-btn{
     display:flex;
