@@ -48,6 +48,18 @@ const KIND_LABEL = {
   "diagram": "Diagrams",
 };
 
+// renderArtifacts rebuilds the panel (and the add-menu) from scratch on every
+// call, so the outside-click-to-close listener is wired once at module scope
+// instead of once per render (which would leak a listener each time).
+let addMenuListenerInited = false;
+function initArtifactsAddMenuOnce() {
+  if (addMenuListenerInited) return;
+  addMenuListenerInited = true;
+  document.addEventListener("click", () => {
+    document.querySelectorAll(".artifacts-add > .menu").forEach((m) => (m.hidden = true));
+  });
+}
+
 let _renderGen = 0;
 export async function renderArtifacts() {
   const gen = ++_renderGen;
@@ -61,38 +73,42 @@ export async function renderArtifacts() {
     return;
   }
 
-  // Toolbar.
+  // Toolbar: round "+" trigger → dropdown of artifact kinds to create
+  // (mirrors the Workspace panel's ws-add-btn / ws-add-menu pattern).
   const toolbar = el("div", "toolbar");
-  const newKitBtn = el("button", "btn-add", { type: "button" });
-  newKitBtn.innerHTML = `<span class="mi mi-sm">add</span>Brand kit`;
-  newKitBtn.addEventListener("click", () =>
-    invoke("open_tool", { file: EDITOR["brand-kit"], query: null }),
-  );
-  toolbar.appendChild(newKitBtn);
-  const newDeckBtn = el("button", "btn-add", { type: "button" });
-  newDeckBtn.innerHTML = `<span class="mi mi-sm">add</span>Presentation`;
-  newDeckBtn.addEventListener("click", () =>
-    invoke("open_tool", { file: EDITOR["presentation"], query: null }),
-  );
-  toolbar.appendChild(newDeckBtn);
-  const newThemeBtn = el("button", "btn-add", { type: "button" });
-  newThemeBtn.innerHTML = `<span class="mi mi-sm">add</span>Theme`;
-  newThemeBtn.addEventListener("click", () =>
-    invoke("open_tool", { file: EDITOR["theme"], query: null }),
-  );
-  toolbar.appendChild(newThemeBtn);
-  const newDiagramBtn = el("button", "btn-add", { type: "button" });
-  newDiagramBtn.innerHTML = `<span class="mi mi-sm">add</span>Diagram`;
-  newDiagramBtn.addEventListener("click", () =>
-    invoke("open_tool", { file: EDITOR["diagram"], query: null }),
-  );
-  toolbar.appendChild(newDiagramBtn);
-  const newVideoBtn = el("button", "btn-add", { type: "button" });
-  newVideoBtn.innerHTML = `<span class="mi mi-sm">add</span>Video`;
-  newVideoBtn.addEventListener("click", () =>
-    invoke("open_video_window", { path: project.path, file: null }),
-  );
-  toolbar.appendChild(newVideoBtn);
+  const addWrap = el("div", "artifacts-add", {
+    style: "position: relative; margin-left: auto",
+  });
+  const addBtn = el("button", "btn-round btn-round-filled", {
+    type: "button",
+    title: "New artifact",
+  });
+  addBtn.innerHTML = mi("add");
+  const addMenu = el("div", "menu", { hidden: true });
+  addBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    addMenu.hidden = !addMenu.hidden;
+  });
+  initArtifactsAddMenuOnce(); // one document-level listener across all renders
+
+  const NEW_ITEMS = [
+    { icon: "palette", label: "Brand kit", action: () => invoke("open_tool", { file: EDITOR["brand-kit"], query: null }) },
+    { icon: "slideshow", label: "Presentation", action: () => invoke("open_tool", { file: EDITOR["presentation"], query: null }) },
+    { icon: "styles", label: "Theme", action: () => invoke("open_tool", { file: EDITOR["theme"], query: null }) },
+    { icon: "schema", label: "Diagram", action: () => invoke("open_tool", { file: EDITOR["diagram"], query: null }) },
+    { icon: "movie", label: "Video", action: () => invoke("open_video_window", { path: project.path, file: null }) },
+  ];
+  for (const { icon, label, action } of NEW_ITEMS) {
+    const item = el("button", "menu__item", { type: "button" });
+    item.innerHTML = mi(icon) + label;
+    item.addEventListener("click", () => {
+      addMenu.hidden = true;
+      action();
+    });
+    addMenu.appendChild(item);
+  }
+  addWrap.append(addBtn, addMenu);
+  toolbar.appendChild(addWrap);
   root.appendChild(toolbar);
 
   let items = [];
