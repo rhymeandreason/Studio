@@ -173,9 +173,12 @@ function createImageNoteFromMedia(item) {
 
 function onMediaTilePointerDown(e, item, tile) {
   if (e.button !== 0) return;
-  // The tile itself is a <button>, so only exclude the rename field / links —
-  // NOT "button" (that would match the tile and never start a drag).
-  if (e.target.closest("textarea, input, a")) return;
+  // The tile itself is a <button>, so only exclude the rename field / links /
+  // the name label — NOT "button" (that would match the tile and never start
+  // a drag). Excluding the name label matters: capturing the pointer here
+  // would make WebKit retarget the resulting "click" to the tile instead of
+  // the label, so click-to-rename would never fire.
+  if (e.target.closest("textarea, input, a, .mediatile__name")) return;
   // Capture the pointer so WebKit doesn't hijack the drag over the image.
   try {
     tile.setPointerCapture(e.pointerId);
