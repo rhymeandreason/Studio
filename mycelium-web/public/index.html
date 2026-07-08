@@ -26,6 +26,16 @@
     text-decoration:none;font-size:15px;font-weight:600;padding:12px;border-radius:11px;
     border:1px solid var(--accent);color:var(--accent);background:transparent}
   .savebtn span{font-size:19px;line-height:1}
+  .avatar{width:76px;height:76px;border-radius:50%;object-fit:cover;display:block;margin:0 0 10px}
+  .avatar[hidden]{display:none}
+  .connect{display:flex;align-items:center;gap:10px;text-decoration:none;font-size:15px;font-weight:600;
+    padding:12px 14px;border-radius:11px;margin-bottom:8px;color:#fff;border:1px solid transparent}
+  .connect .ico{font-size:16px;width:22px;text-align:center;font-weight:700}
+  .connect:active{opacity:.85}
+  .connect.linkedin{background:#0a66c2}
+  .connect.instagram{background:linear-gradient(70deg,#f58529,#dd2a7b 45%,#8134af 80%)}
+  .connect.x{background:#111}
+  .connect.website,.connect.email,.connect.phone{background:transparent;color:var(--text);border-color:var(--line)}
   .savebtn:active{background:var(--accent);color:#fff}
   label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
   input{width:100%;font-size:16px;padding:12px;border:1px solid var(--line);border-radius:11px;
@@ -54,6 +64,7 @@
     <p class="sub" id="intro">Share your contact info and I'll keep in touch.</p>
 
     <div class="card" id="me-card">
+      <img class="avatar" id="me-avatar" alt="" hidden>
       <h2 id="me-name">My info</h2>
       <div id="me-list"></div>
       <a class="savebtn" href="/api/vcard" id="save-contact">
@@ -89,13 +100,23 @@
   // Prefill your card from /me.json
   fetch("/me.json").then(r => r.ok ? r.json() : null).then(me => {
     if (!me) return;
+    if (me.photo) { const a = document.getElementById("me-avatar"); a.src = "/" + me.photo;
+      a.onload = () => a.hidden = false; }
     if (me.name) { document.getElementById("me-name").textContent = me.name;
       document.getElementById("intro").textContent = `${me.name} would love to stay in touch.`; }
     const list = document.getElementById("me-list");
     (me.contacts || []).forEach(c => {
-      const row = document.createElement("div"); row.className = "me-row";
-      row.innerHTML = `<span class="k">${c.type}</span><span>${escapeHtml(c.value)}</span>`;
-      list.appendChild(row);
+      const act = contactAction(c);
+      if (act) {   // tappable: follow / connect / call / email
+        const a = document.createElement("a"); a.className = "connect " + c.type;
+        a.href = act.href; if (act.blank) { a.target = "_blank"; a.rel = "noopener"; }
+        a.innerHTML = `<span class="ico">${act.icon}</span> ${act.label}`;
+        list.appendChild(a);
+      } else {     // plain row fallback (e.g. "other")
+        const row = document.createElement("div"); row.className = "me-row";
+        row.innerHTML = `<span class="k">${c.type}</span><span>${escapeHtml(c.value)}</span>`;
+        list.appendChild(row);
+      }
     });
     if (!(me.contacts || []).length) document.getElementById("me-card").classList.add("hidden");
   }).catch(() => document.getElementById("me-card").classList.add("hidden"));
@@ -134,6 +155,21 @@
   };
 
   function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+  // Map a stored contact to a tappable action (follow/connect/call/email).
+  function contactAction(c){
+    const v = String(c.value||"").trim(); if(!v) return null;
+    const handle = v.replace(/^@/,""); const bare = v.replace(/^https?:\/\//,"");
+    switch(c.type){
+      case "linkedin":  return { href:`https://${bare}`, blank:true, icon:"in", label:"Connect on LinkedIn" };
+      case "instagram": return { href:`https://instagram.com/${handle}`, blank:true, icon:"◎", label:"Follow on Instagram" };
+      case "x":         return { href:`https://x.com/${handle}`, blank:true, icon:"𝕏", label:"Follow on X" };
+      case "website":   return { href:/^https?:\/\//.test(v)?v:`https://${bare}`, blank:true, icon:"↗", label:"Visit website" };
+      case "email":     return { href:`mailto:${v}`, blank:false, icon:"✉", label:"Email me" };
+      case "phone":     return { href:`tel:${v.replace(/\s+/g,"")}`, blank:false, icon:"☎", label:"Call or text" };
+      default: return null;
+    }
+  }
 </script>
 </body>
 </html>

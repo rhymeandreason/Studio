@@ -1,5 +1,6 @@
 {
 "name": "Mary Huang",
+"photo": "me.jpg",
 "contacts": [
 { "type": "email", "value": "rhymeandreason1.0@gmail.com" },
 { "type": "linkedin", "value": "www.linkedin.com/in/maryhuang1/" },

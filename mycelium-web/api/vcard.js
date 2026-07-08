@@ -29,6 +29,13 @@ export default async function handler(req, res) {
     const family = rest.join(" ");
 
     const lines = ["BEGIN:VCARD", "VERSION:3.0", `N:${esc(family)};${esc(given || "")};;;`, `FN:${esc(name)}`];
+
+    // Embed the photo (base64) so guests get your face in their contacts.
+    if (me.photo) {
+      const buf = await fetch(`${proto}://${host}/${me.photo}`)
+        .then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+      if (buf) lines.push(`PHOTO;ENCODING=b;TYPE=JPEG:${Buffer.from(buf).toString("base64")}`);
+    }
     for (const c of me.contacts || []) {
       const v = String(c.value || "").trim();
       if (!v) continue;
