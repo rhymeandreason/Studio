@@ -587,6 +587,7 @@ fn tool_style(filename: &str) -> ToolStyle {
         "modes.html" => s(320.0, 480.0, true, Chrome::NativeTint, Tint::Paper),
         "kit-gallery.html" => s(900.0, 640.0, true, Chrome::NativeTint, Tint::Paper),
         "daily-briefing.html" => s(1080.0, 760.0, true, Chrome::NativeTint, Tint::Paper),
+        "mycelium.html" => s(1100.0, 760.0, false, Chrome::Native, Tint::None),
         _ => s(900.0, 640.0, false, Chrome::Native, Tint::None),
     }
 }
@@ -2930,6 +2931,26 @@ fn save_daily_notes(app: AppHandle, store: serde_json::Value) -> Result<(), Stri
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let text = serde_json::to_string_pretty(&store).map_err(|e| e.to_string())?;
     std::fs::write(dir.join("daily-notes.json"), text).map_err(|e| e.to_string())
+}
+
+/// Read the Mycelium store (app config dir / mycelium.json) — the local social
+/// graph (trees, people, your card). Same global-store pattern as Daily Notes.
+#[tauri::command]
+fn read_mycelium(app: AppHandle) -> Result<serde_json::Value, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    match std::fs::read_to_string(dir.join("mycelium.json")) {
+        Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
+        Err(_) => Ok(serde_json::json!({ "version": 1, "trees": [], "people": [] })),
+    }
+}
+
+/// Write the Mycelium store (app config dir / mycelium.json, pretty-printed).
+#[tauri::command]
+fn save_mycelium(app: AppHandle, store: serde_json::Value) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let text = serde_json::to_string_pretty(&store).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("mycelium.json"), text).map_err(|e| e.to_string())
 }
 
 /// Path to the global schedules store (app config dir / schedules.json).
@@ -5908,6 +5929,8 @@ pub fn run() {
             save_project_order,
             read_daily_notes,
             save_daily_notes,
+            read_mycelium,
+            save_mycelium,
             read_schedules,
             save_schedules,
             paste_image,

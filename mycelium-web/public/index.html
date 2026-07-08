@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Nice to meet you</title>
+<style>
+  :root {
+    --bg:#f7f5f0; --card:#fff; --text:#2a2a28; --muted:#8a8678;
+    --line:rgba(42,42,40,.12); --accent:#7a5cff;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#17161c; --card:#211f29; --text:#eceaf2; --muted:#9a95a8; --line:rgba(255,255,255,.12); }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);
+    padding:22px 16px 60px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:440px;margin:0 auto}
+  h1{font-size:26px;margin:6px 0 2px}
+  .sub{color:var(--muted);margin:0 0 20px;font-size:15px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:16px}
+  .card h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+  .me-row{display:flex;gap:8px;align-items:center;font-size:15px;padding:3px 0}
+  .me-row .k{color:var(--muted);width:88px;flex:0 0 auto;text-transform:capitalize}
+  label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
+  input{width:100%;font-size:16px;padding:12px;border:1px solid var(--line);border-radius:11px;
+    background:transparent;color:var(--text)}
+  input:focus{outline:none;border-color:var(--accent)}
+  .contact-row{display:flex;gap:8px;margin-bottom:8px}
+  .contact-row select{flex:0 0 118px;font-size:15px;padding:11px 8px;border:1px solid var(--line);
+    border-radius:11px;background:var(--card);color:var(--text)}
+  .contact-row input{flex:1}
+  .addbtn{background:none;border:1px dashed var(--line);color:var(--muted);width:100%;
+    padding:11px;border-radius:11px;font-size:14px;margin-top:2px}
+  .submit{width:100%;font-size:17px;font-weight:600;padding:15px;border:none;border-radius:13px;
+    background:var(--accent);color:#fff;margin-top:20px}
+  .submit:disabled{opacity:.5}
+  .done{text-align:center;padding:50px 10px}
+  .done .big{font-size:52px}
+  .done h1{margin-top:12px}
+  .err{color:#d9534f;font-size:14px;margin-top:10px;text-align:center}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div id="form-view">
+    <h1>Hi, nice to meet you 👋</h1>
+    <p class="sub" id="intro">Share your contact info and I'll keep in touch.</p>
+
+    <div class="card" id="me-card">
+      <h2 id="me-name">My info</h2>
+      <div id="me-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>Your info</h2>
+      <label>Name</label>
+      <input id="name" placeholder="Your name" autocomplete="name">
+      <label>How to reach you</label>
+      <div id="contacts"></div>
+      <button class="addbtn" id="add">+ Add another</button>
+      <button class="submit" id="send">Share with me</button>
+      <div class="err hidden" id="err"></div>
+    </div>
+  </div>
+
+  <div id="done-view" class="done hidden">
+    <div class="big">🌱</div>
+    <h1>Got it — thanks!</h1>
+    <p class="sub">Your info is on its way. See you around.</p>
+  </div>
+</div>
+
+<script type="module">
+  const TYPES = ["phone","email","instagram","linkedin","x","website","other"];
+  const params = new URLSearchParams(location.search);
+  const treeId = params.get("t") || "";
+  const contactsEl = document.getElementById("contacts");
+
+  // Prefill your card from /me.json
+  fetch("/me.json").then(r => r.ok ? r.json() : null).then(me => {
+    if (!me) return;
+    if (me.name) { document.getElementById("me-name").textContent = me.name;
+      document.getElementById("intro").textContent = `${me.name} would love to stay in touch.`; }
+    const list = document.getElementById("me-list");
+    (me.contacts || []).forEach(c => {
+      const row = document.createElement("div"); row.className = "me-row";
+      row.innerHTML = `<span class="k">${c.type}</span><span>${escapeHtml(c.value)}</span>`;
+      list.appendChild(row);
+    });
+    if (!(me.contacts || []).length) document.getElementById("me-card").classList.add("hidden");
+  }).catch(() => document.getElementById("me-card").classList.add("hidden"));
+
+  function addRow(type = "phone", value = "") {
+    const row = document.createElement("div"); row.className = "contact-row";
+    const sel = document.createElement("select");
+    sel.innerHTML = TYPES.map(t => `<option ${t===type?"selected":""}>${t}</option>`).join("");
+    const inp = document.createElement("input"); inp.placeholder = "phone, @handle, email…"; inp.value = value;
+    row.append(sel, inp); contactsEl.appendChild(row);
+  }
+  addRow("phone"); addRow("instagram");
+  document.getElementById("add").onclick = () => addRow("email");
+
+  document.getElementById("send").onclick = async () => {
+    const btn = document.getElementById("send"), err = document.getElementById("err");
+    err.classList.add("hidden");
+    const contacts = [...contactsEl.querySelectorAll(".contact-row")].map(r => ({
+      type: r.querySelector("select").value, value: r.querySelector("input").value.trim()
+    })).filter(c => c.value);
+    const name = document.getElementById("name").value.trim();
+    if (!name && !contacts.length) { err.textContent = "Add your name or a way to reach you."; err.classList.remove("hidden"); return; }
+    btn.disabled = true; btn.textContent = "Sharing…";
+    try {
+      const res = await fetch("/api/submit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ treeId, name, contacts })
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "failed");
+      document.getElementById("form-view").classList.add("hidden");
+      document.getElementById("done-view").classList.remove("hidden");
+    } catch (e) {
+      err.textContent = "Something went wrong. Try again."; err.classList.remove("hidden");
+      btn.disabled = false; btn.textContent = "Share with me";
+    }
+  };
+
+  function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+</script>
+</body>
+</html>

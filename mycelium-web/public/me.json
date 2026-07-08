@@ -1,0 +1,7 @@
+{
+  "name": "Your Name",
+  "contacts": [
+    { "type": "email", "value": "you@example.com" },
+    { "type": "instagram", "value": "@yourhandle" }
+  ]
+}

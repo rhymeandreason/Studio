@@ -1,0 +1,10 @@
+{
+  "name": "mycelium-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mycelium intake service — public contact-sharing page + inbox for the Studio Mycelium tool.",
+  "dependencies": {
+    "@upstash/redis": "^1.34.0",
+    "qrcode": "^1.5.4"
+  }
+}
