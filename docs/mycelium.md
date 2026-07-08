@@ -10,6 +10,39 @@ nice to meet you"), sees *your* card, and fills in *their* contact info. Those
 submissions land in a hosted inbox you can watch live on your phone, then **pull**
 into the local graph under the right tree.
 
+## Views & vocabulary
+
+Two surfaces — the **Studio app** (desktop, yours) and the **web** (phone, mostly
+guests). These are the canonical names for each view; use them in code, commits,
+and docs.
+
+### Studio (desktop — you)
+
+| View | Name | What it is |
+|---|---|---|
+| The node graph | **Canvas** | the open, pannable/zoomable graph of everything |
+| The hubs | **Trees** | a group: event · place · company · group |
+| The dots under a tree | **People** (each a **Contact**) | one person node |
+| The right-hand panel | **Inspector** | edits the selected Tree or Contact |
+| Your own info editor | **My Card** | your contact card, shown to guests on Intake |
+
+### Web (phone)
+
+| View | Name | File | Who sees it |
+|---|---|---|---|
+| "Hi, nice to meet you" form | **Intake** | `public/index.html` (`/?t=<treeId>`) | guests |
+| Full-screen QR you hold up | **Presenter** | `public/show.html` (`/show.html?t=…&name=…`) | you, at the event |
+| Live feed of arrivals | **Inbox** | `public/inbox.html` (`/inbox.html?t=<treeId>`) | you |
+
+### Shared terms
+
+- **Submission** — one guest's send from Intake (stored on the server until pulled).
+- **Sync** — the pull-and-clear that drains Submissions from the server into the
+  Canvas as People.
+- **Handoff QR** — the small QR in the Inspector that opens **Presenter** on your
+  own phone (a QR of the Presenter URL, via `/api/qr?url=…`), as distinct from the
+  **intake QR** guests scan (`/api/qr?t=…`).
+
 ## Architecture — two halves
 
 Mycelium is deliberately split so PII exposure stays minimal:
