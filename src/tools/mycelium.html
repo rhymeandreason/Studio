@@ -458,18 +458,39 @@
         hint.innerHTML = `Set your Mycelium server URL in <b>Settings</b> to generate a QR and collect contacts.`;
         inspector.appendChild(hint);
       } else {
-        const link = `${store.serverUrl.replace(/\/$/, "")}/?t=${t.id}`;
+        const base = store.serverUrl.replace(/\/$/, "");
+        const link = `${base}/?t=${t.id}`;
+        const presenter = `${base}/show.html?t=${encodeURIComponent(t.id)}&name=${encodeURIComponent(t.name || "")}`;
+
+        // The intake QR — what guests scan.
         const qr = document.createElement("div"); qr.className = "qr-wrap";
-        qr.innerHTML = `<img alt="QR" src="${store.serverUrl.replace(/\/$/, "")}/api/qr?t=${encodeURIComponent(t.id)}" />`;
+        qr.innerHTML = `<img alt="QR" src="${base}/api/qr?t=${encodeURIComponent(t.id)}" />`;
         inspector.appendChild(qr);
 
         const lb = document.createElement("div"); lb.className = "link-box";
         lb.innerHTML = `<code>${esc(link)}</code>`;
         const copy = document.createElement("button"); copy.className = "btn-icon";
         copy.innerHTML = `<span class="mi mi-sm">content_copy</span>`;
-        copy.onclick = () => { navigator.clipboard.writeText(link); toast("Link copied"); };
+        copy.onclick = () => { navigator.clipboard.writeText(link); toast("Intake link copied"); };
         lb.appendChild(copy); inspector.appendChild(lb);
 
+        // Handoff: scan this with YOUR phone to open the presenter page there,
+        // then hold your phone up for guests to scan.
+        inspector.appendChild(sectionLabel("Show on your phone"));
+        const hint = document.createElement("div"); hint.className = "muted-note"; hint.style.marginTop = "0";
+        hint.textContent = "Scan this with your own phone to pull up a full-screen QR you can show people.";
+        inspector.appendChild(hint);
+        const hqr = document.createElement("div"); hqr.className = "qr-wrap";
+        hqr.innerHTML = `<img alt="Open on phone" style="width:128px;height:128px" src="${base}/api/qr?url=${encodeURIComponent(presenter)}" />`;
+        inspector.appendChild(hqr);
+        const plb = document.createElement("div"); plb.className = "link-box";
+        plb.innerHTML = `<code>${esc(presenter)}</code>`;
+        const pcopy = document.createElement("button"); pcopy.className = "btn-icon";
+        pcopy.innerHTML = `<span class="mi mi-sm">content_copy</span>`;
+        pcopy.onclick = () => { navigator.clipboard.writeText(presenter); toast("Presenter link copied"); };
+        plb.appendChild(pcopy); inspector.appendChild(plb);
+
+        inspector.appendChild(divider());
         const sync = document.createElement("button");
         sync.className = "btn"; sync.style.width = "100%";
         sync.innerHTML = `<span class="mi mi-sm">sync</span> Pull new contacts`;

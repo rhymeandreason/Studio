@@ -10,6 +10,7 @@ third-party form service.
 | Path | Purpose |
 |---|---|
 | `public/index.html` | Intake page — `/?t=<treeId>`. Shows your card, collects theirs. |
+| `public/show.html`   | Presenter page — `/show.html?t=<treeId>&name=<label>`. Full-screen QR you hold up for guests; keeps the screen awake. |
 | `public/inbox.html`  | Live inbox — `/inbox.html?t=<treeId>`. Watch contacts arrive on your phone. |
 | `public/me.json`     | **Your** card shown on the intake page. Edit this. |
 | `api/submit.js`      | `POST /api/submit` — stores a submission. |
@@ -31,7 +32,9 @@ third-party form service.
 
 ## Flow
 
-- In Studio, make a tree → its inspector shows a QR (`/api/qr?t=<treeId>`).
+- In Studio, make a tree → its inspector shows the intake QR plus a **"Show on
+  your phone"** handoff QR. Scan that with your own phone to open `show.html` —
+  a full-screen QR you hold up for guests.
 - Someone scans it → intake page tagged with that tree → they submit.
 - Open `/inbox.html?t=<treeId>` on your phone to watch them arrive live.
 - Back in Studio, the tree's **Pull new contacts** button drains the store into
