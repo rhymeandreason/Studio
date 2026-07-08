@@ -1,7 +1,8 @@
 {
-  "name": "Your Name",
-  "contacts": [
-    { "type": "email", "value": "you@example.com" },
-    { "type": "instagram", "value": "@yourhandle" }
-  ]
+"name": "Mary Huang",
+"contacts": [
+{ "type": "email", "value": "rhymeandreason1.0@gmail.com" },
+{ "type": "linkedin", "value": "www.linkedin.com/in/maryhuang1/" },
+{ "type": "instagram", "value": "@rhymeandreason" }
+]
 }
