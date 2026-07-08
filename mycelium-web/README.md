@@ -15,7 +15,8 @@ third-party form service.
 | `public/me.json`     | **Your** card shown on the intake page. Edit this. |
 | `api/submit.js`      | `POST /api/submit` — stores a submission. |
 | `api/pull.js`        | `GET /api/pull?tree=…` — returns + consumes (clears). `&peek=1` to read without clearing. |
-| `api/qr.js`          | `GET /api/qr?t=…` — SVG QR of the intake link. |
+| `api/qr.js`          | `GET /api/qr?t=…` (intake QR) or `?url=…` (handoff QR) — SVG. |
+| `api/vcard.js`       | `GET /api/vcard` — your card (from `me.json`) as a `.vcf`; the Intake "Save my contact" button opens the guest's native Add-Contact screen. |
 | `lib/store.js`       | Upstash Redis, keyed per tree. |
 
 ## Deploy (once)
