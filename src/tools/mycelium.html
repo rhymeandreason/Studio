@@ -207,7 +207,6 @@
   <div id="bar">
     <div class="brand"><span class="mi">hub</span> Mycelium</div>
     <button class="btn" id="btn-me"><span class="mi mi-sm">badge</span> My card</button>
-    <button class="btn" id="btn-info" title="Toggle inspector"><span class="mi mi-sm">info</span></button>
     <button class="btn" id="btn-settings"><span class="mi mi-sm">settings</span></button>
     <button class="btn btn-primary" id="btn-tree"><span class="mi mi-sm">add</span> New tree</button>
   </div>
@@ -238,7 +237,6 @@
 
     let store = { version: 1, serverUrl: "", me: { name: "", contacts: [] }, trees: [], people: [] };
     let selected = null;            // { type:'tree'|'person', id } | null
-    let inspectorOn = false;        // whether the inspector panel is allowed to show at all
     let view = { x: 120, y: 120, scale: 1 };
     let draggingId = null;          // node currently under the pointer — exempt from collision push
     let sim = null, simRunning = false; // live d3-force session, active only while dragging
@@ -743,9 +741,8 @@
     }
 
     const isSel = (type, id) => selected && selected.type === type && selected.id === id;
-    // forceInspectorOpen lets a double-click show the inspector even when the
-    // info toggle is off — cleared by any plain (non-double-click) select or
-    // deselect, so it only lasts until you click elsewhere.
+    // forceInspectorOpen is set by a double-click; cleared by any plain
+    // (non-double-click) select or deselect, so it only lasts until you click elsewhere.
     let forceInspectorOpen = false;
     function select(type, id, { forceInspector = false } = {}) {
       shiftPending = null;
@@ -828,7 +825,7 @@
 
     // ---------- inspector ----------
     function showInspector() {
-      if (!selected || !(inspectorOn || forceInspectorOpen)) return inspector.classList.add("hidden");
+      if (!selected || !forceInspectorOpen) return inspector.classList.add("hidden");
       inspector.classList.remove("hidden");
       if (selected.type === "tree") renderTreeInspector(tree(selected.id));
       else renderPersonInspector(person(selected.id));
@@ -1145,11 +1142,6 @@
     $("#btn-tree-empty").onclick = newTree;
     $("#btn-settings").onclick = openSettings;
     $("#btn-me").onclick = openMyCard;
-    $("#btn-info").onclick = () => {
-      inspectorOn = !inspectorOn;
-      $("#btn-info").classList.toggle("btn-primary", inspectorOn);
-      showInspector();
-    };
 
     load();
   </script>
