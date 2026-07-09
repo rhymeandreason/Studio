@@ -118,6 +118,21 @@
     }
     .node.add-person .label { color: var(--text-muted); }
 
+    /* ---- new-tree quick-edit card ---- */
+    .tree-card {
+      position: absolute;
+      width: 260px;
+      transform: translateY(-50%); /* fixed on the card itself — never a JS animation target */
+    }
+    .tree-card-inner {
+      background: var(--surface);
+      border: 1px solid var(--hairline-strong);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.16);
+      display: flex; flex-direction: column;
+    }
+
     #empty {
       position: absolute; inset: 0;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -412,6 +427,32 @@
       world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
     }
 
+    // Pan/zoom the canvas so a world point centers in the stage viewport.
+    let focusRaf = null;
+    function focusOn(x, y, targetScale = Math.max(view.scale, 1)) {
+      const rect = stage.getBoundingClientRect();
+      const from = { x: view.x, y: view.y, scale: view.scale };
+      const to = {
+        x: rect.width / 2 - x * targetScale,
+        y: rect.height / 2 - y * targetScale,
+        scale: targetScale,
+      };
+      const duration = 420;
+      const start = performance.now();
+      const ease = (t) => 1 - Math.pow(1 - t, 3); // easeOutCubic
+      if (focusRaf) cancelAnimationFrame(focusRaf);
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / duration);
+        const e = ease(t);
+        view.x = from.x + (to.x - from.x) * e;
+        view.y = from.y + (to.y - from.y) * e;
+        view.scale = from.scale + (to.scale - from.scale) * e;
+        applyView();
+        focusRaf = t < 1 ? requestAnimationFrame(step) : null;
+      };
+      focusRaf = requestAnimationFrame(step);
+    }
+
     // Persistent DOM elements keyed by node id. render() used to tear down and
     // rebuild every .node on each call — including the one under the pointer —
     // which released its pointer capture mid-drag (removing a captured element
@@ -442,6 +483,7 @@
         if (!live.has(id)) { el.remove(); nodeEls.delete(id); }
       }
       updateAddPersonAffordance();
+      updateTreeCard();
       applyView();
     }
 
@@ -558,6 +600,44 @@
         }, 100);
       });
       requestAnimationFrame(() => input.focus());
+    }
+
+    // ---------- new-tree quick-edit card ----------
+    // Shown next to a freshly-created tree so its basics can be filled in
+    // right there on the canvas — dismissed as soon as selection moves on
+    // (a different node, or nothing). Independent of the inspector-panel
+    // toggle, since it's a one-off entry surface, not the general inspector.
+    let treeCardEl = null;
+    let treeCardTreeId = null;
+    let treeCardBuiltFor = null; // tree id whose content is currently built, to avoid rebuilding (and losing focus) on every render
+
+    function updateTreeCard() {
+      const t = treeCardTreeId ? tree(treeCardTreeId) : null;
+      const stillSelected = t && selected?.type === "tree" && selected.id === treeCardTreeId;
+      if (!stillSelected) {
+        if (treeCardEl) { treeCardEl.remove(); treeCardEl = null; }
+        treeCardTreeId = null; treeCardBuiltFor = null;
+        return;
+      }
+      if (!treeCardEl) {
+        treeCardEl = document.createElement("div");
+        treeCardEl.className = "tree-card";
+        treeCardEl.addEventListener("pointerdown", (e) => e.stopPropagation()); // don't let stage's pan/deselect fire
+        world.appendChild(treeCardEl);
+      }
+      treeCardEl.style.left = (t.x + 100) + "px";
+      treeCardEl.style.top = t.y + "px";
+      if (treeCardBuiltFor !== t.id) {
+        drawTreeCard(t);
+        treeCardBuiltFor = t.id;
+        enter(treeCardEl.querySelector(".tree-card-inner"));
+      }
+    }
+
+    function drawTreeCard(t) {
+      treeCardEl.innerHTML = `<div class="tree-card-inner"></div>`;
+      treeCardEl.querySelector(".tree-card-inner").appendChild(
+        buildTreeBasicsFields(t, () => { render(); scheduleSave(); }, () => drawTreeCard(t)));
     }
 
     // node drag + select
@@ -741,32 +821,43 @@
       inspector.appendChild(del);
     }
 
-    function renderTreeInspector(t) {
-      if (!t) return;
-      inspector.innerHTML = `<div class="eyebrow">Tree</div>`;
-      inspector.appendChild(fieldInput("Name", t.name, (v) => { t.name = v; render(); scheduleSave(); }));
+    // Name/Type/Date/Color fields — shared by the sidebar Tree inspector and
+    // the floating quick-edit card shown next to a freshly-created tree.
+    // `onKindChange` lets each caller rebuild itself when a pill flips (the
+    // row of buttons has to redraw its own .on state).
+    function buildTreeBasicsFields(t, onChange, onKindChange) {
+      const frag = document.createDocumentFragment();
+      frag.appendChild(fieldInput("Name", t.name, (v) => { t.name = v; onChange(); }));
 
-      // kind pills
       const kr = document.createElement("div"); kr.className = "row";
       kr.innerHTML = `<span class="label">Type</span>`;
       const pk = document.createElement("div"); pk.className = "pill-kind";
       KINDS.forEach(k => {
         const b = document.createElement("button");
         b.textContent = k; if (t.kind === k) b.classList.add("on");
-        b.onclick = () => { t.kind = k; render(); scheduleSave(); renderTreeInspector(t); };
+        b.onclick = () => { t.kind = k; onChange(); onKindChange(); };
         pk.appendChild(b);
       });
-      kr.appendChild(pk); inspector.appendChild(kr);
+      kr.appendChild(pk); frag.appendChild(kr);
 
       const two = document.createElement("div"); two.className = "row two";
-      two.appendChild(inlineField("Date", "date", t.date, (v) => { t.date = v; render(); scheduleSave(); }));
+      two.appendChild(inlineField("Date", "date", t.date, (v) => { t.date = v; onChange(); }));
       const colWrap = document.createElement("div");
       colWrap.innerHTML = `<span class="label">Color</span>`;
       const col = document.createElement("input"); col.type = "color"; col.value = t.color || "#7a5cff";
       col.className = "field"; col.style.height = "34px"; col.style.padding = "2px";
-      col.oninput = () => { t.color = col.value; render(); scheduleSave(); };
+      col.oninput = () => { t.color = col.value; onChange(); };
       colWrap.appendChild(col); two.appendChild(colWrap);
-      inspector.appendChild(two);
+      frag.appendChild(two);
+      return frag;
+    }
+
+    function renderTreeInspector(t) {
+      if (!t) return;
+      inspector.innerHTML = `<div class="eyebrow">Tree</div>`;
+      inspector.appendChild(buildTreeBasicsFields(t,
+        () => { render(); scheduleSave(); },
+        () => renderTreeInspector(t)));
 
       inspector.appendChild(divider());
 
@@ -918,7 +1009,10 @@
         x: 240 + (n % 3) * 260, y: 200 + Math.floor(n / 3) * 220,
         createdAt: nowISO(),
       };
-      store.trees.push(t); render(); scheduleSave(); select("tree", t.id);
+      store.trees.push(t); scheduleSave();
+      treeCardTreeId = t.id;
+      select("tree", t.id);
+      focusOn(t.x, t.y);
     }
 
     $("#btn-tree").onclick = newTree;
