@@ -973,6 +973,7 @@ fn tray_item_order(app: &AppHandle) -> Vec<String> {
             "studio".to_string(),
             "tools".to_string(),
             "ram".to_string(),
+            "tasks".to_string(),
             "daily-notes".to_string(),
         ],
     }
@@ -1067,6 +1068,31 @@ fn build_daily_notes_tray(app: &AppHandle, icon: Option<Image<'static>>) -> taur
             } = event
             {
                 open_tool_window_near(tray.app_handle(), "daily-notes.html", Some(rect));
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
+/// Build the Tasks tray icon: one click away, no menu.
+fn build_tasks_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Result<()> {
+    let icon = match icon {
+        Some(icon) => icon,
+        None => Image::from_bytes(include_bytes!("../icons/calendar.png"))?,
+    };
+
+    TrayIconBuilder::with_id("tasks-tray")
+        .icon(icon)
+        .icon_as_template(true)
+        .tooltip("Tasks")
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                rect,
+                button_state: tauri::tray::MouseButtonState::Up,
+                ..
+            } = event
+            {
+                open_tool_window_near(tray.app_handle(), "tasks.html", Some(rect));
             }
         })
         .build(app)?;
@@ -6081,6 +6107,7 @@ pub fn run() {
                     "tools" => build_tools_tray(&handle, icon_override)?,
                     "ram" => build_ram_tray(&handle, icon_override)?,
                     "daily-notes" => build_daily_notes_tray(&handle, icon_override)?,
+                    "tasks" => build_tasks_tray(&handle, icon_override)?,
                     _ => {}
                 }
             }

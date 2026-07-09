@@ -75,6 +75,10 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
 - **Dev inspector:** Cmd+Option+Click any element → its CSS rule in Zed.
   [docs/devinspect.md](docs/devinspect.md)
 - Saves are debounced (`scheduleNotesSave()` / `scheduleWorkspaceSave()` / …).
+- **`TrayItems.json`** (repo root) overrides the tray icon order/icons defined
+  in `tool_style`/`tray_item_order` in `lib.rs` — if it exists it *replaces*
+  the code default wholesale, so adding a new tray icon in Rust also requires
+  adding its `{ "id": ... }` entry here or it silently won't show.
 
 ## Conventions
 - The human tests each step in the running app before committing. `cargo check`

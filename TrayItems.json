@@ -2,5 +2,6 @@
   { "id": "studio" },
   { "id": "tools" },
   { "id": "ram" , "icon": "planner_review.png"},
+  { "id": "tasks", "icon": "calendar.png" },
   { "id": "daily-notes", "icon": "format_list_bulleted.png" }
 ]
