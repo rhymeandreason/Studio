@@ -973,7 +973,6 @@ async function loadNotes(path) {
 
 export function scheduleNotesSave() {
   if (!state.notesProjectPath) return;
-  setNotesStatus("Saving…");
   clearTimeout(notesSaveTimer);
   notesSaveTimer = setTimeout(async () => {
     try {

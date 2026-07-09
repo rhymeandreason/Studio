@@ -729,7 +729,6 @@ async function saveWorkspaceNow() {
 
 export function scheduleWorkspaceSave() {
   if (!state.activeProject) return;
-  setStatus("Saving…");
   clearTimeout(wsSaveTimer);
   wsSaveTimer = setTimeout(saveWorkspaceNow, 400);
 }

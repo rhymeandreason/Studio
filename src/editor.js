@@ -453,7 +453,6 @@ export function setEditStatus(text) {
 function scheduleEditsSave() {
   if (!editItem) return;
   editDirty = true;
-  setEditStatus("Saving…");
   clearTimeout(editSaveTimer);
   editSaveTimer = setTimeout(async () => {
     try {
