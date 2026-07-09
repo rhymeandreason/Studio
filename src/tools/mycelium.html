@@ -421,8 +421,14 @@
         else { n.fx = n.x; n.fy = n.y; }
       }
       if (sim) sim.stop();
+      // Link pull toward the tree, tuned per kind — groups cluster tightest and
+      // pull hardest, companies sit halfway, everything else uses the default.
+      const LINK_DISTANCE = { group: 120, company: 140, default: 160 };
+      const LINK_STRENGTH = { group: 0.75, company: 0.555, default: 0.3 };
       sim = forceSimulation(nodes)
-        .force("link", forceLink(links).distance(140).strength(0.6))
+        .force("link", forceLink(links)
+          .distance(l => LINK_DISTANCE[l.target.kind] ?? LINK_DISTANCE.default)
+          .strength(l => LINK_STRENGTH[l.target.kind] ?? LINK_STRENGTH.default))
         .force("charge", forceManyBody().strength(-90))
         .force("collide", forceCollide(d => d.__r ?? NODE_RADIUS[isTreeObj(d) ? "tree" : "person"] + 4).strength(0.9))
         .alpha(1).alphaTarget(alphaTarget)
