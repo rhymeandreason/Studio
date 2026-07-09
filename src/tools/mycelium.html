@@ -85,6 +85,10 @@
       mix-blend-mode: luminosity; opacity: .9; }
     .node.person .dot { width: 40px; height: 40px; font-size: 15px; font-weight: 600; }
     .node.selected .dot { box-shadow: 0 0 0 3px var(--accent-ring), 0 4px 14px rgba(0,0,0,.14); }
+    /* Shift-held, waiting for the second click to complete a person<->tree link */
+    .node.shift-pending .dot { box-shadow: 0 0 0 3px var(--accent), 0 4px 14px rgba(0,0,0,.14); }
+    .node.shift-pending .dot { animation: shift-pending-pulse 1s ease-in-out infinite; }
+    @keyframes shift-pending-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .6; } }
     .node .label {
       margin-top: 5px; font-size: 11.5px; line-height: 1.2;
       max-width: 96px; color: var(--text);
@@ -237,6 +241,35 @@
     let view = { x: 120, y: 120, scale: 1 };
     let draggingId = null;          // node currently under the pointer — exempt from collision push
     let sim = null, simRunning = false; // live d3-force session, active only while dragging
+
+    // ---------- undo ----------
+    // Snapshot-based, capped at 20 steps. Covers structural changes (add/delete
+    // tree or person, connect/disconnect a tree, drag) — not per-keystroke field
+    // edits, which would make undo granular to the point of being annoying.
+    const UNDO_LIMIT = 20;
+    let undoStack = [];
+    function pushUndo() {
+      undoStack.push(JSON.parse(JSON.stringify({ trees: store.trees, people: store.people })));
+      if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    }
+    function undo() {
+      const snap = undoStack.pop();
+      if (!snap) return;
+      store.trees = snap.trees; store.people = snap.people;
+      selected = null; shiftPending = null;
+      // Existing .node elements are wired (closures) to the pre-undo object
+      // references — force everything to be recreated against the restored ones.
+      for (const el of nodeEls.values()) el.remove();
+      nodeEls.clear();
+      render(); showInspector(); scheduleSave();
+    }
+    window.addEventListener("keydown", (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z" || e.shiftKey) return;
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) return; // let native field undo happen
+      e.preventDefault();
+      undo();
+    });
 
     const $ = (s) => document.querySelector(s);
     const stage = $("#stage"), world = $("#world"), edges = $("#edges");
@@ -504,7 +537,7 @@
 
     function updateTreeNode(t) {
       const el = getNodeEl(t.id, "tree", t);
-      el.className = "node tree" + (isSel("tree", t.id) ? " selected" : "");
+      el.className = "node tree" + (isSel("tree", t.id) ? " selected" : "") + (isShiftPending("tree", t.id) ? " shift-pending" : "");
       el.style.left = t.x + "px"; el.style.top = t.y + "px";
       el.style.setProperty("--tree-color", t.color || "var(--accent)");
       el.innerHTML =
@@ -516,7 +549,7 @@
     }
     function updatePersonNode(p) {
       const el = getNodeEl(p.id, "person", p);
-      el.className = "node person" + (isSel("person", p.id) ? " selected" : "");
+      el.className = "node person" + (isSel("person", p.id) ? " selected" : "") + (isShiftPending("person", p.id) ? " shift-pending" : "");
       el.style.left = p.x + "px"; el.style.top = p.y + "px";
       el.innerHTML =
         `<div class="node-inner">
@@ -579,6 +612,7 @@
           const t = tree(addPersonForTreeId); if (!t) return;
           const person = { id: uid("person_"), name, contacts: [], treeIds: [t.id], note: "",
             x: t.x + 95, y: t.y - 70, createdAt: nowISO(), sourceSubmissionId: null };
+          pushUndo();
           store.people.push(person); scheduleSave();
           input.value = "";
           startSettlePhysics(new Set([person.id])); // let it settle clear of the box/others instead of teleporting
@@ -655,7 +689,7 @@
         if (!start) return;
         const dx = (e.clientX - start.mx) / view.scale;
         const dy = (e.clientY - start.my) / view.scale;
-        if (Math.abs(dx) + Math.abs(dy) > 3 && !moved) { moved = true; draggingId = obj.id; startDragPhysics(obj); }
+        if (Math.abs(dx) + Math.abs(dy) > 3 && !moved) { pushUndo(); moved = true; draggingId = obj.id; startDragPhysics(obj); }
         obj.x = Math.round(start.ox + dx); obj.y = Math.round(start.oy + dy);
         if (moved) { obj.fx = obj.x; obj.fy = obj.y; }
         el.style.left = obj.x + "px"; el.style.top = obj.y + "px";
@@ -666,12 +700,14 @@
         start = null;
         draggingId = null;
         if (moved) { coolDragPhysics(); scheduleSave(); }
+        else if (e.shiftKey) { handleShiftLinkClick(type, obj); }
         else { select(type, obj.id); }
       });
     }
 
     const isSel = (type, id) => selected && selected.type === type && selected.id === id;
     function select(type, id) {
+      shiftPending = null;
       selected = { type, id };
       if (type === "tree") {
         // Fresh box for this tree; let its connected people settle around the
@@ -682,7 +718,41 @@
       }
       render(); showInspector();
     }
-    function deselect() { selected = null; render(); inspector.classList.add("hidden"); }
+    function deselect() { shiftPending = null; selected = null; render(); inspector.classList.add("hidden"); }
+
+    // ---------- shift-click to connect a person to a tree ----------
+    // Hold Shift, click a person then a tree (either order) to add that
+    // connection if it doesn't already exist — a faster alternative to the
+    // inspector's tree chip-list for a single link.
+    let shiftPending = null; // { type, id } | null
+    const isShiftPending = (type, id) => shiftPending && shiftPending.type === type && shiftPending.id === id;
+
+    function handleShiftLinkClick(type, obj) {
+      if (!shiftPending || shiftPending.type === type) {
+        shiftPending = { type, id: obj.id };
+        render();
+        return;
+      }
+      const p = type === "person" ? obj : person(shiftPending.id);
+      const t = type === "tree" ? obj : tree(shiftPending.id);
+      shiftPending = null;
+      if (!p || !t) { render(); return; }
+      p.treeIds ||= [];
+      if (!p.treeIds.includes(t.id)) {
+        pushUndo();
+        p.treeIds.push(t.id);
+        startSettlePhysics(new Set([p.id]));
+        render();
+        scheduleSave();
+        if (selected?.type === "person" && selected.id === p.id) renderPersonInspector(p);
+        pop(nodeEls.get(p.id)?.querySelector(".dot"));
+      } else {
+        render(); // already connected — just clear the pending highlight
+      }
+    }
+    window.addEventListener("keyup", (e) => {
+      if (e.key === "Shift" && shiftPending) { shiftPending = null; render(); }
+    });
 
     // ---------- stage pan / zoom ----------
     (function panZoom() {
@@ -768,6 +838,7 @@
              </div>
              <button class="btn-icon" title="Disconnect"><span class="mi mi-sm">close</span></button>`;
           row.lastElementChild.onclick = () => {
+            pushUndo();
             p.treeIds.splice(i, 1);
             if (!p.treeIds.length) { p.x = p.y = null; } // fall back to auto-layout
             draw(); onChange();
@@ -783,6 +854,7 @@
             remaining.map(t => `<option value="${t.id}">${esc(t.name || "Untitled")}</option>`).join("");
           tsel.onchange = () => {
             if (!tsel.value) return;
+            pushUndo();
             const first = !p.treeIds.length;
             p.treeIds.push(tsel.value);
             if (first) p.x = p.y = null; // re-layout around the new (first) hub
@@ -815,6 +887,7 @@
 
       inspector.appendChild(divider());
       const del = dangerBtn("Delete contact", () => {
+        pushUndo();
         store.people = store.people.filter(x => x.id !== p.id);
         deselect(); scheduleSave();
       });
@@ -912,6 +985,7 @@
       const count = store.people.filter(p => p.treeIds?.includes(t.id)).length;
       const del = dangerBtn(`Delete tree (${count} contact${count===1?"":"s"})`, () => {
         if (count && !confirm("Delete this tree and detach its contacts?")) return;
+        pushUndo();
         store.people.forEach(p => { p.treeIds = (p.treeIds||[]).filter(id => id !== t.id); });
         store.people = store.people.filter(p => (p.treeIds||[]).length);
         store.trees = store.trees.filter(x => x.id !== t.id);
@@ -929,7 +1003,9 @@
         if (!res.ok) throw new Error("HTTP " + res.status);
         const subs = await res.json(); // [{ id, name, contacts, note, createdAt }]
         let added = 0;
+        let pushedUndo = false;
         for (const s of subs) {
+          if (!pushedUndo && !store.people.some(p => p.sourceSubmissionId === s.id)) { pushUndo(); pushedUndo = true; }
           if (store.people.some(p => p.sourceSubmissionId === s.id)) continue;
           store.people.push({
             id: uid("person_"), name: s.name || "", contacts: s.contacts || [],
@@ -1009,6 +1085,7 @@
         x: 240 + (n % 3) * 260, y: 200 + Math.floor(n / 3) * 220,
         createdAt: nowISO(),
       };
+      pushUndo();
       store.trees.push(t); scheduleSave();
       treeCardTreeId = t.id;
       select("tree", t.id);
