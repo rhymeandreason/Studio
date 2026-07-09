@@ -697,6 +697,7 @@
     }
 
     // node drag + select
+    let lastClickAt = 0, lastClickType = null, lastClickId = null; // manual double-click tracking, see pointerup below
     function wireNode(el, type, obj) {
       let moved = false, start = null;
       el.addEventListener("dragstart", (e) => e.preventDefault());
@@ -723,11 +724,21 @@
         draggingId = null;
         if (moved) { coolDragPhysics(); scheduleSave(); }
         else if (e.shiftKey) { handleShiftLinkClick(type, obj); }
-        else { select(type, obj.id); }
-      });
-      el.addEventListener("dblclick", (e) => {
-        e.stopPropagation();
-        select(type, obj.id, { forceInspector: true });
+        else {
+          // Detect the double-click ourselves rather than relying on the
+          // browser's native dblclick event: pointerdown's preventDefault()
+          // above (needed to stop WKWebView's drag-ghost) can suppress
+          // WebKit's synthesized click/dblclick events, so this is the only
+          // reliable way to catch it in the actual Tauri app.
+          const now = performance.now();
+          const isDouble = now - lastClickAt < 400 && lastClickType === type && lastClickId === obj.id;
+          lastClickAt = isDouble ? 0 : now; // reset so a third rapid click doesn't chain into another double
+          lastClickType = type; lastClickId = obj.id;
+          select(type, obj.id, { forceInspector: isDouble });
+          // Re-center on the node once the inspector is showing (its width
+          // just changed the visible stage area) so the panel doesn't cover it.
+          if (isDouble) focusOn(obj.x, obj.y);
+        }
       });
     }
 
