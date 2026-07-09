@@ -1190,8 +1190,10 @@
       };
       pushUndo();
       store.trees.push(t); scheduleSave();
-      treeCardTreeId = t.id;
+      // Order matters: setViewTab deselects (and renders) before select() runs
+      // below, which would otherwise clobber treeCardTreeId if set first.
       if (viewTab !== "all") setViewTab("all"); // new tree should always be visible, whatever tab you were on
+      treeCardTreeId = t.id;
       select("tree", t.id);
       focusOn(t.x, t.y);
     }
