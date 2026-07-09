@@ -56,9 +56,12 @@
     .node {
       position: absolute;
       transform: translate(-50%, -50%);
-      user-select: none;
       cursor: pointer;
       text-align: center;
+    }
+    .node, .node * {
+      user-select: none; -webkit-user-select: none;
+      -webkit-user-drag: none;
     }
     .node .dot {
       display: flex; align-items: center; justify-content: center;
@@ -160,8 +163,7 @@
 
   <div id="split">
     <div id="stage">
-      <svg id="edges"></svg>
-      <div id="world"></div>
+      <div id="world"><svg id="edges"></svg></div>
       <div id="empty">
         <span class="mi">hub</span>
         <div>No trees yet.<br>Create one for an event, place, company, or group.</div>
@@ -183,6 +185,7 @@
     let store = { version: 1, serverUrl: "", me: { name: "", contacts: [] }, trees: [], people: [] };
     let selected = null;            // { type:'tree'|'person', id } | null
     let view = { x: 120, y: 120, scale: 1 };
+    let draggingId = null;          // node currently under the pointer — exempt from collision push
 
     const $ = (s) => document.querySelector(s);
     const stage = $("#stage"), world = $("#world"), edges = $("#edges");
@@ -232,19 +235,60 @@
       p.y = Math.round(base.y + Math.sin(a) * 150);
     }
 
+    // ---------- collision avoidance ----------
+    // Radii roughly match the .dot sizes (66px/40px) plus breathing room.
+    const NODE_RADIUS = { tree: 42, person: 27 };
+    function resolveCollisions() {
+      const nodes = [
+        ...store.trees.map(t => ({ obj: t, r: NODE_RADIUS.tree })),
+        ...store.people.map(p => ({ obj: p, r: NODE_RADIUS.person })),
+      ];
+      for (let iter = 0; iter < 6; iter++) {
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const a = nodes[i], b = nodes[j];
+            let dx = b.obj.x - a.obj.x, dy = b.obj.y - a.obj.y;
+            let dist = Math.hypot(dx, dy);
+            const minDist = a.r + b.r;
+            if (dist >= minDist) continue;
+            if (dist < 0.01) {
+              // exactly coincident — nudge apart along a stable pseudo-random axis
+              const a2 = (i * 13 + j * 7) % (Math.PI * 2);
+              dx = Math.cos(a2); dy = Math.sin(a2); dist = 1;
+            }
+            const overlap = (minDist - dist) / 2;
+            const nx = dx / dist, ny = dy / dist;
+            const aPinned = a.obj.id === draggingId, bPinned = b.obj.id === draggingId;
+            if (!aPinned) { a.obj.x -= nx * overlap; a.obj.y -= ny * overlap; }
+            if (!bPinned) { b.obj.x += nx * overlap; b.obj.y += ny * overlap; }
+          }
+        }
+      }
+    }
+
     // ---------- rendering ----------
     function applyView() {
+      // #edges is a child of #world, so it inherits this transform for free —
+      // no separate sync needed (that split used to let the lines drift/detach
+      // from the nodes on zoom, since two elements never scale in perfect lockstep).
       world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
-      edges.style.transform = world.style.transform;
     }
+
+    // Persistent DOM elements keyed by node id. render() used to tear down and
+    // rebuild every .node on each call — including the one under the pointer —
+    // which released its pointer capture mid-drag (removing a captured element
+    // from the DOM ends the capture per spec) and made dragging die after one
+    // move. Now nodes are created once and updated in place.
+    const nodeEls = new Map();
 
     function render() {
       $("#empty").style.display = store.trees.length ? "none" : "flex";
-      world.innerHTML = "";
-      // edges first
+
+      for (const p of store.people) layoutPerson(p);
+      resolveCollisions();
+
       let lines = "";
       for (const p of store.people) {
-        layoutPerson(p);
         for (const tid of (p.treeIds || [])) {
           const t = tree(tid); if (!t) continue;
           lines += `<line x1="${t.x}" y1="${t.y}" x2="${p.x}" y2="${p.y}"
@@ -253,8 +297,12 @@
       }
       edges.innerHTML = lines;
 
-      for (const t of store.trees) world.appendChild(treeNode(t));
-      for (const p of store.people) world.appendChild(personNode(p));
+      const live = new Set();
+      for (const t of store.trees) { live.add(t.id); updateTreeNode(t); }
+      for (const p of store.people) { live.add(p.id); updatePersonNode(p); }
+      for (const [id, el] of nodeEls) {
+        if (!live.has(id)) { el.remove(); nodeEls.delete(id); }
+      }
       applyView();
     }
 
@@ -262,8 +310,19 @@
       return (name || "?").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?";
     }
 
-    function treeNode(t) {
-      const el = document.createElement("div");
+    function getNodeEl(id, type, obj) {
+      let el = nodeEls.get(id);
+      if (!el) {
+        el = document.createElement("div");
+        wireNode(el, type, obj);
+        world.appendChild(el);
+        nodeEls.set(id, el);
+      }
+      return el;
+    }
+
+    function updateTreeNode(t) {
+      const el = getNodeEl(t.id, "tree", t);
       el.className = "node tree" + (isSel("tree", t.id) ? " selected" : "");
       el.style.left = t.x + "px"; el.style.top = t.y + "px";
       el.style.setProperty("--tree-color", t.color || "var(--accent)");
@@ -271,42 +330,51 @@
         `<div class="dot"><span class="mi">${KIND_ICON[t.kind] || "hub"}</span></div>
          <div class="label">${esc(t.name || "Untitled")}</div>` +
         (t.date ? `<div class="sublabel">${esc(t.date)}</div>` : "");
-      wireNode(el, "tree", t);
-      return el;
     }
-    function personNode(p) {
-      const el = document.createElement("div");
+    function updatePersonNode(p) {
+      const el = getNodeEl(p.id, "person", p);
       el.className = "node person" + (isSel("person", p.id) ? " selected" : "");
       el.style.left = p.x + "px"; el.style.top = p.y + "px";
       el.innerHTML =
         `<div class="dot">${esc(initials(p.name))}</div>
          <div class="label">${esc(p.name || "New contact")}</div>`;
-      wireNode(el, "person", p);
-      return el;
     }
 
     // node drag + select
     function wireNode(el, type, obj) {
       let moved = false, start = null;
+      el.addEventListener("dragstart", (e) => e.preventDefault());
       el.addEventListener("pointerdown", (e) => {
         e.stopPropagation();
+        e.preventDefault(); // stop WKWebView's native text/icon drag-ghost from hijacking the gesture
         moved = false;
         start = { mx: e.clientX, my: e.clientY, ox: obj.x, oy: obj.y };
+        // Dragging a tree carries along people exclusively connected to it —
+        // people shared with another tree stay put (their edge just stretches).
+        if (type === "tree") {
+          start.riders = store.people
+            .filter(p => (p.treeIds || []).length === 1 && p.treeIds[0] === obj.id)
+            .map(p => ({ p, ox: p.x, oy: p.y }));
+        }
         el.setPointerCapture(e.pointerId);
       });
       el.addEventListener("pointermove", (e) => {
         if (!start) return;
         const dx = (e.clientX - start.mx) / view.scale;
         const dy = (e.clientY - start.my) / view.scale;
-        if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+        if (Math.abs(dx) + Math.abs(dy) > 3) { moved = true; draggingId = obj.id; }
         obj.x = Math.round(start.ox + dx); obj.y = Math.round(start.oy + dy);
         el.style.left = obj.x + "px"; el.style.top = obj.y + "px";
-        render(); // cheap enough; keeps edges attached
+        if (start.riders) {
+          for (const r of start.riders) { r.p.x = Math.round(r.ox + dx); r.p.y = Math.round(r.oy + dy); }
+        }
+        render(); // cheap enough; keeps edges attached + pushes overlapping nodes aside
       });
       el.addEventListener("pointerup", (e) => {
         el.releasePointerCapture(e.pointerId);
         start = null;
-        if (moved) { scheduleSave(); }
+        draggingId = null;
+        if (moved) { render(); scheduleSave(); }
         else { select(type, obj.id); }
       });
     }
@@ -381,6 +449,52 @@
       return wrap;
     }
 
+    // Person <-> tree links: a person can connect to several trees at once
+    // (e.g. a friend met at an event who's also part of a company you track).
+    function treeLinks(p, onChange) {
+      p.treeIds ||= [];
+      const wrap = document.createElement("div");
+      const draw = () => {
+        wrap.innerHTML = "";
+        p.treeIds.forEach((tid, i) => {
+          const t = tree(tid);
+          const row = document.createElement("div");
+          row.className = "contact-row";
+          row.innerHTML =
+            `<div class="field" style="display:flex; align-items:center; gap:6px; flex:1 1 auto;">
+               <span style="width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:${t?.color || 'var(--accent)'}"></span>
+               ${esc(t?.name || "Deleted tree")}
+             </div>
+             <button class="btn-icon" title="Disconnect"><span class="mi mi-sm">close</span></button>`;
+          row.lastElementChild.onclick = () => {
+            p.treeIds.splice(i, 1);
+            if (!p.treeIds.length) { p.x = p.y = null; } // fall back to auto-layout
+            draw(); onChange();
+          };
+          wrap.appendChild(row);
+        });
+
+        const remaining = store.trees.filter(t => !p.treeIds.includes(t.id));
+        if (remaining.length) {
+          const addRow = document.createElement("div"); addRow.className = "contact-row";
+          const tsel = document.createElement("select"); tsel.className = "field";
+          tsel.innerHTML = `<option value="" disabled selected>Connect to tree…</option>` +
+            remaining.map(t => `<option value="${t.id}">${esc(t.name || "Untitled")}</option>`).join("");
+          tsel.onchange = () => {
+            if (!tsel.value) return;
+            const first = !p.treeIds.length;
+            p.treeIds.push(tsel.value);
+            if (first) p.x = p.y = null; // re-layout around the new (first) hub
+            draw(); onChange();
+          };
+          addRow.appendChild(tsel);
+          wrap.appendChild(addRow);
+        }
+      };
+      draw();
+      return wrap;
+    }
+
     function renderPersonInspector(p) {
       if (!p) return;
       inspector.innerHTML = `<div class="eyebrow">Contact</div>`;
@@ -390,13 +504,8 @@
       inspector.appendChild(head);
       inspector.appendChild(nameIn);
 
-      const treeRow = document.createElement("div"); treeRow.className = "row";
-      treeRow.innerHTML = `<span class="label">Tree</span>`;
-      const tsel = document.createElement("select"); tsel.className = "field";
-      tsel.innerHTML = store.trees.map(t => `<option value="${t.id}" ${p.treeIds?.[0]===t.id?"selected":""}>${esc(t.name||"Untitled")}</option>`).join("");
-      tsel.onchange = () => { p.treeIds = [tsel.value]; p.x = p.y = null; render(); scheduleSave(); };
-      treeRow.appendChild(tsel);
-      inspector.appendChild(treeRow);
+      inspector.appendChild(sectionLabel("Trees"));
+      inspector.appendChild(treeLinks(p, () => { render(); scheduleSave(); }));
 
       inspector.appendChild(sectionLabel("Contact info"));
       inspector.appendChild(contactRows(p.contacts ||= [], () => { render(); scheduleSave(); }));
