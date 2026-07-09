@@ -598,19 +598,22 @@
         if (!live.has(id)) { el.remove(); nodeEls.delete(id); removedAny = true; }
       }
       updateAddPersonAffordance();
-      updateTreeCard();
+      if (updateTreeCard()) removedAny = true;
       applyView();
-      // WKWebView sometimes leaves stale pixels behind a removed .node (its
-      // enter/pop animation left an inline `transform`, which promotes it to
-      // its own compositing layer — removing that layer can skip repainting
-      // the vacated area; a mere opacity nudge wasn't enough to force it).
-      // Toggling display:none/back synchronously drops and rebuilds #stage's
-      // backing store entirely, all within this tick so nothing flashes.
-      if (removedAny) {
-        stage.style.display = "none";
-        void stage.offsetHeight; // force sync layout+paint before restoring
-        stage.style.display = "";
-      }
+      if (removedAny) forceRepaint();
+    }
+
+    // WKWebView sometimes leaves stale pixels behind an absolutely-positioned
+    // node after it's removed (its enter/pop animation left an inline
+    // `transform`, which promotes it to its own compositing layer — removing
+    // that layer can skip repainting the vacated area; a mere opacity nudge
+    // wasn't enough to force it). Toggling display:none/back synchronously
+    // drops and rebuilds #stage's backing store entirely, all within this
+    // tick so nothing visibly flashes.
+    function forceRepaint() {
+      stage.style.display = "none";
+      void stage.offsetHeight; // force sync layout+paint before restoring
+      stage.style.display = "";
     }
 
     function initials(name) {
@@ -742,9 +745,10 @@
       const t = treeCardTreeId ? tree(treeCardTreeId) : null;
       const stillSelected = t && selected?.type === "tree" && selected.id === treeCardTreeId;
       if (!stillSelected) {
+        const hadEl = !!treeCardEl;
         if (treeCardEl) { treeCardEl.remove(); treeCardEl = null; }
         treeCardTreeId = null; treeCardBuiltFor = null;
-        return;
+        return hadEl;
       }
       if (!treeCardEl) {
         treeCardEl = document.createElement("div");
@@ -1187,6 +1191,7 @@
       pushUndo();
       store.trees.push(t); scheduleSave();
       treeCardTreeId = t.id;
+      if (viewTab !== "all") setViewTab("all"); // new tree should always be visible, whatever tab you were on
       select("tree", t.id);
       focusOn(t.x, t.y);
     }
