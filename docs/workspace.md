@@ -56,6 +56,22 @@ To add another editor option, add `{ value, label }` to `EDITOR_OPTIONS` in
 `src/workspace.js` — `value` must match the `.app` name macOS expects after
 `open -a` (e.g. `"Visual Studio Code"`, `"IntelliJ IDEA"`).
 
+### Activating a project: `activate_project` vs `open_project`
+
+`activate_project_ex(app, path, apply_mode)` in `lib.rs` is the shared core
+(store as active, refresh tray, `show_studio`, emit `project-activated`).
+`apply_mode` gates two side effects: tidying per-project Code Editor windows
+(hide others, show/focus this project's) and auto-applying the project's
+first recorded Mode layout (below). Two callers, two behaviors:
+
+- **Tray menu click** and **`create_project`** call `activate_project` (→
+  `apply_mode: true`) — switching projects this way snaps windows into the
+  project's saved layout, matching the Modes spotlight tool.
+- **`open_project`**, invoked by the main window's "All Projects" list
+  (double-click / Enter on a card), calls `activate_project_ex(.., false)` —
+  it's just browsing, so it only swaps the active project and never
+  opens/closes/focuses other windows as a side effect.
+
 ## Modes (record/play window layouts)
 
 `workspace.json`'s `modes` array (seeded with Code/Design/Default) holds named

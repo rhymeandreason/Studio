@@ -1237,6 +1237,14 @@ fn set_window_width(app: AppHandle, width: u32) -> Result<(), String> {
 
 /// Activate a project: store it, refresh the tray, open the window, notify the UI.
 fn activate_project(app: &AppHandle, path: &str) {
+    activate_project_ex(app, path, true);
+}
+
+/// `apply_mode` controls whether the project's first recorded Mode layout is
+/// auto-applied. The Modes spotlight tool and tray relies on this; the main
+/// window's "All Projects" list wants to just browse into a project without
+/// snapping windows into a saved layout, so it calls this with `false`.
+fn activate_project_ex(app: &AppHandle, path: &str, apply_mode: bool) {
     let projects = scan_projects(app);
     let Some(project) = projects.iter().find(|p| p.path == path).cloned() else {
         return;
@@ -1252,24 +1260,30 @@ fn activate_project(app: &AppHandle, path: &str) {
     // projects leaves the previous project's editor frontmost (per-project
     // windows are independent — nothing else brings the active one forward).
     // Runs before any mode apply below, which can still override the layout.
-    let active_editor = code_editor_label(&project.path);
-    for (label, win) in app.webview_windows() {
-        if !label.starts_with("tool-code-editor-html-") {
-            continue;
-        }
-        if label == active_editor {
-            let _ = win.show();
-            let _ = win.set_focus();
-        } else {
-            let _ = win.hide();
+    // Skipped when just browsing (apply_mode == false): the Projects list
+    // shouldn't open/close other windows as a side effect of selection.
+    if apply_mode {
+        let active_editor = code_editor_label(&project.path);
+        for (label, win) in app.webview_windows() {
+            if !label.starts_with("tool-code-editor-html-") {
+                continue;
+            }
+            if label == active_editor {
+                let _ = win.show();
+                let _ = win.set_focus();
+            } else {
+                let _ = win.hide();
+            }
         }
     }
 
     // Auto-apply the project's first recorded Mode (first with a saved layout),
     // so activating a project snaps its windows into place.
-    if let Ok(ws) = read_workspace(project.path.clone()) {
-        if let Some(mode) = ws.modes.iter().find(|m| !m.layout.is_empty()) {
-            let _ = apply_window_layout(app.clone(), mode.layout.clone());
+    if apply_mode {
+        if let Ok(ws) = read_workspace(project.path.clone()) {
+            if let Some(mode) = ws.modes.iter().find(|m| !m.layout.is_empty()) {
+                let _ = apply_window_layout(app.clone(), mode.layout.clone());
+            }
         }
     }
 }
@@ -1586,10 +1600,12 @@ fn list_projects(app: AppHandle) -> Vec<Project> {
     scan_projects(&app)
 }
 
-/// Activate a project from the UI (e.g. clicking a card in the overview).
+/// Activate a project from the main window's "All Projects" list (e.g.
+/// double-clicking a card). This is just browsing, so it skips the saved
+/// Mode auto-apply that `activate_project` does for the tray/Modes spotlight.
 #[tauri::command]
 fn open_project(app: AppHandle, path: String) {
-    activate_project(&app, &path);
+    activate_project_ex(&app, &path, false);
 }
 
 /// Create a new project folder under ~/Projects and activate it.
