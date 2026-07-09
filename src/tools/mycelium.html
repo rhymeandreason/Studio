@@ -98,6 +98,11 @@
     }
     .node.tree .label { font-weight: 600; font-size: 12.5px; max-width: 120px; }
     .node .sublabel { font-size: 10px; color: var(--text-muted); pointer-events: none; }
+    /* "Blur names" (Settings) — for screenshots. Blurs the label text but
+       keeps node shapes/colors legible so the graph's structure still reads. */
+    body.blur-names .node .label,
+    body.blur-names .node .sublabel { filter: blur(5px); }
+    body.blur-names .node.person .dot { color: transparent; text-shadow: 0 0 8px var(--text); }
 
     /* ---- add-person affordance ---- */
     .node.add-person .dot {
@@ -339,6 +344,7 @@
       }
       store.me ||= { name: "", contacts: [] };
       store.trees ||= []; store.people ||= [];
+      document.body.classList.toggle("blur-names", !!store.blurNames);
       render();
     }
 
@@ -1257,6 +1263,14 @@
       inspector.appendChild(note);
 
       inspector.appendChild(divider());
+      inspector.appendChild(sectionLabel("Privacy"));
+      inspector.appendChild(checkboxField("Blur names", store.blurNames, (v) => {
+        store.blurNames = v;
+        document.body.classList.toggle("blur-names", v);
+        scheduleSave();
+      }, "For screenshots — blurs names on the canvas, keeps node shapes visible."));
+
+      inspector.appendChild(divider());
       inspector.appendChild(sectionLabel("Stats"));
       const stat = document.createElement("div"); stat.className = "muted-note";
       const n = countNonEventOnlyPeople();
@@ -1304,6 +1318,22 @@
       row.innerHTML = `<span class="label">${label}</span>`;
       const i = document.createElement("input"); i.className = "field"; i.value = val || ""; i.placeholder = ph;
       i.oninput = () => onInput(i.value); row.appendChild(i); return row;
+    }
+    function checkboxField(label, val, onChange, hint = "") {
+      const row = document.createElement("div"); row.className = "row";
+      const lb = document.createElement("label");
+      lb.style.cssText = "display:flex; align-items:center; gap:8px; cursor:pointer;";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!val;
+      cb.onchange = () => onChange(cb.checked);
+      lb.appendChild(cb);
+      lb.appendChild(document.createTextNode(label));
+      row.appendChild(lb);
+      if (hint) {
+        const note = document.createElement("div"); note.className = "muted-note";
+        note.textContent = hint;
+        row.appendChild(note);
+      }
+      return row;
     }
     function inlineField(label, type, val, onInput) {
       const w = document.createElement("div");
