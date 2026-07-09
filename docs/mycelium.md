@@ -143,6 +143,46 @@ render as generic rows.
 submission with its tree. `/api/qr?t=<treeId>` returns an SVG QR of that URL for
 the Studio tool to display.
 
+## Canvas interaction
+
+- **Trees and people are draggable** (`wireNode()` in `mycelium.html`). Node
+  elements are created once and updated in place across renders — never
+  torn down/rebuilt — because removing a pointer-captured element from the
+  DOM mid-drag silently ends its capture (WebKit/spec behavior) and kills
+  the gesture after one move.
+- **Person can belong to several trees** (`treeIds: []`), edited via a
+  chip-list in the person Inspector (connect/disconnect), not a single-select.
+- **Collision avoidance**: `resolveCollisions()` runs synchronously on every
+  `render()` and nudges any two overlapping nodes apart — deterministic and
+  timer-independent, so a node is correctly placed the instant it's created
+  or moved, with no dependency on animation frames actually running (matters
+  for a backgrounded/unfocused window).
+- **Force-directed physics** (vendored `d3-force`, `src/vendor/d3-force.mjs`):
+  a live `forceSimulation` spins up for two kinds of moments — a held-hot
+  session while a node is being dragged (its edge-connected neighbors react
+  elastically via `forceLink`/`forceCollide` instead of moving in rigid
+  lockstep), and a one-shot "settle" for events that used to just teleport
+  via `resolveCollisions()` (a tree getting selected, a person getting
+  added). The two collision systems are complementary, not redundant: the
+  manual resolver guarantees synchronous idle-state correctness; d3-force
+  only runs for these specific, bounded, animated moments — it is
+  deliberately **not** run continuously, to avoid the whole graph drifting/
+  rearranging on its own or burning CPU at rest.
+- **Add a person from the canvas**: selecting a tree shows a "+" node next
+  to it (`updateAddPersonAffordance()`); clicking it reveals an inline name
+  field — Enter creates the person and keeps the field open/focused for
+  adding several in a row, Escape cancels. The open (or closed) field is
+  itself treated as a pinned physics obstacle so new people don't spawn
+  behind/under it.
+- **Node centering**: `.node`'s `left`/`top` anchor is centered via a
+  `.node-inner` wrapper's `transform: translate(-50%,-50%)` — never put that
+  transform directly on `.node` itself, since `enter()`/`pop()` (kit motion)
+  set an inline `transform` on whatever element they're given, which would
+  silently clobber it and visually detach the node from its edge line.
+- **Inspector panel is off by default** — toggled via the info (`ⓘ`) button
+  in the top bar (`inspectorOn`); selecting a node still works normally
+  underneath (drag, add-person, etc.) whether or not the panel is showing.
+
 ## Status
 
 Phase 1 (this branch): local graph tool + data model + Vercel intake scaffold.

@@ -88,7 +88,8 @@
     .node .label {
       margin-top: 5px; font-size: 11.5px; line-height: 1.2;
       max-width: 96px; color: var(--text);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
     }
     .node.tree .label { font-weight: 600; font-size: 12.5px; max-width: 120px; }
     .node .sublabel { font-size: 10px; color: var(--text-muted); }
@@ -186,6 +187,7 @@
   <div id="bar">
     <div class="brand"><span class="mi">hub</span> Mycelium</div>
     <button class="btn" id="btn-me"><span class="mi mi-sm">badge</span> My card</button>
+    <button class="btn" id="btn-info" title="Toggle inspector"><span class="mi mi-sm">info</span></button>
     <button class="btn" id="btn-settings"><span class="mi mi-sm">settings</span></button>
     <button class="btn btn-primary" id="btn-tree"><span class="mi mi-sm">add</span> New tree</button>
   </div>
@@ -216,6 +218,7 @@
 
     let store = { version: 1, serverUrl: "", me: { name: "", contacts: [] }, trees: [], people: [] };
     let selected = null;            // { type:'tree'|'person', id } | null
+    let inspectorOn = false;        // whether the inspector panel is allowed to show at all
     let view = { x: 120, y: 120, scale: 1 };
     let draggingId = null;          // node currently under the pointer — exempt from collision push
     let sim = null, simRunning = false; // live d3-force session, active only while dragging
@@ -284,19 +287,25 @@
     // Radii roughly match the .dot sizes (66px/40px) plus breathing room.
     const NODE_RADIUS = { tree: 42, person: 27 };
     const ADD_BOX_RADIUS = 90; // rough half-width of the open name-field pill
+
+    // The add-person affordance is a fixed obstacle too — whether it's showing
+    // the closed "+" circle or the open name field — so nodes (including a
+    // freshly-created person) get pushed clear of it instead of sitting behind
+    // or under it.
+    function addBoxObstacle() {
+      if (!selected || selected.type !== "tree") return null;
+      const t = tree(selected.id);
+      if (!t) return null;
+      const r = addPersonOpen ? ADD_BOX_RADIUS : NODE_RADIUS.person;
+      return { obj: { id: "__addbox__", x: t.x + 95, y: t.y - 70 }, r, pinned: true };
+    }
+
     function resolveCollisions() {
       const nodes = [
         ...store.trees.map(t => ({ obj: t, r: NODE_RADIUS.tree })),
         ...store.people.map(p => ({ obj: p, r: NODE_RADIUS.person })),
       ];
-      // The open add-person field is a fixed obstacle too, so a freshly-created
-      // person (spawned right under it) gets pushed clear instead of sitting
-      // behind the input box.
-      let addBox = null;
-      if (addPersonOpen) {
-        const t = tree(addPersonForTreeId);
-        if (t) { addBox = { obj: { id: "__addbox__", x: t.x + 95, y: t.y - 70 }, r: ADD_BOX_RADIUS, pinned: true }; }
-      }
+      const addBox = addBoxObstacle();
       if (addBox) nodes.push(addBox);
       for (let iter = 0; iter < 6; iter++) {
         for (let i = 0; i < nodes.length; i++) {
@@ -321,16 +330,27 @@
       }
     }
 
-    // ---------- drag physics ----------
-    // A live d3-force session, spun up only while actively dragging a node.
-    // The dragged node is pinned to the cursor (fx/fy); its direct neighbors
-    // (people <-> tree links) are freed to react elastically via forceLink +
-    // forceCollide, giving the "connected people follow the tree" motion a
-    // springy, force-directed feel instead of a rigid delta copy. Everything
-    // else stays pinned so the graph doesn't drift or rearrange on its own.
+    // ---------- physics ----------
+    // A live d3-force session. Nodes not in the "free" set are pinned (fx/fy)
+    // so only the parts of the graph that actually need to move do — everything
+    // else stays put instead of drifting/rearranging on its own. Two flavors:
+    // a held-hot session while actively dragging (startDragPhysics), and a
+    // one-shot settle for events like "a tree got selected" or "a person was
+    // added" that used to just teleport via resolveCollisions() (startSettlePhysics).
     function isTreeObj(d) { return d.kind !== undefined; }
 
-    function startDragPhysics(draggedObj) {
+    function neighborIdsOf(obj) {
+      const ids = new Set();
+      for (const p of store.people) {
+        for (const tid of (p.treeIds || [])) {
+          if (obj.id === p.id) ids.add(tid);
+          else if (obj.id === tid) ids.add(p.id);
+        }
+      }
+      return ids;
+    }
+
+    function buildForceGraph() {
       const nodes = [...store.trees, ...store.people];
       const links = [];
       for (const p of store.people) {
@@ -338,23 +358,26 @@
           const t = tree(tid); if (t) links.push({ source: p, target: t });
         }
       }
-      const neighborIds = new Set();
-      for (const l of links) {
-        if (l.source === draggedObj) neighborIds.add(l.target.id);
-        if (l.target === draggedObj) neighborIds.add(l.source.id);
-      }
+      // The add-person affordance pushes back too — a permanently-pinned
+      // obstacle in the same simulation, whether dragging or settling.
+      const addBox = addBoxObstacle();
+      if (addBox) nodes.push({ ...addBox.obj, fx: addBox.obj.x, fy: addBox.obj.y, __r: addBox.r });
+      return { nodes, links };
+    }
+
+    function runPhysics(freeIds, { alphaTarget = 0 } = {}) {
+      const { nodes, links } = buildForceGraph();
       for (const n of nodes) {
-        if (n === draggedObj || neighborIds.has(n.id)) { n.fx = null; n.fy = null; }
+        if (n.__r != null) continue; // the add-box obstacle stays fixed, set above
+        if (freeIds.has(n.id)) { n.fx = null; n.fy = null; }
         else { n.fx = n.x; n.fy = n.y; }
       }
-      draggedObj.fx = draggedObj.x; draggedObj.fy = draggedObj.y;
-
       if (sim) sim.stop();
       sim = forceSimulation(nodes)
         .force("link", forceLink(links).distance(140).strength(0.6))
         .force("charge", forceManyBody().strength(-90))
-        .force("collide", forceCollide(d => NODE_RADIUS[isTreeObj(d) ? "tree" : "person"] + 4).strength(0.9))
-        .alpha(1).alphaTarget(0.35)
+        .force("collide", forceCollide(d => d.__r ?? NODE_RADIUS[isTreeObj(d) ? "tree" : "person"] + 4).strength(0.9))
+        .alpha(1).alphaTarget(alphaTarget)
         .on("tick", render)
         .on("end", () => {
           simRunning = false;
@@ -363,8 +386,22 @@
         });
       simRunning = true;
     }
+
+    function startDragPhysics(draggedObj) {
+      const free = neighborIdsOf(draggedObj);
+      free.add(draggedObj.id);
+      runPhysics(free, { alphaTarget: 0.35 }); // held hot while the pointer is down
+      draggedObj.fx = draggedObj.x; draggedObj.fy = draggedObj.y; // don't jump at drag start
+    }
     function coolDragPhysics() {
       sim?.alphaTarget(0);
+    }
+
+    // One-shot settle: starts hot (alpha 1) and decays naturally to rest, no
+    // held-hot phase since nothing is tracking a live pointer.
+    function startSettlePhysics(freeIds) {
+      if (!freeIds.size) return;
+      runPhysics(freeIds, { alphaTarget: 0 });
     }
 
     // ---------- rendering ----------
@@ -502,6 +539,7 @@
             x: t.x + 95, y: t.y - 70, createdAt: nowISO(), sourceSubmissionId: null };
           store.people.push(person); scheduleSave();
           input.value = "";
+          startSettlePhysics(new Set([person.id])); // let it settle clear of the box/others instead of teleporting
           render();
           if (selected?.type === "tree" && selected.id === t.id) renderTreeInspector(t); // refresh contact count
           // Animate the inner .dot, not the outer .node — the node carries the
@@ -553,7 +591,17 @@
     }
 
     const isSel = (type, id) => selected && selected.type === type && selected.id === id;
-    function select(type, id) { selected = { type, id }; render(); showInspector(); }
+    function select(type, id) {
+      selected = { type, id };
+      if (type === "tree") {
+        // Fresh box for this tree; let its connected people settle around the
+        // newly-appearing add-person affordance instead of resolveCollisions()
+        // teleporting them clear of it.
+        addPersonOpen = false; addPersonDrawnOpen = null;
+        startSettlePhysics(neighborIdsOf({ id }));
+      }
+      render(); showInspector();
+    }
     function deselect() { selected = null; render(); inspector.classList.add("hidden"); }
 
     // ---------- stage pan / zoom ----------
@@ -588,7 +636,7 @@
 
     // ---------- inspector ----------
     function showInspector() {
-      if (!selected) return inspector.classList.add("hidden");
+      if (!selected || !inspectorOn) return inspector.classList.add("hidden");
       inspector.classList.remove("hidden");
       if (selected.type === "tree") renderTreeInspector(tree(selected.id));
       else renderPersonInspector(person(selected.id));
@@ -877,6 +925,11 @@
     $("#btn-tree-empty").onclick = newTree;
     $("#btn-settings").onclick = openSettings;
     $("#btn-me").onclick = openMyCard;
+    $("#btn-info").onclick = () => {
+      inspectorOn = !inspectorOn;
+      $("#btn-info").classList.toggle("btn-primary", inspectorOn);
+      showInspector();
+    };
 
     load();
   </script>
