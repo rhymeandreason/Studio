@@ -98,11 +98,11 @@
     }
     .node.tree .label { font-weight: 600; font-size: 12.5px; max-width: 120px; }
     .node .sublabel { font-size: 10px; color: var(--text-muted); pointer-events: none; }
-    /* "Blur names" (Settings) — for screenshots. Blurs the label text but
-       keeps node shapes/colors (and person-dot initials) legible so the
+    /* "Blur names" (Settings) — for screenshots. Only people's names, not
+       tree names (those are usually just an event/company/place, not PII) —
+       and keeps node shapes/colors (and person-dot initials) legible so the
        graph's structure still reads. */
-    body.blur-names .node .label,
-    body.blur-names .node .sublabel { filter: blur(5px); }
+    body.blur-names .node.person .label { filter: blur(5px); }
 
     /* ---- add-person affordance ---- */
     .node.add-person .dot {
