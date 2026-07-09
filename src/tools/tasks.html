@@ -32,6 +32,7 @@
       padding: 16px 20px 12px;
       // border-bottom: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
       margin-top: -16px;
+z-index:20;
     }
 
     header .title {
@@ -1024,7 +1025,7 @@ border: 1 px solid var(--hairline);
       $url.value = task ? (task.actions?.find((a) => a.kind === "url")?.target || task.location || "") : "";
       const parts = task?.start ? toLocalParts(task.start) : {
         date: "",
-        time: ""
+        time: "12:00"
       };
       $date.value = parts.date;
       $time.value = parts.time;
@@ -1040,7 +1041,9 @@ border: 1 px solid var(--hairline);
 
     function closeForm() {
       editingId = null;
-      form.classList.remove("open");
+      form.classList.remove("open", "revealing");
+      form.style.removeProperty("--reveal-h");
+      form.style.removeProperty("--reveal-scale");
       $title.value = $url.value = $date.value = $time.value = "";
       document.getElementById("formHint").textContent = "";
     }
@@ -1054,7 +1057,10 @@ border: 1 px solid var(--hairline);
     document.getElementById("addSave").addEventListener("click", async () => {
       const title = $title.value.trim();
       const raw = $url.value.trim();
-      if (!title || !$date.value || !$time.value) return;
+      if (!title || !$date.value || !$time.value) {
+        document.getElementById("formHint").textContent = "Title, date, and time are required.";
+        return;
+      }
       const isUrl = /^https?:\/\//i.test(raw);
       const fields = {
         title,
