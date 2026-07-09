@@ -176,6 +176,8 @@
   <div class="toast" id="toast"></div>
 
   <script type="module">
+    import { forceSimulation, forceLink, forceManyBody, forceCollide } from "../vendor/d3-force.mjs";
+
     const invoke = window.__TAURI__?.core?.invoke;
     const CONTACT_TYPES = ["phone","email","linkedin","instagram","x","website","other"];
     const KINDS = ["event","place","company","group"];
@@ -186,6 +188,7 @@
     let selected = null;            // { type:'tree'|'person', id } | null
     let view = { x: 120, y: 120, scale: 1 };
     let draggingId = null;          // node currently under the pointer — exempt from collision push
+    let sim = null, simRunning = false; // live d3-force session, active only while dragging
 
     const $ = (s) => document.querySelector(s);
     const stage = $("#stage"), world = $("#world"), edges = $("#edges");
@@ -195,11 +198,23 @@
     const nowISO = () => new Date().toISOString();
 
     // ---------- persistence ----------
+    // d3-force writes vx/vy/fx/fy/index onto tree & person objects directly (they
+    // double as sim nodes). Strip those before writing mycelium.json so the saved
+    // shape stays exactly the documented data model.
+    const SIM_KEYS = ["vx", "vy", "fx", "fy", "index"];
+    function cleanNode(o) {
+      const c = { ...o };
+      for (const k of SIM_KEYS) delete c[k];
+      return c;
+    }
     let saveTimer = null;
     function scheduleSave() {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(async () => {
-        if (invoke) await invoke("save_mycelium", { store });
+        if (invoke) {
+          const payload = { ...store, trees: store.trees.map(cleanNode), people: store.people.map(cleanNode) };
+          await invoke("save_mycelium", { store: payload });
+        }
       }, 400);
     }
     async function load() {
@@ -266,6 +281,52 @@
       }
     }
 
+    // ---------- drag physics ----------
+    // A live d3-force session, spun up only while actively dragging a node.
+    // The dragged node is pinned to the cursor (fx/fy); its direct neighbors
+    // (people <-> tree links) are freed to react elastically via forceLink +
+    // forceCollide, giving the "connected people follow the tree" motion a
+    // springy, force-directed feel instead of a rigid delta copy. Everything
+    // else stays pinned so the graph doesn't drift or rearrange on its own.
+    function isTreeObj(d) { return d.kind !== undefined; }
+
+    function startDragPhysics(draggedObj) {
+      const nodes = [...store.trees, ...store.people];
+      const links = [];
+      for (const p of store.people) {
+        for (const tid of (p.treeIds || [])) {
+          const t = tree(tid); if (t) links.push({ source: p, target: t });
+        }
+      }
+      const neighborIds = new Set();
+      for (const l of links) {
+        if (l.source === draggedObj) neighborIds.add(l.target.id);
+        if (l.target === draggedObj) neighborIds.add(l.source.id);
+      }
+      for (const n of nodes) {
+        if (n === draggedObj || neighborIds.has(n.id)) { n.fx = null; n.fy = null; }
+        else { n.fx = n.x; n.fy = n.y; }
+      }
+      draggedObj.fx = draggedObj.x; draggedObj.fy = draggedObj.y;
+
+      if (sim) sim.stop();
+      sim = forceSimulation(nodes)
+        .force("link", forceLink(links).distance(140).strength(0.6))
+        .force("charge", forceManyBody().strength(-90))
+        .force("collide", forceCollide(d => NODE_RADIUS[isTreeObj(d) ? "tree" : "person"] + 4).strength(0.9))
+        .alpha(1).alphaTarget(0.35)
+        .on("tick", render)
+        .on("end", () => {
+          simRunning = false;
+          for (const n of nodes) { n.fx = n.x; n.fy = n.y; }
+          render(); scheduleSave();
+        });
+      simRunning = true;
+    }
+    function coolDragPhysics() {
+      sim?.alphaTarget(0);
+    }
+
     // ---------- rendering ----------
     function applyView() {
       // #edges is a child of #world, so it inherits this transform for free —
@@ -285,7 +346,7 @@
       $("#empty").style.display = store.trees.length ? "none" : "flex";
 
       for (const p of store.people) layoutPerson(p);
-      resolveCollisions();
+      if (!simRunning) resolveCollisions(); // the d3-force session handles collision live while dragging
 
       let lines = "";
       for (const p of store.people) {
@@ -349,32 +410,23 @@
         e.preventDefault(); // stop WKWebView's native text/icon drag-ghost from hijacking the gesture
         moved = false;
         start = { mx: e.clientX, my: e.clientY, ox: obj.x, oy: obj.y };
-        // Dragging a tree carries along people exclusively connected to it —
-        // people shared with another tree stay put (their edge just stretches).
-        if (type === "tree") {
-          start.riders = store.people
-            .filter(p => (p.treeIds || []).length === 1 && p.treeIds[0] === obj.id)
-            .map(p => ({ p, ox: p.x, oy: p.y }));
-        }
         el.setPointerCapture(e.pointerId);
       });
       el.addEventListener("pointermove", (e) => {
         if (!start) return;
         const dx = (e.clientX - start.mx) / view.scale;
         const dy = (e.clientY - start.my) / view.scale;
-        if (Math.abs(dx) + Math.abs(dy) > 3) { moved = true; draggingId = obj.id; }
+        if (Math.abs(dx) + Math.abs(dy) > 3 && !moved) { moved = true; draggingId = obj.id; startDragPhysics(obj); }
         obj.x = Math.round(start.ox + dx); obj.y = Math.round(start.oy + dy);
+        if (moved) { obj.fx = obj.x; obj.fy = obj.y; }
         el.style.left = obj.x + "px"; el.style.top = obj.y + "px";
-        if (start.riders) {
-          for (const r of start.riders) { r.p.x = Math.round(r.ox + dx); r.p.y = Math.round(r.oy + dy); }
-        }
-        render(); // cheap enough; keeps edges attached + pushes overlapping nodes aside
+        render(); // keeps edges attached; physics tick also renders, this keeps input feel responsive
       });
       el.addEventListener("pointerup", (e) => {
         el.releasePointerCapture(e.pointerId);
         start = null;
         draggingId = null;
-        if (moved) { render(); scheduleSave(); }
+        if (moved) { coolDragPhysics(); scheduleSave(); }
         else { select(type, obj.id); }
       });
     }
