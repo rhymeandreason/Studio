@@ -94,9 +94,10 @@
       max-width: 96px; color: var(--text);
       overflow: hidden; text-overflow: ellipsis;
       display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+      pointer-events: none; /* text shouldn't steal clicks meant for a nearby/overlapping node's dot */
     }
     .node.tree .label { font-weight: 600; font-size: 12.5px; max-width: 120px; }
-    .node .sublabel { font-size: 10px; color: var(--text-muted); }
+    .node .sublabel { font-size: 10px; color: var(--text-muted); pointer-events: none; }
 
     /* ---- add-person affordance ---- */
     .node.add-person .dot {
@@ -318,6 +319,16 @@
     const person = (id) => store.people.find(p => p.id === id);
     function primaryTreeOf(p) { return p.treeIds?.[0] ? tree(p.treeIds[0]) : null; }
 
+    // People count, excluding anyone whose only tree connections are Events
+    // (a person with no trees at all, or with at least one non-Event tree, counts).
+    function countNonEventOnlyPeople() {
+      return store.people.filter(p => {
+        const tids = p.treeIds || [];
+        if (!tids.length) return true;
+        return tids.some(tid => tree(tid)?.kind !== "event");
+      }).length;
+    }
+
     function layoutPerson(p) {
       // Assign a position if missing: fan around the primary tree hub.
       if (p.x != null && p.y != null) return;
@@ -442,8 +453,13 @@
     }
 
     function startDragPhysics(draggedObj) {
-      const free = neighborIdsOf(draggedObj);
-      free.add(draggedObj.id);
+      const free = new Set([draggedObj.id]);
+      // Dragging a tree carries its people along (they're freed to follow via
+      // forceLink). Dragging a person should NOT drag its tree(s) toward it —
+      // only free neighbors in the tree->person direction, not person->tree.
+      if (isTreeObj(draggedObj)) {
+        for (const id of neighborIdsOf(draggedObj)) free.add(id);
+      }
       runPhysics(free, { alphaTarget: 0.35 }); // held hot while the pointer is down
       draggedObj.fx = draggedObj.x; draggedObj.fy = draggedObj.y; // don't jump at drag start
     }
@@ -709,12 +725,21 @@
         else if (e.shiftKey) { handleShiftLinkClick(type, obj); }
         else { select(type, obj.id); }
       });
+      el.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        select(type, obj.id, { forceInspector: true });
+      });
     }
 
     const isSel = (type, id) => selected && selected.type === type && selected.id === id;
-    function select(type, id) {
+    // forceInspectorOpen lets a double-click show the inspector even when the
+    // info toggle is off — cleared by any plain (non-double-click) select or
+    // deselect, so it only lasts until you click elsewhere.
+    let forceInspectorOpen = false;
+    function select(type, id, { forceInspector = false } = {}) {
       shiftPending = null;
       selected = { type, id };
+      forceInspectorOpen = forceInspector;
       if (type === "tree") {
         // Fresh box for this tree; let its connected people settle around the
         // newly-appearing add-person affordance instead of resolveCollisions()
@@ -724,7 +749,7 @@
       }
       render(); showInspector();
     }
-    function deselect() { shiftPending = null; selected = null; render(); inspector.classList.add("hidden"); }
+    function deselect() { shiftPending = null; selected = null; forceInspectorOpen = false; render(); inspector.classList.add("hidden"); }
 
     // ---------- shift-click to connect a person to a tree ----------
     // Hold Shift, click a person then a tree (either order) to add that
@@ -792,7 +817,7 @@
 
     // ---------- inspector ----------
     function showInspector() {
-      if (!selected || !inspectorOn) return inspector.classList.add("hidden");
+      if (!selected || !(inspectorOn || forceInspectorOpen)) return inspector.classList.add("hidden");
       inspector.classList.remove("hidden");
       if (selected.type === "tree") renderTreeInspector(tree(selected.id));
       else renderPersonInspector(person(selected.id));
@@ -1039,6 +1064,13 @@
       const note = document.createElement("div"); note.className = "muted-note";
       note.innerHTML = `The Vercel deployment that hosts your intake page + inbox. See <code>mycelium-web/README.md</code>.`;
       inspector.appendChild(note);
+
+      inspector.appendChild(divider());
+      inspector.appendChild(sectionLabel("Stats"));
+      const stat = document.createElement("div"); stat.className = "muted-note";
+      const n = countNonEventOnlyPeople();
+      stat.textContent = `${n} ${n === 1 ? "person" : "people"} (excludes people only connected to an Event)`;
+      inspector.appendChild(stat);
     }
     function openMyCard() {
       selected = null; render();
