@@ -206,7 +206,11 @@
 <body>
   <div id="bar">
     <div class="brand"><span class="mi">hub</span> Mycelium</div>
-    <button class="btn" id="btn-me"><span class="mi mi-sm">badge</span> My card</button>
+    <div class="tabs tabs--round">
+      <button class="tab is-active" id="tab-all">All</button>
+      <button class="tab" id="tab-main">Main</button>
+      <button class="tab" id="tab-events">Events</button>
+    </div>
     <button class="btn" id="btn-settings"><span class="mi mi-sm">settings</span></button>
     <button class="btn btn-primary" id="btn-tree"><span class="mi mi-sm">add</span> New tree</button>
   </div>
@@ -237,6 +241,7 @@
 
     let store = { version: 1, serverUrl: "", me: { name: "", contacts: [] }, trees: [], people: [] };
     let selected = null;            // { type:'tree'|'person', id } | null
+    let viewTab = "all";            // "all" | "main" | "events" — see visibleIds()
     let view = { x: 120, y: 120, scale: 1 };
     let draggingId = null;          // node currently under the pointer — exempt from collision push
     let sim = null, simRunning = false; // live d3-force session, active only while dragging
@@ -263,12 +268,31 @@
       render(); showInspector(); scheduleSave();
     }
     window.addEventListener("keydown", (e) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z" || e.shiftKey) return;
       const ae = document.activeElement;
-      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) return; // let native field undo happen
-      e.preventDefault();
-      undo();
+      const inField = ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA");
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        if (inField) return; // let native field undo happen
+        e.preventDefault();
+        undo();
+      } else if ((e.key === "Delete" || e.key === "Backspace") && !inField) {
+        if (!selected) return;
+        e.preventDefault();
+        deleteSelected();
+      }
     });
+    function deleteSelected() {
+      if (!selected) return;
+      pushUndo();
+      if (selected.type === "tree") {
+        const id = selected.id;
+        store.people.forEach(p => { p.treeIds = (p.treeIds||[]).filter(tid => tid !== id); });
+        store.people = store.people.filter(p => (p.treeIds||[]).length);
+        store.trees = store.trees.filter(x => x.id !== id);
+      } else {
+        store.people = store.people.filter(x => x.id !== selected.id);
+      }
+      deselect(); scheduleSave();
+    }
 
     const $ = (s) => document.querySelector(s);
     const stage = $("#stage"), world = $("#world"), edges = $("#edges");
@@ -320,11 +344,43 @@
     // People count, excluding anyone whose only tree connections are Events
     // (a person with no trees at all, or with at least one non-Event tree, counts).
     function countNonEventOnlyPeople() {
-      return store.people.filter(p => {
-        const tids = p.treeIds || [];
-        if (!tids.length) return true;
-        return tids.some(tid => tree(tid)?.kind !== "event");
-      }).length;
+      return store.people.filter(p => !isEventOnlyPerson(p)).length;
+    }
+
+    // A person counts as "event-only" if every tree they're connected to is an
+    // Event (a person with no tree connections at all is not event-only).
+    function isEventOnlyPerson(p) {
+      const tids = p.treeIds || [];
+      if (!tids.length) return false;
+      return tids.every(tid => tree(tid)?.kind === "event");
+    }
+
+    // ---------- view tabs ----------
+    // "all" shows everything. "main" hides event-only people, and hides Event
+    // trees that have no person also connected to a non-Event tree (i.e. an
+    // event that's fully isolated from the rest of the graph). "events" is the
+    // inverse: just Event trees and the people connected to them.
+    function visibleIds() {
+      if (viewTab === "all") return null; // null = no filtering
+      const treeIds = new Set(), personIds = new Set();
+      if (viewTab === "events") {
+        for (const t of store.trees) if (t.kind === "event") treeIds.add(t.id);
+        for (const p of store.people) if ((p.treeIds || []).some(tid => treeIds.has(tid))) personIds.add(p.id);
+      } else { // main
+        for (const p of store.people) if (!isEventOnlyPerson(p)) personIds.add(p.id);
+        for (const t of store.trees) {
+          if (t.kind !== "event") { treeIds.add(t.id); continue; }
+          const hasNonEventPerson = store.people.some(p =>
+            (p.treeIds || []).includes(t.id) && (p.treeIds || []).some(tid => tree(tid)?.kind !== "event"));
+          if (hasNonEventPerson) treeIds.add(t.id);
+        }
+      }
+      return { treeIds, personIds };
+    }
+    function setViewTab(tab) {
+      viewTab = tab;
+      for (const id of ["all", "main", "events"]) $(`#tab-${id}`).classList.toggle("is-active", id === tab);
+      deselect(); // avoid an inspector left open on a node the new tab just hid
     }
 
     function layoutPerson(p) {
@@ -519,10 +575,15 @@
       for (const p of store.people) layoutPerson(p);
       if (!simRunning) resolveCollisions(); // the d3-force session handles collision live while dragging
 
+      const vis = visibleIds(); // null = show everything
+      const treeVisible = (id) => !vis || vis.treeIds.has(id);
+      const personVisible = (id) => !vis || vis.personIds.has(id);
+
       let lines = "";
       for (const p of store.people) {
+        if (!personVisible(p.id)) continue;
         for (const tid of (p.treeIds || [])) {
-          const t = tree(tid); if (!t) continue;
+          const t = tree(tid); if (!t || !treeVisible(t.id)) continue;
           lines += `<line x1="${t.x}" y1="${t.y}" x2="${p.x}" y2="${p.y}"
             stroke="var(--hairline-strong)" stroke-width="1.5" />`;
         }
@@ -530,14 +591,26 @@
       edges.innerHTML = lines;
 
       const live = new Set();
-      for (const t of store.trees) { live.add(t.id); updateTreeNode(t); }
-      for (const p of store.people) { live.add(p.id); updatePersonNode(p); }
+      for (const t of store.trees) { if (treeVisible(t.id)) { live.add(t.id); updateTreeNode(t); } }
+      for (const p of store.people) { if (personVisible(p.id)) { live.add(p.id); updatePersonNode(p); } }
+      let removedAny = false;
       for (const [id, el] of nodeEls) {
-        if (!live.has(id)) { el.remove(); nodeEls.delete(id); }
+        if (!live.has(id)) { el.remove(); nodeEls.delete(id); removedAny = true; }
       }
       updateAddPersonAffordance();
       updateTreeCard();
       applyView();
+      // WKWebView sometimes leaves stale pixels behind a removed .node (its
+      // enter/pop animation left an inline `transform`, which promotes it to
+      // its own compositing layer — removing that layer can skip repainting
+      // the vacated area; a mere opacity nudge wasn't enough to force it).
+      // Toggling display:none/back synchronously drops and rebuilds #stage's
+      // backing store entirely, all within this tick so nothing flashes.
+      if (removedAny) {
+        stage.style.display = "none";
+        void stage.offsetHeight; // force sync layout+paint before restoring
+        stage.style.display = "";
+      }
     }
 
     function initials(name) {
@@ -925,11 +998,7 @@
       inspector.appendChild(fieldTextarea("Note", p.note, (v) => { p.note = v; scheduleSave(); }));
 
       inspector.appendChild(divider());
-      const del = dangerBtn("Delete contact", () => {
-        pushUndo();
-        store.people = store.people.filter(x => x.id !== p.id);
-        deselect(); scheduleSave();
-      });
+      const del = dangerBtn("Delete contact", deleteSelected);
       inspector.appendChild(del);
     }
 
@@ -1024,11 +1093,7 @@
       const count = store.people.filter(p => p.treeIds?.includes(t.id)).length;
       const del = dangerBtn(`Delete tree (${count} contact${count===1?"":"s"})`, () => {
         if (count && !confirm("Delete this tree and detach its contacts?")) return;
-        pushUndo();
-        store.people.forEach(p => { p.treeIds = (p.treeIds||[]).filter(id => id !== t.id); });
-        store.people = store.people.filter(p => (p.treeIds||[]).length);
-        store.trees = store.trees.filter(x => x.id !== t.id);
-        deselect(); scheduleSave();
+        deleteSelected();
       });
       inspector.appendChild(del);
     }
@@ -1080,18 +1145,6 @@
       stat.textContent = `${n} ${n === 1 ? "person" : "people"} (excludes people only connected to an Event)`;
       inspector.appendChild(stat);
     }
-    function openMyCard() {
-      selected = null; render();
-      inspector.classList.remove("hidden");
-      inspector.innerHTML = `<div class="eyebrow">My card</div>`;
-      const me = store.me ||= { name: "", contacts: [] };
-      inspector.appendChild(fieldInput("Name", me.name, (v) => { me.name = v; scheduleSave(); }));
-      inspector.appendChild(sectionLabel("Your contact info"));
-      inspector.appendChild(contactRows(me.contacts ||= [], scheduleSave));
-      const note = document.createElement("div"); note.className = "muted-note";
-      note.innerHTML = `Shown to people on the intake page. Sync it to the server via <code>mycelium-web/public/me.json</code> for now.`;
-      inspector.appendChild(note);
-    }
 
     // ---------- small field builders ----------
     function fieldInput(label, val, onInput, ph = "") {
@@ -1141,7 +1194,9 @@
     $("#btn-tree").onclick = newTree;
     $("#btn-tree-empty").onclick = newTree;
     $("#btn-settings").onclick = openSettings;
-    $("#btn-me").onclick = openMyCard;
+    $("#tab-all").onclick = () => setViewTab("all");
+    $("#tab-main").onclick = () => setViewTab("main");
+    $("#tab-events").onclick = () => setViewTab("events");
 
     load();
   </script>
