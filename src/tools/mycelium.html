@@ -128,13 +128,13 @@
     }
     .node.add-person .label { color: var(--text-muted); }
 
-    /* ---- new-tree quick-edit card ---- */
-    .tree-card {
+    /* ---- quick-edit card (new-tree basics, person single-click) ---- */
+    .quick-card {
       position: absolute;
       width: 260px;
       transform: translateY(-50%); /* fixed on the card itself — never a JS animation target */
     }
-    .tree-card-inner {
+    .quick-card-inner {
       background: var(--surface);
       border: 1px solid var(--hairline-strong);
       border-radius: 14px;
@@ -616,6 +616,7 @@
       }
       updateAddPersonAffordance();
       if (updateTreeCard()) removedAny = true;
+      if (updatePersonCard()) removedAny = true;
       applyView();
       if (removedAny) forceRepaint();
     }
@@ -769,7 +770,7 @@
       }
       if (!treeCardEl) {
         treeCardEl = document.createElement("div");
-        treeCardEl.className = "tree-card";
+        treeCardEl.className = "quick-card tree-card";
         treeCardEl.addEventListener("pointerdown", (e) => e.stopPropagation()); // don't let stage's pan/deselect fire
         world.appendChild(treeCardEl);
       }
@@ -778,14 +779,52 @@
       if (treeCardBuiltFor !== t.id) {
         drawTreeCard(t);
         treeCardBuiltFor = t.id;
-        enter(treeCardEl.querySelector(".tree-card-inner"));
+        enter(treeCardEl.querySelector(".quick-card-inner"));
       }
     }
 
     function drawTreeCard(t) {
-      treeCardEl.innerHTML = `<div class="tree-card-inner"></div>`;
-      treeCardEl.querySelector(".tree-card-inner").appendChild(
+      treeCardEl.innerHTML = `<div class="quick-card-inner"></div>`;
+      treeCardEl.querySelector(".quick-card-inner").appendChild(
         buildTreeBasicsFields(t, () => { render(); scheduleSave(); }, () => drawTreeCard(t)));
+    }
+
+    // ---- person quick-edit card, shown next to a person node on single click ----
+    let personCardEl = null;
+    let personCardPersonId = null;
+    let personCardBuiltFor = null; // person id whose content is currently built, to avoid rebuilding (and losing focus) on every render
+
+    function updatePersonCard() {
+      const p = personCardPersonId ? person(personCardPersonId) : null;
+      const stillSelected = p && selected?.type === "person" && selected.id === personCardPersonId;
+      if (!stillSelected) {
+        const hadEl = !!personCardEl;
+        if (personCardEl) { personCardEl.remove(); personCardEl = null; }
+        personCardPersonId = null; personCardBuiltFor = null;
+        return hadEl;
+      }
+      if (!personCardEl) {
+        personCardEl = document.createElement("div");
+        personCardEl.className = "quick-card person-card";
+        personCardEl.addEventListener("pointerdown", (e) => e.stopPropagation()); // don't let stage's pan/deselect fire
+        world.appendChild(personCardEl);
+      }
+      personCardEl.style.left = (p.x + 60) + "px";
+      personCardEl.style.top = p.y + "px";
+      if (personCardBuiltFor !== p.id) {
+        drawPersonCard(p);
+        personCardBuiltFor = p.id;
+        enter(personCardEl.querySelector(".quick-card-inner"));
+      }
+    }
+
+    function drawPersonCard(p) {
+      personCardEl.innerHTML = `<div class="quick-card-inner"></div>`;
+      const inner = personCardEl.querySelector(".quick-card-inner");
+      inner.appendChild(fieldInput("Name", p.name, (v) => { p.name = v; render(); scheduleSave(); }));
+      inner.appendChild(sectionLabel("Contact info"));
+      inner.appendChild(contactRows(p.contacts ||= [], () => scheduleSave()));
+      inner.appendChild(fieldTextarea("Note", p.note, (v) => { p.note = v; scheduleSave(); }));
     }
 
     // node drag + select
@@ -848,6 +887,8 @@
         // teleporting them clear of it.
         addPersonOpen = false; addPersonDrawnOpen = null;
         startSettlePhysics(neighborIdsOf({ id }));
+      } else {
+        personCardPersonId = id; // quick-edit card next to the person node
       }
       render(); showInspector();
     }
