@@ -184,6 +184,17 @@
     .link-box code { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       font-family: var(--mono, ui-monospace, monospace); }
     .divider { height: 1px; background: var(--hairline); margin: 16px 0; }
+    .tree-accordion { border: 1px solid var(--hairline); border-radius: var(--radius-sm); margin-bottom: 8px; overflow: hidden; }
+    .tree-accordion summary {
+      display: flex; align-items: center; gap: 8px; padding: 9px 10px;
+      cursor: pointer; list-style: none; font-size: 12.5px; font-weight: 600;
+      user-select: none;
+    }
+    .tree-accordion summary::-webkit-details-marker { display: none; }
+    .tree-accordion summary .swatch { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; }
+    .tree-accordion summary .mi { font-size: 16px; color: var(--text-muted); margin-left: auto; transition: transform .15s; }
+    .tree-accordion[open] summary .mi { transform: rotate(180deg); }
+    .tree-accordion .tree-accordion-body { padding: 4px 10px 12px; border-top: 1px solid var(--hairline); }
     .muted-note { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
     .danger { color: #b4443a; }
     .toast {
@@ -1037,6 +1048,57 @@
       return frag;
     }
 
+    // QR codes + sharing links for a tree's intake page — lives under
+    // Settings so all of a project's sharing info is in one place.
+    function buildTreeSharing(t) {
+      const frag = document.createDocumentFragment();
+      if (!store.serverUrl) {
+        const hint = document.createElement("div"); hint.className = "muted-note"; hint.style.marginTop = "0";
+        hint.textContent = "Set your Mycelium server URL above to generate a QR and collect contacts.";
+        frag.appendChild(hint);
+        return frag;
+      }
+      const base = store.serverUrl.replace(/\/$/, "");
+      const link = `${base}/?t=${t.id}`;
+      const presenter = `${base}/show.html?t=${encodeURIComponent(t.id)}&name=${encodeURIComponent(t.name || "")}`;
+
+      // The intake QR — what guests scan.
+      const qr = document.createElement("div"); qr.className = "qr-wrap";
+      qr.innerHTML = `<img alt="QR" src="${base}/api/qr?t=${encodeURIComponent(t.id)}" />`;
+      frag.appendChild(qr);
+
+      const lb = document.createElement("div"); lb.className = "link-box";
+      lb.innerHTML = `<code>${esc(link)}</code>`;
+      const copy = document.createElement("button"); copy.className = "btn-icon";
+      copy.innerHTML = `<span class="mi mi-sm">content_copy</span>`;
+      copy.onclick = () => { navigator.clipboard.writeText(link); toast("Intake link copied"); };
+      lb.appendChild(copy); frag.appendChild(lb);
+
+      // Handoff: scan this with YOUR phone to open the presenter page there,
+      // then hold your phone up for guests to scan.
+      frag.appendChild(sectionLabel("Show on your phone"));
+      const hint = document.createElement("div"); hint.className = "muted-note"; hint.style.marginTop = "0";
+      hint.textContent = "Scan this with your own phone to pull up a full-screen QR you can show people.";
+      frag.appendChild(hint);
+      const hqr = document.createElement("div"); hqr.className = "qr-wrap";
+      hqr.innerHTML = `<img alt="Open on phone" style="width:128px;height:128px" src="${base}/api/qr?url=${encodeURIComponent(presenter)}" />`;
+      frag.appendChild(hqr);
+      const plb = document.createElement("div"); plb.className = "link-box";
+      plb.innerHTML = `<code>${esc(presenter)}</code>`;
+      const pcopy = document.createElement("button"); pcopy.className = "btn-icon";
+      pcopy.innerHTML = `<span class="mi mi-sm">content_copy</span>`;
+      pcopy.onclick = () => { navigator.clipboard.writeText(presenter); toast("Presenter link copied"); };
+      plb.appendChild(pcopy); frag.appendChild(plb);
+
+      frag.appendChild(divider());
+      const sync = document.createElement("button");
+      sync.className = "btn"; sync.style.width = "100%";
+      sync.innerHTML = `<span class="mi mi-sm">sync</span> Pull new contacts`;
+      sync.onclick = () => pullInbox(t, sync);
+      frag.appendChild(sync);
+      return frag;
+    }
+
     function renderTreeInspector(t) {
       if (!t) return;
       inspector.innerHTML = `<div class="eyebrow">Tree</div>`;
@@ -1044,53 +1106,11 @@
         () => { render(); scheduleSave(); },
         () => renderTreeInspector(t)));
 
-      inspector.appendChild(divider());
-
-      // ---- sharing ----
-      inspector.appendChild(sectionLabel("Share to collect contacts"));
-      if (!store.serverUrl) {
-        const hint = document.createElement("div"); hint.className = "muted-note";
-        hint.innerHTML = `Set your Mycelium server URL in <b>Settings</b> to generate a QR and collect contacts.`;
-        inspector.appendChild(hint);
-      } else {
-        const base = store.serverUrl.replace(/\/$/, "");
-        const link = `${base}/?t=${t.id}`;
-        const presenter = `${base}/show.html?t=${encodeURIComponent(t.id)}&name=${encodeURIComponent(t.name || "")}`;
-
-        // The intake QR — what guests scan.
-        const qr = document.createElement("div"); qr.className = "qr-wrap";
-        qr.innerHTML = `<img alt="QR" src="${base}/api/qr?t=${encodeURIComponent(t.id)}" />`;
-        inspector.appendChild(qr);
-
-        const lb = document.createElement("div"); lb.className = "link-box";
-        lb.innerHTML = `<code>${esc(link)}</code>`;
-        const copy = document.createElement("button"); copy.className = "btn-icon";
-        copy.innerHTML = `<span class="mi mi-sm">content_copy</span>`;
-        copy.onclick = () => { navigator.clipboard.writeText(link); toast("Intake link copied"); };
-        lb.appendChild(copy); inspector.appendChild(lb);
-
-        // Handoff: scan this with YOUR phone to open the presenter page there,
-        // then hold your phone up for guests to scan.
-        inspector.appendChild(sectionLabel("Show on your phone"));
-        const hint = document.createElement("div"); hint.className = "muted-note"; hint.style.marginTop = "0";
-        hint.textContent = "Scan this with your own phone to pull up a full-screen QR you can show people.";
-        inspector.appendChild(hint);
-        const hqr = document.createElement("div"); hqr.className = "qr-wrap";
-        hqr.innerHTML = `<img alt="Open on phone" style="width:128px;height:128px" src="${base}/api/qr?url=${encodeURIComponent(presenter)}" />`;
-        inspector.appendChild(hqr);
-        const plb = document.createElement("div"); plb.className = "link-box";
-        plb.innerHTML = `<code>${esc(presenter)}</code>`;
-        const pcopy = document.createElement("button"); pcopy.className = "btn-icon";
-        pcopy.innerHTML = `<span class="mi mi-sm">content_copy</span>`;
-        pcopy.onclick = () => { navigator.clipboard.writeText(presenter); toast("Presenter link copied"); };
-        plb.appendChild(pcopy); inspector.appendChild(plb);
-
+      if (t.kind === "event") {
         inspector.appendChild(divider());
-        const sync = document.createElement("button");
-        sync.className = "btn"; sync.style.width = "100%";
-        sync.innerHTML = `<span class="mi mi-sm">sync</span> Pull new contacts`;
-        sync.onclick = () => pullInbox(t, sync);
-        inspector.appendChild(sync);
+        const shareHint = document.createElement("div"); shareHint.className = "muted-note"; shareHint.style.marginTop = "0";
+        shareHint.innerHTML = `QR codes and sharing links for this event are under <b>Settings</b>.`;
+        inspector.appendChild(shareHint);
       }
 
       inspector.appendChild(divider());
@@ -1148,6 +1168,30 @@
       const n = countNonEventOnlyPeople();
       stat.textContent = `${n} ${n === 1 ? "person" : "people"} (excludes people only connected to an Event)`;
       inspector.appendChild(stat);
+
+      inspector.appendChild(divider());
+      inspector.appendChild(sectionLabel("Events")); // sharing QRs only ever make sense for Event trees
+      const eventTrees = store.trees.filter(t => t.kind === "event");
+      if (!eventTrees.length) {
+        const none = document.createElement("div"); none.className = "muted-note"; none.style.marginTop = "0";
+        none.textContent = "No events yet.";
+        inspector.appendChild(none);
+      }
+      for (const t of eventTrees) {
+        const acc = document.createElement("details"); acc.className = "tree-accordion";
+        const sum = document.createElement("summary");
+        sum.innerHTML = `<span class="swatch" style="background:${t.color || 'var(--accent)'}"></span>
+          ${esc(t.name || "Untitled")}<span class="mi">expand_more</span>`;
+        acc.appendChild(sum);
+        const body = document.createElement("div"); body.className = "tree-accordion-body";
+        acc.appendChild(body);
+        // Build the QR/link content lazily, only once expanded — no point
+        // hitting the QR endpoint for every tree just to render Settings.
+        acc.addEventListener("toggle", () => {
+          if (acc.open && !body.childElementCount) body.appendChild(buildTreeSharing(t));
+        }, { once: false });
+        inspector.appendChild(acc);
+      }
     }
 
     // ---------- small field builders ----------
