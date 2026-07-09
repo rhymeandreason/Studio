@@ -55,9 +55,14 @@
 
     .node {
       position: absolute;
-      transform: translate(-50%, -50%);
       cursor: pointer;
       text-align: center;
+    }
+    /* Centering lives on this inner wrapper, not .node itself — .node is what
+       enter()/pop() set an inline `transform` on, which would otherwise clobber
+       this translate and visually detach the node from its edge line. */
+    .node-inner {
+      transform: translate(-50%, -50%);
     }
     .node, .node * {
       user-select: none; -webkit-user-select: none;
@@ -87,6 +92,30 @@
     }
     .node.tree .label { font-weight: 600; font-size: 12.5px; max-width: 120px; }
     .node .sublabel { font-size: 10px; color: var(--text-muted); }
+
+    /* ---- add-person affordance ---- */
+    .node.add-person .dot {
+      width: 40px; height: 40px;
+      border: 1.5px dashed var(--hairline-strong);
+      background: transparent;
+      color: var(--text-muted);
+      transition: box-shadow .12s, transform .12s, border-color .12s, background .12s;
+    }
+    .node.add-person .dot .mi { font-size: 20px; }
+    .node.add-person:hover .dot {
+      border-color: var(--accent); color: var(--accent); background: var(--accent-soft);
+    }
+    .node.add-person.open .dot {
+      width: auto; height: 34px; padding: 0 4px 0 10px; border-radius: 17px;
+      border-style: solid; border-color: var(--accent-ring); background: var(--surface);
+      box-shadow: 0 4px 14px rgba(0,0,0,.14);
+      cursor: default;
+    }
+    .node.add-person input {
+      border: none; outline: none; background: transparent; font: inherit;
+      color: var(--text); width: 110px; padding: 0 2px;
+    }
+    .node.add-person .label { color: var(--text-muted); }
 
     #empty {
       position: absolute; inset: 0;
@@ -177,6 +206,7 @@
 
   <script type="module">
     import { forceSimulation, forceLink, forceManyBody, forceCollide } from "../vendor/d3-force.mjs";
+    import { enter, pop } from "../kit/motion.js";
 
     const invoke = window.__TAURI__?.core?.invoke;
     const CONTACT_TYPES = ["phone","email","linkedin","instagram","x","website","other"];
@@ -253,11 +283,21 @@
     // ---------- collision avoidance ----------
     // Radii roughly match the .dot sizes (66px/40px) plus breathing room.
     const NODE_RADIUS = { tree: 42, person: 27 };
+    const ADD_BOX_RADIUS = 90; // rough half-width of the open name-field pill
     function resolveCollisions() {
       const nodes = [
         ...store.trees.map(t => ({ obj: t, r: NODE_RADIUS.tree })),
         ...store.people.map(p => ({ obj: p, r: NODE_RADIUS.person })),
       ];
+      // The open add-person field is a fixed obstacle too, so a freshly-created
+      // person (spawned right under it) gets pushed clear instead of sitting
+      // behind the input box.
+      let addBox = null;
+      if (addPersonOpen) {
+        const t = tree(addPersonForTreeId);
+        if (t) { addBox = { obj: { id: "__addbox__", x: t.x + 95, y: t.y - 70 }, r: ADD_BOX_RADIUS, pinned: true }; }
+      }
+      if (addBox) nodes.push(addBox);
       for (let iter = 0; iter < 6; iter++) {
         for (let i = 0; i < nodes.length; i++) {
           for (let j = i + 1; j < nodes.length; j++) {
@@ -273,7 +313,7 @@
             }
             const overlap = (minDist - dist) / 2;
             const nx = dx / dist, ny = dy / dist;
-            const aPinned = a.obj.id === draggingId, bPinned = b.obj.id === draggingId;
+            const aPinned = a.pinned || a.obj.id === draggingId, bPinned = b.pinned || b.obj.id === draggingId;
             if (!aPinned) { a.obj.x -= nx * overlap; a.obj.y -= ny * overlap; }
             if (!bPinned) { b.obj.x += nx * overlap; b.obj.y += ny * overlap; }
           }
@@ -364,6 +404,7 @@
       for (const [id, el] of nodeEls) {
         if (!live.has(id)) { el.remove(); nodeEls.delete(id); }
       }
+      updateAddPersonAffordance();
       applyView();
     }
 
@@ -388,17 +429,97 @@
       el.style.left = t.x + "px"; el.style.top = t.y + "px";
       el.style.setProperty("--tree-color", t.color || "var(--accent)");
       el.innerHTML =
-        `<div class="dot"><span class="mi">${KIND_ICON[t.kind] || "hub"}</span></div>
-         <div class="label">${esc(t.name || "Untitled")}</div>` +
-        (t.date ? `<div class="sublabel">${esc(t.date)}</div>` : "");
+        `<div class="node-inner">
+           <div class="dot"><span class="mi">${KIND_ICON[t.kind] || "hub"}</span></div>
+           <div class="label">${esc(t.name || "Untitled")}</div>
+           ${t.date ? `<div class="sublabel">${esc(t.date)}</div>` : ""}
+         </div>`;
     }
     function updatePersonNode(p) {
       const el = getNodeEl(p.id, "person", p);
       el.className = "node person" + (isSel("person", p.id) ? " selected" : "");
       el.style.left = p.x + "px"; el.style.top = p.y + "px";
       el.innerHTML =
-        `<div class="dot">${esc(initials(p.name))}</div>
-         <div class="label">${esc(p.name || "New contact")}</div>`;
+        `<div class="node-inner">
+           <div class="dot">${esc(initials(p.name))}</div>
+           <div class="label">${esc(p.name || "New contact")}</div>
+         </div>`;
+    }
+
+    // ---------- add-person affordance ----------
+    // A "+" node that appears next to the selected tree. Click reveals a name
+    // field inline; Enter creates the person and keeps the field open (focused
+    // + cleared) so several people can be added back to back.
+    let addPersonEl = null;
+    let addPersonForTreeId = null;
+    let addPersonOpen = false;
+    let addPersonDrawnOpen = null; // open-state actually reflected in the DOM
+
+    function updateAddPersonAffordance() {
+      const t = selected?.type === "tree" ? tree(selected.id) : null;
+      if (!t) {
+        if (addPersonEl) { addPersonEl.remove(); addPersonEl = null; }
+        addPersonForTreeId = null; addPersonOpen = false; addPersonDrawnOpen = null;
+        return;
+      }
+      const isNew = addPersonForTreeId !== t.id;
+      if (isNew) {
+        addPersonForTreeId = t.id; addPersonOpen = false; addPersonDrawnOpen = null;
+        if (!addPersonEl) {
+          addPersonEl = document.createElement("div");
+          addPersonEl.className = "node add-person";
+          world.appendChild(addPersonEl);
+        }
+      }
+      addPersonEl.style.left = (t.x + 95) + "px";
+      addPersonEl.style.top = (t.y - 70) + "px";
+      // Only rebuild the element's content when open/closed actually changes —
+      // render() runs often (e.g. every drag tick), and re-drawing while the
+      // field is open would blow away focus + whatever the user just typed.
+      if (addPersonDrawnOpen !== addPersonOpen) { drawAddPersonEl(); addPersonDrawnOpen = addPersonOpen; }
+      // .node-inner only exists once drawAddPersonEl() has run at least once.
+      if (isNew) enter(addPersonEl.querySelector(".node-inner"));
+    }
+
+    function drawAddPersonEl() {
+      const el = addPersonEl;
+      el.classList.toggle("open", addPersonOpen);
+      if (!addPersonOpen) {
+        el.innerHTML = `<div class="node-inner"><div class="dot"><span class="mi">add</span></div><div class="label">Add person</div></div>`;
+        el.onclick = () => { addPersonOpen = true; addPersonDrawnOpen = null; updateAddPersonAffordance(); };
+        return;
+      }
+      el.innerHTML = `<div class="node-inner"><div class="dot"><input placeholder="Name" /></div></div>`;
+      el.onclick = null;
+      const input = el.querySelector("input");
+      input.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") {
+          const name = input.value.trim();
+          if (!name) return;
+          const t = tree(addPersonForTreeId); if (!t) return;
+          const person = { id: uid("person_"), name, contacts: [], treeIds: [t.id], note: "",
+            x: t.x + 95, y: t.y - 70, createdAt: nowISO(), sourceSubmissionId: null };
+          store.people.push(person); scheduleSave();
+          input.value = "";
+          render();
+          if (selected?.type === "tree" && selected.id === t.id) renderTreeInspector(t); // refresh contact count
+          // Animate the inner .dot, not the outer .node — the node carries the
+          // translate(-50%,-50%) centering transform, and motion-one's pop()
+          // sets an inline transform that would clobber it (dot drifts off
+          // the edge line's anchor point, which reads x/y straight, uncentered).
+          pop(nodeEls.get(person.id)?.querySelector(".dot"));
+          input.focus();
+        } else if (e.key === "Escape") {
+          addPersonOpen = false; addPersonDrawnOpen = null; updateAddPersonAffordance();
+        }
+      });
+      input.addEventListener("blur", () => {
+        setTimeout(() => {
+          if (!input.value.trim()) { addPersonOpen = false; addPersonDrawnOpen = null; updateAddPersonAffordance(); }
+        }, 100);
+      });
+      requestAnimationFrame(() => input.focus());
     }
 
     // node drag + select
@@ -598,17 +719,6 @@
       col.oninput = () => { t.color = col.value; render(); scheduleSave(); };
       colWrap.appendChild(col); two.appendChild(colWrap);
       inspector.appendChild(two);
-
-      // add person
-      const addP = document.createElement("button");
-      addP.className = "btn btn-primary"; addP.style.width = "100%"; addP.style.marginTop = "4px";
-      addP.innerHTML = `<span class="mi mi-sm">person_add</span> Add person`;
-      addP.onclick = () => {
-        const p = { id: uid("person_"), name: "", contacts: [], treeIds: [t.id], note: "",
-                    x: null, y: null, createdAt: nowISO(), sourceSubmissionId: null };
-        store.people.push(p); render(); scheduleSave(); select("person", p.id);
-      };
-      inspector.appendChild(addP);
 
       inspector.appendChild(divider());
 
