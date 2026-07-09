@@ -2956,6 +2956,22 @@ fn save_project_order(app: AppHandle, data: String) -> Result<(), String> {
     std::fs::write(dir.join("project-order.json"), data).map_err(|e| e.to_string())
 }
 
+/// Archived project paths (Projects list "Archived" section), persisted in
+/// the app config dir as a JSON array of paths — same shape/location pattern
+/// as `project-order.json`.
+#[tauri::command]
+fn read_archived_projects(app: AppHandle) -> Result<String, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    Ok(std::fs::read_to_string(dir.join("archived-projects.json")).unwrap_or_default())
+}
+
+#[tauri::command]
+fn save_archived_projects(app: AppHandle, data: String) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("archived-projects.json"), data).map_err(|e| e.to_string())
+}
+
 /// Read the Daily Notes store (app config dir / daily-notes.json).
 #[tauri::command]
 fn read_daily_notes(app: AppHandle) -> Result<serde_json::Value, String> {
@@ -5988,6 +6004,8 @@ pub fn run() {
             save_media_meta,
             read_project_order,
             save_project_order,
+            read_archived_projects,
+            save_archived_projects,
             read_daily_notes,
             save_daily_notes,
             read_mycelium,

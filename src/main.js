@@ -134,6 +134,23 @@ async function loadProjectOrder() {
   }
 }
 
+// Paths of archived projects (Projects list "Archived" section).
+let archivedPaths = new Set();
+
+async function loadArchivedProjects() {
+  try {
+    const raw = await invoke("read_archived_projects");
+    const list = raw ? JSON.parse(raw) : [];
+    archivedPaths = new Set(Array.isArray(list) ? list : []);
+  } catch (_) {
+    archivedPaths = new Set();
+  }
+}
+
+function saveArchivedProjects() {
+  invoke("save_archived_projects", { data: JSON.stringify([...archivedPaths]) });
+}
+
 // Ordered first by the manual order, then any new projects by name.
 function applyProjectOrder(projects) {
   if (!projectOrder.length) return projects;
@@ -218,10 +235,23 @@ function onProjectPointerUp() {
   const order = [...grid.querySelectorAll(".project-card")].map((c) => c.dataset.path);
   const from = order.indexOf(drag.p.path);
   if (from === -1) return;
+
+  // Cards before the "Archived" divider are active; the count is stable
+  // whether or not the dragged card itself was archived (removing it just
+  // shifts the boundary by one when it was on the active side).
+  const activeCount = order.filter((p) => !archivedPaths.has(p)).length;
+  const wasArchived = archivedPaths.has(drag.p.path);
+
   order.splice(from, 1);
   let dest = from < to ? to - 1 : to;
   dest = Math.max(0, Math.min(dest, order.length));
   order.splice(dest, 0, drag.p.path);
+
+  const activeCountAfterRemoval = activeCount - (wasArchived ? 0 : 1);
+  const nowArchived = dest >= activeCountAfterRemoval;
+  if (nowArchived) archivedPaths.add(drag.p.path);
+  else archivedPaths.delete(drag.p.path);
+  saveArchivedProjects();
 
   projectOrder = order;
   saveProjectOrder();
@@ -323,6 +353,9 @@ async function trashProjects(paths) {
       : `Move ${paths.length} projects to Trash?`;
   if (!(await confirmDialog(msg, "Move to Trash"))) return;
   for (const path of paths) await invoke("trash_project", { path });
+  let archivedChanged = false;
+  for (const path of paths) archivedChanged = archivedPaths.delete(path) || archivedChanged;
+  if (archivedChanged) saveArchivedProjects();
   projectsSelection.clear();
   showOverview();
 }
@@ -367,88 +400,103 @@ panelKeymaps.projects = {
   Escape: () => projectsSelection.clear(),
 };
 
+function buildProjectCard(p) {
+  const card = document.createElement("div");
+  card.className = "project-card card";
+  card.dataset.path = p.path;
+  if (archivedPaths.has(p.path)) card.classList.add("is-archived");
+  if (projectsSelection.has(p.path)) card.classList.add("is-selected");
+
+  // Icon: the project's .studio-icon.png if present, else a letter avatar.
+  // The img failing to load IS the existence check (no Rust call needed).
+  const icon = document.createElement("img");
+  icon.className = "card__icon";
+  icon.src =
+    window.__TAURI__.core.convertFileSrc(`${p.path}/.studio-icon.png`) +
+    `?v=${iconVersion}`;
+  icon.addEventListener("error", () => {
+    const letter = document.createElement("div");
+    letter.className = "card__icon card__icon--letter";
+    letter.textContent = (p.name[0] || "?").toUpperCase();
+    icon.replaceWith(letter);
+  });
+  card.append(icon);
+
+  if (p.sprite) {
+    const sprite = document.createElement("span");
+    sprite.className = "card__sprite";
+    const { "--sprite-start": start, "--sprite-end": end, ...rest } = spriteStyle(
+      p.sprite,
+      "idle",
+      28,
+    );
+    Object.assign(sprite.style, rest);
+    sprite.style.setProperty("--sprite-start", start);
+    sprite.style.setProperty("--sprite-end", end);
+    card.append(sprite);
+  }
+
+  const name = document.createElement("span");
+  name.className = "card__name";
+  name.textContent = p.name;
+  card.append(name);
+
+  if (p.modified) {
+    const modified = document.createElement("span");
+    modified.className = "card__modified";
+    modified.textContent = relativeDate(p.modified * 1000);
+    card.append(modified);
+  }
+  card.addEventListener("pointerdown", (e) =>
+    onProjectCardPointerDown(e, p, card),
+  );
+  // Single-click selects; double-click opens (interaction-spec §3.4).
+  card.addEventListener("click", (e) => {
+    if (Date.now() - lastProjectDragEnd < 300) return; // ignore click after drag
+    if (e.shiftKey) {
+      projectsSelection.range(
+        overviewProjects.map((x) => x.path),
+        p.path,
+      );
+    } else {
+      projectsSelection.toggle(p.path, e.metaKey || e.ctrlKey);
+    }
+  });
+  card.addEventListener("dblclick", () =>
+    invoke("open_project", { path: p.path }),
+  );
+  return card;
+}
+
 async function showOverview() {
   state.activePanel = "projects";
   invoke("clear_active_project");
   await loadProjectOrder();
-  const projects = applyProjectOrder(await invoke("list_projects"));
+  await loadArchivedProjects();
+  const ordered = applyProjectOrder(await invoke("list_projects"));
+  const activeProjects = ordered.filter((p) => !archivedPaths.has(p.path));
+  const archivedProjects = ordered.filter((p) => archivedPaths.has(p.path));
   const grid = document.getElementById("overview-grid");
   grid.innerHTML = "";
 
-  overviewProjects = projects;
+  overviewProjects = [...activeProjects, ...archivedProjects];
 
-  if (projects.length === 0) {
+  if (ordered.length === 0) {
     const note = document.createElement("p");
     note.className = "placeholder";
     note.textContent = "No projects yet. Use “New Project…” in the menu bar.";
     grid.append(note);
   } else {
-    for (const p of projects) {
-      const card = document.createElement("div");
-      card.className = "project-card card";
-      card.dataset.path = p.path;
-      if (projectsSelection.has(p.path)) card.classList.add("is-selected");
+    for (const p of activeProjects) grid.append(buildProjectCard(p));
 
-      // Icon: the project's .studio-icon.png if present, else a letter avatar.
-      // The img failing to load IS the existence check (no Rust call needed).
-      const icon = document.createElement("img");
-      icon.className = "card__icon";
-      icon.src =
-        window.__TAURI__.core.convertFileSrc(`${p.path}/.studio-icon.png`) +
-        `?v=${iconVersion}`;
-      icon.addEventListener("error", () => {
-        const letter = document.createElement("div");
-        letter.className = "card__icon card__icon--letter";
-        letter.textContent = (p.name[0] || "?").toUpperCase();
-        icon.replaceWith(letter);
-      });
-      card.append(icon);
+    // Always shown (even with nothing archived yet) so a project can be
+    // dragged past it to archive.
+    const divider = document.createElement("div");
+    divider.className = "overview-divider";
+    divider.textContent = "Archived";
+    grid.append(divider);
 
-      if (p.sprite) {
-        const sprite = document.createElement("span");
-        sprite.className = "card__sprite";
-        const { "--sprite-start": start, "--sprite-end": end, ...rest } = spriteStyle(
-          p.sprite,
-          "idle",
-          28,
-        );
-        Object.assign(sprite.style, rest);
-        sprite.style.setProperty("--sprite-start", start);
-        sprite.style.setProperty("--sprite-end", end);
-        card.append(sprite);
-      }
-
-      const name = document.createElement("span");
-      name.className = "card__name";
-      name.textContent = p.name;
-      card.append(name);
-
-      if (p.modified) {
-        const modified = document.createElement("span");
-        modified.className = "card__modified";
-        modified.textContent = relativeDate(p.modified * 1000);
-        card.append(modified);
-      }
-      card.addEventListener("pointerdown", (e) =>
-        onProjectCardPointerDown(e, p, card),
-      );
-      // Single-click selects; double-click opens (interaction-spec §3.4).
-      card.addEventListener("click", (e) => {
-        if (Date.now() - lastProjectDragEnd < 300) return; // ignore click after drag
-        if (e.shiftKey) {
-          projectsSelection.range(
-            overviewProjects.map((x) => x.path),
-            p.path,
-          );
-        } else {
-          projectsSelection.toggle(p.path, e.metaKey || e.ctrlKey);
-        }
-      });
-      card.addEventListener("dblclick", () =>
-        invoke("open_project", { path: p.path }),
-      );
-      grid.append(card);
-    }
+    for (const p of archivedProjects) grid.append(buildProjectCard(p));
   }
 
   // Clicking empty space in the overview clears selection (wired once).

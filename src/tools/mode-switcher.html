@@ -269,8 +269,18 @@ position: absolute;
     }
 
     // Match the overview's manual project order (read_project_order), falling
-    // back to name order for any project not in the saved list.
+    // back to name order for any project not in the saved list. Archived
+    // projects (per the overview's Archived divider) are left out entirely —
+    // this is a "switch to what I'm working on" tool, not a browser.
     async function applyProjectOrder(projects) {
+      let archived = new Set();
+      try {
+        const raw = await invoke('read_archived_projects');
+        const list = raw ? JSON.parse(raw) : [];
+        archived = new Set(Array.isArray(list) ? list : []);
+      } catch (_) {}
+      projects = projects.filter((p) => !archived.has(p.path));
+
       let order = [];
       try {
         const raw = await invoke('read_project_order');
