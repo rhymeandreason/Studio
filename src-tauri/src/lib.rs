@@ -2953,6 +2953,25 @@ fn save_mycelium(app: AppHandle, store: serde_json::Value) -> Result<(), String>
     std::fs::write(dir.join("mycelium.json"), text).map_err(|e| e.to_string())
 }
 
+const CONTACTSDUMP_BIN: &str = env!("CONTACTSDUMP_BIN");
+
+/// Mac Contacts export as a JSON array string — `[{"name","emails":[],
+/// "phones":[]}]` (Contacts framework, via the `contactsdump` Swift helper).
+/// Returns `"[]"` if Contacts access is denied. Used by Mycelium's "match
+/// Mac Contacts" feature to fill in email/phone for people already in your
+/// graph.
+#[tauri::command]
+async fn contacts_dump() -> Result<String, String> {
+    let out = Command::new(CONTACTSDUMP_BIN)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
 /// Path to the global schedules store (app config dir / schedules.json).
 fn schedules_file_path(app: &AppHandle) -> Option<PathBuf> {
     app.path()
@@ -5931,6 +5950,7 @@ pub fn run() {
             save_daily_notes,
             read_mycelium,
             save_mycelium,
+            contacts_dump,
             read_schedules,
             save_schedules,
             paste_image,

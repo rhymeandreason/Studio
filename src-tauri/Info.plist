@@ -4,5 +4,7 @@
 <dict>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Studio reads today's events to build your morning briefing.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Mycelium matches your Mac Contacts to fill in email/phone for people in your graph.</string>
 </dict>
 </plist>

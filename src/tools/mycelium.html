@@ -1151,6 +1151,100 @@
       }
     }
 
+    // ---------- match Mac Contacts ----------
+    // Enrich people already in the graph with email/phone from the local
+    // Address Book (read-only; nothing is written back to Contacts). Matches
+    // by shared email/phone are unambiguous and get merged automatically;
+    // name-only matches are noisier, so those are surfaced for you to
+    // confirm or skip instead of auto-merging.
+    const normEmail = (s) => (s || "").trim().toLowerCase();
+    const normPhone = (s) => (s || "").replace(/[^\d+]/g, "");
+    const normName = (s) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const contactKey = (c) => `${c.type}:${c.type === "phone" ? normPhone(c.value) : normEmail(c.value)}`;
+
+    function mergeMacContact(person, mac) {
+      person.contacts ||= [];
+      const existing = new Set(person.contacts.map(contactKey));
+      let added = false;
+      for (const e of mac.emails || []) {
+        const c = { type: "email", value: e }, key = contactKey(c);
+        if (!existing.has(key)) { person.contacts.push(c); existing.add(key); added = true; }
+      }
+      for (const ph of mac.phones || []) {
+        const c = { type: "phone", value: ph }, key = contactKey(c);
+        if (!existing.has(key)) { person.contacts.push(c); existing.add(key); added = true; }
+      }
+      return added;
+    }
+
+    async function matchMacContacts(btn, container) {
+      if (!invoke) { toast("Only available in the app"); return; }
+      btn.disabled = true; btn.innerHTML = `<span class="mi mi-sm">contacts</span> Scanning…`;
+      container.innerHTML = "";
+      try {
+        const raw = await invoke("contacts_dump");
+        const mac = JSON.parse(raw || "[]");
+        if (!mac.length) {
+          container.innerHTML = `<div class="muted-note" style="margin-top:0">No contacts found — or access was denied (check System Settings → Privacy &amp; Security → Contacts).</div>`;
+          return;
+        }
+
+        const byEmail = new Map(), byPhone = new Map();
+        for (const c of mac) {
+          for (const e of c.emails || []) byEmail.set(normEmail(e), c);
+          for (const ph of c.phones || []) byPhone.set(normPhone(ph), c);
+        }
+
+        let autoAdded = 0, pushedUndo = false;
+        const fuzzy = [];
+        for (const p of store.people) {
+          const found = (p.contacts || []).map(c =>
+            c.type === "email" ? byEmail.get(normEmail(c.value)) : c.type === "phone" ? byPhone.get(normPhone(c.value)) : null
+          ).find(Boolean);
+          if (!found) {
+            const nm = normName(p.name);
+            const cand = nm && mac.find(c => normName(c.name) === nm);
+            if (cand) fuzzy.push({ person: p, contact: cand });
+            continue;
+          }
+          if (!pushedUndo) { pushUndo(); pushedUndo = true; }
+          if (mergeMacContact(p, found)) autoAdded++;
+        }
+        if (autoAdded) { render(); scheduleSave(); }
+
+        const summary = document.createElement("div"); summary.className = "muted-note"; summary.style.marginTop = "0";
+        summary.textContent = autoAdded
+          ? `Filled in contact info for ${autoAdded} ${autoAdded === 1 ? "person" : "people"} (matched by shared email/phone).`
+          : "No shared email/phone matches found.";
+        container.appendChild(summary);
+
+        if (fuzzy.length) {
+          container.appendChild(sectionLabel("Possible matches — same name, confirm before adding"));
+          for (const { person, contact } of fuzzy) {
+            const row = document.createElement("div"); row.className = "contact-row";
+            row.innerHTML = `<div class="field" style="display:flex; align-items:center; flex:1 1 auto;">${esc(person.name)}</div>
+              <button class="btn-icon" title="Add contact info"><span class="mi mi-sm">check</span></button>
+              <button class="btn-icon" title="Not a match"><span class="mi mi-sm">close</span></button>`;
+            const [, addBtn, skipBtn] = row.children;
+            addBtn.onclick = () => {
+              pushUndo();
+              mergeMacContact(person, contact);
+              scheduleSave();
+              if (selected?.type === "person" && selected.id === person.id) renderPersonInspector(person);
+              row.remove();
+              toast(`Added contact info for ${person.name || "contact"}`);
+            };
+            skipBtn.onclick = () => row.remove();
+            container.appendChild(row);
+          }
+        }
+      } catch (e) {
+        container.innerHTML = `<div class="muted-note" style="margin-top:0">Couldn't read Contacts: ${esc(e.message || e)}</div>`;
+      } finally {
+        btn.disabled = false; btn.innerHTML = `<span class="mi mi-sm">contacts</span> Match Mac Contacts`;
+      }
+    }
+
     // ---------- settings / my card ----------
     function openSettings() {
       selected = null; render();
@@ -1168,6 +1262,16 @@
       const n = countNonEventOnlyPeople();
       stat.textContent = `${n} ${n === 1 ? "person" : "people"} (excludes people only connected to an Event)`;
       inspector.appendChild(stat);
+
+      inspector.appendChild(divider());
+      inspector.appendChild(sectionLabel("Contacts"));
+      const matchBtn = document.createElement("button");
+      matchBtn.className = "btn"; matchBtn.style.width = "100%";
+      matchBtn.innerHTML = `<span class="mi mi-sm">contacts</span> Match Mac Contacts`;
+      const matchResults = document.createElement("div"); matchResults.style.marginTop = "8px";
+      matchBtn.onclick = () => matchMacContacts(matchBtn, matchResults);
+      inspector.appendChild(matchBtn);
+      inspector.appendChild(matchResults);
 
       inspector.appendChild(divider());
       inspector.appendChild(sectionLabel("Events")); // sharing QRs only ever make sense for Event trees

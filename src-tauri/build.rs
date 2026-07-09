@@ -86,6 +86,14 @@ fn main() {
     println!("cargo:rustc-env=TRANSIT_BIN={}", tr_bin.display());
     println!("cargo:rerun-if-changed={tr_src}");
 
+    // Mac Contacts export helper (Contacts framework → name/emails/phones
+    // JSON), for Mycelium's "match Mac Contacts" feature.
+    let cd_src = "swift/contactsdump.swift";
+    let cd_bin = Path::new(&out_dir).join("contactsdump");
+    swiftc(cd_src, &cd_bin, "macosx11.0");
+    println!("cargo:rustc-env=CONTACTSDUMP_BIN={}", cd_bin.display());
+    println!("cargo:rerun-if-changed={cd_src}");
+
     tauri_build::build();
 }
 
