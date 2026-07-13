@@ -7,7 +7,9 @@
   <title>Daily Briefing</title>
   <link rel="stylesheet" href="../tokens.css" />
   <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
   <script type="module" src="../kit/components.js"></script>
+  <script type="module" src="../kit/window-chrome.js"></script>
   <script src="../vendor/marked.min.js"></script>
   <style>
     /* Spacing scale — tokens.css/kit.css don't define --space-*, so set them
@@ -24,14 +26,39 @@
 
     body {
       margin: 0;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #titlebar {
+      height: 44px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+    }
+
+    .tb-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* The scroll container (was body); carries the paper fill so the
+       window's rounded corners work (body stays transparent). */
+    #scroll {
+      flex: 1 1 auto;
+      overflow-y: auto;
       padding: clamp(28px, 6vw, 56px);
+      padding-top: 0;
       display: flex;
       flex-direction: column;
       gap: var(--space-6);
-      box-sizing: border-box;
       background: var(--bg);
-      color: var(--text);
-      overflow-y: auto;
     }
 
     /* ── Top section: date, body, meetings — all centered ─────────── */
@@ -293,6 +320,10 @@ padding-botton:100px;
 </head>
 
 <body>
+  <div id="titlebar" data-window-bar>
+    <div class="tb-title" data-window-close><span class="eyebrow">Daily Briefing</span></div>
+  </div>
+  <div id="scroll">
   <div id="settings" class="settings card">
     <label class="label" for="sources">Briefing prompt</label>
     <textarea id="sources" class="field" rows="4" placeholder="Anything — e.g. a warm morning briefing with top news, or 'Write a haiku about today's weather in Woodacre, CA.'"></textarea>
@@ -324,6 +355,7 @@ padding-botton:100px;
   </div>
 
   <div id="status" class="text-xs text-muted"></div>
+  </div>
 
   <script type="module">
     const hasTauri = !!window.__TAURI__;

@@ -6,21 +6,41 @@
 <title>Window Size</title>
 <link rel="stylesheet" href="../tokens.css" />
 <link rel="stylesheet" href="../kit/kit.css" />
+<link rel="stylesheet" href="../kit/window-chrome.css" />
+<script type="module" src="../kit/components.js"></script>
+<script type="module" src="../kit/window-chrome.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
-    background: #1a1a1a;
     color: #fff;
     font-family: "SF Mono", Menlo, monospace;
     height: 100vh;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    padding: 0 16px 0 80px; /* left pad for traffic lights */
-    -webkit-app-region: drag;
     user-select: none;
     overflow: hidden;
+  }
+
+  /* Compact bar — the whole window is only 80px tall. Dark to match the
+     overlay surface (overrides the kit's default paper tint). */
+  #titlebar {
+    height: 24px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    background: #1a1a1a;
+  }
+
+  #content {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 16px 6px;
+    background: #1a1a1a; /* body stays transparent for the rounded corners */
+    min-height: 0;
   }
 
   #app-name {
@@ -52,11 +72,16 @@
 </style>
 </head>
 <body>
-  <div id="app-name">—</div>
-  <div id="dims">
-    <span id="w">—</span><span class="x">×</span><span id="h">—</span><span class="unit">px</span>
+  <div id="titlebar" data-window-bar>
+    <div class="tb-title" data-window-close></div>
   </div>
-  <div id="no-window">no window</div>
+  <div id="content">
+    <div id="app-name">—</div>
+    <div id="dims">
+      <span id="w">—</span><span class="x">×</span><span id="h">—</span><span class="unit">px</span>
+    </div>
+    <div id="no-window">no window</div>
+  </div>
 
   <script>
     if (window.__TAURI__) {

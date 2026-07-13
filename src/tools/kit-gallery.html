@@ -6,26 +6,41 @@
 <title>Studio Design System</title>
 <link rel="stylesheet" href="../tokens.css" />
 <link rel="stylesheet" href="../kit/kit.css" />
+<link rel="stylesheet" href="../kit/window-chrome.css" />
+<script type="module" src="../kit/components.js"></script>
+<script type="module" src="../kit/window-chrome.js"></script>
 <style>
   /* --- Page chrome --- */
   body {
-    background: var(--bg);
     color: var(--text);
     font-family: system-ui, sans-serif;
-    padding: 0 48px 80px;
+    height: 100vh;
     display: flex;
     flex-direction: column;
     gap: 0;
-    max-width: 860px;
+    overflow: hidden;
   }
   .titlebar {
-    height: 52px;
-    flex: 0 0 52px;
-    -webkit-app-region: drag;
+    height: 44px;
+    flex: 0 0 44px;
     display: flex;
-    align-items: flex-end;
-    padding-bottom: 10px;
+    align-items: center;
+    padding: 0 14px;
   }
+  .tb-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  /* Scrolls the sections; carries the paper fill (body is transparent so the
+     window's rounded corners work — see window-chrome.css). */
+  #scroll {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 0 48px 80px;
+    background: var(--bg);
+  }
+  #scroll > section { max-width: 764px; }
 
   /* --- Section --- */
   section {
@@ -98,10 +113,13 @@ border-radius: 2px;
 </style>
 </head>
 <body>
-  <div class="titlebar" data-tauri-drag-region>
-    <div class="page-title">Design System</div>
+  <div class="titlebar" data-window-bar>
+    <div class="tb-title" data-window-close>
+      <div class="page-title">Design System</div>
+    </div>
   </div>
 
+  <div id="scroll">
   <!-- Color tokens -->
   <section>
     <div class="section-meta">
@@ -505,6 +523,7 @@ border-radius: 2px;
       </div>
     </div>
   </section>
+  </div>
 
   <script type="module">
     import "../kit/components.js";

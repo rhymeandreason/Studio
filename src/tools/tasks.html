@@ -7,7 +7,9 @@
   <title>Tasks</title>
   <link rel="stylesheet" href="../tokens.css" />
   <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
   <script type="module" src="../kit/components.js"></script>
+  <script type="module" src="../kit/window-chrome.js"></script>
   <style>
     html,
     body {
@@ -17,7 +19,6 @@
     body {
       margin: 0;
       font-family: var(--sans);
-      background: var(--bg);
       color: var(--text);
       display: flex;
       flex-direction: column;
@@ -29,17 +30,29 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 16px 20px 12px;
-      // border-bottom: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
-      margin-top: -16px;
+      padding: 10px 20px;
 z-index:20;
+    }
+
+    header .tb-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-right: auto;
     }
 
     header .title {
       font-size: 18px;
       font-weight: 600;
-      margin-right: auto;
-      opacity: 0;
+    }
+
+    /* Carries the paper fill (body is transparent for the rounded corners). */
+    #main {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      background: var(--bg);
     }
 
     /* Round filled "add" button. */
@@ -441,13 +454,16 @@ border: 1 px solid var(--hairline);
 </head>
 
 <body>
-  <header>
-    <span class="title">Tasks</span>
+  <header data-window-bar>
+    <div class="tb-title" data-window-close>
+      <span class="title">Tasks</span>
+    </div>
     <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Transit settings"><span class="mi">tune</span></button>
     <button class="btn btn-ghost btn-icon" id="refreshBtn" title="Sync calendar"><span class="mi">refresh</span></button>
     <button class="btn btn-primary" id="addBtn" title="Add task"><span class="mi">add</span></button>
   </header>
 
+  <div id="main">
   <div id="settingsForm">
     <input class="field" id="cfgOrigin" placeholder="Home / origin address (for in-person travel time)" />
     <select class="field" id="cfgMode">
@@ -472,6 +488,7 @@ border: 1 px solid var(--hairline);
 
   <div id="list">
     <div id="empty">Loading…</div>
+  </div>
   </div>
 
   <script type="module">

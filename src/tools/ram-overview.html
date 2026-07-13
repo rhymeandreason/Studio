@@ -7,6 +7,9 @@
 <!-- Shared Runes tokens/icon font/reset; this tool's own :root below overrides where it differs. -->
 <link rel="stylesheet" href="../tokens.css" />
 <link rel="stylesheet" href="../kit/kit.css" />
+<link rel="stylesheet" href="../kit/window-chrome.css" />
+<script type="module" src="../kit/components.js"></script>
+<script type="module" src="../kit/window-chrome.js"></script>
 <style>
   :root {
     --bg: #f7f5f0;
@@ -24,7 +27,6 @@
   body {
     margin: 0;
     font-family: var(--sans);
-    background: var(--bg);
     color: var(--text);
     height: 100vh;
     display: flex;
@@ -33,14 +35,25 @@
   }
 
   #header {
-    padding: 34px 18px 10px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
     border-bottom: 1px solid var(--hairline);
     flex-shrink: 0;
     font-size: 14px;
     font-weight: 600;
   }
 
+  .tb-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   #current {
+    background: var(--bg); /* body stays transparent for the rounded corners */
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -52,6 +65,7 @@
   }
 
   #list-wrap {
+    background: var(--bg);
     flex: 1 1 auto;
     overflow-y: auto;
     padding: 6px 18px 14px;
@@ -86,7 +100,9 @@
 </style>
 </head>
 <body>
-  <div id="header" data-tauri-drag-region>RAM overview</div>
+  <div id="header" data-window-bar>
+    <div class="tb-title" data-window-close><span>RAM overview</span></div>
+  </div>
   <div id="current">Loading…</div>
   <div id="list-wrap">
     <table>

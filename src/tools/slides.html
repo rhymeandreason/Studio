@@ -9,15 +9,22 @@
 <link rel="stylesheet" href="../deck/render.css" />
 <script type="module" src="../kit/components.js"></script>
 <script src="../vendor/marked.min.js"></script>
+<link rel="stylesheet" href="../kit/window-chrome.css" />
+<script type="module" src="../kit/window-chrome.js"></script>
 <style>
   body {
-    background: var(--bg);
     color: var(--text);
     font-family: var(--sans);
     height: 100vh;
     display: flex;
+    flex-direction: column;
     overflow: hidden;
   }
+
+  #titlebar { height: 44px; flex-shrink: 0; display: flex; align-items: center; padding: 0 14px; }
+  .tb-title { display: flex; align-items: center; gap: 8px; }
+  /* Carries the paper fill (body is transparent for the rounded corners). */
+  #main { flex: 1 1 auto; display: flex; min-height: 0; background: var(--bg); }
 
   /* Three columns: slide reel · stage · inspector. */
   .reel {
@@ -188,6 +195,10 @@
 </style>
 </head>
 <body>
+  <div id="titlebar" data-window-bar>
+    <div class="tb-title" data-window-close><span class="eyebrow">Slides</span></div>
+  </div>
+  <div id="main">
   <div class="reel">
     <div class="reel-head">
       <button class="btn btn-primary" id="add-slide"><span class="mi mi-sm">add</span> Slide</button>
@@ -209,6 +220,7 @@
   </div>
 
   <div class="inspector" id="inspector"></div>
+  </div>
 
   <script type="module">
     import { initDevInspect } from "../devinspect.js";

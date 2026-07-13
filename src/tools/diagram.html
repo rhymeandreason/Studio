@@ -7,15 +7,22 @@
 <link rel="stylesheet" href="../tokens.css" />
 <link rel="stylesheet" href="../kit/kit.css" />
 <script type="module" src="../kit/components.js"></script>
+<link rel="stylesheet" href="../kit/window-chrome.css" />
+<script type="module" src="../kit/window-chrome.js"></script>
 <style>
   body {
-    background: var(--bg);
     color: var(--text);
     font-family: var(--sans);
     height: 100vh;
     display: flex;
+    flex-direction: column;
     overflow: hidden;
   }
+
+  #titlebar { height: 44px; flex-shrink: 0; display: flex; align-items: center; padding: 0 14px; }
+  .tb-title { display: flex; align-items: center; gap: 8px; }
+  /* Carries the paper fill (body is transparent for the rounded corners). */
+  #main { flex: 1 1 auto; display: flex; min-height: 0; background: var(--bg); }
 
   /* Two columns: stage · inspector (mirrors the Slides tool, minus the reel). */
   .stage-wrap { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -100,6 +107,10 @@
 </style>
 </head>
 <body>
+  <div id="titlebar" data-window-bar>
+    <div class="tb-title" data-window-close><span class="eyebrow">Diagram</span></div>
+  </div>
+  <div id="main">
   <div class="stage-wrap">
     <div class="stage-bar">
       <input class="title" id="dg-name" value="Untitled diagram" spellcheck="false" />
@@ -114,6 +125,7 @@
   </div>
 
   <div class="inspector" id="inspector"></div>
+  </div>
 
   <script type="module">
     import { renderDiagram, diagramSvgText, matrixInset, TEMPLATES, TEMPLATE_DEFAULTS, DIAGRAM_DEFAULT_THEME, DW, DH } from "../diagram/render.js";

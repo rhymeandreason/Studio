@@ -535,94 +535,64 @@ fn toggle_mode_switcher_window(app: &AppHandle) {
     }
 }
 
-/// Open (or focus) a tool's HTML file in its own native window.
-/// How a tool window is chromed. One source of truth so the look of a tool is
-/// decided in exactly one place — every builder below routes through
-/// `apply_tool_chrome`, so a style fix can't drift between them (it used to:
-/// the same per-tool `if` was copy-pasted into three builders).
-enum Chrome {
-    /// Fully custom: no native title bar / traffic lights. The page paints its
-    /// own draggable bar + close button + rounded corners (see
-    /// `src/kit/window-chrome.js`) and reads `?color=` for its tint.
-    Custom,
-    /// Native title bar, transparent + tinted to the window's color (or paper).
-    NativeTint,
-    /// Plain native title bar with the OS default look.
-    Native,
-}
-
-/// Where a tool window's tint comes from.
+/// Where a tool window's tint comes from. All tool windows share the minimal
+/// custom chrome (no native title bar / traffic lights; the page paints its
+/// own draggable bar + close dot + rounded corners via `src/kit/window-chrome.js`,
+/// reading `?color=` for its tint) — only the tint source varies.
 enum Tint {
     /// The active project's accent / git color (passed in as `color`).
     Project,
-    /// The Runes paper background (#f7f5f0) — for global, project-less tools.
+    /// The Runes paper background — for global, project-less tools (no
+    /// `?color=` is passed; the bar falls back to `var(--bg)`).
     Paper,
-    /// No tint (Native chrome).
-    None,
 }
 
 struct ToolStyle {
     w: f64,
     h: f64,
-    /// Blank the native title (the page owns the bar) vs. show the tool name.
-    empty_title: bool,
-    chrome: Chrome,
     tint: Tint,
 }
 
-/// Per-tool window style table. To migrate a tool to the custom chrome: flip
-/// its `chrome` to `Chrome::Custom` here AND give its HTML the kit window-chrome
-/// (link `kit/window-chrome.css`, import `kit/window-chrome.js`, mark its top
-/// bar `data-window-bar`). Spotlight / Mode switcher have their own bespoke
-/// invisible windows and never come through here.
+/// Per-tool window style table. Every tool defaults to the minimal custom
+/// chrome (no native bar; the page paints its own via the kit window-chrome —
+/// link `kit/window-chrome.css`, import `kit/window-chrome.js`, mark its top
+/// bar `data-window-bar`). Rows below only override size/tint. Spotlight /
+/// Mode switcher / Task cards have their own bespoke invisible windows and
+/// never come through here.
 fn tool_style(filename: &str) -> ToolStyle {
-    let s = |w, h, empty_title, chrome, tint| ToolStyle { w, h, empty_title, chrome, tint };
+    let s = |w, h, tint| ToolStyle { w, h, tint };
     match filename {
-        "code-editor.html" => s(900.0, 640.0, true, Chrome::Custom, Tint::Project),
-        "code-preview.html" => s(900.0, 640.0, true, Chrome::NativeTint, Tint::Project),
-        "daily-notes.html" => s(300.0, 600.0, true, Chrome::NativeTint, Tint::Paper),
-        "ram-overview.html" => s(380.0, 440.0, true, Chrome::NativeTint, Tint::Paper),
-        "file-directory.html" => s(350.0, 640.0, true, Chrome::Custom, Tint::Paper),
-        "tasks.html" => s(800.0, 800.0, true, Chrome::NativeTint, Tint::Paper),
-        "modes.html" => s(320.0, 480.0, true, Chrome::NativeTint, Tint::Paper),
-        "kit-gallery.html" => s(900.0, 640.0, true, Chrome::NativeTint, Tint::Paper),
-        "daily-briefing.html" => s(1080.0, 760.0, true, Chrome::NativeTint, Tint::Paper),
-        "mycelium.html" => s(1100.0, 760.0, false, Chrome::Native, Tint::None),
-        _ => s(900.0, 640.0, false, Chrome::Native, Tint::None),
+        "code-editor.html" => s(900.0, 640.0, Tint::Project),
+        "code-preview.html" => s(900.0, 640.0, Tint::Project),
+        "daily-notes.html" => s(300.0, 600.0, Tint::Paper),
+        "ram-overview.html" => s(380.0, 440.0, Tint::Paper),
+        "file-directory.html" => s(350.0, 640.0, Tint::Paper),
+        "tasks.html" => s(800.0, 800.0, Tint::Paper),
+        "modes.html" => s(320.0, 480.0, Tint::Paper),
+        "git-pulse.html" => s(820.0, 600.0, Tint::Paper),
+        "daily-briefing.html" => s(1080.0, 760.0, Tint::Paper),
+        "mycelium.html" => s(1100.0, 760.0, Tint::Paper),
+        _ => s(900.0, 640.0, Tint::Paper),
     }
 }
 
-/// Apply a tool's window style (size + chrome) to its builder. `color` is the
-/// resolved tint color hex (project/repo accent), or empty for none.
+/// Apply a tool's window style (size + the minimal custom chrome) to its
+/// builder. `decorations(false)` removes the native bar + traffic lights;
+/// `transparent(true)` lets the page's rounded corners show the desktop
+/// through them. `shadow(false)` is required: the default macOS window shadow
+/// is drawn around the SQUARE window bounds, which reads as a 1px black
+/// border + square corners (same recipe as the Spotlight / Mode switcher
+/// windows).
 fn apply_tool_chrome<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
     builder: tauri::webview::WebviewWindowBuilder<'a, R, M>,
     filename: &str,
-    color: &str,
 ) -> tauri::webview::WebviewWindowBuilder<'a, R, M> {
     let st = tool_style(filename);
-    let mut builder = builder.inner_size(st.w, st.h);
-    match st.chrome {
-        Chrome::Custom => {
-            // `decorations(false)` removes the native bar + traffic lights;
-            // `transparent(true)` lets the page's rounded corners show the
-            // desktop through them. `shadow(false)` is required: the default
-            // macOS window shadow is drawn around the SQUARE window bounds,
-            // which reads as a 1px black border + square corners (same recipe
-            // as the Spotlight / Mode switcher windows).
-            builder = builder.decorations(false).transparent(true).shadow(false);
-        }
-        Chrome::NativeTint => {
-            let (r, g, b) = match st.tint {
-                Tint::Project if !color.is_empty() => parse_hex(color),
-                _ => (0xf7, 0xf5, 0xf0),
-            };
-            builder = builder
-                .title_bar_style(tauri::TitleBarStyle::Transparent)
-                .background_color(tauri::webview::Color(r, g, b, 0xff));
-        }
-        Chrome::Native => {}
-    }
     builder
+        .inner_size(st.w, st.h)
+        .decorations(false)
+        .transparent(true)
+        .shadow(false)
 }
 
 fn open_tool_window(app: &AppHandle, path: &str) {
@@ -659,21 +629,10 @@ fn open_tool_window_with_color(app: &AppHandle, path: &str, color: &str) {
         return;
     }
     let url = format!("tools/{}?color={}", filename, url_encode(color));
-    let title = if tool_style(filename).empty_title {
-        String::new()
-    } else {
-        Path::new(filename)
-            .file_stem()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .replace('-', " ")
-            .split_whitespace()
-            .map(|w| { let mut c = w.chars(); c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default() })
-            .collect::<Vec<_>>()
-            .join(" ")
-    };
-    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into())).title(title);
-    let _ = apply_tool_chrome(builder, filename, color).build();
+    // Empty native title everywhere — the page paints its own bar.
+    let builder =
+        WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into())).title(String::new());
+    let _ = apply_tool_chrome(builder, filename).build();
 }
 
 /// Per-project window label for the Code Editor, so each project gets its own
@@ -739,10 +698,10 @@ fn open_code_editor_window(app: &AppHandle, color: &str, project_path: &str, ope
         format!("?{}", params.join("&"))
     };
     let url = format!("tools/{}{}", filename, qs);
-    // code-editor has empty_title (the page paints its own bar).
+    // Empty native title — the page paints its own bar.
     let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
         .title(String::new());
-    let _ = apply_tool_chrome(builder, filename, color).build();
+    let _ = apply_tool_chrome(builder, filename).build();
 }
 
 /// The active project's folder path, or empty if none is active.
@@ -827,23 +786,12 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
         let _ = win.set_focus();
         return;
     }
-    let style = tool_style(filename);
-    let title = if style.empty_title {
-        String::new()
-    } else {
-        Path::new(path)
-            .file_stem()
-            .and_then(|n| n.to_str())
-            .unwrap_or("Tool")
-            .to_string()
-    };
-
     // Resolve the tint: project-tinted tools (e.g. code-preview) pick up the
     // active project's color and pass it through the URL so the page can paint
-    // its own bar on first frame; paper/none tools need no color.
-    let color = match style.tint {
+    // its own bar on first frame; paper tools need no color.
+    let color = match tool_style(filename).tint {
         Tint::Project => active_git_color_hex(app).unwrap_or_default(),
-        _ => String::new(),
+        Tint::Paper => String::new(),
     };
     let url = if color.is_empty() {
         format!("tools/{filename}")
@@ -851,8 +799,9 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
         format!("tools/{filename}?color={}", url_encode(&color))
     };
 
-    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into())).title(title);
-    let builder = apply_tool_chrome(builder, filename, &color);
+    let builder =
+        WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into())).title(String::new());
+    let builder = apply_tool_chrome(builder, filename);
 
     if let Ok(win) = builder.build() {
         if let Some(rect) = near {
@@ -1558,10 +1507,9 @@ fn open_tool(app: AppHandle, file: String, query: Option<String>) {
         let _ = win.set_focus();
         return;
     }
-    let style = tool_style(&file);
-    let color = match style.tint {
+    let color = match tool_style(&file).tint {
         Tint::Project => active_git_color_hex(&app).unwrap_or_default(),
-        _ => String::new(),
+        Tint::Paper => String::new(),
     };
     // Compose the query: any caller-supplied query plus the resolved color.
     let mut parts: Vec<String> = Vec::new();
@@ -1573,20 +1521,10 @@ fn open_tool(app: AppHandle, file: String, query: Option<String>) {
         format!("tools/{file}?{}", parts.join("&"))
     };
 
-    let title = if style.empty_title {
-        String::new()
-    } else {
-        Path::new(&file)
-            .file_stem()
-            .and_then(|n| n.to_str())
-            .unwrap_or("Tool")
-            .to_string()
-    };
-
     let builder = WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url.into()))
         .min_inner_size(280.0, 320.0)
-        .title(title);
-    let _ = apply_tool_chrome(builder, &file, &color).build();
+        .title(String::new());
+    let _ = apply_tool_chrome(builder, &file).build();
 }
 
 // Note: the artifact formats Claude writes to are documented in the
@@ -3987,13 +3925,10 @@ fn open_git_pulse(app: AppHandle, repo: String) {
         return;
     }
     let url = format!("tools/git-pulse.html?repo={}", url_encode(&repo));
-    if let Ok(win) = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
-        .title("")
-        .inner_size(820.0, 600.0)
-        .title_bar_style(tauri::TitleBarStyle::Transparent)
-        .background_color(tauri::webview::Color(0xf7, 0xf5, 0xf0, 0xff))
-        .build()
-    {
+    let builder =
+        tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
+            .title(String::new());
+    if let Ok(win) = apply_tool_chrome(builder, "git-pulse.html").build() {
         let _ = win.show();
     }
 }

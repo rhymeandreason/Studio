@@ -7,20 +7,21 @@
   <title>Mycelium</title>
   <link rel="stylesheet" href="../tokens.css" />
   <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
   <script type="module" src="../kit/components.js"></script>
+  <script type="module" src="../kit/window-chrome.js"></script>
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100vh; }
     body {
       font-family: var(--sans);
-      background: var(--bg);
       color: var(--text);
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
 
-    /* ---- top bar ---- */
+    /* ---- top bar (doubles as the window bar; chrome from kit) ---- */
     #bar {
       flex: 0 0 auto;
       display: flex;
@@ -28,7 +29,6 @@
       gap: 8px;
       padding: 10px 14px;
       border-bottom: 1px solid var(--hairline);
-      background: var(--bg);
     }
     #bar .brand {
       display: flex; align-items: center; gap: 7px;
@@ -44,8 +44,11 @@
       position: relative;
       flex: 1 1 auto;
       overflow: hidden;
+      /* Opaque base under the dot grid — body is transparent so the window's
+         rounded corners work (see window-chrome.css). */
       background:
-        radial-gradient(circle at 1px 1px, var(--hairline) 1px, transparent 0);
+        radial-gradient(circle at 1px 1px, var(--hairline) 1px, transparent 0)
+        var(--bg);
       background-size: 26px 26px;
       cursor: grab;
     }
@@ -220,8 +223,8 @@
 </head>
 
 <body>
-  <div id="bar">
-    <div class="brand"><span class="mi">hub</span> Mycelium</div>
+  <div id="bar" data-window-bar>
+    <div class="brand" data-window-close><span class="mi">hub</span> Mycelium</div>
     <div class="tabs tabs--round">
       <button class="tab is-active" id="tab-all">All</button>
       <button class="tab" id="tab-main">Main</button>

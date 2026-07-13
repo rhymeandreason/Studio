@@ -7,19 +7,35 @@
 <link rel="stylesheet" href="../tokens.css" />
 <link rel="stylesheet" href="../kit/kit.css" />
 <script type="module" src="../kit/components.js"></script>
+<link rel="stylesheet" href="../kit/window-chrome.css" />
+<script type="module" src="../kit/window-chrome.js"></script>
 <style>
   html, body { height: 100%; }
   body {
     margin: 0;
     overflow: hidden;
     display: flex;
-    background: var(--bg);
+    flex-direction: column;
     font-family: var(--sans);
+  }
+  #titlebar {
+    height: 44px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+  }
+  .tb-title { display: flex; align-items: center; gap: 8px; }
+  #main {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
   }
   #stage {
     flex: 1;
     position: relative;
     min-width: 0;
+    background: var(--bg); /* body stays transparent for the rounded corners */
   }
   #stage canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
   #hint {
@@ -59,6 +75,10 @@
 </style>
 </head>
 <body>
+  <div id="titlebar" data-window-bar>
+    <div class="tb-title" data-window-close><span class="eyebrow">Trees</span></div>
+  </div>
+  <div id="main">
   <div id="stage">
     <canvas id="canvas"></canvas>
     <div id="hint" class="text-s">click canvas for a new tree</div>
@@ -135,6 +155,7 @@
       <button class="btn btn-primary" id="generate"><span class="mi mi-sm">casino</span>Generate</button>
       <button class="btn" id="export"><span class="mi mi-sm">download</span>SVG</button>
     </div>
+  </div>
   </div>
 
 <script type="module">

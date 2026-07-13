@@ -9,7 +9,9 @@
          .chip etc. -->
     <link rel="stylesheet" href="../styles.css" />
     <link rel="stylesheet" href="../kit/kit.css" />
+    <link rel="stylesheet" href="../kit/window-chrome.css" />
     <script type="module" src="../kit/components.js"></script>
+    <script type="module" src="../kit/window-chrome.js"></script>
     <style>
       /* The editor is the whole window here (no grid / side column), so pin the
          lightbox as the page and let it fill the viewport. */
@@ -17,11 +19,20 @@
       body {
         height: 100%;
         margin: 0;
-        background: var(--bg);
       }
+      /* The lightbox is position:fixed, so body's overflow clip can't round it —
+         round + clip it itself (body stays transparent; window-chrome.css). */
       .lightbox {
         position: fixed;
         inset: 0;
+        border-radius: var(--window-radius, 10px);
+        overflow: hidden;
+      }
+      .tb-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
       }
       /* Empty state shown until an image is opened. */
       .ie-empty {
@@ -49,8 +60,10 @@
   <body>
     <!-- Image editor (mirrors the media-panel lightbox) -->
     <div class="lightbox" id="lightbox">
-      <div class="lightbox__bar">
-        <span class="lightbox__name" id="lightbox-name">Image Editor</span>
+      <div class="lightbox__bar" data-window-bar>
+        <div class="tb-title" data-window-close>
+          <span class="lightbox__name" id="lightbox-name">Image Editor</span>
+        </div>
         <div class="lightbox__actions">
           <span class="edit-status" id="edit-status"></span>
           <button class="btn-ghost" id="lb-open">

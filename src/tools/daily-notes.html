@@ -8,6 +8,9 @@
   <!-- Shared Runes tokens/icon font/reset; this tool's own :root below overrides where it differs. -->
   <link rel="stylesheet" href="../tokens.css" />
   <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
+  <script type="module" src="../kit/components.js"></script>
+  <script type="module" src="../kit/window-chrome.js"></script>
   <style>
 
     * {
@@ -17,7 +20,6 @@
     body {
       margin: 0;
       font-family: var(--sans);
-      background: var(--bg);
       color: var(--text);
       height: 100vh;
       display: flex;
@@ -25,10 +27,17 @@
       overflow: hidden;
     }
 
+    /* Compact window bar (the window is only 300px wide). */
     #header {
-      padding: 34px 18px 10px;
+      padding: 10px 14px;
       border-bottom: 1px solid var(--hairline);
       flex-shrink: 0;
+    }
+
+    #header .tb-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     #header .date {
@@ -43,6 +52,7 @@
     }
 
     #checklist {
+      background: var(--bg); /* body stays transparent for the rounded corners */
       flex: 1 1 auto;
       overflow-y: auto;
       padding: 10px 14px;
@@ -104,6 +114,7 @@
     }
 
     #add-row {
+      background: var(--bg);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -132,6 +143,7 @@
     }
 
     #calendar {
+      background: var(--bg);
       flex-shrink: 0;
       border-top: 1px solid var(--hairline);
       padding: 16px 14px 16px;
@@ -185,8 +197,10 @@
 </head>
 
 <body>
-  <div id="header" data-tauri-drag-region>
-    <div class="page-title" id="date-label"></div>
+  <div id="header" data-window-bar>
+    <div class="tb-title" data-window-close>
+      <div class="page-title" id="date-label"></div>
+    </div>
     <div class="sub" id="carry-label"></div>
   </div>
 

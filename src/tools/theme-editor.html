@@ -9,8 +9,15 @@
 <link rel="stylesheet" href="../deck/render.css" />
 <script type="module" src="../kit/components.js"></script>
 <script src="../vendor/marked.min.js"></script>
+<link rel="stylesheet" href="../kit/window-chrome.css" />
+<script type="module" src="../kit/window-chrome.js"></script>
 <style>
-  body { background: var(--bg); color: var(--text); font-family: var(--sans); height: 100vh; display: flex; overflow: hidden; }
+  body { color: var(--text); font-family: var(--sans); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  #titlebar { height: 44px; flex-shrink: 0; display: flex; align-items: center; padding: 0 14px; }
+  .tb-title { display: flex; align-items: center; gap: 8px; }
+  /* Carries the paper fill (body is transparent for the rounded corners). */
+  #main { flex: 1 1 auto; display: flex; min-height: 0; background: var(--bg); }
 
   /* Left: font browser (ported from Brand Explorer). */
   .browser { flex: 0 0 360px; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--hairline); }
@@ -48,6 +55,10 @@
 </style>
 </head>
 <body>
+  <div id="titlebar" data-window-bar>
+    <div class="tb-title" data-window-close><span class="eyebrow">Theme Editor</span></div>
+  </div>
+  <div id="main">
   <div class="browser">
     <div class="browser-head">
       <input id="search" class="field" placeholder="Search fonts…" />
@@ -76,6 +87,7 @@
       <div class="swatch-grid" id="colors"></div>
     </div>
     <div class="preview-grid" id="preview-grid"></div>
+  </div>
   </div>
 
   <script type="module">

@@ -13,8 +13,22 @@ Every tool must link these in `<head>`, in order:
 ```html
 <link rel="stylesheet" href="../tokens.css" />
 <link rel="stylesheet" href="../kit/kit.css" />
+<link rel="stylesheet" href="../kit/window-chrome.css" />
 <script type="module" src="../kit/components.js"></script>
+<script type="module" src="../kit/window-chrome.js"></script>
 ```
+
+**Window chrome is required.** Every tool window opens with the minimal
+custom chrome (no native title bar — `decorations(false)` + transparent +
+shadowless; see `tool_style` in `src-tauri/src/lib.rs`), so the page must
+paint its own bar: mark the tool's top bar element with `data-window-bar`,
+and its leading group with `data-window-close` — window-chrome.js injects
+the close dot there and wires Cmd+W and window dragging. Keep `html`/`body`
+backgrounds **transparent** and put the opaque `var(--bg)` fill on the
+content containers below the bar, or the rounded corners won't round
+(window-chrome.css explains the quirk). `file-directory.html` is the
+reference. A per-tool row in `tool_style` is only needed for a non-default
+window size or a project-colored tint.
 
 Then a local `<style>` for tool-specific overrides only — never rewrite what kit already provides. Endeavor to use the kit styles. Don't make override styles that are only a little different.
 
