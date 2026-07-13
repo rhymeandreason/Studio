@@ -266,10 +266,8 @@ max-width:350px;
   <div id="project-picker" hidden></div>
   <div id="tree"></div>
 
-  <script>
-    const {
-      invoke
-    } = window.__TAURI__.core;
+  <script type="module">
+    import { hasTauri, invoke, listen } from '../kit/app.js';
 
     const tree = document.getElementById('tree');
 
@@ -603,8 +601,8 @@ max-width:350px;
 
     main();
 
-    if (window.__TAURI__ && window.__TAURI__.event) {
-      window.__TAURI__.event.listen('project-activated', () => main());
+    if (hasTauri) {
+      listen('project-activated', () => main());
     }
   </script>
   <script type="module">

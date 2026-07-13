@@ -63,7 +63,7 @@
   </div>
 
   <script type="module">
-    const { invoke } = window.__TAURI__.core;
+    import { invoke } from "../kit/app.js";
     const { getCurrentWindow } = window.__TAURI__.window;
     const win = getCurrentWindow();
 

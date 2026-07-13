@@ -130,7 +130,7 @@
   <script type="module">
     import { renderDiagram, diagramSvgText, matrixInset, TEMPLATES, TEMPLATE_DEFAULTS, DIAGRAM_DEFAULT_THEME, DW, DH } from "../diagram/render.js";
     import { colorScheme, SCHEMES, loadPresets } from "../deck/render.js";
-    const invoke = window.__TAURI__?.core?.invoke;
+    import { hasTauri, invoke, listen } from "../kit/app.js";
 
     if (window.__TAURI__) {
       const { getCurrentWindow } = window.__TAURI__.window;
@@ -631,7 +631,7 @@
       const s = sec("Theme");
       const editBtn = document.createElement("button");
       editBtn.className = "btn btn-secondary"; editBtn.innerHTML = `<span class="mi mi-sm">edit</span> Edit theme`;
-      editBtn.onclick = () => invoke?.("open_tool", { file: "theme-editor.html", query: "theme=" + encodeURIComponent(JSON.stringify(state.theme)) });
+      editBtn.onclick = () => hasTauri && invoke("open_tool", { file: "theme-editor.html", query: "theme=" + encodeURIComponent(JSON.stringify(state.theme)) });
       s.appendChild(editBtn);
 
       const projWrap = document.createElement("div"); projWrap.className = "theme-cards";
@@ -658,7 +658,7 @@
         const edit = document.createElement("button");
         edit.className = "theme-card__edit"; edit.title = "Edit theme";
         edit.innerHTML = `<span class="mi mi-sm">edit</span>`;
-        edit.onclick = (e) => { e.stopPropagation(); invoke?.("open_tool", { file: "theme-editor.html", query: "artifact=" + encodeURIComponent(editPath) }); };
+        edit.onclick = (e) => { e.stopPropagation(); hasTauri && invoke("open_tool", { file: "theme-editor.html", query: "artifact=" + encodeURIComponent(editPath) }); };
         card.appendChild(edit);
       }
       card.onclick = () => {
@@ -669,7 +669,7 @@
       return card;
     }
     async function loadProjectThemes(container) {
-      if (!invoke || !projectRoot) return;
+      if (!hasTauri || !projectRoot) return;
       let items = [];
       try { items = (await invoke("list_artifacts", { projectPath: projectRoot })).filter(a => a.kind === "theme"); }
       catch { return; }
@@ -724,7 +724,7 @@
       return JSON.stringify({ name: state.name, title: state.title, template: state.template, theme: state.theme, colorScheme: state.colorScheme, transparentBg: state.transparentBg, data: state.data, offsets: state.offsets });
     }
     function scheduleSave() {
-      if (!booted || !invoke) return;
+      if (!booted || !hasTauri) return;
       if (snapshot() === lastSaved) return;
       clearTimeout(saveTimer);
       saveTimer = setTimeout(autoSave, 700);
@@ -749,7 +749,7 @@
     }
     document.getElementById("save-as").onclick = async () => {
       const content = JSON.stringify(buildDoc(), null, 2);
-      if (invoke) {
+      if (hasTauri) {
         try {
           const p = await invoke("save_artifact", { kind: "diagram", name: state.name || "Untitled diagram", content });
           activePath = p; deriveProjectRoot(p); statusEl.textContent = "Saved → " + p;
@@ -767,7 +767,7 @@
     document.getElementById("export-svg").onclick = async () => {
       const filename = (state.name || "diagram").replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".svg";
       const content = svgText();
-      if (invoke) {
+      if (hasTauri) {
         try { const p = await invoke("save_tool_export", { filename, content }); statusEl.textContent = "SVG → " + p; }
         catch (e) { if (e !== "__cancelled__") statusEl.textContent = "Export failed: " + e; }
       } else {
@@ -798,8 +798,8 @@
     }
 
     function initArtifactWatch() {
-      if (!invoke || !window.__TAURI__?.event) return;
-      window.__TAURI__.event.listen("fs-changed", async () => {
+      if (!hasTauri) return;
+      listen("fs-changed", async () => {
         if (inspectorTab === "theme") renderInspector();
         if (!activePath || saving) return;
         if (snapshot() !== lastSaved) return;    // local unsaved edits win
@@ -821,7 +821,7 @@
     async function boot() {
       PRESETS = await loadPresets();
       const path = new URLSearchParams(location.search).get("artifact");
-      if (path && invoke) {
+      if (path && hasTauri) {
         try {
           adopt(JSON.parse(await invoke("read_artifact", { path })));
           activePath = path; deriveProjectRoot(path);

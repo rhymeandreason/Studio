@@ -302,7 +302,8 @@
 
 <div id="status"></div>
 
-<script>
+<script type="module">
+import { hasTauri, invoke } from '../kit/app.js';
 // ─── State ───────────────────────────────────────────────────────────────────
 
 // Grid is represented as a CSS grid with explicit column/row tracks.
@@ -583,9 +584,9 @@ document.addEventListener('keydown', e => {
 
 async function saveFile(content, filename, mimeType) {
   // Running inside Studio: save into the active project's designs/ folder.
-  if (window.__TAURI__) {
+  if (hasTauri) {
     try {
-      const path = await window.__TAURI__.core.invoke('save_tool_export', { filename, content });
+      const path = await invoke('save_tool_export', { filename, content });
       showStatus(`Saved to ${path}`);
       return;
     } catch (e) {

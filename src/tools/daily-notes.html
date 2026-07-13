@@ -216,9 +216,9 @@
     <div class="cal-grid" id="cal-grid"></div>
   </div>
 
-  <script>
+  <script type="module">
+    import { hasTauri, invoke } from '../kit/app.js';
     const STORE_KEY = 'studio-daily-notes';
-    const invoke = window.__TAURI__?.core?.invoke;
 
     function todayKey(d = new Date()) {
       const y = d.getFullYear();
@@ -238,14 +238,14 @@
     }
 
     async function loadStore() {
-      if (!invoke) return loadLegacyStore();
+      if (!hasTauri) return loadLegacyStore();
       const onDisk = await invoke('read_daily_notes');
       if (onDisk && Object.keys(onDisk).length) return onDisk;
       return loadLegacyStore();
     }
 
     async function saveStore(store) {
-      if (invoke) {
+      if (hasTauri) {
         await invoke('save_daily_notes', { store });
       } else {
         localStorage.setItem(STORE_KEY, JSON.stringify(store));

@@ -142,7 +142,7 @@
 <div id="tooltip"></div>
 
 <script type="module">
-const invoke = window.__TAURI__?.core?.invoke;
+import { hasTauri, invoke, esc } from "../kit/app.js";
 
 const scrollArea = document.getElementById('scroll-area');
 const empty      = document.getElementById('empty');
@@ -251,10 +251,6 @@ function moveTooltip(e) {
   tooltip.style.left = Math.min(e.clientX + 14, window.innerWidth - 340) + 'px';
   tooltip.style.top  = Math.max(0, e.clientY - 10) + 'px';
 }
-function esc(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
 async function load(repo) {
   try {
     const raw = await invoke('git_log_week', { repo });
@@ -265,7 +261,7 @@ async function load(repo) {
   }
 }
 
-if (invoke) {
+if (hasTauri) {
   const r = repoFromUrl();
   if (r) load(r);
 } else {

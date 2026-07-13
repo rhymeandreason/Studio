@@ -113,8 +113,8 @@
     </table>
   </div>
 
-  <script>
-    const { invoke } = window.__TAURI__.core;
+  <script type="module">
+    import { invoke } from '../kit/app.js';
 
     async function refresh() {
       const current = document.getElementById("current");

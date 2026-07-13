@@ -385,7 +385,7 @@
         setEditStatus,
       } from "../editor.js";
 
-      const { invoke } = window.__TAURI__.core;
+      import { invoke } from "../kit/app.js";
 
       // Roomier than the 900×640 tool default — the editor wants stage + panel.
       if (window.__TAURI__) {

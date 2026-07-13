@@ -38,6 +38,13 @@ Then a local `<style>` for tool-specific overrides only — never rewrite what k
 
 **Motion:** `import { enter, exit, enterStagger, pop } from "../kit/motion.js"`
 
+**Helpers:** `import { hasTauri, invoke, listen, esc, toast } from "../kit/app.js"`
+— don't hand-roll a `window.__TAURI__?.core?.invoke` shim, an HTML-escaper, or
+a toast per tool. `invoke`/`listen` are always functions (safe stand-ins in a
+browser preview), so branch on `hasTauri`, never on `invoke` truthiness.
+`toast(msg)` shows a transient `.kit-toast` pill (styled in kit.css). Requires
+the tool's main script to be `<script type="module">`.
+
 **Tokens over hardcoding:** use `var(--bg)`, `var(--surface)`, `var(--text)`, `var(--accent)`, `var(--radius)` etc. for colors and radii — never hardcode them. (There is no `--space-*` scale; follow the kit and use raw px for spacing.)
 
 **Icons:** `<span class="mi">icon_name</span>` (Material Symbols Rounded font +

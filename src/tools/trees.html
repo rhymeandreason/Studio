@@ -159,6 +159,8 @@
   </div>
 
 <script type="module">
+import { hasTauri, invoke } from "../kit/app.js";
+
 if (window.__TAURI__) {
   const { getCurrentWindow } = window.__TAURI__.window;
   const { LogicalSize } = window.__TAURI__.dpi;
@@ -487,9 +489,9 @@ ${parts.join("\n")}
 }
 
 async function saveFile(filename, content) {
-  if (window.__TAURI__) {
+  if (hasTauri) {
     try {
-      await window.__TAURI__.core.invoke("save_tool_export", { filename, content });
+      await invoke("save_tool_export", { filename, content });
     } catch (e) {
       if (e !== "__cancelled__") console.error(e);
     }

@@ -1172,3 +1172,21 @@ font-family: var(--sans);
     padding: 6px 12px;
     border-radius: 999px;
 }
+
+/* Transient pill message, created by toast() in kit/app.js. */
+.kit-toast {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text);
+    color: var(--bg);
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: 200;
+}
+.kit-toast.show { opacity: 1; }

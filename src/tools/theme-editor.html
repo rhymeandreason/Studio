@@ -92,7 +92,7 @@
 
   <script type="module">
     import { renderSlide, PREVIEW_SLIDES } from "../deck/render.js";
-    const invoke = window.__TAURI__?.core?.invoke;
+    import { hasTauri, invoke } from "../kit/app.js";
 
     // Set preferred window size on load (avoids hardcoding in Rust).
     if (window.__TAURI__) {
@@ -292,7 +292,7 @@
     document.getElementById("save-as").onclick = async () => {
       const name = theme.name || "Untitled theme";
       const content = JSON.stringify(buildDoc(), null, 2);
-      if (invoke) {
+      if (hasTauri) {
         try { const p = await invoke("save_artifact", { kind:"theme", name, content });
               activePath = p; statusEl.textContent = "Saved → " + p; }
         catch(e){ statusEl.textContent = "Save failed: " + e; }
@@ -318,7 +318,7 @@
         } catch {}
       }
       const path = params.get("artifact");
-      if (path && invoke) {
+      if (path && hasTauri) {
         try {
           const data = JSON.parse(await invoke("read_artifact", { path }));
           if (data.fonts) theme.fonts = data.fonts;

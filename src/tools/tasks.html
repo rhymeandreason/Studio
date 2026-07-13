@@ -497,8 +497,7 @@ border: 1 px solid var(--hairline);
       genId
     } from "../dom.js";
 
-    const hasTauri = !!window.__TAURI__;
-    const invoke = hasTauri ? window.__TAURI__.core.invoke : null;
+    import { hasTauri, invoke } from "../kit/app.js";
 
     // Default lead time (minutes) for a calendar-derived online meeting.
     const DEFAULT_LEAD = 2;

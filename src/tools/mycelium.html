@@ -205,13 +205,6 @@
     .tree-accordion .tree-accordion-body { padding: 4px 10px 12px; border-top: 1px solid var(--hairline); }
     .muted-note { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
     .danger { color: #b4443a; }
-    .toast {
-      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-      background: var(--text); color: var(--bg); padding: 8px 14px;
-      border-radius: 999px; font-size: 12px; opacity: 0; transition: opacity .2s;
-      pointer-events: none; z-index: 50;
-    }
-    .toast.show { opacity: 1; }
     .pill-kind { display: flex; gap: 6px; flex-wrap: wrap; }
     .pill-kind button {
       font-size: 11px; padding: 4px 9px; border-radius: 999px;
@@ -246,13 +239,12 @@
     <aside id="inspector" class="hidden"></aside>
   </div>
 
-  <div class="toast" id="toast"></div>
 
   <script type="module">
     import { forceSimulation, forceLink, forceManyBody, forceCollide } from "../vendor/d3-force.mjs";
     import { enter, pop } from "../kit/motion.js";
+    import { hasTauri, invoke, esc, toast } from "../kit/app.js";
 
-    const invoke = window.__TAURI__?.core?.invoke;
     const CONTACT_TYPES = ["phone","email","linkedin","instagram","x","website","other"];
     const KINDS = ["event","place","company","group"];
     const KIND_ICON = { event:"event", place:"place", company:"business", group:"groups" };
@@ -334,14 +326,14 @@
     function scheduleSave() {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(async () => {
-        if (invoke) {
+        if (hasTauri) {
           const payload = { ...store, trees: store.trees.map(cleanNode), people: store.people.map(cleanNode) };
           await invoke("save_mycelium", { store: payload });
         }
       }, 400);
     }
     async function load() {
-      if (invoke) {
+      if (hasTauri) {
         const onDisk = await invoke("read_mycelium");
         store = Object.assign(store, onDisk || {});
       }
@@ -351,10 +343,6 @@
       render();
     }
 
-    function toast(msg) {
-      const t = $("#toast"); t.textContent = msg; t.classList.add("show");
-      setTimeout(() => t.classList.remove("show"), 1600);
-    }
 
     // ---------- model helpers ----------
     const tree = (id) => store.trees.find(t => t.id === id);
@@ -1228,7 +1216,7 @@
     }
 
     async function matchMacContacts(btn, container) {
-      if (!invoke) { toast("Only available in the app"); return; }
+      if (!hasTauri) { toast("Only available in the app"); return; }
       btn.disabled = true; btn.innerHTML = `<span class="mi mi-sm">contacts</span> Scanning…`;
       container.innerHTML = "";
       try {
@@ -1399,7 +1387,6 @@
       const b = document.createElement("button"); b.className = "btn btn-ghost danger"; b.style.width = "100%";
       b.innerHTML = `<span class="mi mi-sm">delete</span> ${txt}`; b.onclick = onClick; return b;
     }
-    function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 
     // ---------- new tree ----------
     function newTree() {

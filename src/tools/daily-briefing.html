@@ -358,8 +358,7 @@ padding-botton:100px;
   </div>
 
   <script type="module">
-    const hasTauri = !!window.__TAURI__;
-    const invoke = hasTauri ? window.__TAURI__.core.invoke : null;
+    import { hasTauri, invoke, esc } from "../kit/app.js";
 
     // Used when ~/Projects/briefing-prompt.txt is empty.
     const DEFAULT_PROMPT =
@@ -377,16 +376,6 @@ padding-botton:100px;
       return new Date().toISOString().slice(0, 10);
     }
 
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"]/g, (c) =>
-        ({
-          "&": "&amp;",
-          "<": "&lt;",
-          ">": "&gt;",
-          '"': "&quot;"
-        } [c]));
-    }
-
     function renderMeetings(meetings) {
       const section = $("meetings-section");
       const box = $("meetings");
@@ -401,10 +390,10 @@ padding-botton:100px;
       for (const m of meetings) {
         const row = document.createElement("div");
         row.className = "meeting";
-        const loc = m.location ? `<span class="meeting__loc">· ${escapeHtml(m.location)}</span>` : "";
+        const loc = m.location ? `<span class="meeting__loc">· ${esc(m.location)}</span>` : "";
         row.innerHTML =
-          `<span class="meeting__time">${escapeHtml(m.time || "")}</span>` +
-          `<span class="meeting__title">${escapeHtml(m.title || "")} ${loc}</span>`;
+          `<span class="meeting__time">${esc(m.time || "")}</span>` +
+          `<span class="meeting__title">${esc(m.title || "")} ${loc}</span>`;
         box.appendChild(row);
       }
     }
@@ -416,7 +405,7 @@ padding-botton:100px;
         window.marked.parse(markdown || "", {
           breaks: true
         }) :
-        escapeHtml(markdown || "");
+        esc(markdown || "");
     }
 
     // Gallery is a generic strip of { imageUrl, blurb, pageUrl, source }
@@ -429,15 +418,15 @@ padding-botton:100px;
         if (!item || !item.imageUrl) continue;
         const card = document.createElement("div");
         card.className = "gallery-card";
-        const blurb = escapeHtml(item.blurb || "");
-        const sourceLabel = escapeHtml(item.source || "Source");
-        const img = `<img src="${escapeHtml(item.imageUrl)}" alt="${sourceLabel}" />`;
+        const blurb = esc(item.blurb || "");
+        const sourceLabel = esc(item.source || "Source");
+        const img = `<img src="${esc(item.imageUrl)}" alt="${sourceLabel}" />`;
         const blurbHtml = item.pageUrl ?
-          `${blurb} — <a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer">${sourceLabel}</a>` :
+          `${blurb} — <a href="${esc(item.pageUrl)}" target="_blank" rel="noreferrer">${sourceLabel}</a>` :
           blurb;
         card.innerHTML =
           (item.pageUrl ?
-            `<a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer">${img}</a>` :
+            `<a href="${esc(item.pageUrl)}" target="_blank" rel="noreferrer">${img}</a>` :
             img) +
           `<div class="gallery-card__blurb">${blurbHtml}</div>`;
         box.appendChild(card);
@@ -547,7 +536,7 @@ padding-botton:100px;
         setStatus("");
         $("body").classList.remove("is-loading");
         $("body").innerHTML =
-          `<div class="brief-error">Couldn't generate briefing:\n${escapeHtml(e.message || String(e))}</div>`;
+          `<div class="brief-error">Couldn't generate briefing:\n${esc(e.message || String(e))}</div>`;
       } finally {
         refreshing = false;
       }

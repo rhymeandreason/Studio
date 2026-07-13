@@ -166,6 +166,8 @@
   </div>
 
   <script type="module">
+    import { hasTauri, invoke } from "../kit/app.js";
+
     // ---- Curated top Google Fonts (family, category, sample weight) --------
     // Baked in: no API key, instant, offline list. Previews load from the
     // Google Fonts CDN on demand (the explorer browses Google's library).
@@ -406,7 +408,6 @@
 
     // ---- Save kit (JSON) ---------------------------------------------------
     const statusEl = document.getElementById("status");
-    const invoke = window.__TAURI__?.core?.invoke;
     let activePath = null; // set when opened via ?artifact=
 
     function buildKit() {
@@ -442,7 +443,7 @@
       const { kit, name } = buildKit();
       const content = JSON.stringify(kit, null, 2);
 
-      if (invoke) {
+      if (hasTauri) {
         try {
           const path = await invoke("save_artifact", {
             kind: "brand-kit",
@@ -474,7 +475,7 @@
     // ---- Boot (open-on-artifact via ?artifact=<path>) ----------------------
     async function boot() {
       const artifactPath = new URLSearchParams(location.search).get("artifact");
-      if (artifactPath && invoke) {
+      if (artifactPath && hasTauri) {
         try {
           const data = JSON.parse(await invoke("read_artifact", { path: artifactPath }));
           if (data.fonts) {

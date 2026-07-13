@@ -226,9 +226,8 @@
     import { initDevInspect } from "../devinspect.js";
     import { renderSlide as renderSlideBase, colorScheme, SCHEMES, HEADING_DEFAULT, loadPresets } from "../deck/render.js";
     import { renderDiagram } from "../diagram/render.js";
+    import { hasTauri, invoke, listen, esc } from "../kit/app.js";
     const marked = window.marked;
-    const invoke = window.__TAURI__?.core?.invoke;
-    const esc = (s) => (s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 
     // ---------- Layouts ----------
     // Each layout declares the slots it edits. Slots are markdown-capable text
@@ -329,7 +328,7 @@
       if (!rel) return null;
       if (/^data:|^https?:/.test(rel)) return rel;
       if (imgCache.has(rel)) return imgCache.get(rel);
-      if (!invoke || !projectRoot) return null;
+      if (!hasTauri || !projectRoot) return null;
       try {
         const abs = projectRoot + "/" + rel.replace(/^\//, "");
         if (isDiagramRef(rel)) {
@@ -372,7 +371,7 @@
     // ---------- Media picker ----------
     // Grid of the active project's media/ images; click one to pick it.
     async function openMediaPicker(onPick) {
-      if (!invoke || !projectRoot) { statusEl.textContent = "No active project — type a media path instead."; return; }
+      if (!hasTauri || !projectRoot) { statusEl.textContent = "No active project — type a media path instead."; return; }
       const overlay = document.createElement("div"); overlay.className = "picker-overlay";
       overlay.innerHTML = `<div class="picker-bar"><h3>Project media</h3><button class="btn btn-secondary" id="pk-close">Close</button></div><div class="picker-grid" id="pk-grid"></div>`;
       document.body.appendChild(overlay);
@@ -764,7 +763,7 @@
         const edit = document.createElement("button");
         edit.className = "theme-card__edit"; edit.title = "Edit theme";
         edit.innerHTML = `<span class="mi mi-sm">edit</span>`;
-        edit.onclick = (e) => { e.stopPropagation(); invoke?.("open_tool", { file:"theme-editor.html", query:"artifact="+encodeURIComponent(editPath) }); };
+        edit.onclick = (e) => { e.stopPropagation(); hasTauri && invoke("open_tool", { file:"theme-editor.html", query:"artifact="+encodeURIComponent(editPath) }); };
         preview.appendChild(edit);
       }
       const meta = document.createElement("div"); meta.className = "theme-card__meta";
@@ -781,11 +780,11 @@
       // Edit the deck's current theme — opens the theme editor seeded with it.
       const editBtn = document.createElement("button");
       editBtn.className = "btn btn-secondary"; editBtn.innerHTML = `<span class="mi mi-sm">edit</span> Edit theme`;
-      editBtn.onclick = () => invoke?.("open_tool", { file:"theme-editor.html", query:"theme="+encodeURIComponent(JSON.stringify(state.theme)) });
+      editBtn.onclick = () => hasTauri && invoke("open_tool", { file:"theme-editor.html", query:"theme="+encodeURIComponent(JSON.stringify(state.theme)) });
       s.appendChild(editBtn);
       const newBtn = document.createElement("button");
       newBtn.className = "btn btn-secondary"; newBtn.innerHTML = `<span class="mi mi-sm">add</span> New theme`;
-      newBtn.onclick = () => invoke?.("open_tool", { file:"theme-editor.html", query:null });
+      newBtn.onclick = () => hasTauri && invoke("open_tool", { file:"theme-editor.html", query:null });
       s.appendChild(newBtn);
 
       // Project themes (saved theme artifacts), loaded async.
@@ -818,7 +817,7 @@
 
     // Read the project's theme artifacts and render a card for each.
     async function loadProjectThemes(container){
-      if (!invoke || !projectRoot) return;
+      if (!hasTauri || !projectRoot) return;
       let items = [];
       try { items = (await invoke("list_artifacts", { projectPath: projectRoot })).filter(a => a.kind === "theme"); }
       catch { return; }
@@ -897,7 +896,7 @@
     // Content fingerprint (sans savedAt) so navigation/re-renders don't churn the file.
     function snapshot(){ return JSON.stringify({ name: state.name, theme: state.theme, slides: state.slides }); }
     function scheduleSave(){
-      if (!booted || !invoke) return;
+      if (!booted || !hasTauri) return;
       if (snapshot() === lastSaved) return;
       clearTimeout(saveTimer);
       saveTimer = setTimeout(autoSave, 700);
@@ -925,7 +924,7 @@
     document.getElementById("save-as").onclick = async () => {
       const name = state.name||"Untitled deck";
       const content = JSON.stringify(buildDoc(),null,2);
-      if (invoke) {
+      if (hasTauri) {
         try { const p = await invoke("save_artifact", { kind:"presentation", name, content });
               // adopt the new file so auto-save overwrites it from here on
               activePath = p; deriveProjectRoot(p); statusEl.textContent="Saved → "+p; }
@@ -1022,7 +1021,7 @@
       statusEl.textContent = "Building web export…";
       try {
         const { html, assets } = await buildDeckHtml("assets");
-        if (invoke) {
+        if (hasTauri) {
           const folder = (state.name||"deck").replace(/[^a-z0-9]+/gi,"-").toLowerCase();
           const p = await invoke("save_export_dir", { folder, html, assets });
           statusEl.textContent = "Web deck → " + p;
@@ -1040,8 +1039,7 @@
     // lands in media/ (via Studio's import_media / paste_image) and is set on the
     // current slide. The OS drop overlay is handled by Tauri's drag-drop event.
     function initImageImport(){
-      if (!invoke || !window.__TAURI__?.event) return;
-      const { listen } = window.__TAURI__.event;
+      if (!hasTauri) return;
       listen("tauri://drag-enter", () => document.body.classList.add("dropping"));
       listen("tauri://drag-leave", () => document.body.classList.remove("dropping"));
       listen("tauri://drag-drop", async (e) => {
@@ -1075,8 +1073,8 @@
     // edits the artifact). Studio's recursive watcher broadcasts "fs-changed".
     // Guarded so we never clobber in-progress edits or react to our own saves.
     function initArtifactWatch(){
-      if (!invoke || !window.__TAURI__?.event) return;
-      window.__TAURI__.event.listen("fs-changed", async () => {
+      if (!hasTauri) return;
+      listen("fs-changed", async () => {
         // A theme artifact may have been added/edited — refresh the Theme tab.
         if (inspectorTab === "theme") renderInspector();
         // An embedded diagram may have been edited — re-render from disk.
@@ -1105,7 +1103,7 @@
     async function boot(){
       PRESETS = await loadPresets();   // built-in themes from ../deck/themes/
       const path = new URLSearchParams(location.search).get("artifact");
-      if (path && invoke) {
+      if (path && hasTauri) {
         try {
           const data = JSON.parse(await invoke("read_artifact", { path }));
           if (data.theme) state.theme = data.theme;

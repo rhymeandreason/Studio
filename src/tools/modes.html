@@ -119,8 +119,8 @@
   <div id="empty" hidden>No active project.</div>
   <div id="modes" hidden></div>
 
-  <script>
-    const invoke = window.__TAURI__?.core?.invoke;
+  <script type="module">
+    import { hasTauri, invoke, listen } from '../kit/app.js';
 
     const emptyEl = document.getElementById('empty');
     const modesEl = document.getElementById('modes');
@@ -189,9 +189,9 @@
 
     main();
 
-    if (window.__TAURI__ && window.__TAURI__.event) {
-      window.__TAURI__.event.listen('project-activated', () => main());
-      window.__TAURI__.event.listen('fs-changed', () => {
+    if (hasTauri) {
+      listen('project-activated', () => main());
+      listen('fs-changed', () => {
         if (currentProjectPath) main();
       });
     }

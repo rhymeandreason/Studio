@@ -495,9 +495,9 @@ import "../vendor/prism.js";           // window.Prism (markup + css + js)
 import "../vendor/prism-markdown.min.js"; // adds Prism.languages.markdown
 import "../kit/window-chrome.js";         // custom title bar: drag, close dot, tint
 import "../kit/components.js";            // <studio-*> kit components (icon toggle)
+import { hasTauri, invoke } from "../kit/app.js";
 
 const TAURI = window.__TAURI__;
-const invoke = TAURI ? TAURI.core.invoke : null;
 const evt = TAURI ? TAURI.event : null;
 
 // Wider window for the 4-column layout.
@@ -517,7 +517,7 @@ const $ = (id) => document.getElementById(id);
 // (independent of the active project), and mirror it to the preview window.
 let titleColor = "";
 async function applyTitleColor() {
-  if (!invoke) return;
+  if (!hasTauri) return;
   titleColor = currentPath ? await invoke("git_color_for_path", { path: currentPath }) : "";
   // No file (or file outside any known repo) → fall back to the active project's color.
   if (!titleColor) titleColor = await invoke("active_git_color");
@@ -598,7 +598,7 @@ function updateNav() {
 }
 
 async function openFile() {
-  if (invoke) {
+  if (hasTauri) {
     const path = await invoke("pick_text_file");
     if (!path) return;
     await loadPath(path);
@@ -610,7 +610,7 @@ async function openFile() {
 // Load a specific file by absolute path. `push` (default) records it in the
 // nav history; Back/Forward pass false so they don't re-record.
 async function loadPath(path, push = true) {
-  if (!invoke) return;
+  if (!hasTauri) return;
   const text = await invoke("read_text_file", { path });
   currentPath = path;
   diskText = text;
@@ -660,7 +660,7 @@ function loadText(text) {
 
 async function saveFile() {
   if (!currentPath) return;
-  if (invoke) {
+  if (hasTauri) {
     await invoke("write_text_file", { path: currentPath, content: code.value });
     diskText = code.value;
     setStale(false);
@@ -678,7 +678,7 @@ async function saveFile() {
 
 // Re-read the current file from disk (picks up external edits) and refresh diff.
 async function reloadFromDisk() {
-  if (!invoke || !currentPath) return;
+  if (!hasTauri || !currentPath) return;
   const text = await invoke("read_text_file", { path: currentPath });
   diskText = text;
   setStale(false);
@@ -689,7 +689,7 @@ async function reloadFromDisk() {
 // Poll the open file for external changes (e.g. saved from another editor) and
 // flag the Refresh button with a dot rather than silently clobbering local edits.
 setInterval(async () => {
-  if (!invoke || !currentPath || document.hidden) return;
+  if (!hasTauri || !currentPath || document.hidden) return;
   let text;
   try { text = await invoke("read_text_file", { path: currentPath }); } catch { return; }
   setStale(text !== diskText);
@@ -874,7 +874,7 @@ $("diff-mode").addEventListener("click", () => {
 async function refreshDiff() {
   changedLines = new Set();
   deletedAt = new Set();
-  if (!invoke || !currentPath) { paint(); return; }
+  if (!hasTauri || !currentPath) { paint(); return; }
   const cmd = diffMode === "committed" ? "git_diff_file_committed" : "git_diff_file";
   try {
     const diff = await invoke(cmd, { path: currentPath });
@@ -935,7 +935,7 @@ function rewriteCssUrls(css, cssAbsPath) {
 // @font-face) rewritten too — convertFileSrc percent-encodes the path, so
 // relative url() inside an external sheet can't resolve on its own.
 async function resolveAssets(html) {
-  if (!convertFileSrc || !currentPath || !invoke) return html;
+  if (!convertFileSrc || !currentPath || !hasTauri) return html;
   let doc;
   try { doc = new DOMParser().parseFromString(html, "text/html"); } catch { return html; }
 
@@ -1045,7 +1045,7 @@ mdView.addEventListener("click", (e) => {
     return;
   }
   if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) return;   // external scheme
-  if (!currentPath || !invoke) return;
+  if (!currentPath || !hasTauri) return;
   const rel = decodeURIComponent(href.split("#")[0].split("?")[0]);
   loadPath(resolveRelative(currentPath, rel)).catch(() => {
     console.warn("can't open " + rel);
@@ -1261,7 +1261,7 @@ window.addEventListener("resize", () => { if (document.body.classList.contains("
 
 // ---------- preview window ----------
 let previewOpen = false;
-$("preview-btn").addEventListener("click", () => { if (invoke) invoke("open_code_preview", { color: titleColor }); });
+$("preview-btn").addEventListener("click", () => { if (hasTauri) invoke("open_code_preview", { color: titleColor }); });
 if (evt) {
   evt.listen("ce:ready", () => { previewOpen = true; pushPreview(); evt.emit("ce:color", titleColor); });
   evt.listen("ce:closed", () => { previewOpen = false; });
@@ -1497,7 +1497,7 @@ function restore() {
     filenameEl.title = currentPath;
     setDirty(!!s.dirty);
     history = [s.path]; histIdx = 0; updateNav();   // seed nav history
-    if (invoke) invoke("read_text_file", { path: s.path }).then((t) => { diskText = t; }).catch(() => {});
+    if (hasTauri) invoke("read_text_file", { path: s.path }).then((t) => { diskText = t; }).catch(() => {});
     applyMode();
     applyTitleColor();
     render();
@@ -1521,7 +1521,7 @@ function restore() {
 // falls back to the restored session instead of re-loading the launch file, and
 // no other project's window can grab it.
 restore();
-if (invoke) invoke("take_pending_open", { label: myLabel }).then((p) => { if (p) loadPath(p); });
+if (hasTauri) invoke("take_pending_open", { label: myLabel }).then((p) => { if (p) loadPath(p); });
 
 import("../devinspect.js").then((m) => m.initDevInspect()).catch(() => {});
 </script>
