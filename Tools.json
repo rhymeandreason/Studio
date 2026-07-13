@@ -13,5 +13,6 @@
   { "file": "file-directory.html", "name": "File Directory" },
   { "file": "modes.html", "name": "Modes" },
   { "file": "tasks.html", "name": "Tasks" },
-  { "file": "mycelium.html", "name": "Mycelium" }
+  { "file": "mycelium.html", "name": "Mycelium" },
+  { "file": "trees.html", "name": "Trees" }
 ]

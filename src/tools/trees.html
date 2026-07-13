@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trees</title>
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<script type="module" src="../kit/components.js"></script>
+<style>
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    overflow: hidden;
+    display: flex;
+    background: var(--bg);
+    font-family: var(--sans);
+  }
+  #stage {
+    flex: 1;
+    position: relative;
+    min-width: 0;
+  }
+  #stage canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
+  #hint {
+    position: absolute;
+    left: 14px;
+    bottom: 10px;
+    pointer-events: none;
+  }
+  #panel {
+    width: 272px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-left: 1px solid var(--hairline);
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .ctl-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 14px;
+  }
+  .ctl { display: flex; flex-direction: column; }
+  .ctl .label { margin-bottom: -4px; }
+  .color-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 10px;
+  }
+  .color-grid .ctl { gap: 3px; }
+  .section { display: flex; flex-direction: column; gap: 8px; }
+  #seed-readout { font-variant-numeric: tabular-nums; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row .btn { flex: 1; justify-content: center; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="canvas"></canvas>
+    <div id="hint" class="text-s">click canvas for a new tree</div>
+  </div>
+
+  <div id="panel">
+    <div>
+      <div class="eyebrow">Trees</div>
+      <div class="text-s" id="seed-readout"></div>
+    </div>
+
+    <div class="section">
+      <span class="label">Species</span>
+      <select class="field" id="species"></select>
+    </div>
+
+    <div class="section">
+      <span class="label">Shape</span>
+      <div class="ctl-grid">
+        <div class="ctl"><span class="label">Levels</span>
+          <input class="range" data-p="levels" type="range" min="3" max="7" step="1" /></div>
+        <div class="ctl"><span class="label">Twigs</span>
+          <input class="range" data-p="twigs" type="range" min="1.5" max="3.4" step="0.1" /></div>
+        <div class="ctl"><span class="label">Spread</span>
+          <input class="range" data-p="spread" type="range" min="12" max="80" step="1" /></div>
+        <div class="ctl"><span class="label">Taper</span>
+          <input class="range" data-p="decay" type="range" min="0.6" max="0.88" step="0.01" /></div>
+        <div class="ctl"><span class="label">Gnarl</span>
+          <input class="range" data-p="gnarl" type="range" min="0" max="1.2" step="0.05" /></div>
+        <div class="ctl"><span class="label">Droop</span>
+          <input class="range" data-p="droop" type="range" min="-1" max="1" step="0.05" /></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <span class="label">Foliage</span>
+      <select class="field" id="leafStyle">
+        <option value="blobs">Blobs</option>
+        <option value="flowers">Flowers</option>
+        <option value="dots">Dots</option>
+        <option value="leaves">Leaves</option>
+        <option value="bare">Bare</option>
+      </select>
+      <div class="ctl-grid">
+        <div class="ctl"><span class="label">Density</span>
+          <input class="range" data-p="density" type="range" min="0" max="1" step="0.05" /></div>
+        <div class="ctl"><span class="label">Size</span>
+          <input class="range" data-p="leafSize" type="range" min="0.4" max="2" step="0.05" /></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <span class="label">Wind</span>
+      <div class="ctl-grid">
+        <div class="ctl"><span class="label">Strength</span>
+          <input class="range" data-p="wind" type="range" min="0" max="1" step="0.05" data-live="1" /></div>
+        <div class="ctl"><span class="label">Speed</span>
+          <input class="range" data-p="windSpeed" type="range" min="0.2" max="2.5" step="0.05" data-live="1" /></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <span class="label">Colors</span>
+      <div class="color-grid">
+        <div class="ctl"><span class="label">Leaf A</span><studio-color id="c-leaf1"></studio-color></div>
+        <div class="ctl"><span class="label">Leaf B</span><studio-color id="c-leaf2"></studio-color></div>
+        <div class="ctl"><span class="label">Center</span><studio-color id="c-center"></studio-color></div>
+        <div class="ctl"><span class="label">Trunk</span><studio-color id="c-trunk"></studio-color></div>
+        <div class="ctl"><span class="label">Paper</span><studio-color id="c-bg"></studio-color></div>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:auto;">
+      <button class="btn btn-primary" id="generate"><span class="mi mi-sm">casino</span>Generate</button>
+      <button class="btn" id="export"><span class="mi mi-sm">download</span>SVG</button>
+    </div>
+  </div>
+
+<script type="module">
+if (window.__TAURI__) {
+  const { getCurrentWindow } = window.__TAURI__.window;
+  const { LogicalSize } = window.__TAURI__.dpi;
+  getCurrentWindow().setSize(new LogicalSize(1180, 740));
+}
+
+/* ---------- species presets --------------------------------------------- */
+/* Slider-visible params + hidden growth-habit params (apical = how strongly
+ * one child continues the parent's direction; clusterAspect = foliage
+ * cluster flatness, 1 = round). */
+const SPECIES = {
+  blossom: { label: "Blossom", levels: 5, twigs: 2.4, spread: 42, decay: 0.74, gnarl: 0.6,  droop: -0.12, density: 0.75, leafSize: 1.0, leafStyle: "flowers",
+             leaf1: "#e63b2a", leaf2: "#f29a76", center: "#ffd53d", trunk: "#181310", apical: 0.15, clusterAspect: 0.8,  stature: 1.0 },
+  maple:   { label: "Maple",   levels: 5, twigs: 2.6, spread: 48, decay: 0.72, gnarl: 0.45, droop: -0.2,  density: 0.7,  leafSize: 1.15, leafStyle: "blobs",
+             leaf1: "#d95d39", leaf2: "#e8a04c", center: "#f4d35e", trunk: "#3a2e26", apical: 0.1,  clusterAspect: 0.95, stature: 1.05 },
+  oak:     { label: "Oak",     levels: 5, twigs: 2.3, spread: 58, decay: 0.7,  gnarl: 0.9,  droop: 0.05,  density: 0.7,  leafSize: 1.2,  leafStyle: "blobs",
+             leaf1: "#55703f", leaf2: "#7d9a54", center: "#c9d36a", trunk: "#33291f", apical: 0.05, clusterAspect: 0.85, stature: 1.15 },
+  pine:    { label: "Pine",    levels: 6, twigs: 3.2, spread: 68, decay: 0.78, gnarl: 0.15, droop: 0.35,  density: 0.6,  leafSize: 0.7,  leafStyle: "blobs",
+             leaf1: "#3c5a42", leaf2: "#5d7f5c", center: "#9db87e", trunk: "#41332a", apical: 0.95, clusterAspect: 0.55, stature: 1.25, sideScale: 0.5 },
+  willow:  { label: "Willow",  levels: 6, twigs: 2.5, spread: 40, decay: 0.8,  gnarl: 0.3,  droop: 0.85,  density: 0.85, leafSize: 0.9,  leafStyle: "leaves",
+             leaf1: "#7fa06b", leaf2: "#a8c18b", center: "#d7e3b2", trunk: "#4a3d2f", apical: 0.1,  clusterAspect: 0.9,  stature: 1.1 },
+  poplar:  { label: "Poplar",  levels: 5, twigs: 2.8, spread: 24, decay: 0.75, gnarl: 0.25, droop: -0.5,  density: 0.7,  leafSize: 0.8,  leafStyle: "blobs",
+             leaf1: "#91a84b", leaf2: "#b6c46b", center: "#e4d97a", trunk: "#4e4434", apical: 0.8,  clusterAspect: 0.7,  stature: 1.2, sideScale: 0.65 },
+  acacia:  { label: "Acacia",  levels: 5, twigs: 2.7, spread: 60, decay: 0.68, gnarl: 0.55, droop: -0.3,  density: 0.75, leafSize: 1.3,  leafStyle: "blobs",
+             leaf1: "#6a8f4f", leaf2: "#93b06a", center: "#d3c979", trunk: "#3d3126", apical: 0.05, clusterAspect: 0.4,  stature: 1.0 },
+};
+
+/* ---------- state --------------------------------------------------------- */
+const P = {
+  species: "blossom",
+  seed: (Math.random() * 1e9) | 0,
+  levels: 5, twigs: 2.4, spread: 42, decay: 0.74, gnarl: 0.6, droop: -0.12,
+  density: 0.75, leafSize: 1, leafStyle: "flowers",
+  wind: 0.45, windSpeed: 1,
+  leaf1: "#e63b2a", leaf2: "#f29a76", center: "#ffd53d", trunk: "#181310",
+  bg: "#f7f5f0",
+};
+
+let tree = null;      // root branch node
+let branchCount = 0;
+let fit = { s: 1, tx: 0, ty: 0 };
+
+const TAU = Math.PI * 2;
+const mulberry32 = (a) => () => {
+  a |= 0; a = (a + 0x6D2B79F5) | 0;
+  let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const lerp = (a, b, f) => a + (b - a) * f;
+const normAngle = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
+
+/* ---------- generation ---------------------------------------------------- */
+function buildTree() {
+  const rng = mulberry32(P.seed);
+  const sp = SPECIES[P.species];
+  const trunkLen = 130 * sp.stature;
+  const trunkWidth = 15 * sp.stature;
+  branchCount = 0;
+
+  function makeCluster(len, branchIdx) {
+    const r = mulberry32((P.seed ^ (branchIdx * 2654435761)) | 0);
+    const R = (12 + len * 0.55) * P.leafSize;
+    const aspect = sp.clusterAspect;
+    // Weeping trees hang tall curtains of foliage below the tip instead of
+    // round puffs around it.
+    const hang = Math.max(0, P.droop - 0.3);
+    const ay = aspect * (1 + hang * 1.6);
+    const oy = R * hang * 1.4;
+    const cl = { R: R * (1 + hang), blobs: [], shapes: [], phase: r() * TAU };
+    const nb = 4 + Math.floor(r() * 3);
+    for (let i = 0; i < nb; i++) {
+      const a = r() * TAU, d = r() * R * 0.6;
+      cl.blobs.push({
+        x: Math.cos(a) * d, y: Math.sin(a) * d * ay + oy,
+        r: R * (0.42 + r() * 0.35), c: r() < 0.72 ? 0 : 1, phase: r() * TAU,
+      });
+    }
+    const n = Math.round((4 + 15 * P.density) * (0.7 + r() * 0.6));
+    for (let i = 0; i < n; i++) {
+      const a = r() * TAU, d = Math.sqrt(r()) * R;
+      cl.shapes.push({
+        x: Math.cos(a) * d, y: Math.sin(a) * d * ay + oy,
+        s: R * (0.16 + r() * 0.13), rot: r() * TAU,
+        c: r() < 0.7 ? 0 : 1, phase: r() * TAU,
+      });
+    }
+    return cl;
+  }
+
+  function grow(depth, attachSeg, relAngle, parentRestA, isLeader, parentLen, levelsLeft) {
+    const b = { depth, attachSeg, relAngle, phase: rng() * TAU, segs: [], children: [], leaf: null };
+    const idx = branchCount++;
+    let worldA = parentRestA + relAngle;
+    const len = parentLen * P.decay * (0.85 + rng() * 0.3);
+    const wBase = Math.max(1.1, trunkWidth * Math.pow(0.6, depth));
+    const wTip = depth >= P.levels - 1 ? 1 : wBase * 0.62;
+    const nseg = depth === 0 ? 5 : 4;
+    // Leaders (the trunk + its apical continuations) always reach upward, so
+    // conifers stay conical; only side branches obey positive droop.
+    const droopTarget = (!isLeader && P.droop >= 0) ? Math.PI / 2 : -Math.PI / 2;
+    const steerK = isLeader
+      ? 0.15
+      : Math.abs(P.droop) * (P.droop > 0
+        ? Math.pow(depth / P.levels, 1.5) * 0.9
+        : 0.12);
+    const restAs = [];
+    for (let i = 0; i < nseg; i++) {
+      const bend = (rng() - 0.5) * P.gnarl * (depth === 0 ? 0.35 : 0.75);
+      const dA = bend + normAngle(droopTarget - worldA) * steerK;
+      worldA += dA;
+      restAs.push(worldA);
+      b.segs.push({ dA, len: len / nseg, w: lerp(wBase, wTip, (i + 0.5) / nseg) });
+    }
+
+    const terminal = levelsLeft <= 1 || (depth >= 2 && rng() < 0.1) || branchCount > 1300;
+    if (terminal) {
+      if (P.leafStyle !== "bare") b.leaf = makeCluster(len, idx);
+      return b;
+    }
+    // Weeping species also trail foliage along deep (not just terminal) branches.
+    if (P.leafStyle !== "bare" && P.droop > 0.4 && depth >= 2 && rng() < 0.6)
+      b.leaf = makeCluster(len * 0.6, idx);
+
+    const k = Math.max(1, Math.min(4, Math.round(P.twigs + (rng() - 0.5) * 1.4)));
+    const spreadR = (P.spread * Math.PI) / 180;
+    const sideScale = sp.sideScale ?? 1;
+    const specs = [];
+    if (rng() < sp.apical) {
+      // Apical split: one continuation at the tip; side branches whorled
+      // along the parent's length, shorter (sideScale) and depth-capped so
+      // they stay subordinate to the leader.
+      specs.push({ o: (rng() - 0.5) * spreadR * 0.25, seg: nseg - 1, leader: isLeader, scale: 1, lv: levelsLeft - 1 });
+      const flip = rng() < 0.5 ? 1 : -1;
+      for (let i = 1; i < k; i++) specs.push({
+        o: flip * (i % 2 ? 1 : -1) * spreadR * (0.5 + rng() * 0.6),
+        seg: 1 + Math.floor(rng() * (nseg - 1)), leader: false, scale: sideScale,
+        lv: Math.min(levelsLeft - 1, 2),
+      });
+    } else {
+      for (let i = 0; i < k; i++) {
+        const f = k === 1 ? (rng() - 0.5) * 0.8 : (i / (k - 1) - 0.5) * 2;
+        specs.push({ o: f * spreadR * (0.7 + rng() * 0.5), seg: nseg - 1, leader: false, scale: 1, lv: levelsLeft - 1 });
+      }
+    }
+    if (depth <= 1 && rng() < 0.7) {
+      const seg = 1 + Math.floor(rng() * (nseg - 2));
+      specs.push({
+        o: (rng() < 0.5 ? -1 : 1) * spreadR * (0.6 + rng() * 0.5), seg, leader: false, scale: 1,
+        lv: sp.apical > 0.5 ? Math.min(levelsLeft - 1, 2) : levelsLeft - 1,
+      });
+    }
+    for (const s of specs)
+      b.children.push(grow(depth + 1, s.seg, s.o, restAs[s.seg], s.leader, len * s.scale, s.lv));
+    return b;
+  }
+
+  tree = grow(0, 0, (rng() - 0.5) * 0.2, -Math.PI / 2, true, trunkLen / P.decay, P.levels);
+  computeFit();
+  seedReadout.textContent = `seed ${P.seed} · ${branchCount} branches`;
+}
+
+/* ---------- pose + draw (shared by canvas, SVG, measuring) --------------- */
+function drawTree(g, t) {
+  const W = P.wind, ws = P.windSpeed;
+  const gust = Math.sin(t * ws * 0.5) * 0.6 + Math.sin(t * ws * 0.23 + 1.7) * 0.4;
+  const leaves = [];
+
+  function rec(b, x, y, baseA) {
+    const df = b.depth / Math.max(1, P.levels);
+    const sway = W * (0.004 + 0.03 * Math.pow(df, 1.6)) * Math.sin(t * ws + b.phase)
+               + W * 0.012 * gust * df;
+    let a = baseA + b.relAngle + sway;
+    let px = x, py = y;
+    const joints = [{ x, y, a }];
+    for (const s of b.segs) {
+      a += s.dA;
+      const nx = px + Math.cos(a) * s.len, ny = py + Math.sin(a) * s.len;
+      g.seg(px, py, nx, ny, s.w, P.trunk);
+      px = nx; py = ny;
+      joints.push({ x: px, y: py, a });
+    }
+    if (b.leaf) leaves.push({ cl: b.leaf, x: px, y: py });
+    for (const c of b.children) {
+      const j = joints[c.attachSeg + 1];
+      rec(c, j.x, j.y, j.a);
+    }
+  }
+  rec(tree, 0, 0, -Math.PI / 2);
+
+  const cols = [P.leaf1, P.leaf2];
+  for (const L of leaves) {
+    const { cl, x, y } = L;
+    if (P.leafStyle === "blobs") {
+      for (const bl of cl.blobs) {
+        const dx = Math.sin(t * ws * 1.3 + bl.phase) * W * 3;
+        g.circle(x + bl.x + dx, y + bl.y, bl.r, cols[bl.c]);
+      }
+      continue;
+    }
+    for (const s of cl.shapes) {
+      const dx = Math.sin(t * ws * 1.6 + s.phase) * W * 2.5;
+      const dy = Math.cos(t * ws * 1.3 + s.phase) * W * 1.5;
+      const sx = x + s.x + dx, sy = y + s.y + dy;
+      if (P.leafStyle === "flowers") g.flower(sx, sy, s.s, cols[s.c], P.center);
+      else if (P.leafStyle === "dots") g.circle(sx, sy, s.s * 0.6, cols[s.c]);
+      else g.ellipse(sx, sy, s.s, s.s * 0.45,
+        s.rot + Math.sin(t * ws + s.phase) * W * 0.25, cols[s.c]);
+    }
+  }
+}
+
+/* ---------- renderers ----------------------------------------------------- */
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const canvasG = {
+  seg(x1, y1, x2, y2, w, c) {
+    ctx.strokeStyle = c; ctx.lineWidth = w; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  },
+  circle(x, y, r, c) {
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  },
+  ellipse(x, y, rx, ry, rot, c) {
+    ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot, 0, TAU); ctx.fill();
+  },
+  flower(x, y, s, petal, center) {
+    ctx.fillStyle = petal; ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * TAU;
+      const px = x + Math.cos(a) * s * 0.62, py = y + Math.sin(a) * s * 0.62;
+      ctx.moveTo(px + s * 0.5, py); ctx.arc(px, py, s * 0.5, 0, TAU);
+    }
+    ctx.fill();
+    ctx.fillStyle = center; ctx.beginPath(); ctx.arc(x, y, s * 0.42, 0, TAU); ctx.fill();
+  },
+};
+
+function measureBounds() {
+  const m = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  const grow2 = (x, y, r) => {
+    if (x - r < m.minX) m.minX = x - r;
+    if (x + r > m.maxX) m.maxX = x + r;
+    if (y - r < m.minY) m.minY = y - r;
+    if (y + r > m.maxY) m.maxY = y + r;
+  };
+  drawTree({
+    seg(x1, y1, x2, y2, w) { grow2(x1, y1, w); grow2(x2, y2, w); },
+    circle(x, y, r) { grow2(x, y, r); },
+    ellipse(x, y, rx) { grow2(x, y, rx); },
+    flower(x, y, s) { grow2(x, y, s * 1.2); },
+  }, 0);
+  return m;
+}
+
+function computeFit() {
+  const W = canvas.clientWidth || 800, H = canvas.clientHeight || 600;
+  const m = measureBounds();
+  const bw = Math.max(1, m.maxX - m.minX), bh = Math.max(1, m.maxY - m.minY);
+  const s = Math.min((W - 90) / bw, (H - 80) / bh, 1.6);
+  fit = {
+    s,
+    tx: W / 2 - s * (m.minX + m.maxX) / 2,
+    ty: H - 36 - s * m.maxY,
+  };
+}
+
+function frame(ms) {
+  const t = ms / 1000;
+  const dpr = window.devicePixelRatio || 1;
+  // The flex layout can settle without a window resize event, so sync the
+  // backing store here instead of in a resize listener.
+  const bw = canvas.clientWidth * dpr, bh = canvas.clientHeight * dpr;
+  if (canvas.width !== bw || canvas.height !== bh) {
+    canvas.width = bw; canvas.height = bh;
+    if (tree) computeFit();
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = P.bg;
+  ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+  ctx.translate(fit.tx, fit.ty);
+  ctx.scale(fit.s, fit.s);
+  ctx.fillStyle = "rgba(0,0,0,0.07)";
+  ctx.beginPath(); ctx.ellipse(0, 4, 52, 9, 0, 0, TAU); ctx.fill();
+  drawTree(canvasG, t);
+  requestAnimationFrame(frame);
+}
+
+/* ---------- SVG export ---------------------------------------------------- */
+const R2 = (n) => Math.round(n * 100) / 100;
+
+function exportSVG() {
+  const parts = [];
+  const svgG = {
+    seg(x1, y1, x2, y2, w, c) {
+      parts.push(`<line x1="${R2(x1)}" y1="${R2(y1)}" x2="${R2(x2)}" y2="${R2(y2)}" stroke="${c}" stroke-width="${R2(w)}" stroke-linecap="round"/>`);
+    },
+    circle(x, y, r, c) {
+      parts.push(`<circle cx="${R2(x)}" cy="${R2(y)}" r="${R2(r)}" fill="${c}"/>`);
+    },
+    ellipse(x, y, rx, ry, rot, c) {
+      parts.push(`<ellipse cx="${R2(x)}" cy="${R2(y)}" rx="${R2(rx)}" ry="${R2(ry)}" transform="rotate(${R2(rot * 180 / Math.PI)} ${R2(x)} ${R2(y)})" fill="${c}"/>`);
+    },
+    flower(x, y, s, petal, center) {
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * TAU;
+        this.circle(x + Math.cos(a) * s * 0.62, y + Math.sin(a) * s * 0.62, s * 0.5, petal);
+      }
+      this.circle(x, y, s * 0.42, center);
+    },
+  };
+  drawTree(svgG, performance.now() / 1000);
+
+  const m = measureBounds();
+  const pad = 40;
+  const w = R2(m.maxX - m.minX + pad * 2), h = R2(m.maxY - m.minY + pad * 2);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+<rect width="${w}" height="${h}" fill="${P.bg}"/>
+<g transform="translate(${R2(pad - m.minX)} ${R2(pad - m.minY)})">
+${parts.join("\n")}
+</g>
+</svg>`;
+
+  saveFile(`tree-${P.species}-${P.seed}.svg`, svg);
+}
+
+async function saveFile(filename, content) {
+  if (window.__TAURI__) {
+    try {
+      await window.__TAURI__.core.invoke("save_tool_export", { filename, content });
+    } catch (e) {
+      if (e !== "__cancelled__") console.error(e);
+    }
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content], { type: "image/svg+xml" }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ---------- controls ------------------------------------------------------ */
+const seedReadout = document.getElementById("seed-readout");
+const speciesSel = document.getElementById("species");
+const leafStyleSel = document.getElementById("leafStyle");
+const ranges = [...document.querySelectorAll("input.range[data-p]")];
+const colorIds = { leaf1: "c-leaf1", leaf2: "c-leaf2", center: "c-center", trunk: "c-trunk", bg: "c-bg" };
+
+for (const [key, sp] of Object.entries(SPECIES)) {
+  const opt = document.createElement("option");
+  opt.value = key; opt.textContent = sp.label;
+  speciesSel.appendChild(opt);
+}
+
+function syncControls() {
+  speciesSel.value = P.species;
+  leafStyleSel.value = P.leafStyle;
+  for (const r of ranges) r.value = P[r.dataset.p];
+  for (const [p, id] of Object.entries(colorIds)) document.getElementById(id).value = P[p];
+}
+
+function applyPreset(key) {
+  const sp = SPECIES[key];
+  P.species = key;
+  for (const p of ["levels", "twigs", "spread", "decay", "gnarl", "droop",
+                   "density", "leafSize", "leafStyle",
+                   "leaf1", "leaf2", "center", "trunk"]) P[p] = sp[p];
+  syncControls();
+  buildTree();
+}
+
+speciesSel.addEventListener("change", () => applyPreset(speciesSel.value));
+leafStyleSel.addEventListener("change", () => { P.leafStyle = leafStyleSel.value; buildTree(); });
+
+for (const r of ranges) {
+  r.addEventListener("input", () => {
+    P[r.dataset.p] = parseFloat(r.value);
+    if (!r.dataset.live) buildTree(); // wind params are read live each frame
+  });
+}
+
+for (const [p, id] of Object.entries(colorIds)) {
+  document.getElementById(id).addEventListener("input", (e) => {
+    P[p] = e.target.querySelector("input").value;
+  });
+}
+
+function regenerate() {
+  P.seed = (Math.random() * 1e9) | 0;
+  buildTree();
+}
+document.getElementById("generate").addEventListener("click", regenerate);
+canvas.addEventListener("click", regenerate);
+document.getElementById("export").addEventListener("click", exportSVG);
+
+/* ---------- boot ---------------------------------------------------------- */
+syncControls();
+buildTree();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
