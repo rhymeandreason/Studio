@@ -50,6 +50,30 @@
       max-width: 220px;
     }
 
+    .title-strip input#docname {
+      width: auto;
+      max-width: 220px;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-family: var(--serif);
+      font-size: 13px;
+      padding: 2px 4px;
+      cursor: text;
+    }
+
+    .title-strip input#docname:hover {
+      background: var(--hairline);
+      border-radius: var(--radius-sm);
+    }
+
+    .title-strip input#docname:focus {
+      outline: none;
+      background: var(--elevated);
+      border-radius: var(--radius-sm);
+      cursor: auto;
+    }
+
     /* Main is a row: the editor column + the inspector sidebar. */
     main {
       flex: 1 1 auto;
@@ -336,7 +360,7 @@
 <body class="outline-window">
   <div class="title-strip titlebar" id="toolbar" data-window-bar>
     <span class="project" id="project" data-window-close><span class="mi">movie</span></span>
-    <select class="field" id="docsel" title="Switch edit"></select>
+    <input class="field" id="docname" title="Click to rename" spellcheck="false" />
     <button class="btn-icon-s" id="newdoc" title="New video"><span class="mi">add</span></button>
     <button class="btn-icon-s" id="refresh" title="Reload from file"><span class="mi">refresh</span></button>
     <span class="spacer"></span>

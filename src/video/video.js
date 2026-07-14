@@ -19,7 +19,7 @@ const projectPath = params.get("path") || "";
 const projectName = projectPath.split("/").filter(Boolean).pop() || "Untitled";
 
 const $project = document.getElementById("project");
-const $docsel = document.getElementById("docsel");
+const $docname = document.getElementById("docname");
 const $newdoc = document.getElementById("newdoc");
 const $refresh = document.getElementById("refresh");
 const $stage = document.getElementById("stage");
@@ -131,23 +131,43 @@ async function flushSave() {
 let lastPersisted = "";
 
 // ── Edit documents (multiple per project) ───────────────────────────────────
-function renderDocSel() {
-  $docsel.innerHTML = "";
-  for (const e of edits) {
-    const opt = document.createElement("option");
-    opt.value = e.file;
-    opt.textContent = e.name;
-    if (e.file === currentFile) opt.selected = true;
-    $docsel.append(opt);
-  }
+// The current edit's name is edit-in-place (mirrors the deck-name field in
+// the Slides tool): a plain-looking input, always live, click and type.
+// Switching between edits happens from the Artifacts panel (dblclick a video
+// card → "video-open-edit"), not from this window.
+function renderDocName() {
+  if (document.activeElement === $docname) return; // mid-edit; don't clobber
+  $docname.value = currentFile ? doc.name || "" : "";
+  $docname.disabled = !currentFile;
 }
 
 async function refreshEditList() {
   edits = await invoke("list_videos", { path: projectPath });
-  renderDocSel();
+  renderDocName();
 }
 
-$docsel.addEventListener("change", () => openEdit($docsel.value));
+$docname.addEventListener("blur", () => {
+  if (!currentFile) return;
+  const name = $docname.value.trim() || "Untitled";
+  if (name !== doc.name) {
+    doc.name = name;
+    const e = edits.find((x) => x.file === currentFile);
+    if (e) e.name = name;
+    scheduleVideoSave();
+  }
+  renderDocName();
+});
+
+$docname.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    $docname.blur();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    $docname.value = doc.name || "";
+    $docname.blur();
+  }
+});
 
 $newdoc.addEventListener("click", async () => {
   const name = prompt("Name this video", "Untitled");
@@ -212,7 +232,7 @@ async function openEdit(file, { keepPosition = false } = {}) {
     timelineSpan = 0; // fresh doc → fit the timeline to its content again
   }
   setPlaying(false);
-  renderDocSel();
+  renderDocName();
   render();
 }
 
@@ -1368,7 +1388,7 @@ listen("fs-changed", () =>
   liveRefresh(() => {
     currentFile = null;
     dirty = false;
-    renderDocSel();
+    renderDocName();
   }),
 );
 window.addEventListener("focus", () => liveRefresh(ensureAnEdit));
