@@ -21,11 +21,25 @@ export const artifactsSelection = createSelection({
   },
 });
 
+// Video edits aren't real artifact files (videos/<edit>.json, not under
+// artifacts/), so they share the selection set under a synthetic id that
+// deleteArtifactsSelection routes to delete_video instead of delete_artifact.
+const VIDEO_ID_PREFIX = "video:";
+const videoId = (projectPath, file) => `${VIDEO_ID_PREFIX}${projectPath}::${file}`;
+
 export async function deleteArtifactsSelection() {
-  const paths = artifactsSelection.get();
-  if (!paths.length) return;
+  const ids = artifactsSelection.get();
+  if (!ids.length) return;
   artifactsSelection.clear();
-  await Promise.all(paths.map((p) => invoke("delete_artifact", { path: p })));
+  await Promise.all(
+    ids.map((id) => {
+      if (id.startsWith(VIDEO_ID_PREFIX)) {
+        const [projectPath, file] = id.slice(VIDEO_ID_PREFIX.length).split("::");
+        return invoke("delete_video", { path: projectPath, file });
+      }
+      return invoke("delete_artifact", { path: id });
+    }),
+  );
   renderArtifacts();
 }
 
@@ -158,13 +172,20 @@ export async function renderArtifacts() {
     const grid = el("div", "artifacts__grid");
     for (const v of videos) grid.appendChild(videoCard(project, v));
     root.appendChild(grid);
+    grid.addEventListener("click", (e) => {
+      if (e.target === grid) artifactsSelection.clear();
+    });
   }
 }
 
 // --- Video cards: videos/<edit>.json, opened in the Video window -------------
-// Not part of the multi-select model (deletion lives in the Video window).
 function videoCard(project, v) {
+  const id = videoId(project.path, v.file);
   const card = el("div", "artifact-card");
+  card.dataset.path = id;
+  card.addEventListener("click", (e) => {
+    artifactsSelection.toggle(id, e.metaKey || e.ctrlKey);
+  });
   const prev = el("div", "artifact__preview artifact__preview--video");
   prev.innerHTML = mi("movie"); // placeholder until the thumb loads
   card.appendChild(prev);

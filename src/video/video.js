@@ -21,7 +21,6 @@ const projectName = projectPath.split("/").filter(Boolean).pop() || "Untitled";
 const $project = document.getElementById("project");
 const $docsel = document.getElementById("docsel");
 const $newdoc = document.getElementById("newdoc");
-const $deldoc = document.getElementById("deldoc");
 const $refresh = document.getElementById("refresh");
 const $stage = document.getElementById("stage");
 const $frame = document.getElementById("frame");
@@ -141,7 +140,6 @@ function renderDocSel() {
     if (e.file === currentFile) opt.selected = true;
     $docsel.append(opt);
   }
-  $deldoc.disabled = edits.length === 0;
 }
 
 async function refreshEditList() {
@@ -158,22 +156,6 @@ $newdoc.addEventListener("click", async () => {
     const file = await invoke("create_video", { path: projectPath, name: name.trim() || "Untitled" });
     await refreshEditList();
     await openEdit(file);
-  } catch (e) {
-    toast(String(e));
-  }
-});
-
-$deldoc.addEventListener("click", async () => {
-  if (!currentFile) return;
-  const cur = edits.find((e) => e.file === currentFile);
-  if (!confirm(`Delete “${cur ? cur.name : currentFile}”? This can't be undone.`)) return;
-  try {
-    await invoke("delete_video", { path: projectPath, file: currentFile });
-    currentFile = null;
-    dirty = false;
-    await refreshEditList();
-    if (edits.length) await openEdit(edits[0].file);
-    else await ensureAnEdit();
   } catch (e) {
     toast(String(e));
   }
@@ -976,10 +958,6 @@ function renderInspector() {
   if (clip) {
     if (isShader(clip)) renderShaderClipInspector(clip);
     else renderVideoClipInspector(clip);
-    appendDeleteButton(() => {
-      const i = clips().findIndex((c) => c.id === clip.id);
-      if (i >= 0) removeClip(i);
-    }, "Delete clip");
     return;
   }
   const tx = selectedText();
@@ -1032,22 +1010,6 @@ function renderInspector() {
     fieldInput(Math.round(fontPxOutput(tx)), (v) => (tx.size = v), "number", { min: 8 })
   );
   inspectorField("Color", fieldColor(tx.color || "#ffffff", (v) => (tx.color = v)));
-
-  appendDeleteButton(() => {
-    doc.text = text().filter((t) => t.id !== tx.id);
-    sel = null;
-    scheduleVideoSave();
-    render();
-  }, "Delete text layer");
-}
-
-function appendDeleteButton(onDelete, label) {
-  const del = document.createElement("button");
-  del.className = "btn btn-ghost full";
-  del.style.justifySelf = "start";
-  del.innerHTML = `<span class="mi mi-sm">delete</span>${label}`;
-  del.addEventListener("click", onDelete);
-  $inspector.append(del);
 }
 
 $addtext.addEventListener("click", () => {
@@ -1377,11 +1339,18 @@ function toast(msg) {
 // never while a local edit is pending — so UI edits can't be clobbered by our
 // own write echo or by unrelated project file changes. The titlebar refresh
 // button force-reloads regardless.
-async function liveRefresh() {
+//
+// `onMissing` distinguishes *why* we're refreshing: an external fs event (the
+// file we had open vanished — e.g. deleted from the Artifacts panel) must not
+// recreate it, or a deletion would look like it silently failed; but the user
+// actually focusing an edit-less window should still conjure a first edit, same
+// as the initial open.
+async function liveRefresh(onMissing) {
   if (dirty || saveTimer || exporting) return; // local edits win; save is imminent
   await refreshEditList();
   if (!currentFile || !edits.some((e) => e.file === currentFile)) {
-    await ensureAnEdit();
+    if (edits.length) await openEdit(edits[0].file);
+    else await onMissing();
     return;
   }
   let fresh;
@@ -1395,8 +1364,14 @@ async function liveRefresh() {
   if (s === lastPersisted) return; // no real change (e.g. our own write echo)
   await openEdit(currentFile, { keepPosition: true });
 }
-listen("fs-changed", liveRefresh);
-window.addEventListener("focus", liveRefresh);
+listen("fs-changed", () =>
+  liveRefresh(() => {
+    currentFile = null;
+    dirty = false;
+    renderDocSel();
+  }),
+);
+window.addEventListener("focus", () => liveRefresh(ensureAnEdit));
 
 // Jump to a specific edit (Artifacts-panel card → already-open window).
 listen("video-open-edit", async (e) => {
