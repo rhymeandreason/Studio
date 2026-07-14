@@ -503,37 +503,31 @@ export function addRow(list, value = "", autoBrowse = false) {
     gitBtns.className = "ws-repo__gitbtns";
     gitBtns.append(gitBtn, pulseBtn);
 
-    // Convention-based Start/Stop: shown only if dev-open.sh / dev-stop.sh
-    // exist at the repo root (checked via repo_scripts, re-run whenever the
-    // path changes). No per-project setup — drop the script in, get the button.
-    const startBtn = document.createElement("button");
-    startBtn.type = "button";
-    startBtn.className = "ws-repo__git";
-    startBtn.innerHTML = `${mi("play_arrow")}Start`;
-    startBtn.title = "Run dev-open.sh";
-    startBtn.hidden = true;
-    const stopBtn = document.createElement("button");
-    stopBtn.type = "button";
-    stopBtn.className = "ws-repo__git ws-repo__git--ghost";
-    stopBtn.innerHTML = `${mi("stop")}Stop`;
-    stopBtn.title = "Run dev-stop.sh";
-    stopBtn.hidden = true;
+    // Start/Stop the dev server now lives in its own tool window (an
+    // oscilloscope that follows the active project). The button is shown only
+    // if dev-open.sh / dev-stop.sh exist at the repo root (checked via
+    // repo_scripts, re-run whenever the path changes).
+    const serverBtn = document.createElement("button");
+    serverBtn.type = "button";
+    serverBtn.className = "ws-repo__git";
+    serverBtn.innerHTML = `${mi("dns")}Server`;
+    serverBtn.title = "Open the Server window for this repo";
+    serverBtn.hidden = true;
+    serverBtn.addEventListener("click", () =>
+      invoke("open_tool", { file: "server.html" }),
+    );
     const scriptBtns = document.createElement("div");
     scriptBtns.className = "ws-repo__gitbtns";
-    scriptBtns.append(startBtn, stopBtn);
+    scriptBtns.append(serverBtn);
 
     const refreshRepoScripts = async () => {
       const repo = input.value.trim();
       if (!repo) {
-        startBtn.hidden = true;
-        stopBtn.hidden = true;
+        serverBtn.hidden = true;
         return;
       }
       const { start, stop } = await invoke("repo_scripts", { repo });
-      startBtn.hidden = !start;
-      startBtn.onclick = () => start && invoke("run_script", { path: start });
-      stopBtn.hidden = !stop;
-      stopBtn.onclick = () => stop && invoke("run_script", { path: stop });
+      serverBtn.hidden = !start && !stop;
     };
     refreshRepoScripts();
     input.addEventListener("change", refreshRepoScripts);

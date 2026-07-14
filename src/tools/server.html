@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Server</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
+  <script type="module" src="../kit/components.js"></script>
+  <script type="module" src="../kit/window-chrome.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      /* Transparent for the custom window's rounded corners; the tinted panel
+         below carries the fill. */
+      background: transparent;
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* The whole window is the project color (like the sketch). */
+    #panel {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      background: var(--window-color, var(--accent));
+      border-radius: var(--window-radius, 10px);
+      overflow: hidden;
+    }
+
+    #titlebar {
+      height: 44px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+    }
+
+    /* Title = the dev URL host:port (read from the repo's dev-open.sh). */
+    #title {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-weight: 700;
+      font-size: 15px;
+      color: #000;
+      padding: 4px 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      /* Let drags on the label fall through to the bar's drag region. */
+      pointer-events: none;
+    }
+
+    #body {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 26px 34px;
+      gap: 34px;
+    }
+
+    /* Oscilloscope screen. */
+    #screen {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #000;
+      border-radius: 22px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    #scope { width: 100%; height: 100%; display: block; }
+
+    /* Big round start/stop button, in a darker shade of the project color. */
+    #power {
+      width: 128px;
+      height: 128px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--window-color, var(--accent)) 62%, #000);
+      transition: transform 0.12s ease, filter 0.12s ease;
+    }
+    #power:hover { filter: brightness(1.08); }
+    #power:active { transform: scale(0.95); }
+    #power .glyph {
+      width: 42px;
+      height: 42px;
+      color: #fff;
+    }
+
+    /* No repo / no start script → button disabled + hint. */
+    #power[disabled] { opacity: 0.4; cursor: default; }
+    #power[disabled]:hover { filter: none; }
+
+    #hint {
+      color: rgba(0, 0, 0, 0.55);
+      font-size: 12px;
+      text-align: center;
+      margin: -18px 0 0;
+      min-height: 15px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="panel">
+    <div id="titlebar" data-window-bar>
+      <span data-window-close></span>
+      <span id="title">localhost:3000</span>
+    </div>
+    <div id="body">
+      <div id="screen"><canvas id="scope"></canvas></div>
+      <button id="power" title="Start server">
+        <svg class="glyph" id="glyph" viewBox="0 0 24 24" aria-hidden="true"></svg>
+      </button>
+      <p id="hint"></p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { hasTauri, invoke, listen, toast } from "../kit/app.js";
+
+    const root = document.documentElement.style;
+    const titleEl = document.getElementById("title");
+    const powerEl = document.getElementById("power");
+    const glyphEl = document.getElementById("glyph");
+    const hintEl = document.getElementById("hint");
+    const canvas = document.getElementById("scope");
+    const ctx = canvas.getContext("2d");
+
+    // Play triangle (start) / stop square, drawn as SVG paths.
+    const PLAY = '<path d="M8 5v14l11-7z" fill="currentColor"/>';
+    const STOP = '<rect x="6" y="6" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2.5"/>';
+
+    // Project + server state.
+    let project = null;      // { path, name }
+    let url = "http://localhost:3000";
+    let scripts = { start: null, stop: null };
+    let running = false;
+
+    function hostPort(u) {
+      return u.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    }
+
+    // ---- Load the active project's server config, retint, refresh title. ----
+    async function loadProject() {
+      if (!hasTauri) { render(); return; }
+      project = await invoke("get_active_project");
+      if (!project) {
+        scripts = { start: null, stop: null };
+        hintEl.textContent = "No active project";
+        render();
+        return;
+      }
+      const color = await invoke("active_git_color").catch(() => "");
+      if (color) {
+        root.setProperty("--window-color", color);
+        root.setProperty("--titlebar-tint", color);
+      }
+      const ws = await invoke("read_workspace", { path: project.path }).catch(() => ({}));
+      const repo = (ws.repo || "").trim();
+      scripts = repo
+        ? await invoke("repo_scripts", { repo }).catch(() => ({ start: null, stop: null }))
+        : { start: null, stop: null };
+      // The URL (and its port) come from the repo's dev-open.sh; default only
+      // when the script has no discernible port.
+      const auto = repo
+        ? await invoke("repo_dev_url", { repo }).catch(() => null)
+        : null;
+      url = auto || "http://localhost:3000";
+      titleEl.textContent = hostPort(url);
+      await poll();
+    }
+
+    // ---- Running state ----
+    async function poll() {
+      if (hasTauri) running = await invoke("server_status", { url }).catch(() => false);
+      render();
+    }
+
+    function render() {
+      glyphEl.innerHTML = running ? STOP : PLAY;
+      powerEl.title = running ? "Stop server" : "Start server";
+      const canStart = !!scripts.start;
+      const canStop = !!scripts.stop;
+      powerEl.disabled = running ? !canStop : !canStart;
+      if (!project) hintEl.textContent = "No active project";
+      else if (!scripts.start && !scripts.stop)
+        hintEl.textContent = "Add dev-open.sh / dev-stop.sh to the repo";
+      else hintEl.textContent = running ? "running" : "stopped";
+    }
+
+    powerEl.addEventListener("click", async () => {
+      if (!hasTauri) return;
+      const path = running ? scripts.stop : scripts.start;
+      if (!path) return;
+      await invoke("run_script", { path }).catch((e) => toast(String(e)));
+      // Give the server a moment to bind / release the port, then re-check.
+      setTimeout(poll, 1200);
+      setTimeout(poll, 3000);
+    });
+
+    // ---- Oscilloscope animation ----
+    function fit() {
+      const dpr = window.devicePixelRatio || 1;
+      const r = canvas.getBoundingClientRect();
+      canvas.width = Math.round(r.width * dpr);
+      canvas.height = Math.round(r.height * dpr);
+    }
+    new ResizeObserver(fit).observe(canvas);
+    fit();
+
+    let phase = 0;
+    let amp = 0;          // eased 0..1 so the trace grows in / flattens out
+    function draw() {
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      const target = running ? 1 : 0;
+      amp += (target - amp) * 0.08;
+      phase += 0.04;
+
+      const dpr = window.devicePixelRatio || 1;
+      const mid = h / 2;
+      const cycles = 3.2;
+      const maxAmp = h * 0.34;
+      ctx.beginPath();
+      for (let px = 0; px <= w; px += 2) {
+        const t = px / w;
+        const y = mid + Math.sin(t * cycles * Math.PI * 2 + phase) * maxAmp * amp;
+        px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+      }
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2.5 * dpr;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.stroke();
+      requestAnimationFrame(draw);
+    }
+    draw();
+
+    // ---- Wiring ----
+    if (hasTauri) {
+      listen("project-activated", loadProject);
+      setInterval(poll, 2000);
+    }
+    loadProject();
+  </script>
+</body>
+
+</html>

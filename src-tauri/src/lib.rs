@@ -551,6 +551,7 @@ fn tool_style(filename: &str) -> ToolStyle {
         "tasks.html" => s(800.0, 800.0, Tint::Paper),
         "modes.html" => s(320.0, 480.0, Tint::Paper),
         "git-pulse.html" => s(820.0, 600.0, Tint::Paper),
+        "server.html" => s(240.0, 440.0, Tint::Project),
         "daily-briefing.html" => s(1080.0, 760.0, Tint::Paper),
         "mycelium.html" => s(1100.0, 760.0, Tint::Paper),
         _ => s(900.0, 640.0, Tint::Paper),
@@ -2138,6 +2139,89 @@ fn repo_scripts(repo: String) -> RepoScripts {
     RepoScripts {
         start: check("dev-open.sh"),
         stop: check("dev-stop.sh"),
+    }
+}
+
+/// Parse a port out of a dev-open.sh line. Handles the common declarations a
+/// dev script uses: `PORT=3000`, `--port 5173`, `--port=5173`, `-p 8080`, and
+/// `localhost:3000` / `127.0.0.1:3000` / `0.0.0.0:3000`.
+fn extract_port(script: &str) -> Option<u16> {
+    let leading = |s: &str| -> Option<u16> {
+        let digits: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
+        digits.parse().ok()
+    };
+    for line in script.lines() {
+        let l = line.trim();
+        if l.starts_with('#') {
+            continue;
+        }
+        for key in ["--port=", "--port ", "-p ", "PORT=", "port=", "port "] {
+            if let Some(idx) = l.find(key) {
+                if let Some(p) = leading(&l[idx + key.len()..]) {
+                    return Some(p);
+                }
+            }
+        }
+        for host in ["localhost:", "127.0.0.1:", "0.0.0.0:"] {
+            if let Some(idx) = l.find(host) {
+                if let Some(p) = leading(&l[idx + host.len()..]) {
+                    return Some(p);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// The dev URL inferred from the repo's `dev-open.sh` — the port it launches on,
+/// as `http://localhost:<port>`. Returns None if there's no script or no port
+/// can be found (the Server tool then falls back to a saved/default URL).
+#[tauri::command]
+fn repo_dev_url(repo: String) -> Option<String> {
+    let script = std::fs::read_to_string(Path::new(repo.trim()).join("dev-open.sh")).ok()?;
+    extract_port(&script).map(|port| format!("http://localhost:{port}"))
+}
+
+/// Split a dev-server URL like `http://localhost:3000/` into `(host, port)`.
+/// Tolerates a missing scheme and a trailing path; defaults the port from the
+/// scheme (80/443) when none is given.
+fn parse_host_port(url: &str) -> Option<(String, u16)> {
+    let raw = url.trim();
+    let is_https = raw.starts_with("https://");
+    let rest = raw
+        .strip_prefix("http://")
+        .or_else(|| raw.strip_prefix("https://"))
+        .unwrap_or(raw);
+    // Drop any path/query after the authority.
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or(rest);
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((h, p)) => (h.to_string(), p.parse().ok()?),
+        None => (
+            authority.to_string(),
+            if is_https { 443 } else { 80 },
+        ),
+    };
+    if host.is_empty() {
+        return None;
+    }
+    Some((host, port))
+}
+
+/// True if something is listening on the dev-server URL's host:port. A plain
+/// TCP connect (short timeout) — cheap, and true regardless of whether the
+/// server speaks HTTP yet, or who started it (so it stays accurate across
+/// Studio restarts and project switches). Drives the Server tool's waveform.
+#[tauri::command]
+fn server_status(url: String) -> bool {
+    use std::net::ToSocketAddrs;
+    let Some((host, port)) = parse_host_port(&url) else {
+        return false;
+    };
+    match (host.as_str(), port).to_socket_addrs() {
+        Ok(addrs) => addrs.into_iter().any(|a| {
+            std::net::TcpStream::connect_timeout(&a, std::time::Duration::from_millis(400)).is_ok()
+        }),
+        Err(_) => false,
     }
 }
 
@@ -5366,6 +5450,8 @@ pub fn run() {
             open_app,
             run_script,
             repo_scripts,
+            server_status,
+            repo_dev_url,
             open_in_photos,
             run_shortcut,
             heic_preview,
