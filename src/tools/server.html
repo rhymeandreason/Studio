@@ -149,6 +149,10 @@
     // Project + server state.
     let project = null;      // { path, name }
     let url = "http://localhost:3000";
+    let repo = "";
+    // "port" → detect via TCP probe of the URL (dev-open.sh exposed a port);
+    // "pid"  → detect via <repo>/.dev.pid (port-less servers, e.g. Studio).
+    let mode = "port";
     let scripts = { start: null, stop: null };
     let running = false;
 
@@ -172,23 +176,35 @@
         root.setProperty("--titlebar-tint", color);
       }
       const ws = await invoke("read_workspace", { path: project.path }).catch(() => ({}));
-      const repo = (ws.repo || "").trim();
+      repo = (ws.repo || "").trim();
       scripts = repo
         ? await invoke("repo_scripts", { repo }).catch(() => ({ start: null, stop: null }))
         : { start: null, stop: null };
-      // The URL (and its port) come from the repo's dev-open.sh; default only
-      // when the script has no discernible port.
+      // If dev-open.sh exposes a port, detect via TCP probe and show host:port.
+      // Otherwise (port-less, e.g. Studio's `npm run tauri dev`) fall back to a
+      // PID-file check and label the window with the project name.
       const auto = repo
         ? await invoke("repo_dev_url", { repo }).catch(() => null)
         : null;
-      url = auto || "http://localhost:3000";
-      titleEl.textContent = hostPort(url);
+      if (auto) {
+        mode = "port";
+        url = auto;
+        titleEl.textContent = hostPort(url);
+      } else {
+        mode = "pid";
+        titleEl.textContent = project.name || "server";
+      }
       await poll();
     }
 
     // ---- Running state ----
     async function poll() {
-      if (hasTauri) running = await invoke("server_status", { url }).catch(() => false);
+      if (hasTauri) {
+        running = await (mode === "pid"
+          ? invoke("dev_pid_alive", { repo })
+          : invoke("server_status", { url })
+        ).catch(() => false);
+      }
       render();
     }
 

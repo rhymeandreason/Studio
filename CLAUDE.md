@@ -35,6 +35,8 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
 - **Media + image editor** — `media.js`. [docs/media.md](docs/media.md)
 - **Notes** — in `main.js`. [docs/notes.md](docs/notes.md)
 - **Workspace** (per-project launchpad) — `workspace.js`. [docs/workspace.md](docs/workspace.md)
+- **Server** (per-project dev-server start/stop tool with a running-state
+  oscilloscope) — `src/tools/server.html`. [docs/server.md](docs/server.md)
 - **Artifacts** (schema'd JSON design files under `artifacts/<kind>/`; Claude
   writes them, tools edit them, the panel shows them) — `artifacts.js`.
   [docs/artifacts.md](docs/artifacts.md)

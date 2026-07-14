@@ -2225,6 +2225,28 @@ fn server_status(url: String) -> bool {
     }
 }
 
+/// Running-check for dev servers with no HTTP port to probe (e.g. a Tauri app's
+/// `npm run tauri dev`, which serves from `tauri://localhost`). Reads the PID
+/// that `dev-open.sh` wrote to `<repo>/.dev.pid` (removed by `dev-stop.sh`) and
+/// tests it with `kill -0`. Per-project and unambiguous — unlike a `pgrep`
+/// pattern, which can't tell two `tauri dev` sessions apart.
+#[tauri::command]
+fn dev_pid_alive(repo: String) -> bool {
+    let pidfile = Path::new(repo.trim()).join(".dev.pid");
+    let Ok(txt) = std::fs::read_to_string(&pidfile) else {
+        return false;
+    };
+    let pid = txt.trim();
+    if pid.is_empty() || !pid.chars().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    Command::new("kill")
+        .args(["-0", pid])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 const WINBOUNDS_BIN: &str = env!("WINBOUNDS_BIN");
 const DAYAGENDA_BIN: &str = env!("DAYAGENDA_BIN");
 const CALREAD_BIN: &str = env!("CALREAD_BIN");
@@ -5451,6 +5473,7 @@ pub fn run() {
             run_script,
             repo_scripts,
             server_status,
+            dev_pid_alive,
             repo_dev_url,
             open_in_photos,
             run_shortcut,
