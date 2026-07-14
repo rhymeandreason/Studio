@@ -1,13 +1,18 @@
 # Video editor
 
-A standalone companion window (like Git / Claude windows) for cutting
-multi-clip edits with animated text and shader backgrounds, exporting MP4s for
-YouTube / Reels / Square / Web. Launched from the Workspace tab or from an
-edit's card in the **Artifacts panel** (a "Videos" group: first-clip
-thumbnail via `quicklook_thumb`, or a live shader render; Open jumps to that
-edit). `open_video_window(path, file?)` in `src-tauri/src/lib.rs` — `file`
-targets a specific edit (`&file=` on first open, `video-open-edit` event when
-the window already exists).
+A standalone companion window (like Git / Claude windows; minimal custom
+chrome via `src/kit/window-chrome.{js,css}` — no native title bar) for
+cutting multi-clip edits with animated text and shader backgrounds, exporting
+MP4s for YouTube / Reels / Square / Web. Launched from the Workspace tab or
+from an edit's card in the **Artifacts panel** (a "Videos" group: first-clip
+thumbnail via `quicklook_thumb`, or a live shader render; dblclick opens that
+edit; cards join the panel's shared selection model, so Delete/Backspace
+removes an edit via `delete_video`). The Artifacts "+" menu's "Video" item
+always starts a *new* edit (`create_video` then `open_video_window` with that
+file) — it never just reopens whatever's already open.
+`open_video_window(path, file?)` in `src-tauri/src/lib.rs` — `file` targets a
+specific edit (`&file=` on first open, `video-open-edit` event when the
+window already exists).
 
 **The edit is a plain JSON file** — `<project>/videos/<edit>.json`. The GUI
 and Claude Code are two editors of the same file: the window saves debounced
@@ -37,7 +42,8 @@ Times in seconds (float). Clip `src` is project-relative when possible.
 ```jsonc
 {
   "version": 1,
-  "name": "Tutorial — intro",      // display name in the edit switcher
+  "name": "Tutorial — intro",      // display name, edited in place in the title-strip
+                                    // (#docname input — click it and type, no dialog)
   "preset": "youtube",             // youtube | reels | square | web
   "clips": [                       // played in array order, end-to-end
     { "id": "c1", "src": "media/intro.mov",
@@ -115,6 +121,14 @@ local edit is pending (dirty flag / debounce timer) — so UI edits can't be
 clobbered by the editor's own write echo or unrelated project file changes.
 The titlebar refresh button force-reloads from disk (explicitly discarding
 pending edits), preserving playhead and selection.
+
+Both triggers share `liveRefresh(onMissing)`, but pass a different
+`onMissing` for the case where the open edit has vanished from disk (deleted
+— e.g. from the Artifacts panel — or the project has none yet):
+`fs-changed` just clears `currentFile` without recreating anything, so an
+explicit delete sticks; `focus` falls back to `ensureAnEdit()`, which
+creates a first "Untitled" edit. **Don't merge these** — routing a delete
+through `ensureAnEdit()` silently resurrects the file you just removed.
 
 ## Claude Code control
 
