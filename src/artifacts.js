@@ -110,7 +110,14 @@ export async function renderArtifacts() {
     { icon: "slideshow", label: "Presentation", action: () => invoke("open_tool", { file: EDITOR["presentation"], query: null }) },
     { icon: "styles", label: "Theme", action: () => invoke("open_tool", { file: EDITOR["theme"], query: null }) },
     { icon: "schema", label: "Diagram", action: () => invoke("open_tool", { file: EDITOR["diagram"], query: null }) },
-    { icon: "movie", label: "Video", action: () => invoke("open_video_window", { path: project.path, file: null }) },
+    {
+      icon: "movie",
+      label: "Video",
+      action: async () => {
+        const file = await invoke("create_video", { path: project.path, name: "Untitled" });
+        invoke("open_video_window", { path: project.path, file });
+      },
+    },
   ];
   for (const { icon, label, action } of NEW_ITEMS) {
     const item = el("button", "menu__item", { type: "button" });
