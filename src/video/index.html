@@ -1,243 +1,349 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Video</title>
-    <link rel="stylesheet" href="../tokens.css" />
-    <link rel="stylesheet" href="../kit/kit.css" />
-    <script type="module" src="../kit/components.js"></script>
-    <style>
-      /* Tool-specific styles only — buttons/fields/labels come from kit.css. */
-      html, body { height: 100%; }
-      body {
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        user-select: none;
-      }
-      /* Native transparent title bar: leave room for the traffic lights. */
-      .title-strip { padding-left: 78px; border-bottom: none; flex: 0 0 34px; }
-      .title-strip .project {
-        font-weight: 600;
-        color: var(--text);
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .title-strip .spacer { flex: 1 1 auto; }
-      .title-strip select.field { width: auto; max-width: 220px; }
-      /* Main is a row: the editor column + the inspector sidebar. */
-      main {
-        flex: 1 1 auto;
-        display: flex;
-        min-height: 0;
-        padding: 4px 14px 12px;
-        gap: 12px;
-      }
-      .editor-col {
-        flex: 1 1 auto;
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-        min-height: 0;
-        gap: 10px;
-      }
-      /* Preview stage: black, letterboxes the export-aspect frame inside. */
-      .stage {
-        position: relative;
-        flex: 1 1 auto;
-        min-height: 120px;
-        background: #000;
-        border-radius: var(--radius);
-        overflow: hidden;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .frame { position: relative; background: #000; overflow: hidden; }
-      /* Videos are centered and sized/rotated by JS (per clip rotation + fit). */
-      .stage .vid {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        opacity: 0;
-      }
-      .stage .vid.active { opacity: 1; }
-      /* Shader generator clips render here, filling the frame. */
-      .stage .shadercv {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        display: none;
-      }
-      .stage .shadercv.active { display: block; }
-      .stage .placeholder {
-        color: var(--text-soft);
-        font-style: italic;
-        text-align: center;
-        padding: 20px;
-      }
-      .overlay { position: absolute; inset: 0; pointer-events: none; }
-      .controls { display: flex; align-items: center; gap: 8px; }
-      .controls .time {
-        font-family: var(--mono);
-        font-size: 12px;
-        color: var(--text-muted);
-        font-variant-numeric: tabular-nums;
-      }
-      .controls select.field { width: auto; }
-      /* Timeline: a clip lane + stacked text lanes, with a draggable playhead. */
-      .timeline {
-        position: relative;
-        flex: 0 0 auto;
-        background: var(--surface);
-        border-radius: var(--radius);
-        padding: 6px;
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-        user-select: none;
-      }
-      .lane {
-        position: relative;
-        height: 42px;
-        border-radius: var(--radius-sm);
-        background: var(--hairline);
-      }
-      .texttracks { display: flex; flex-direction: column; gap: 4px; }
-      .lane--text { height: 26px; }
-      .block {
-        position: absolute;
-        top: 3px;
-        bottom: 3px;
-        border-radius: var(--radius-sm);
-        background: var(--elevated);
-        border: 1px solid var(--hairline);
-        overflow: hidden;
-        cursor: grab;
-        display: flex;
-        align-items: center;
-        font-size: 11px;
-        color: var(--text);
-      }
-      .block.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); z-index: 2; }
-      .block--shader { background: var(--accent-soft); }
-      .block .label {
-        padding: 0 8px;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        pointer-events: none;
-      }
-      .block .label .mi { font-size: 13px; color: var(--text-muted); }
-      .block .handle {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 9px;
-        cursor: ew-resize;
-        background: var(--hairline-strong);
-      }
-      .block .handle.l { left: 0; }
-      .block .handle.r { right: 0; }
-      .lane--text .block { background: var(--sage-soft); }
-      .playhead {
-        position: absolute;
-        top: 4px;
-        bottom: 4px;
-        width: 2px;
-        background: var(--rose);
-        pointer-events: none;
-        z-index: 3;
-        left: 6px;
-      }
-      .playhead::before {
-        content: "";
-        position: absolute;
-        top: -3px;
-        left: -4px;
-        border: 5px solid transparent;
-        border-top-color: var(--rose);
-      }
-      /* Wide invisible grab target so the thin playhead is easy to drag. */
-      .playhead .grab {
-        position: absolute;
-        top: -6px;
-        bottom: -6px;
-        left: -9px;
-        width: 20px;
-        pointer-events: auto;
-        cursor: ew-resize;
-      }
-      .timeline.scrubbing { cursor: ew-resize; }
-      /* Inspector — right sidebar for the selected clip / text layer. */
-      .inspector {
-        flex: 0 0 224px;
-        overflow-y: auto;
-        background: var(--surface);
-        border-radius: var(--radius);
-        padding: 12px;
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 10px;
-        align-content: start;
-        align-items: center;
-        font-size: 12px;
-      }
-      .inspector > label {
-        font-size: 11.5px;
-        font-weight: 600;
-        color: var(--text-muted);
-      }
-      .inspector .full { grid-column: 1 / -1; }
-      .inspector .row { display: flex; align-items: center; gap: 6px; }
-      .inspector__hint {
-        grid-column: 1 / -1;
-        color: var(--text-soft);
-        font-style: italic;
-        padding-top: 4px;
-      }
-      .toast {
-        position: fixed;
-        left: 50%;
-        bottom: 12px;
-        transform: translateX(-50%);
-        background: var(--text);
-        color: var(--bg);
-        padding: 6px 12px;
-        border-radius: var(--radius-sm);
-        font-size: 12px;
-        opacity: 0;
-        transition: opacity var(--dur-base);
-        pointer-events: none;
-        max-width: 90%;
-        z-index: 10;
-      }
-      .toast.show { opacity: 1; }
-    </style>
-  </head>
-  <body>
-    <div class="title-strip" data-tauri-drag-region>
-      <span class="project" id="project" data-tauri-drag-region
-        ><span class="mi">movie</span></span
-      >
-      <select class="field" id="docsel" title="Switch edit"></select>
-      <button class="btn-icon-s" id="newdoc" title="New video"><span class="mi">add</span></button>
-      <button class="btn-icon-s" id="refresh" title="Reload from file"><span class="mi">refresh</span></button>
-      <span class="spacer" data-tauri-drag-region></span>
-      <button class="btn-icon-s" id="deldoc" title="Delete this edit"><span class="mi">delete</span></button>
-    </div>
-    <main>
-      <div class="editor-col">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Video</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
+  <script type="module" src="../kit/components.js"></script>
+  <script type="module" src="../kit/window-chrome.js"></script>
+  <style>
+    /* Tool-specific styles only — buttons/fields/labels come from kit.css. */
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .title-strip {
+      border-bottom: none;
+      flex: 0 0 34px;
+      padding: 8px 12px;
+    }
+
+    .title-strip .project {
+      font-weight: 600;
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .title-strip .spacer {
+      flex: 1 1 auto;
+    }
+
+    .title-strip select.field {
+      width: auto;
+      max-width: 220px;
+    }
+
+    /* Main is a row: the editor column + the inspector sidebar. */
+    main {
+      flex: 1 1 auto;
+      display: flex;
+      min-height: 0;
+      padding: 4px 14px 12px;
+      gap: 12px;
+      background: var(--bg);
+    }
+
+    .editor-col {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      gap: 10px;
+    }
+
+    /* Preview stage: black, letterboxes the export-aspect frame inside. */
+    .stage {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 120px;
+      background: #000;
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .frame {
+      position: relative;
+      background: #000;
+      overflow: hidden;
+    }
+
+    /* Videos are centered and sized/rotated by JS (per clip rotation + fit). */
+    .stage .vid {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0;
+    }
+
+    .stage .vid.active {
+      opacity: 1;
+    }
+
+    /* Shader generator clips render here, filling the frame. */
+    .stage .shadercv {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+
+    .stage .shadercv.active {
+      display: block;
+    }
+
+    .stage .placeholder {
+      color: var(--text-soft);
+      font-style: italic;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .controls .time {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .controls select.field {
+      width: auto;
+    }
+
+    /* Timeline: a clip lane + stacked text lanes, with a draggable playhead. */
+    .timeline {
+      position: relative;
+      flex: 0 0 auto;
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      user-select: none;
+    }
+
+    .lane {
+      position: relative;
+      height: 42px;
+      border-radius: var(--radius-sm);
+      background: var(--hairline);
+    }
+
+    .texttracks {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .lane--text {
+      height: 26px;
+    }
+
+    .block {
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      border-radius: var(--radius-sm);
+      background: var(--elevated);
+      border: 1px solid var(--hairline);
+      overflow: hidden;
+      cursor: grab;
+      display: flex;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text);
+    }
+
+    .block.sel {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+      z-index: 2;
+    }
+
+    .block--shader {
+      background: var(--accent-soft);
+    }
+
+    .block .label {
+      padding: 0 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+    }
+
+    .block .label .mi {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .block .handle {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 9px;
+      cursor: ew-resize;
+      background: var(--hairline-strong);
+    }
+
+    .block .handle.l {
+      left: 0;
+    }
+
+    .block .handle.r {
+      right: 0;
+    }
+
+    .lane--text .block {
+      background: var(--sage-soft);
+    }
+
+    .playhead {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      width: 2px;
+      background: var(--rose);
+      pointer-events: none;
+      z-index: 3;
+      left: 6px;
+    }
+
+    .playhead::before {
+      content: "";
+      position: absolute;
+      top: -3px;
+      left: -4px;
+      border: 5px solid transparent;
+      border-top-color: var(--rose);
+    }
+
+    /* Wide invisible grab target so the thin playhead is easy to drag. */
+    .playhead .grab {
+      position: absolute;
+      top: -6px;
+      bottom: -6px;
+      left: -9px;
+      width: 20px;
+      pointer-events: auto;
+      cursor: ew-resize;
+    }
+
+    .timeline.scrubbing {
+      cursor: ew-resize;
+    }
+
+    /* Inspector — right sidebar for the selected clip / text layer. */
+    .inspector {
+      flex: 0 0 224px;
+      overflow-y: auto;
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 12px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-content: start;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .inspector>label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .inspector .full {
+      grid-column: 1 / -1;
+    }
+
+    .inspector .row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .inspector__hint {
+      grid-column: 1 / -1;
+      color: var(--text-soft);
+      font-style: italic;
+      padding-top: 4px;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      background: var(--text);
+      color: var(--bg);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity var(--dur-base);
+      pointer-events: none;
+      max-width: 90%;
+      z-index: 10;
+    }
+
+    .toast.show {
+      opacity: 1;
+    }
+
+  </style>
+</head>
+
+<body class="outline-window">
+  <div class="title-strip titlebar" data-window-bar>
+    <span class="project" id="project" data-window-close><span class="mi">movie</span></span>
+    <select class="field" id="docsel" title="Switch edit"></select>
+    <button class="btn-icon-s" id="newdoc" title="New video"><span class="mi">add</span></button>
+    <button class="btn-icon-s" id="refresh" title="Reload from file"><span class="mi">refresh</span></button>
+    <span class="spacer"></span>
+    <button class="btn-icon-s" id="deldoc" title="Delete this edit"><span class="mi">delete</span></button>
+  </div>
+  <main>
+    <div class="editor-col">
       <div class="stage" id="stage">
         <div class="placeholder" id="placeholder">No clips yet — add one below.</div>
         <!-- The frame is the export aspect ratio; clips fit/rotate inside it and
@@ -259,7 +365,9 @@
         <span class="time" id="time">0:00 / 0:00</span>
         <span class="spacer" style="flex: 1 1 auto"></span>
         <button class="btn-add" id="addtext"><span class="mi mi-sm">text_fields</span>Text</button>
-        <select class="field" id="addsel"><option value="">+ Add clip…</option></select>
+        <select class="field" id="addsel">
+          <option value="">+ Add clip…</option>
+        </select>
         <select class="field" id="preset" title="Export format">
           <option value="youtube">YouTube 16:9</option>
           <option value="reels">Reels 9:16</option>
@@ -273,13 +381,16 @@
       <div class="timeline" id="timeline">
         <div class="texttracks" id="textLane"></div>
         <div class="lane" id="clipLane"></div>
-        <div class="playhead" id="playhead"><div class="grab"></div></div>
+        <div class="playhead" id="playhead">
+          <div class="grab"></div>
+        </div>
       </div>
-      </div>
-      <aside class="inspector" id="inspector"></aside>
-    </main>
-    <div class="toast" id="toast"></div>
+    </div>
+    <aside class="inspector" id="inspector"></aside>
+  </main>
+  <div class="toast" id="toast"></div>
 
-    <script type="module" src="./video.js"></script>
-  </body>
+  <script type="module" src="./video.js"></script>
+</body>
+
 </html>

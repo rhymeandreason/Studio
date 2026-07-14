@@ -5105,7 +5105,9 @@ fn open_video_window(app: AppHandle, path: String, file: Option<String>) -> Resu
         .title("")
         .inner_size(900.0, 640.0)
         .min_inner_size(560.0, 420.0)
-        .title_bar_style(tauri::TitleBarStyle::Transparent)
+        .decorations(false)
+        .transparent(true)
+        .shadow(false)
         .build()
         .map_err(|e| e.to_string())?;
     let _ = win.restore_state(StateFlags::SIZE | StateFlags::POSITION);
