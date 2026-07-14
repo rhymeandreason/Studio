@@ -628,10 +628,6 @@ export async function loadWorkspace(path) {
   selectTab(wsPinnedTab || "workspace");
   updatePinButton();
   renderSpriteBadge();
-  wsSchedules = ws.schedules || [];
-  wsScheduleSlots = ws.scheduleSlots && ws.scheduleSlots.length === 3
-    ? ws.scheduleSlots
-    : ["09:00", "13:00", "17:00"];
   wsModes = ws.modes && ws.modes.length
     ? ws.modes
     : [
@@ -681,8 +677,6 @@ let wsSaveTimer = null;
 let wsEditor = "Studio Code Editor";
 let wsColor = "";
 let wsPinnedTab = null;
-let wsSchedules = [];
-let wsScheduleSlots = ["09:00", "13:00", "17:00"];
 
 function readWorkspaceForm() {
   return {
@@ -698,8 +692,6 @@ function readWorkspaceForm() {
     scripts: readList("scripts"),
     pinnedTab: wsPinnedTab,
     sprite: wsSprite,
-    schedules: wsSchedules,
-    scheduleSlots: wsScheduleSlots,
     modes: wsModes,
   };
 }

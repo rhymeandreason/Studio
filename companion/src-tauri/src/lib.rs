@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use studio_claude_core as core;
+use studio_claude_core::{url_encode, ClaudeHistorySession, ClaudeLogMessage, ClaudeSession};
 use tauri::{AppHandle, Emitter, Manager, Url};
 
 // --- Workspace repo resolution -------------------------------------------
@@ -29,72 +29,19 @@ fn read_workspace(project_path: &str) -> Workspace {
         .unwrap_or_default()
 }
 
-/// Resolve a manifest path entry: expand `~`, leave absolute paths, treat the
-/// rest as relative to the project folder.
-fn resolve_path(home: &Path, project_dir: &Path, raw: &str) -> PathBuf {
-    let raw = raw.trim();
-    if let Some(rest) = raw.strip_prefix("~/") {
-        home.join(rest)
-    } else if raw == "~" {
-        home.to_path_buf()
-    } else if Path::new(raw).is_absolute() {
-        PathBuf::from(raw)
-    } else {
-        project_dir.join(raw)
-    }
-}
-
-/// The directory Claude runs in for a project, by mode (the chat's cwd dropdown):
-/// - `"repo"` → the workspace's resolved `repo` path (for code work), falling
-///   back to the project folder if no repo is set.
-/// - anything else (`"project"`, default) → the **project folder**, where media,
-///   notes, and `artifacts/` live — so design artifacts land where the Artifacts
-///   panel reads them.
+/// The directory Claude runs in for a project, by mode (the chat's cwd
+/// dropdown; see `studio_claude_core::claude_cwd`).
 fn claude_cwd(app: &AppHandle, project_path: &str, mode: &str) -> PathBuf {
-    let project_dir = PathBuf::from(project_path);
-    if mode != "repo" {
-        return project_dir;
-    }
+    let home = app.path().home_dir().ok();
     let ws = read_workspace(project_path);
-    if ws.repo.trim().is_empty() {
-        return project_dir;
-    }
-    match app.path().home_dir() {
-        Ok(home) => resolve_path(&home, &project_dir, &ws.repo),
-        Err(_) => project_dir,
-    }
-}
-
-/// GUI apps don't inherit the user's shell PATH (nvm, homebrew, etc.). Resolve
-/// it via a login shell, falling back to the app's own PATH plus common dirs.
-fn claude_path() -> String {
-    if let Ok(out) = Command::new("/bin/zsh")
-        .args(["-l", "-c", "echo $PATH"])
-        .output()
-    {
-        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if !path.is_empty() {
-            return path;
-        }
-    }
-    let mut path = std::env::var("PATH").unwrap_or_default();
-    for extra in ["/opt/homebrew/bin", "/usr/local/bin"] {
-        path.push(':');
-        path.push_str(extra);
-    }
-    path
+    core::claude_cwd(home.as_deref(), project_path, mode, &ws.repo)
 }
 
 // --- Claude subprocesses --------------------------------------------------
 
-struct ClaudeProc {
-    child: Child,
-    stdin: ChildStdin,
-}
-
 #[derive(Default)]
 struct ClaudeState {
-    procs: Mutex<HashMap<String, ClaudeProc>>,
+    procs: Mutex<HashMap<String, ClaudeSession>>,
 }
 
 /// Send a message to a chat session, spawning the `claude` subprocess on first
@@ -113,83 +60,34 @@ fn claude_send(
 ) -> Result<(), String> {
     let mut procs = state.procs.lock().unwrap();
     if !procs.contains_key(&key) {
-        let mut cmd = Command::new("claude");
-        cmd.env("PATH", claude_path())
-            .current_dir(claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project")))
-            .arg("-p")
-            .args(["--input-format", "stream-json"])
-            .args(["--output-format", "stream-json"])
-            .arg("--verbose")
-            .arg("--include-partial-messages");
-        if !model.trim().is_empty() {
-            cmd.args(["--model", model.trim()]);
-        }
-        if let Some(mode) = permission_mode.as_deref().map(str::trim) {
-            if !mode.is_empty() {
-                cmd.args(["--permission-mode", mode]);
-            }
-        }
-        if let Some(r) = &resume {
-            if !r.trim().is_empty() {
-                cmd.args(["--resume", r.trim()]);
-            }
-        }
-        cmd.stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
-        let mut child = cmd.spawn().map_err(|e| e.to_string())?;
-        let stdout = child.stdout.take().ok_or("no stdout")?;
-        let stderr = child.stderr.take().ok_or("no stderr")?;
-        let stdin = child.stdin.take().ok_or("no stdin")?;
-
-        let handle = app.clone();
-        let event_key = key.clone();
-        std::thread::spawn(move || {
-            let event_name = format!("claude-stream-{event_key}");
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                let Ok(line) = line else { break };
-                if line.trim().is_empty() {
-                    continue;
-                }
-                let _ = handle.emit(&event_name, line);
-            }
-            let _ = handle.emit(&event_name, "{\"type\":\"__closed__\"}".to_string());
-        });
-
-        let handle = app.clone();
-        let event_key = key.clone();
-        std::thread::spawn(move || {
-            let event_name = format!("claude-stream-{event_key}");
-            let reader = BufReader::new(stderr);
-            for line in reader.lines() {
-                let Ok(line) = line else { break };
-                if line.trim().is_empty() {
-                    continue;
-                }
+        let event_name = format!("claude-stream-{key}");
+        let out_handle = app.clone();
+        let out_event = event_name.clone();
+        let err_handle = app.clone();
+        let session = core::spawn_claude_session(
+            &claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project")),
+            &model,
+            permission_mode.as_deref(),
+            resume.as_deref(),
+            move |line| {
+                let _ = out_handle.emit(&out_event, line);
+            },
+            move |line| {
                 let payload = serde_json::json!({ "type": "__stderr__", "line": line });
-                let _ = handle.emit(&event_name, payload.to_string());
-            }
-        });
-
-        procs.insert(key.clone(), ClaudeProc { child, stdin });
+                let _ = err_handle.emit(&event_name, payload.to_string());
+            },
+        )?;
+        procs.insert(key.clone(), session);
     }
 
-    let proc = procs.get_mut(&key).unwrap();
-    let msg = serde_json::json!({
-        "type": "user",
-        "message": { "role": "user", "content": [{ "type": "text", "text": text }] }
-    });
-    writeln!(proc.stdin, "{}", msg).map_err(|e| e.to_string())?;
-    proc.stdin.flush().map_err(|e| e.to_string())
+    procs.get_mut(&key).unwrap().send_text(&text)
 }
 
 /// Kill a chat session's subprocess, if running.
 #[tauri::command]
 fn claude_stop(state: tauri::State<ClaudeState>, key: String) {
-    if let Some(mut proc) = state.procs.lock().unwrap().remove(&key) {
-        let _ = proc.child.kill();
+    if let Some(mut session) = state.procs.lock().unwrap().remove(&key) {
+        session.kill();
     }
 }
 
@@ -265,13 +163,6 @@ fn save_last_project(app: AppHandle, path: String, name: String, sprite: String)
 
 // --- Recorded session history (~/.claude/projects) -----------------------
 
-#[derive(Clone, Serialize)]
-struct ClaudeHistorySession {
-    session_id: String,
-    summary: String,
-    modified: u64,
-}
-
 #[tauri::command]
 fn list_claude_project_sessions(
     app: AppHandle,
@@ -282,74 +173,7 @@ fn list_claude_project_sessions(
         return Vec::new();
     };
     let cwd_path = claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project"));
-    let encoded = cwd_path.to_string_lossy().replace('/', "-");
-    let dir = home.join(".claude/projects").join(encoded);
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Vec::new();
-    };
-
-    let mut sessions = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
-            continue;
-        }
-        let Some(session_id) = path.file_stem().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        let modified = entry
-            .metadata()
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
-
-        let mut summary = String::new();
-        if let Ok(text) = std::fs::read_to_string(&path) {
-            for line in text.lines() {
-                let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
-                    continue;
-                };
-                if v.get("type").and_then(|t| t.as_str()) == Some("user") {
-                    let content = &v["message"]["content"];
-                    let text = if let Some(s) = content.as_str() {
-                        Some(s.to_string())
-                    } else if let Some(arr) = content.as_array() {
-                        arr.iter()
-                            .find(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
-                            .and_then(|b| b["text"].as_str())
-                            .map(|s| s.to_string())
-                    } else {
-                        None
-                    };
-                    if let Some(text) = text {
-                        if !text.trim().is_empty() {
-                            summary = text.trim().chars().take(60).collect();
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        if summary.is_empty() {
-            continue;
-        }
-
-        sessions.push(ClaudeHistorySession {
-            session_id: session_id.to_string(),
-            summary,
-            modified,
-        });
-    }
-    sessions.sort_by(|a, b| b.modified.cmp(&a.modified));
-    sessions
-}
-
-#[derive(Clone, Serialize)]
-struct ClaudeLogMessage {
-    role: String,
-    text: String,
+    core::list_project_sessions(&home, &cwd_path)
 }
 
 #[tauri::command]
@@ -363,118 +187,22 @@ fn read_claude_session_log(
         return Vec::new();
     };
     let cwd_path = claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project"));
-    let encoded = cwd_path.to_string_lossy().replace('/', "-");
-    let file = home
-        .join(".claude/projects")
-        .join(encoded)
-        .join(format!("{session_id}.jsonl"));
-
-    let Ok(text) = std::fs::read_to_string(&file) else {
-        return Vec::new();
-    };
-
-    let mut out = Vec::new();
-    for line in text.lines() {
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
-            continue;
-        };
-        let kind = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
-        if kind != "user" && kind != "assistant" {
-            continue;
-        }
-        let content = &v["message"]["content"];
-        if let Some(s) = content.as_str() {
-            let s = s.trim();
-            if !s.is_empty() {
-                out.push(ClaudeLogMessage {
-                    role: kind.to_string(),
-                    text: s.to_string(),
-                });
-            }
-            continue;
-        }
-        let Some(blocks) = content.as_array() else {
-            continue;
-        };
-        for block in blocks {
-            match block.get("type").and_then(|t| t.as_str()) {
-                Some("text") => {
-                    if let Some(s) = block["text"].as_str() {
-                        if !s.trim().is_empty() {
-                            out.push(ClaudeLogMessage {
-                                role: kind.to_string(),
-                                text: s.trim().to_string(),
-                            });
-                        }
-                    }
-                }
-                Some("tool_use") => {
-                    let name = block.get("name").and_then(|n| n.as_str()).unwrap_or("tool");
-                    let input = block.get("input").cloned().unwrap_or(serde_json::json!({}));
-                    out.push(ClaudeLogMessage {
-                        role: "tool".to_string(),
-                        text: format!("{name} {input}"),
-                    });
-                }
-                _ => {}
-            }
-        }
-    }
-    out
+    core::read_session_log(&home, &cwd_path, &session_id)
 }
 
 // --- Account usage (/api/oauth/usage) ------------------------------------
-
-fn fetch_usage() -> Result<serde_json::Value, String> {
-    let out = Command::new("security")
-        .args(["find-generic-password", "-s", "Claude Code-credentials", "-w"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err("Could not read Claude credentials from Keychain".into());
-    }
-    let creds: serde_json::Value =
-        serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())?;
-    let token = creds["claudeAiOauth"]["accessToken"]
-        .as_str()
-        .ok_or("No OAuth access token found")?;
-
-    let resp = ureq::get("https://api.anthropic.com/api/oauth/usage")
-        .set("Authorization", &format!("Bearer {token}"))
-        .set("anthropic-beta", "oauth-2025-04-20")
-        .call()
-        .map_err(|e| match e {
-            ureq::Error::Status(code, _) => format!("usage request failed ({code})"),
-            other => other.to_string(),
-        })?;
-    resp.into_json().map_err(|e| e.to_string())
-}
 
 /// Async so the blocking Keychain read + network call run OFF the main thread.
 /// (A synchronous command blocks the main thread; the Keychain access prompt
 /// also needs the main thread, which deadlocks the app on first use.)
 #[tauri::command]
 async fn get_claude_usage() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(fetch_usage)
+    tauri::async_runtime::spawn_blocking(core::fetch_usage)
         .await
         .map_err(|e| e.to_string())?
 }
 
 // --- Deep links & per-project windows ------------------------------------
-
-/// Percent-encode a query value (RFC 3986 unreserved kept).
-fn url_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char)
-            }
-            _ => out.push_str(&format!("%{b:02X}")),
-        }
-    }
-    out
-}
 
 /// Show & focus any window (fallback for Dock/single-instance with no project).
 fn show_any_window(app: &AppHandle) {

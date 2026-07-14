@@ -3588,6 +3588,7 @@ dependencies = [
  "objc",
  "serde",
  "serde_json",
+ "studio-claude-core",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -3597,6 +3598,15 @@ dependencies = [
  "trash",
  "ureq",
  "webp",
+]
+
+[[package]]
+name = "studio-claude-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ureq",
 ]
 
 [[package]]

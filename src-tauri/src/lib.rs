@@ -2,13 +2,16 @@ mod patchmatch;
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use studio_claude_core as claude_core;
+use studio_claude_core::{
+    claude_path, resolve_path, url_encode, ClaudeHistorySession, ClaudeLogMessage, ClaudeSession,
+};
 use tauri::{
     image::Image,
     menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem},
@@ -74,13 +77,6 @@ struct Workspace {
     sprite: String,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "pinnedTab")]
     pinned_tab: Option<String>,
-    /// Recurring `claude -p` prompts run by the background scheduler.
-    #[serde(default)]
-    schedules: Vec<ScheduledTask>,
-    /// The 3 shared "HH:MM" times tasks can be grouped under, shown in the
-    /// Workspace UI as 3 slots.
-    #[serde(default = "default_schedule_slots", rename = "scheduleSlots")]
-    schedule_slots: Vec<String>,
     /// Named window-layout snapshots (Code / Design / Default, plus any the
     /// user adds), each recorded via the Workspace tab's record/play buttons.
     #[serde(default = "default_modes")]
@@ -194,11 +190,6 @@ struct ScheduledTask {
     id: String,
     #[serde(default)]
     prompt: String,
-    /// Legacy: days used to live per-task; they now live on the slot. Kept
-    /// only so `read_schedules_file` can migrate old data into `SlotDef::days`
-    /// once, after which it's cleared and no longer serialized.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    days: Vec<u8>,
     #[serde(default)]
     enabled: bool,
     /// Model passed to `claude --model`, e.g. "haiku", "sonnet", "opus".
@@ -232,10 +223,6 @@ struct ScheduledTask {
     /// output file is written. Blank = the ~/Projects root ("Global").
     #[serde(default, rename = "projectPath")]
     project_path: String,
-}
-
-fn default_schedule_slots() -> Vec<String> {
-    vec!["09:00".to_string(), "13:00".to_string(), "17:00".to_string()]
 }
 
 fn default_slot_time() -> String {
@@ -284,9 +271,8 @@ fn default_slots() -> Vec<SlotDef> {
     ]
 }
 
-/// The single global schedules store (app config dir / schedules.json): the 3
-/// shared time slots plus every scheduled task across all projects. Replaces
-/// the old per-project `Workspace::schedules`.
+/// The single global schedules store (app config dir / schedules.json): the
+/// shared time slots (`SLOT_COUNT`) plus every scheduled task across all projects.
 #[derive(Clone, Serialize, Deserialize, Default)]
 struct SchedulesFile {
     #[serde(default = "default_slots")]
@@ -1459,7 +1445,6 @@ fn save_artifact(
 /// A short stable hash, used to give an artifact-scoped tool window its own label
 /// (so opening a different artifact opens/focuses a distinct window).
 fn tool_hash(s: &str) -> String {
-    use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     s.hash(&mut h);
     format!("{:x}", h.finish())
@@ -1893,7 +1878,6 @@ fn walk_media(dir: &Path, out: &mut Vec<MediaItem>) {
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
         let path_str = path.to_string_lossy().to_string();
-        migrate_sidecar(&path_str);
         let edits_mtime = std::fs::metadata(sidecar_path(&path_str))
             .and_then(|m| m.modified())
             .ok()
@@ -1942,7 +1926,6 @@ fn quicklook_thumb(app: AppHandle, path: String, size: u32) -> Result<String, St
 /// (via NSWorkspace), cached as a PNG. Returns the cached PNG path.
 #[tauri::command]
 fn app_icon(app: AppHandle, name: String) -> Result<String, String> {
-    use std::hash::{Hash, Hasher};
 
     // Resolve the app name to a `.app` bundle path without launching it
     // (AppleScript's `path to application` launches the app as a side effect).
@@ -1992,7 +1975,6 @@ fn app_icon(app: AppHandle, name: String) -> Result<String, String> {
 }
 
 fn quicklook_thumb_impl(app: &AppHandle, path: &str, size: u32) -> Result<String, String> {
-    use std::hash::{Hash, Hasher};
 
     let src = PathBuf::from(&path);
     let mtime = std::fs::metadata(&src)
@@ -2032,7 +2014,6 @@ fn quicklook_thumb_impl(app: &AppHandle, path: &str, size: u32) -> Result<String
 /// Path of the on-disk cache file for an edited image's baked thumbnail,
 /// keyed by image path + sidecar mtime (so it invalidates when edits change).
 fn edited_thumb_file(app: &AppHandle, path: &str, edits_mtime: u64) -> Result<PathBuf, String> {
-    use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     path.hash(&mut hasher);
     edits_mtime.hash(&mut hasher);
@@ -2614,7 +2595,6 @@ fn open_in_photos(path: String) -> Result<(), String> {
 /// display it. Returns the cached file path; the frontend asset-resolves it.
 #[tauri::command]
 fn heic_preview(app: AppHandle, path: String) -> Result<String, String> {
-    use std::hash::{Hash, Hasher};
 
     let src = PathBuf::from(&path);
     let mtime = std::fs::metadata(&src)
@@ -2670,32 +2650,10 @@ fn import_media(project_path: String, files: Vec<String>) -> Result<Vec<String>,
         if !is_image {
             continue;
         }
-        let Some(fname) = src.file_name() else {
+        let Some(dest) = unique_dest(&media_dir, &src) else {
             continue;
         };
-
-        // Avoid clobbering an existing file: name.ext → name-1.ext, name-2.ext…
-        let mut dest = media_dir.join(fname);
-        if dest.exists() {
-            let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("image");
-            let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("");
-            let mut n = 1;
-            loop {
-                let candidate = media_dir.join(format!("{stem}-{n}.{ext}"));
-                if !candidate.exists() {
-                    dest = candidate;
-                    break;
-                }
-                n += 1;
-            }
-        }
-
-        // Move within the same volume via rename; fall back to copy+delete
-        // across volumes (rename fails with EXDEV there).
-        if std::fs::rename(&src, &dest).is_err() {
-            std::fs::copy(&src, &dest).map_err(|e| e.to_string())?;
-            std::fs::remove_file(&src).map_err(|e| e.to_string())?;
-        }
+        move_into(&src, &dest)?;
         imported.push(dest.to_string_lossy().to_string());
     }
     Ok(imported)
@@ -2923,72 +2881,22 @@ fn schedules_file_path(app: &AppHandle) -> Option<PathBuf> {
         .map(|dir| dir.join("schedules.json"))
 }
 
-/// Fold legacy per-task `days` into their slot's `days` (slots now own the
-/// timing), then clear the per-task copies. Returns whether anything changed,
-/// so the caller can persist the migration. Idempotent: once slots carry days
-/// and tasks don't, it's a no-op.
-fn migrate_slot_days(file: &mut SchedulesFile) -> bool {
-    let mut changed = false;
-    for idx in 0..file.slots.len() {
-        if file.slots[idx].days.is_empty() {
-            if let Some(days) = file
-                .tasks
-                .iter()
-                .find(|t| t.slot as usize == idx && !t.days.is_empty())
-                .map(|t| t.days.clone())
-            {
-                file.slots[idx].days = days;
-                changed = true;
-            }
-        }
-    }
-    for task in file.tasks.iter_mut() {
-        if !task.days.is_empty() {
-            task.days.clear();
-            changed = true;
-        }
-    }
-    changed
-}
-
-/// Read the global schedules store. If it doesn't exist yet, migrate from the
-/// old per-project `Workspace::schedules` (each task tagged with its project
-/// path) and persist the result, so existing schedules carry over once. Also
-/// folds any legacy per-task `days` into their slot.
+/// Read the global schedules store, creating a default one if it doesn't
+/// exist yet. Also coerces the slot count to `SLOT_COUNT`.
 fn read_schedules_file(app: &AppHandle) -> SchedulesFile {
     if let Some(path) = schedules_file_path(app) {
         if let Ok(text) = std::fs::read_to_string(&path) {
             let mut file: SchedulesFile = serde_json::from_str(&text).unwrap_or_default();
-            let mut changed = migrate_slot_days(&mut file);
-            changed |= migrate_slot_count(&mut file);
-            if changed {
+            if migrate_slot_count(&mut file) {
                 let _ = write_schedules_file(app, &file);
             }
             return file;
         }
     }
-    // First run after the move to a global store: gather per-project tasks.
-    let mut file = SchedulesFile {
+    let file = SchedulesFile {
         slots: default_slots(),
         tasks: Vec::new(),
     };
-    for project in scan_projects(app) {
-        if let Ok(ws) = read_workspace(project.path.clone()) {
-            if ws.schedule_slots.len() == 3 && file.tasks.is_empty() {
-                file.slots = ws
-                    .schedule_slots
-                    .iter()
-                    .map(|time| SlotDef { time: time.clone(), days: Vec::new() })
-                    .collect();
-            }
-            for mut task in ws.schedules {
-                task.project_path = project.path.clone();
-                file.tasks.push(task);
-            }
-        }
-    }
-    migrate_slot_days(&mut file);
-    migrate_slot_count(&mut file);
     let _ = write_schedules_file(app, &file);
     file
 }
@@ -3116,15 +3024,6 @@ fn sidecar_path(image_path: &str) -> String {
         .map(|d| format!("{}/", d.to_string_lossy()))
         .unwrap_or_default();
     format!("{}.{}.studio.json", parent, filename)
-}
-
-/// Migrate old-style sidecar (`<image>.studio.json`) to hidden (`.<image>.studio.json`).
-fn migrate_sidecar(image_path: &str) {
-    let old = format!("{}.studio.json", image_path);
-    let new = sidecar_path(image_path);
-    if std::path::Path::new(&old).exists() && !std::path::Path::new(&new).exists() {
-        let _ = std::fs::rename(&old, &new);
-    }
 }
 
 /// Read an image's edit sidecar (`.<image>.studio.json`); empty object if none.
@@ -3451,21 +3350,6 @@ fn save_notes(path: String, notes: serde_json::Value) -> Result<(), String> {
     let file = PathBuf::from(&path).join("notes.json");
     let text = serde_json::to_string_pretty(&notes).map_err(|e| e.to_string())?;
     std::fs::write(&file, text).map_err(|e| e.to_string())
-}
-
-/// Resolve a manifest path entry: expand `~`, leave absolute paths, and treat
-/// everything else as relative to the project folder.
-fn resolve_path(home: &Path, project_dir: &Path, raw: &str) -> PathBuf {
-    let raw = raw.trim();
-    if let Some(rest) = raw.strip_prefix("~/") {
-        home.join(rest)
-    } else if raw == "~" {
-        home.to_path_buf()
-    } else if Path::new(raw).is_absolute() {
-        PathBuf::from(raw)
-    } else {
-        project_dir.join(raw)
-    }
 }
 
 /// RSS (in MB) for a single pid via `ps`.
@@ -4163,8 +4047,8 @@ fn git_undo(repo: String) -> Result<(), String> {
 /// tool" instead of an external macOS app.
 const STUDIO_EDITOR: &str = "Studio Code Editor";
 
-/// Open one changed file in the project's configured editor (blank = Zed,
-/// `STUDIO_EDITOR` = the in-app Code Editor tool).
+/// Last 7 days of commits across all branches, one US-separated record per
+/// line, for the Git Pulse tool.
 #[tauri::command]
 fn git_log_week(repo: String) -> Result<String, String> {
     let out = Command::new("git")
@@ -4184,6 +4068,8 @@ fn git_log_week(repo: String) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
+/// Open one changed file in the project's configured editor (blank = Zed,
+/// `STUDIO_EDITOR` = the in-app Code Editor tool).
 #[tauri::command]
 fn git_open_file(
     app: AppHandle,
@@ -4258,46 +4144,14 @@ fn open_file_in_code_editor(
 /// - anything else (`"project"`, default) → the **project folder**, where media,
 ///   notes, and `artifacts/` live — so design artifacts land where the Artifacts
 ///   panel reads them.
-/// (Matches the standalone companion's `claude_cwd`.)
+/// (Shared with the standalone companion via studio-claude-core.)
 fn claude_cwd(app: &AppHandle, project_path: &str, mode: &str) -> PathBuf {
-    let project_dir = PathBuf::from(project_path);
-    if mode != "repo" {
-        return project_dir;
-    }
+    let home = app.path().home_dir().ok();
     let ws = read_workspace(project_path.to_string()).unwrap_or_default();
-    if ws.repo.trim().is_empty() {
-        return project_dir;
-    }
-    match app.path().home_dir() {
-        Ok(home) => resolve_path(&home, &project_dir, &ws.repo),
-        Err(_) => project_dir,
-    }
+    claude_core::claude_cwd(home.as_deref(), project_path, mode, &ws.repo)
 }
 
-/// GUI apps don't inherit the user's shell PATH (nvm, homebrew, etc.), so
-/// spawning "claude" — and "claude" itself spawning "node" via its shebang —
-/// often fails even though it works fine from a terminal. Resolve PATH via a
-/// login shell (which sources nvm/profile scripts) once, falling back to the
-/// app's own PATH plus common install dirs.
-fn claude_path() -> String {
-    if let Ok(out) = Command::new("/bin/zsh")
-        .args(["-l", "-c", "echo $PATH"])
-        .output()
-    {
-        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if !path.is_empty() {
-            return path;
-        }
-    }
-    let mut path = std::env::var("PATH").unwrap_or_default();
-    for extra in ["/opt/homebrew/bin", "/usr/local/bin"] {
-        path.push(':');
-        path.push_str(extra);
-    }
-    path
-}
-
-/// Start the background loop that fires due `Workspace::schedules` entries.
+/// Start the background loop that fires due scheduled tasks (schedules.json).
 /// Checks every 30s; a task fires when its `time` matches the current
 /// HH:MM, today's weekday is in `days` (or `days` is empty), and it hasn't
 /// already run today.
@@ -4513,16 +4367,6 @@ fn run_due_schedules(app: &AppHandle) {
     }
 }
 
-/// Recompute the set of upcoming wake times needed for all enabled scheduled
-/// tasks (across every project) and apply them via `pmset schedule wake`,
-/// replacing any previously-set schedule. Runs `pmset` through `osascript
-/// ... with administrator privileges`, which prompts for the admin password —
-/// called when the user adds/edits/toggles a scheduled task, so the prompt
-/// happens while they're present, not at 5am.
-///
-/// Note: `pmset schedule cancelall` clears *all* scheduled sleep/wake/poweron
-/// events system-wide, not just Studio's — fine for a single-user machine,
-/// but worth knowing if something else relies on `pmset schedule`.
 /// The next wake time for each enabled scheduled task across every project
 /// (today..+7 days, respecting `days`), sorted, deduped, and capped at 3 —
 /// `pmset` only holds a handful of scheduled events, and tasks sharing a
@@ -5091,15 +4935,10 @@ fn run_scheduled_task(
     });
 }
 
-/// A running `claude -p` subprocess for one companion-window chat session.
-struct ClaudeProc {
-    child: Child,
-    stdin: ChildStdin,
-}
-
+/// Running `claude -p` subprocesses for companion-window chat sessions.
 #[derive(Default)]
 struct ClaudeState {
-    procs: Mutex<HashMap<String, ClaudeProc>>,
+    procs: Mutex<HashMap<String, ClaudeSession>>,
 }
 
 /// Open (or focus) the standalone Scheduled Tasks window, listing scheduled
@@ -5129,7 +4968,6 @@ fn open_schedules_window(app: AppHandle) -> Result<(), String> {
 
 /// Stable per-project label for a Video window (one window per project folder).
 fn video_label(path: &str) -> String {
-    use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     path.hash(&mut h);
     format!("video-{:x}", h.finish())
@@ -5216,21 +5054,6 @@ fn open_claude_window(
     Ok(())
 }
 
-/// Percent-encode a string for use in a URL query value (RFC 3986 unreserved
-/// kept; everything else encoded). Used to build the deep-link URL below.
-fn url_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char)
-            }
-            _ => out.push_str(&format!("%{b:02X}")),
-        }
-    }
-    out
-}
-
 /// Launch (or focus) the standalone Claude companion app for a project. The
 /// companion is a separate process (it survives Studio rebuilds) that runs as a
 /// single owner with one window per project. We launch with `open -n … --args
@@ -5276,83 +5099,34 @@ fn claude_send(
 ) -> Result<(), String> {
     let mut procs = state.procs.lock().unwrap();
     if !procs.contains_key(&key) {
-        let mut cmd = Command::new("claude");
-        cmd.env("PATH", claude_path())
-            .current_dir(claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project")))
-            .arg("-p")
-            .args(["--input-format", "stream-json"])
-            .args(["--output-format", "stream-json"])
-            .arg("--verbose")
-            .arg("--include-partial-messages");
-        if !model.trim().is_empty() {
-            cmd.args(["--model", model.trim()]);
-        }
-        if let Some(mode) = permission_mode.as_deref().map(str::trim) {
-            if !mode.is_empty() {
-                cmd.args(["--permission-mode", mode]);
-            }
-        }
-        if let Some(r) = &resume {
-            if !r.trim().is_empty() {
-                cmd.args(["--resume", r.trim()]);
-            }
-        }
-        cmd.stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
-        let mut child = cmd.spawn().map_err(|e| e.to_string())?;
-        let stdout = child.stdout.take().ok_or("no stdout")?;
-        let stderr = child.stderr.take().ok_or("no stderr")?;
-        let stdin = child.stdin.take().ok_or("no stdin")?;
-
-        let handle = app.clone();
-        let event_key = key.clone();
-        std::thread::spawn(move || {
-            let event_name = format!("claude-stream-{event_key}");
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                let Ok(line) = line else { break };
-                if line.trim().is_empty() {
-                    continue;
-                }
-                let _ = handle.emit(&event_name, line);
-            }
-            let _ = handle.emit(&event_name, "{\"type\":\"__closed__\"}".to_string());
-        });
-
-        let handle = app.clone();
-        let event_key = key.clone();
-        std::thread::spawn(move || {
-            let event_name = format!("claude-stream-{event_key}");
-            let reader = BufReader::new(stderr);
-            for line in reader.lines() {
-                let Ok(line) = line else { break };
-                if line.trim().is_empty() {
-                    continue;
-                }
+        let event_name = format!("claude-stream-{key}");
+        let out_handle = app.clone();
+        let out_event = event_name.clone();
+        let err_handle = app.clone();
+        let session = claude_core::spawn_claude_session(
+            &claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project")),
+            &model,
+            permission_mode.as_deref(),
+            resume.as_deref(),
+            move |line| {
+                let _ = out_handle.emit(&out_event, line);
+            },
+            move |line| {
                 let payload = serde_json::json!({ "type": "__stderr__", "line": line });
-                let _ = handle.emit(&event_name, payload.to_string());
-            }
-        });
-
-        procs.insert(key.clone(), ClaudeProc { child, stdin });
+                let _ = err_handle.emit(&event_name, payload.to_string());
+            },
+        )?;
+        procs.insert(key.clone(), session);
     }
 
-    let proc = procs.get_mut(&key).unwrap();
-    let msg = serde_json::json!({
-        "type": "user",
-        "message": { "role": "user", "content": [{ "type": "text", "text": text }] }
-    });
-    writeln!(proc.stdin, "{}", msg).map_err(|e| e.to_string())?;
-    proc.stdin.flush().map_err(|e| e.to_string())
+    procs.get_mut(&key).unwrap().send_text(&text)
 }
 
 /// Kill a companion-window chat session's subprocess, if running.
 #[tauri::command]
 fn claude_stop(state: tauri::State<ClaudeState>, key: String) {
-    if let Some(mut proc) = state.procs.lock().unwrap().remove(&key) {
-        let _ = proc.child.kill();
+    if let Some(mut session) = state.procs.lock().unwrap().remove(&key) {
+        session.kill();
     }
 }
 
@@ -5374,14 +5148,6 @@ fn save_claude_sessions(app: AppHandle, data: String) -> Result<(), String> {
     std::fs::write(dir.join("claude-sessions.json"), data).map_err(|e| e.to_string())
 }
 
-/// One existing Claude Code session found on disk for a project.
-#[derive(Clone, Serialize)]
-struct ClaudeHistorySession {
-    session_id: String,
-    summary: String,
-    modified: u64,
-}
-
 /// List Claude Code sessions previously recorded for `project_path`, by
 /// reading `~/.claude/projects/<encoded-path>/*.jsonl` (the format Claude
 /// Code itself uses for `--resume`). Newest first.
@@ -5394,85 +5160,15 @@ fn list_claude_project_sessions(
     let Ok(home) = app.path().home_dir() else {
         return Vec::new();
     };
-    // Claude records sessions under the cwd it ran in, so encode the mode's
-    // resolved path (project folder or repo) to find them.
+    // Claude records sessions under the cwd it ran in, so resolve the mode's
+    // path (project folder or repo) to find them.
     let cwd_path = claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project"));
-    let encoded = cwd_path.to_string_lossy().replace('/', "-");
-    let dir = home.join(".claude/projects").join(encoded);
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Vec::new();
-    };
-
-    let mut sessions = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
-            continue;
-        }
-        let Some(session_id) = path.file_stem().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        let modified = entry
-            .metadata()
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
-
-        // First user message becomes the summary.
-        let mut summary = String::new();
-        if let Ok(text) = std::fs::read_to_string(&path) {
-            for line in text.lines() {
-                let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
-                    continue;
-                };
-                if v.get("type").and_then(|t| t.as_str()) == Some("user") {
-                    let content = &v["message"]["content"];
-                    let text = if let Some(s) = content.as_str() {
-                        Some(s.to_string())
-                    } else if let Some(arr) = content.as_array() {
-                        arr.iter()
-                            .find(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
-                            .and_then(|b| b["text"].as_str())
-                            .map(|s| s.to_string())
-                    } else {
-                        None
-                    };
-                    if let Some(text) = text {
-                        if !text.trim().is_empty() {
-                            summary = text.trim().chars().take(60).collect();
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        if summary.is_empty() {
-            continue;
-        }
-
-        sessions.push(ClaudeHistorySession {
-            session_id: session_id.to_string(),
-            summary,
-            modified,
-        });
-    }
-    sessions.sort_by(|a, b| b.modified.cmp(&a.modified));
-    sessions
-}
-
-/// One replayed message from a recorded session log.
-#[derive(Clone, Serialize)]
-struct ClaudeLogMessage {
-    role: String,
-    text: String,
+    claude_core::list_project_sessions(&home, &cwd_path)
 }
 
 /// Read the full transcript of a recorded Claude Code session
 /// (`~/.claude/projects/<encoded-cwd>/<session_id>.jsonl`) so the UI can show
-/// the past chat log when resuming a session started outside Studio. Returns
-/// user/assistant text and a compact summary of each tool call, in order.
+/// the past chat log when resuming a session started outside Studio.
 #[tauri::command]
 fn read_claude_session_log(
     app: AppHandle,
@@ -5484,96 +5180,18 @@ fn read_claude_session_log(
         return Vec::new();
     };
     let cwd_path = claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project"));
-    let encoded = cwd_path.to_string_lossy().replace('/', "-");
-    let file = home
-        .join(".claude/projects")
-        .join(encoded)
-        .join(format!("{session_id}.jsonl"));
-
-    let Ok(text) = std::fs::read_to_string(&file) else {
-        return Vec::new();
-    };
-
-    let mut out = Vec::new();
-    for line in text.lines() {
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
-            continue;
-        };
-        let kind = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
-        if kind != "user" && kind != "assistant" {
-            continue;
-        }
-        let content = &v["message"]["content"];
-        // Content is either a plain string or an array of typed blocks.
-        if let Some(s) = content.as_str() {
-            let s = s.trim();
-            if !s.is_empty() {
-                out.push(ClaudeLogMessage {
-                    role: kind.to_string(),
-                    text: s.to_string(),
-                });
-            }
-            continue;
-        }
-        let Some(blocks) = content.as_array() else {
-            continue;
-        };
-        for block in blocks {
-            match block.get("type").and_then(|t| t.as_str()) {
-                Some("text") => {
-                    if let Some(s) = block["text"].as_str() {
-                        if !s.trim().is_empty() {
-                            out.push(ClaudeLogMessage {
-                                role: kind.to_string(),
-                                text: s.trim().to_string(),
-                            });
-                        }
-                    }
-                }
-                Some("tool_use") => {
-                    let name = block.get("name").and_then(|n| n.as_str()).unwrap_or("tool");
-                    let input = block.get("input").cloned().unwrap_or(serde_json::json!({}));
-                    out.push(ClaudeLogMessage {
-                        role: "tool".to_string(),
-                        text: format!("{name} {input}"),
-                    });
-                }
-                _ => {}
-            }
-        }
-    }
-    out
+    claude_core::read_session_log(&home, &cwd_path, &session_id)
 }
 
-/// Current account usage (the numbers behind Claude's `/usage`): 5-hour and
-/// 7-day quota utilization, fetched from `/api/oauth/usage` with the OAuth
-/// token Claude Code stores in the macOS Keychain. Account-wide, not per
-/// session. Returns the raw JSON (`five_hour`/`seven_day`/`extra_usage`).
+/// Current account usage (the numbers behind Claude's `/usage`); see
+/// `studio_claude_core::fetch_usage`. Async so the blocking Keychain read +
+/// network call run OFF the main thread (the Keychain access prompt also
+/// needs the main thread, which deadlocks the app on first use).
 #[tauri::command]
-fn get_claude_usage() -> Result<serde_json::Value, String> {
-    // The OAuth token lives in the login keychain under this service name.
-    let out = Command::new("security")
-        .args(["find-generic-password", "-s", "Claude Code-credentials", "-w"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err("Could not read Claude credentials from Keychain".into());
-    }
-    let creds: serde_json::Value =
-        serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())?;
-    let token = creds["claudeAiOauth"]["accessToken"]
-        .as_str()
-        .ok_or("No OAuth access token found")?;
-
-    let resp = ureq::get("https://api.anthropic.com/api/oauth/usage")
-        .set("Authorization", &format!("Bearer {token}"))
-        .set("anthropic-beta", "oauth-2025-04-20")
-        .call()
-        .map_err(|e| match e {
-            ureq::Error::Status(code, _) => format!("usage request failed ({code})"),
-            other => other.to_string(),
-        })?;
-    resp.into_json().map_err(|e| e.to_string())
+async fn get_claude_usage() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(claude_core::fetch_usage)
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Move an entire project folder to the Trash.

@@ -52,6 +52,13 @@ to the normal button. The companion reuses the shared frontend in `src/claude/*`
 (its `frontendDist` is `../../src`, window URL
 `claude/index.html?project=…&name=…&sprite=…`).
 
+The Rust logic both apps need — `claude` subprocess spawn/stream, session
+discovery + transcript replay from `~/.claude/projects/`, usage fetch,
+`claude_cwd`/`claude_path`/`resolve_path`/`url_encode` — lives in the shared
+crate **`crates/studio-claude-core/`** (no tauri dependency; both `Cargo.toml`s
+path-depend on it). Fix Claude-Code-format changes there, once. Each app keeps
+only its thin `#[tauri::command]` wrappers and its own sessions-file storage.
+
 - **Frontend** (`src/claude/claude.js`) is companion-only. It has no access to
   Studio's `list_projects`/`get_active_project`; it reads its project from the
   window URL at init and namespaces `localStorage` per project.
