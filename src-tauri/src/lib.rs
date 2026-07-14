@@ -142,32 +142,27 @@ struct WindowSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     editor: Option<String>,
     /// Tool-window-only (label starts with "tool-"): the `src/tools/*.html`
-    /// file + query string (or, for `tool_kind: "color"`, the bare color) it
-    /// was opened with, captured at record time from `TOOL_WINDOWS` — needed
-    /// to rebuild it if it's not open yet (e.g. a fresh launch, before the
-    /// user has opened that tool this session) since its label alone (often
-    /// a hash) can't be reversed back into one.
+    /// file + query string it was opened with, captured at record time from
+    /// `TOOL_WINDOWS` — needed to rebuild it if it's not open yet (e.g. a
+    /// fresh launch, before the user has opened that tool this session) since
+    /// its label alone (often a hash) can't be reversed back into one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     tool_file: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     tool_query: Option<String>,
-    /// "plain" (reopen via `open_tool`) or "color" (reopen via
-    /// `open_tool_window_with_color` — a different label scheme, so it must
-    /// be replayed through that same function). Missing/absent = "plain".
+    /// "plain" (any tool window — reopen via `open_tool_window`, the one
+    /// shared label scheme) or one of the non-tool windows with their own
+    /// label schemes: "code-editor", "schedules", "video", "claude" — each
+    /// replayed through its own builder. Missing/absent = "plain".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     tool_kind: Option<String>,
 }
 
-/// label → (file, query/color, kind) for every tool window opened this
-/// session, so a Workspace mode recorded while one was open can store enough
-/// to rebuild it later — even after a restart, since a label alone (often a
-/// hash, or otherwise unparseable) can't be reversed back into the args its
-/// opener needs. `kind` is `"plain"` (reopen via `open_tool`, used by
-/// `open_tool`/`open_tool_window_near`/`open_tool_window`) or `"color"`
-/// (reopen via `open_tool_window_with_color`, which uses a different label
-/// scheme — filename-with-extension, not file_stem — so it must be replayed
-/// through that exact function for the label, and thus the position/size
-/// restore that depends on it, to match).
+/// label → (file, query, kind) for every tool window opened this session, so
+/// a Workspace mode recorded while one was open can store enough to rebuild
+/// it later — even after a restart, since a label alone (often a hash, or
+/// otherwise unparseable) can't be reversed back into the args its opener
+/// needs. `kind`: see `WindowSnapshot::tool_kind`.
 static TOOL_WINDOWS: OnceLock<Mutex<HashMap<String, (String, Option<String>, String)>>> =
     OnceLock::new();
 
@@ -590,49 +585,12 @@ fn apply_tool_chrome<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
     let st = tool_style(filename);
     builder
         .inner_size(st.w, st.h)
+        // A shared floor, small enough for the tiniest tool (window-size
+        // resizes itself to 240×80).
+        .min_inner_size(240.0, 80.0)
         .decorations(false)
         .transparent(true)
         .shadow(false)
-}
-
-fn open_tool_window(app: &AppHandle, path: &str) {
-    open_tool_window_near(app, path, None);
-}
-
-fn open_tool_window_with_color(app: &AppHandle, path: &str, color: &str) {
-    // The Code Editor is opened per-project, not as a shared singleton.
-    if Path::new(path).file_name().and_then(|n| n.to_str()) == Some("code-editor.html") {
-        open_code_editor_window(app, color, &active_project_path(app), None);
-        return;
-    }
-    if color.is_empty() {
-        open_tool_window_near(app, path, None);
-        return;
-    }
-    // Encode the color into the URL so the tool can apply it immediately on
-    // first paint (before any Tauri events fire), matching the git window pattern.
-    let filename = Path::new(path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
-    let label = format!(
-        "tool-{}",
-        filename
-            .chars()
-            .map(|c| if c.is_alphanumeric() { c } else { '-' })
-            .collect::<String>()
-    );
-    track_tool_window(&label, filename, Some(color.to_string()), "color");
-    if let Some(win) = app.get_webview_window(&label) {
-        let _ = win.show();
-        let _ = win.set_focus();
-        return;
-    }
-    let url = format!("tools/{}?color={}", filename, url_encode(color));
-    // Empty native title everywhere — the page paints its own bar.
-    let builder =
-        WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into())).title(String::new());
-    let _ = apply_tool_chrome(builder, filename).build();
 }
 
 /// Per-project window label for the Code Editor, so each project gets its own
@@ -744,34 +702,57 @@ fn project_path_for_file(app: &AppHandle, file: &str) -> Option<String> {
     best.map(|(_, p)| p)
 }
 
-/// Open a tool window, optionally positioned just below a tray icon's rect
-/// (as reported by `TrayIconEvent::Click`).
-fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>) {
+/// Open (or focus) a tool window — the single entry point every path routes
+/// through (tray icons, the tools menu, Spotlight, the `open_tool` command,
+/// Workspace-mode replay), so all tool windows share ONE label scheme:
+/// `tool-<stem>` (plus `-<hash(query)>` when a query scopes the window, so
+/// e.g. different artifacts don't collide on one shared window).
+///
+/// - `path`: the tool's HTML file — a bare filename or any path ending in it.
+/// - `query`: optional URL query (e.g. `artifact=<enc>`, `repo=<enc>`).
+/// - `near`: position just below a tray icon's rect (as reported by
+///   `TrayIconEvent::Click`); an already-open window toggles visibility
+///   instead of focusing.
+/// - `color`: explicit tint override; `None` resolves it from the tool's
+///   `tool_style` tint (active project accent, or none for paper tools). The
+///   color rides the URL so the page can paint its own bar on first frame.
+///
+/// Loads via the app's tauri://localhost protocol (the tool's HTML lives in
+/// src/tools/, part of frontendDist) rather than file://: file:// windows
+/// send `Origin: null`, which Tauri's IPC rejects ("Origin header not valid
+/// URL").
+fn open_tool_window(
+    app: &AppHandle,
+    path: &str,
+    query: Option<String>,
+    near: Option<tauri::Rect>,
+    color: Option<String>,
+) {
     // The Code Editor is opened per-project, not as a shared singleton.
     if Path::new(path).file_name().and_then(|n| n.to_str()) == Some("code-editor.html") {
-        let color = active_git_color_hex(app).unwrap_or_default();
+        let color = color
+            .filter(|c| !c.is_empty())
+            .or_else(|| active_git_color_hex(app))
+            .unwrap_or_default();
         open_code_editor_window(app, &color, &active_project_path(app), None);
         return;
     }
-    let label = format!(
-        "tool-{}",
-        Path::new(path)
-            .file_stem()
-            .and_then(|n| n.to_str())
-            .unwrap_or("tool")
-            .chars()
-            .map(|c| if c.is_alphanumeric() { c } else { '-' })
-            .collect::<String>()
-    );
-
-    // Load via the app's tauri://localhost protocol (the tool's HTML lives
-    // in src/tools/, part of frontendDist) rather than file://: file://
-    // windows send `Origin: null`, which Tauri's IPC rejects ("Origin
-    // header not valid URL").
     let Some(filename) = Path::new(path).file_name().and_then(|n| n.to_str()) else {
         return;
     };
-    track_tool_window(&label, filename, None, "plain");
+    let stem: String = Path::new(filename)
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .unwrap_or("tool")
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect();
+    let q = query.filter(|q| !q.is_empty());
+    let label = match &q {
+        Some(q) => format!("tool-{stem}-{}", tool_hash(q)),
+        None => format!("tool-{stem}"),
+    };
+    track_tool_window(&label, filename, q.clone(), "plain");
 
     if let Some(win) = app.get_webview_window(&label) {
         if let Some(rect) = near {
@@ -786,24 +767,30 @@ fn open_tool_window_near(app: &AppHandle, path: &str, near: Option<tauri::Rect>)
         let _ = win.set_focus();
         return;
     }
-    // Resolve the tint: project-tinted tools (e.g. code-preview) pick up the
-    // active project's color and pass it through the URL so the page can paint
-    // its own bar on first frame; paper tools need no color.
-    let color = match tool_style(filename).tint {
-        Tint::Project => active_git_color_hex(app).unwrap_or_default(),
-        Tint::Paper => String::new(),
-    };
-    let url = if color.is_empty() {
+
+    let color = color.filter(|c| !c.is_empty()).unwrap_or_else(|| {
+        match tool_style(filename).tint {
+            Tint::Project => active_git_color_hex(app).unwrap_or_default(),
+            Tint::Paper => String::new(),
+        }
+    });
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(q) = &q {
+        parts.push(q.clone());
+    }
+    if !color.is_empty() {
+        parts.push(format!("color={}", url_encode(&color)));
+    }
+    let url = if parts.is_empty() {
         format!("tools/{filename}")
     } else {
-        format!("tools/{filename}?color={}", url_encode(&color))
+        format!("tools/{filename}?{}", parts.join("&"))
     };
 
+    // Empty native title everywhere — the page paints its own bar.
     let builder =
         WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into())).title(String::new());
-    let builder = apply_tool_chrome(builder, filename);
-
-    if let Ok(win) = builder.build() {
+    if let Ok(win) = apply_tool_chrome(builder, filename).build() {
         if let Some(rect) = near {
             position_below_tray_icon(&win, &rect);
         }
@@ -991,7 +978,7 @@ fn build_ram_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Resul
                 ..
             } = event
             {
-                open_tool_window_near(tray.app_handle(), "ram-overview.html", Some(rect));
+                open_tool_window(tray.app_handle(), "ram-overview.html", None, Some(rect), None);
             }
         })
         .build(app)?;
@@ -1016,7 +1003,7 @@ fn build_daily_notes_tray(app: &AppHandle, icon: Option<Image<'static>>) -> taur
                 ..
             } = event
             {
-                open_tool_window_near(tray.app_handle(), "daily-notes.html", Some(rect));
+                open_tool_window(tray.app_handle(), "daily-notes.html", None, Some(rect), None);
             }
         })
         .build(app)?;
@@ -1041,7 +1028,7 @@ fn build_tasks_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Res
                 ..
             } = event
             {
-                open_tool_window_near(tray.app_handle(), "tasks.html", Some(rect));
+                open_tool_window(tray.app_handle(), "tasks.html", None, Some(rect), None);
             }
         })
         .build(app)?;
@@ -1100,7 +1087,7 @@ fn build_tools_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Res
                     }
                 }
                 _ if id.starts_with(TOOL_PREFIX) => {
-                    open_tool_window(app, &id[TOOL_PREFIX.len()..]);
+                    open_tool_window(app, &id[TOOL_PREFIX.len()..], None, None, None);
                 }
                 _ => {}
             }
@@ -1479,52 +1466,10 @@ fn tool_hash(s: &str) -> String {
 }
 
 /// Open a tool window from the frontend, optionally with a query string (e.g.
-/// `artifact=<encoded path>`). A non-empty query gets its own window label so
-/// different artifacts don't collide on one shared `tool-<stem>` window.
+/// `artifact=<encoded path>`). Thin wrapper over `open_tool_window`.
 #[tauri::command]
 fn open_tool(app: AppHandle, file: String, query: Option<String>) {
-    // The Code Editor is opened per-project, not as a shared singleton.
-    if Path::new(&file).file_name().and_then(|n| n.to_str()) == Some("code-editor.html") {
-        let color = active_git_color_hex(&app).unwrap_or_default();
-        open_code_editor_window(&app, &color, &active_project_path(&app), None);
-        return;
-    }
-    let stem: String = Path::new(&file)
-        .file_stem()
-        .and_then(|n| n.to_str())
-        .unwrap_or("tool")
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '-' })
-        .collect();
-    let q = query.filter(|q| !q.is_empty());
-    let label = match &q {
-        Some(q) => format!("tool-{stem}-{}", tool_hash(q)),
-        None => format!("tool-{stem}"),
-    };
-    track_tool_window(&label, &file, q.clone(), "plain");
-    if let Some(win) = app.get_webview_window(&label) {
-        let _ = win.show();
-        let _ = win.set_focus();
-        return;
-    }
-    let color = match tool_style(&file).tint {
-        Tint::Project => active_git_color_hex(&app).unwrap_or_default(),
-        Tint::Paper => String::new(),
-    };
-    // Compose the query: any caller-supplied query plus the resolved color.
-    let mut parts: Vec<String> = Vec::new();
-    if let Some(q) = &q { parts.push(q.clone()); }
-    if !color.is_empty() { parts.push(format!("color={}", url_encode(&color))); }
-    let url = if parts.is_empty() {
-        format!("tools/{file}")
-    } else {
-        format!("tools/{file}?{}", parts.join("&"))
-    };
-
-    let builder = WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url.into()))
-        .min_inner_size(280.0, 320.0)
-        .title(String::new());
-    let _ = apply_tool_chrome(builder, &file).build();
+    open_tool_window(&app, &file, query, None, None);
 }
 
 // Note: the artifact formats Claude writes to are documented in the
@@ -2487,14 +2432,13 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
             upsert_git_window(&app, &win);
             build_git_window(&app, &win);
         } else if let Some(file) = &target.tool_file {
-            // Each kind must go through the exact function that produced the
-            // original label, since several tool windows use a label scheme
-            // that the generic open_tool can't reproduce — otherwise the
-            // position/size lookup by `target.title` below silently misses.
+            // Plain tool windows all mint their label through open_tool_window
+            // (one shared scheme), so the generic arm rebuilds them; the
+            // remaining kinds are the non-tool windows with their own label
+            // schemes, which must be replayed through their own builders —
+            // otherwise the position/size lookup by `target.title` below
+            // silently misses.
             match target.tool_kind.as_deref() {
-                Some("color") => {
-                    open_tool_window_with_color(&app, file, target.tool_query.as_deref().unwrap_or(""))
-                }
                 Some("code-editor") => {
                     let proj = target.tool_query.clone().unwrap_or_default();
                     let color = if proj.is_empty() {
@@ -2503,10 +2447,6 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
                         git_color_for_path(app.clone(), proj.clone())
                     };
                     open_code_editor_window(&app, &color, &proj, None);
-                }
-                Some("git-pulse") => {
-                    let Some(repo) = &target.tool_query else { continue };
-                    open_git_pulse(app.clone(), repo.clone());
                 }
                 Some("schedules") => {
                     let _ = open_schedules_window(app.clone());
@@ -2518,7 +2458,7 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
                 Some("claude") => {
                     let _ = open_claude_window(app.clone(), None, target.tool_query.clone());
                 }
-                _ => open_tool(app.clone(), file.clone(), target.tool_query.clone()),
+                _ => open_tool_window(&app, file, target.tool_query.clone(), None, None),
             }
         } else {
             continue;
@@ -3912,25 +3852,10 @@ fn open_git_window(
 
 #[tauri::command]
 fn open_git_pulse(app: AppHandle, repo: String) {
-    // Unique label per repo so each repo gets its own pulse window.
-    let slug: String = repo
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '-' })
-        .collect();
-    let label = format!("tool-git-pulse-{}", &slug[slug.len().saturating_sub(40)..]);
-    track_tool_window(&label, "git-pulse.html", Some(repo.clone()), "git-pulse");
-    if let Some(win) = app.get_webview_window(&label) {
-        let _ = win.show();
-        let _ = win.set_focus();
-        return;
-    }
-    let url = format!("tools/git-pulse.html?repo={}", url_encode(&repo));
-    let builder =
-        tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
-            .title(String::new());
-    if let Ok(win) = apply_tool_chrome(builder, "git-pulse.html").build() {
-        let _ = win.show();
-    }
+    // The repo rides the query, which also gives each repo its own window
+    // label (query-hashed by open_tool_window).
+    let query = format!("repo={}", url_encode(&repo));
+    open_tool_window(&app, "git-pulse.html", Some(query), None, None);
 }
 
 #[tauri::command]
@@ -4100,10 +4025,7 @@ async fn pick_text_file(app: AppHandle) -> Result<Option<String>, String> {
 /// renders the HTML the editor pushes to it over Tauri events).
 #[tauri::command]
 fn open_code_preview(app: AppHandle, color: Option<String>) {
-    match color.filter(|c| !c.is_empty()) {
-        Some(c) => open_tool_window_with_color(&app, "tools/code-preview.html", &c),
-        None => open_tool_window(&app, "tools/code-preview.html"),
-    }
+    open_tool_window(&app, "code-preview.html", None, None, color);
 }
 
 /// The active project's Git-window color (hex), used to tint the Code Editor /
@@ -4588,7 +4510,7 @@ fn run_due_schedules(app: &AppHandle) {
             // scheduler's worker thread.
             let app2 = app.clone();
             let tool = task.tool.clone();
-            let _ = app.run_on_main_thread(move || open_tool(app2.clone(), tool, None));
+            let _ = app.run_on_main_thread(move || open_tool_window(&app2, &tool, None, None, None));
         } else {
             run_scheduled_task(
                 app,
