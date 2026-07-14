@@ -2284,21 +2284,6 @@ async fn transit_eta(from: String, to: String, mode: Option<String>) -> Result<S
     }
 }
 
-/// Tasks settings (origin address, travel mode, buffer) for transit estimates —
-/// app config dir / tasks-config.json. Returns "{}" if unset.
-#[tauri::command]
-fn read_tasks_config(app: AppHandle) -> Result<String, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    Ok(std::fs::read_to_string(dir.join("tasks-config.json")).unwrap_or_else(|_| "{}".into()))
-}
-
-#[tauri::command]
-fn save_tasks_config(app: AppHandle, data: String) -> Result<(), String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("tasks-config.json"), data).map_err(|e| e.to_string())
-}
-
 /// Return the frontmost non-utility window's info as "app,title,x,y,w,h".
 /// Calls the compiled winbounds Swift helper which uses CGWindowListCopyWindowInfo
 /// for compositor Z-order — reliable across mixed NSWindowLevel windows.
@@ -2820,73 +2805,95 @@ fn handle_dropped_paths(project_path: String, paths: Vec<String>) -> Result<Drop
     })
 }
 
-/// Global manual project order (paths), persisted in the app config dir.
-#[tauri::command]
-fn read_project_order(app: AppHandle) -> Result<String, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    Ok(std::fs::read_to_string(dir.join("project-order.json")).unwrap_or_default())
+// ---- Generic single-file stores --------------------------------------------
+// One read/save command pair for all of Studio's simple single-file stores,
+// instead of a bespoke Rust command pair per feature. Each store is
+// allowlisted in `store_spec` (so the frontend can't touch arbitrary paths)
+// with its location and its default contents when the file doesn't exist yet.
+// Everything crosses the IPC as an opaque string; the owning frontend does
+// its own JSON.parse/stringify. Stores that need server-side logic
+// (schedules migration, per-Task files, per-project notes/workspace) keep
+// their dedicated commands.
+
+/// Where a store's file lives.
+enum StoreDir {
+    /// The app config dir (persistent app-global state).
+    Config,
+    /// ~/Projects — user-visible, Claude-editable globals (briefing, etc).
+    ProjectsRoot,
+    /// The app cache dir (disposable state).
+    Cache,
 }
 
-#[tauri::command]
-fn save_project_order(app: AppHandle, data: String) -> Result<(), String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("project-order.json"), data).map_err(|e| e.to_string())
+/// name → (dir, filename, default-when-missing).
+fn store_spec(name: &str) -> Option<(StoreDir, &'static str, &'static str)> {
+    Some(match name {
+        // Manual project order (paths) for the overview / Mode switcher.
+        "project-order" => (StoreDir::Config, "project-order.json", ""),
+        // Archived project paths (Projects list "Archived" section).
+        "archived-projects" => (StoreDir::Config, "archived-projects.json", ""),
+        // Daily Notes store.
+        "daily-notes" => (StoreDir::Config, "daily-notes.json", "{}"),
+        // Mycelium — the local social graph (trees, people, your card).
+        "mycelium" => (
+            StoreDir::Config,
+            "mycelium.json",
+            r#"{ "version": 1, "trees": [], "people": [] }"#,
+        ),
+        // Tasks settings (origin address, travel mode, buffer).
+        "tasks-config" => (StoreDir::Config, "tasks-config.json", "{}"),
+        // Studio-native note clipboard sidecar (interaction-spec §7.3):
+        // WebKit sanitizes clipboard HTML on write, so the rich payload is
+        // stashed here and matched against the system clipboard on paste.
+        "note-clipboard" => (StoreDir::Cache, "note-clipboard.json", ""),
+        // Daily Briefing cache — global, so it lives in the Projects root.
+        "briefing" => (StoreDir::ProjectsRoot, "today.json", ""),
+        // The editable "what should the briefing cover?" instructions.
+        "briefing-prompt" => (StoreDir::ProjectsRoot, "briefing-prompt.txt", ""),
+        // Weather place name for the briefing; blank = auto-detect by IP.
+        "weather-location" => (StoreDir::ProjectsRoot, "weather-location.txt", ""),
+        _ => return None,
+    })
 }
 
-/// Archived project paths (Projects list "Archived" section), persisted in
-/// the app config dir as a JSON array of paths — same shape/location pattern
-/// as `project-order.json`.
-#[tauri::command]
-fn read_archived_projects(app: AppHandle) -> Result<String, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    Ok(std::fs::read_to_string(dir.join("archived-projects.json")).unwrap_or_default())
+fn store_file(app: &AppHandle, name: &str) -> Result<(PathBuf, &'static str), String> {
+    let (dir, file, default) =
+        store_spec(name).ok_or_else(|| format!("unknown store \"{name}\""))?;
+    let dir = match dir {
+        StoreDir::Config => app.path().app_config_dir().map_err(|e| e.to_string())?,
+        StoreDir::ProjectsRoot => projects_root(app).ok_or("no home dir")?,
+        StoreDir::Cache => app.path().app_cache_dir().map_err(|e| e.to_string())?,
+    };
+    Ok((dir.join(file), default))
 }
 
+/// Read an allowlisted store's contents (its default if the file is missing).
 #[tauri::command]
-fn save_archived_projects(app: AppHandle, data: String) -> Result<(), String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("archived-projects.json"), data).map_err(|e| e.to_string())
-}
-
-/// Read the Daily Notes store (app config dir / daily-notes.json).
-#[tauri::command]
-fn read_daily_notes(app: AppHandle) -> Result<serde_json::Value, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    match std::fs::read_to_string(dir.join("daily-notes.json")) {
-        Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
-        Err(_) => Ok(serde_json::json!({})),
+fn read_store(app: AppHandle, name: String) -> Result<String, String> {
+    let (path, default) = store_file(&app, &name)?;
+    match std::fs::read_to_string(&path) {
+        Ok(s) => Ok(s),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(default.to_string()),
+        Err(e) => Err(e.to_string()),
     }
 }
 
-/// Write the Daily Notes store (app config dir / daily-notes.json, pretty-printed).
+/// Write an allowlisted store. `.json` stores are validated and
+/// pretty-printed (they're hand-inspectable, Claude-readable files);
+/// `.txt` stores are written raw.
 #[tauri::command]
-fn save_daily_notes(app: AppHandle, store: serde_json::Value) -> Result<(), String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let text = serde_json::to_string_pretty(&store).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("daily-notes.json"), text).map_err(|e| e.to_string())
-}
-
-/// Read the Mycelium store (app config dir / mycelium.json) — the local social
-/// graph (trees, people, your card). Same global-store pattern as Daily Notes.
-#[tauri::command]
-fn read_mycelium(app: AppHandle) -> Result<serde_json::Value, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    match std::fs::read_to_string(dir.join("mycelium.json")) {
-        Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
-        Err(_) => Ok(serde_json::json!({ "version": 1, "trees": [], "people": [] })),
+fn save_store(app: AppHandle, name: String, data: String) -> Result<(), String> {
+    let (path, _) = store_file(&app, &name)?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-}
-
-/// Write the Mycelium store (app config dir / mycelium.json, pretty-printed).
-#[tauri::command]
-fn save_mycelium(app: AppHandle, store: serde_json::Value) -> Result<(), String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let text = serde_json::to_string_pretty(&store).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("mycelium.json"), text).map_err(|e| e.to_string())
+    let text = if path.extension().and_then(|e| e.to_str()) == Some("json") && !data.is_empty() {
+        let val: serde_json::Value = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+        serde_json::to_string_pretty(&val).map_err(|e| e.to_string())?
+    } else {
+        data
+    };
+    std::fs::write(&path, text).map_err(|e| e.to_string())
 }
 
 const CONTACTSDUMP_BIN: &str = env!("CONTACTSDUMP_BIN");
@@ -3323,27 +3330,6 @@ fn read_clipboard_text() -> Result<String, String> {
         .output()
         .map_err(|e| e.to_string())?;
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-}
-
-/// Studio-native note clipboard sidecar (interaction-spec §7.3, Option A).
-/// WebKit sanitizes clipboard HTML on write (stripping our marker), so the rich
-/// payload is stashed in an app-cache file and matched against the live system
-/// clipboard text on paste. Works across windows and projects.
-#[tauri::command]
-fn set_note_clipboard(app: AppHandle, data: String) -> Result<(), String> {
-    let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("note-clipboard.json"), data).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_note_clipboard(app: AppHandle) -> Result<String, String> {
-    let path = app
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?
-        .join("note-clipboard.json");
-    Ok(std::fs::read_to_string(path).unwrap_or_default())
 }
 
 /// Paste an image from the clipboard into a project's media/ folder (PNG).
@@ -4741,87 +4727,6 @@ async fn run_claude_prompt(
     }
 }
 
-/// Path to the global Daily Briefing cache, `~/Projects/today.json`. It's not
-/// tied to any one project, so it lives in the Projects root.
-fn briefing_path(app: &AppHandle) -> Option<PathBuf> {
-    projects_root(app).map(|p| p.join("today.json"))
-}
-
-/// Read the cached briefing JSON (the whole `{date, brief}` blob the tool
-/// wrote). Returns `""` if it doesn't exist yet.
-#[tauri::command]
-fn read_briefing(app: AppHandle) -> Result<String, String> {
-    let path = briefing_path(&app).ok_or("no home dir")?;
-    match std::fs::read_to_string(&path) {
-        Ok(s) => Ok(s),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(e.to_string()),
-    }
-}
-
-/// Write the briefing JSON cache to `~/Projects/today.json`.
-#[tauri::command]
-fn save_briefing(app: AppHandle, content: String) -> Result<(), String> {
-    let path = briefing_path(&app).ok_or("no home dir")?;
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    std::fs::write(&path, content).map_err(|e| e.to_string())
-}
-
-/// Path to the editable briefing instructions, `~/Projects/briefing-prompt.txt`
-/// — the "what should the briefing fetch & cover?" note, global like the cache.
-fn briefing_prompt_path(app: &AppHandle) -> Option<PathBuf> {
-    projects_root(app).map(|p| p.join("briefing-prompt.txt"))
-}
-
-/// Read the briefing instructions. Returns `""` if not set yet.
-#[tauri::command]
-fn read_briefing_prompt(app: AppHandle) -> Result<String, String> {
-    let path = briefing_prompt_path(&app).ok_or("no home dir")?;
-    match std::fs::read_to_string(&path) {
-        Ok(s) => Ok(s),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(e.to_string()),
-    }
-}
-
-/// Write the briefing instructions to `~/Projects/briefing-prompt.txt`.
-#[tauri::command]
-fn save_briefing_prompt(app: AppHandle, content: String) -> Result<(), String> {
-    let path = briefing_prompt_path(&app).ok_or("no home dir")?;
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    std::fs::write(&path, content).map_err(|e| e.to_string())
-}
-
-/// Path to the saved weather location (a free-text place name, e.g.
-/// "Woodacre, CA"), `~/Projects/weather-location.txt`. Blank = auto-detect by
-/// IP, same global-not-per-project convention as the briefing prompt.
-fn weather_location_path(app: &AppHandle) -> Option<PathBuf> {
-    projects_root(app).map(|p| p.join("weather-location.txt"))
-}
-
-#[tauri::command]
-fn read_weather_location(app: AppHandle) -> Result<String, String> {
-    let path = weather_location_path(&app).ok_or("no home dir")?;
-    match std::fs::read_to_string(&path) {
-        Ok(s) => Ok(s),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(e.to_string()),
-    }
-}
-
-#[tauri::command]
-fn save_weather_location(app: AppHandle, content: String) -> Result<(), String> {
-    let path = weather_location_path(&app).ok_or("no home dir")?;
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    std::fs::write(&path, content).map_err(|e| e.to_string())
-}
-
 /// Map a WMO weather code (as used by Open-Meteo) to a short human label.
 /// https://open-meteo.com/en/docs#weathervariables
 fn wmo_condition(code: i64) -> &'static str {
@@ -5793,14 +5698,6 @@ pub fn run() {
             save_task,
             delete_task,
             transit_eta,
-            read_tasks_config,
-            save_tasks_config,
-            read_briefing,
-            save_briefing,
-            read_briefing_prompt,
-            save_briefing_prompt,
-            read_weather_location,
-            save_weather_location,
             get_weather,
             get_picture_of_day,
             get_colossal_items,
@@ -5859,15 +5756,9 @@ pub fn run() {
             handle_dropped_paths,
             read_media_meta,
             save_media_meta,
-            read_project_order,
-            save_project_order,
-            read_archived_projects,
-            save_archived_projects,
-            read_daily_notes,
-            save_daily_notes,
-            read_mycelium,
-            save_mycelium,
             contacts_dump,
+            read_store,
+            save_store,
             read_schedules,
             save_schedules,
             paste_image,
@@ -5876,8 +5767,6 @@ pub fn run() {
             delete_note_asset,
             set_project_icon,
             read_clipboard_text,
-            set_note_clipboard,
-            get_note_clipboard,
             reveal_in_finder,
             remove_background,
             extend_background,

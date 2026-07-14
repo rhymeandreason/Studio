@@ -126,7 +126,7 @@ let projectOrder = [];
 
 async function loadProjectOrder() {
   try {
-    const raw = await invoke("read_project_order");
+    const raw = await invoke("read_store", { name: "project-order" });
     projectOrder = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(projectOrder)) projectOrder = [];
   } catch (_) {
@@ -139,7 +139,7 @@ let archivedPaths = new Set();
 
 async function loadArchivedProjects() {
   try {
-    const raw = await invoke("read_archived_projects");
+    const raw = await invoke("read_store", { name: "archived-projects" });
     const list = raw ? JSON.parse(raw) : [];
     archivedPaths = new Set(Array.isArray(list) ? list : []);
   } catch (_) {
@@ -148,7 +148,7 @@ async function loadArchivedProjects() {
 }
 
 function saveArchivedProjects() {
-  invoke("save_archived_projects", { data: JSON.stringify([...archivedPaths]) });
+  invoke("save_store", { name: "archived-projects", data: JSON.stringify([...archivedPaths]) });
 }
 
 // Ordered first by the manual order, then any new projects by name.
@@ -164,7 +164,7 @@ function applyProjectOrder(projects) {
 }
 
 function saveProjectOrder() {
-  invoke("save_project_order", { data: JSON.stringify(projectOrder) });
+  invoke("save_store", { name: "project-order", data: JSON.stringify(projectOrder) });
 }
 
 // --- Project card drag-reorder (pointer-based) -----------------------------
@@ -851,7 +851,8 @@ function copyNotes() {
   if (!notes.length) return;
   const text = notes.map(noteToPlainText).join("\n\n");
   navigator.clipboard.writeText(text).catch((e) => console.error(e));
-  invoke("set_note_clipboard", {
+  invoke("save_store", {
+    name: "note-clipboard",
     data: JSON.stringify({ text, notes: notes.map(stripNoteForCopy) }),
   });
 }
@@ -863,7 +864,7 @@ function copyNotes() {
 // paste paths so a copied note pastes the same from either tab.
 async function tryPasteStudioNotes(text) {
   try {
-    const stash = await invoke("get_note_clipboard");
+    const stash = await invoke("read_store", { name: "note-clipboard" });
     if (!stash) return false;
     const { text: stashText, notes } = JSON.parse(stash);
     if (!Array.isArray(notes) || stashText !== text) return false;

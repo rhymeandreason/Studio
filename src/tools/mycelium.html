@@ -328,13 +328,13 @@
       saveTimer = setTimeout(async () => {
         if (hasTauri) {
           const payload = { ...store, trees: store.trees.map(cleanNode), people: store.people.map(cleanNode) };
-          await invoke("save_mycelium", { store: payload });
+          await invoke("save_store", { name: "mycelium", data: JSON.stringify(payload) });
         }
       }, 400);
     }
     async function load() {
       if (hasTauri) {
-        const onDisk = await invoke("read_mycelium");
+        const onDisk = JSON.parse(await invoke("read_store", { name: "mycelium" }));
         store = Object.assign(store, onDisk || {});
       }
       store.me ||= { name: "", contacts: [] };

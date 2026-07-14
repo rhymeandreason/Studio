@@ -609,10 +609,10 @@ border: 1 px solid var(--hairline);
           origin: "",
           mode: "driving",
           buffer: 5,
-          ...JSON.parse(await invoke("read_tasks_config"))
+          ...JSON.parse(await invoke("read_store", { name: "tasks-config" }))
         };
       } catch (e) {
-        console.warn("read_tasks_config failed", e);
+        console.warn("tasks-config read failed", e);
       }
     }
 
@@ -1140,7 +1140,8 @@ border: 1 px solid var(--hairline);
         mode: document.getElementById("cfgMode").value,
         buffer: Math.max(0, parseInt(document.getElementById("cfgBuffer").value, 10) || 0),
       };
-      await invoke("save_tasks_config", {
+      await invoke("save_store", {
+        name: "tasks-config",
         data: JSON.stringify(config)
       });
       settingsForm.classList.remove("open");

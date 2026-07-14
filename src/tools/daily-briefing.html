@@ -366,9 +366,9 @@ padding-botton:100px;
       "top 3 Hacker News stories with one-line summaries, then one design or " +
       "engineering article worth reading today (with links).";
     const MODEL = "haiku";
-    // Cache is a global file at ~/Projects/today.json (read_briefing /
-    // save_briefing); the editable prompt is ~/Projects/briefing-prompt.txt
-    // (read_briefing_prompt / save_briefing_prompt).
+    // Cache is a global file at ~/Projects/today.json (the "briefing" store);
+    // the editable prompt is ~/Projects/briefing-prompt.txt (the
+    // "briefing-prompt" store). Both via read_store/save_store.
 
     const $ = (id) => document.getElementById(id);
 
@@ -523,8 +523,9 @@ padding-botton:100px;
           model: MODEL,
         });
         renderBody(markdown);
-        await invoke("save_briefing", {
-          content: JSON.stringify({
+        await invoke("save_store", {
+          name: "briefing",
+          data: JSON.stringify({
             date: todayStr(),
             markdown,
             meetings,
@@ -547,7 +548,7 @@ padding-botton:100px;
     async function loadCache() {
       if (!hasTauri) return false;
       try {
-        const raw = await invoke("read_briefing");
+        const raw = await invoke("read_store", { name: "briefing" });
         const cached = raw ? JSON.parse(raw) : null;
         if (cached && typeof cached.markdown === "string") {
           renderMeetings(cached.meetings || []);
@@ -588,36 +589,40 @@ padding-botton:100px;
       }
     });
     if (hasTauri) {
-      invoke("read_briefing_prompt")
+      invoke("read_store", { name: "briefing-prompt" })
         .then((v) => {
           $("sources").value = v || "";
         })
         .catch(() => {});
-      invoke("read_weather_location")
+      invoke("read_store", { name: "weather-location" })
         .then((v) => {
           $("weather-location").value = v || "";
         })
         .catch(() => {});
     }
     $("sources").addEventListener("change", () => {
-      if (hasTauri) invoke("save_briefing_prompt", {
-        content: $("sources").value
+      if (hasTauri) invoke("save_store", {
+        name: "briefing-prompt",
+        data: $("sources").value
       }).catch(() => {});
     });
     $("weather-location").addEventListener("change", () => {
-      if (hasTauri) invoke("save_weather_location", {
-        content: $("weather-location").value
+      if (hasTauri) invoke("save_store", {
+        name: "weather-location",
+        data: $("weather-location").value
       }).catch(() => {});
     });
     // Force a regenerate with the current prompt (saving it first so the file
     // matches what just ran).
     $("run-prompt-btn").addEventListener("click", async () => {
       if (hasTauri) {
-        await invoke("save_briefing_prompt", {
-          content: $("sources").value
+        await invoke("save_store", {
+          name: "briefing-prompt",
+          data: $("sources").value
         }).catch(() => {});
-        await invoke("save_weather_location", {
-          content: $("weather-location").value
+        await invoke("save_store", {
+          name: "weather-location",
+          data: $("weather-location").value
         }).catch(() => {});
       }
       refresh();

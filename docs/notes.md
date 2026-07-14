@@ -8,4 +8,4 @@
 
 **Layout:** `layoutBento()` measures card heights and sets row-spans — re-pack on any height change, and after the panel becomes visible (hidden elements measure 0).
 
-**Copy/paste:** Studio-native payload via app-cache sidecar (`set_note_clipboard`/`get_note_clipboard`) keyed to clipboard text — WebKit strips custom HTML flavors.
+**Copy/paste:** Studio-native payload via app-cache sidecar (the `note-clipboard` store via `read_store`/`save_store`) keyed to clipboard text — WebKit strips custom HTML flavors.

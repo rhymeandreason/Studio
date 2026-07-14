@@ -228,7 +228,7 @@
     }
 
     // One-time migration from the old localStorage-only store; the disk
-    // file (read_daily_notes) takes precedence once it exists.
+    // file (the "daily-notes" store) takes precedence once it exists.
     function loadLegacyStore() {
       try {
         return JSON.parse(localStorage.getItem(STORE_KEY)) || {};
@@ -239,14 +239,14 @@
 
     async function loadStore() {
       if (!hasTauri) return loadLegacyStore();
-      const onDisk = await invoke('read_daily_notes');
+      const onDisk = JSON.parse(await invoke('read_store', { name: 'daily-notes' }));
       if (onDisk && Object.keys(onDisk).length) return onDisk;
       return loadLegacyStore();
     }
 
     async function saveStore(store) {
       if (hasTauri) {
-        await invoke('save_daily_notes', { store });
+        await invoke('save_store', { name: 'daily-notes', data: JSON.stringify(store) });
       } else {
         localStorage.setItem(STORE_KEY, JSON.stringify(store));
       }
