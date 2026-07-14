@@ -48,8 +48,6 @@
       gap: 8px;
     }
 
-    /* The scroll container (was body); carries the paper fill so the
-       window's rounded corners work (body stays transparent). */
     #scroll {
       flex: 1 1 auto;
       overflow-y: auto;
@@ -321,9 +319,9 @@ padding-botton:100px;
 
 <body>
   <div id="titlebar" data-window-bar>
-    <div class="tb-title" data-window-close><span class="eyebrow">Daily Briefing</span></div>
+    <div class="tb-title" data-window-close></div>
   </div>
-  <div id="scroll">
+  <div id="scroll" class="main">
   <div id="settings" class="settings card">
     <label class="label" for="sources">Briefing prompt</label>
     <textarea id="sources" class="field" rows="4" placeholder="Anything — e.g. a warm morning briefing with top news, or 'Write a haiku about today's weather in Woodacre, CA.'"></textarea>

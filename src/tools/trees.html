@@ -30,6 +30,7 @@
     flex: 1 1 auto;
     display: flex;
     min-height: 0;
+overflow: hidden;
   }
   #stage {
     flex: 1;
@@ -47,13 +48,13 @@
   #panel {
     width: 272px;
     flex-shrink: 0;
-    background: var(--surface);
-    border-left: 1px solid var(--hairline);
     padding: 16px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 14px;
+margin-right:12px;
+margin-bottom: 12px;
   }
   .ctl-grid {
     display: grid;
@@ -74,7 +75,7 @@
   .btn-row .btn { flex: 1; justify-content: center; }
 </style>
 </head>
-<body>
+<body class="outline-window">
   <div id="titlebar" data-window-bar>
     <div class="tb-title" data-window-close><span class="eyebrow">Trees</span></div>
   </div>
@@ -84,19 +85,17 @@
     <div id="hint" class="text-s">click canvas for a new tree</div>
   </div>
 
-  <div id="panel">
-    <div>
-      <div class="eyebrow">Trees</div>
+  <div id="panel" class="">
+    <div class="section editsection">
+     <div class="btn-row">
+      <button class="btn btn-primary" id="generate"><span class="mi mi-sm">casino</span>Generate</button>
+      <button class="btn" id="export"><span class="mi mi-sm">download</span>SVG</button>
+    </div>
       <div class="text-s" id="seed-readout"></div>
     </div>
 
-    <div class="section">
-      <span class="label">Species</span>
+    <div class="section editsection">
       <select class="field" id="species"></select>
-    </div>
-
-    <div class="section">
-      <span class="label">Shape</span>
       <div class="ctl-grid">
         <div class="ctl"><span class="label">Levels</span>
           <input class="range" data-p="levels" type="range" min="3" max="7" step="1" /></div>
@@ -113,8 +112,7 @@
       </div>
     </div>
 
-    <div class="section">
-      <span class="label">Foliage</span>
+    <div class="section editsection">
       <select class="field" id="leafStyle">
         <option value="blobs">Blobs</option>
         <option value="flowers">Flowers</option>
@@ -128,9 +126,7 @@
         <div class="ctl"><span class="label">Size</span>
           <input class="range" data-p="leafSize" type="range" min="0.4" max="2" step="0.05" /></div>
       </div>
-    </div>
 
-    <div class="section">
       <span class="label">Wind</span>
       <div class="ctl-grid">
         <div class="ctl"><span class="label">Strength</span>
@@ -140,8 +136,8 @@
       </div>
     </div>
 
-    <div class="section">
-      <span class="label">Colors</span>
+    <div class="section editsection">
+      <span class="editgroup__label">Colors</span>
       <div class="color-grid">
         <div class="ctl"><span class="label">Leaf A</span><studio-color id="c-leaf1"></studio-color></div>
         <div class="ctl"><span class="label">Leaf B</span><studio-color id="c-leaf2"></studio-color></div>
@@ -151,10 +147,7 @@
       </div>
     </div>
 
-    <div class="btn-row" style="margin-top:auto;">
-      <button class="btn btn-primary" id="generate"><span class="mi mi-sm">casino</span>Generate</button>
-      <button class="btn" id="export"><span class="mi mi-sm">download</span>SVG</button>
-    </div>
+
   </div>
   </div>
 

@@ -22,14 +22,7 @@
     overflow: hidden;
   }
 
-  /* Compact bar — the whole window is only 80px tall. Dark to match the
-     overlay surface (overrides the kit's default paper tint). */
   #titlebar {
-    height: 24px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    padding: 0 10px;
     background: #1a1a1a;
   }
 
@@ -37,14 +30,15 @@
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
+text-align: center;
     justify-content: center;
-    padding: 0 16px 6px;
+    padding: 0 16px 30px;
     background: #1a1a1a; /* body stays transparent for the rounded corners */
-    min-height: 0;
+    min-height: 80;
   }
 
   #app-name {
-    font-size: 10px;
+    font-size: 12px;
     color: rgba(255,255,255,0.45);
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -75,8 +69,8 @@
   <div id="titlebar" data-window-bar>
     <div class="tb-title" data-window-close></div>
   </div>
-  <div id="content">
-    <div id="app-name">—</div>
+  <div id="content" class="main">
+     <div id="app-name">—</div>
     <div id="dims">
       <span id="w">—</span><span class="x">×</span><span id="h">—</span><span class="unit">px</span>
     </div>
@@ -91,7 +85,7 @@
       const win = getCurrentWindow();
 
       // Small floating overlay, always on top
-      win.setSize(new LogicalSize(240, 80));
+      win.setSize(new LogicalSize(240, 120));
       win.setAlwaysOnTop(true);
       win.setResizable(false);
 

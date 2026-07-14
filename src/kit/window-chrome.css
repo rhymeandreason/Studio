@@ -25,6 +25,23 @@ body {
     overflow: hidden;          /* clips content rows to the rounded corners */
 }
 
+.titlebar, #titlebar{
+height: 44px;
+flex-shrink: 0;
+display: flex;
+align-items: center;
+padding: 0 14px;
+}
+
+#main, .main{
+background: var(--bg);
+border-radius: 0 0 var(--window-radius) var(--window-radius);
+}
+
+.outline-window{
+border: 2px solid var(--border);
+}
+
 /* The title bar: tinted with the window's color (--titlebar-tint, set by
    window-chrome.js from the ?color= URL param), draggable, no text selection. */
 [data-window-bar] {
