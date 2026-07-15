@@ -1296,6 +1296,15 @@ async function startNewSession() {
 
 newSessionBtn.addEventListener("click", startNewSession);
 
+// The window is reused across projects and only gets a color on "claude-jump"
+// (i.e. when opened/switched to). If the project's accent is changed elsewhere
+// (Mode switcher) while this window is already frontmost, pick it up too.
+listen("fs-changed", async () => {
+    if (!currentProjectPath) return;
+    const ws = await invoke("read_workspace", { path: currentProjectPath }).catch(() => null);
+    if (ws) setProjectColor(ws.color || "");
+});
+
 listen("claude-jump", async (event) => {
     // The window hides rather than closes, so opening it doesn't re-run init();
     // refresh usage on each open (throttled, so rapid reopens don't 429).
