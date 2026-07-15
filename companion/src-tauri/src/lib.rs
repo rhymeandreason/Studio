@@ -229,6 +229,18 @@ fn open_project_window(app: &AppHandle, project: &str, name: &str) {
         let _ = win.show();
         let _ = win.unminimize();
         let _ = win.set_focus();
+        // The window persists (hidden) across activations rather than being
+        // rebuilt, so its color/sprite are whatever they were on first open —
+        // re-read workspace.json now in case they've changed since (see
+        // claude.js's "claude-jump" listener).
+        let ws = read_workspace(project);
+        let _ = win.emit(
+            "claude-jump",
+            serde_json::json!({
+                "sprite": ws.sprite,
+                "color": ws.color,
+            }),
+        );
         return;
     }
 

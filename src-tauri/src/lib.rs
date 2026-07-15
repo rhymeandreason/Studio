@@ -4380,6 +4380,9 @@ fn fire_due_tasks(app: &AppHandle) {
         let app2 = app.clone();
         let id2 = id.clone();
         let _ = app.run_on_main_thread(move || open_task_notification_window(&app2, &id2));
+        let _ = Command::new("afplay")
+            .arg("/System/Library/Sounds/Glass.aiff")
+            .spawn();
         task["firedAt"] = serde_json::json!(now.to_rfc3339());
         if let Some(obj) = task.as_object_mut() {
             obj.remove("snoozeUntil");

@@ -617,11 +617,20 @@ async function switchTo(key) {
     activeKey = key;
     const session = sessions.find((s) => s.key === key);
     if (!session) return;
+    const projectChanged = session.projectPath !== currentProjectPath;
     currentProjectPath = session.projectPath;
     // Remember the last active session so reopening the window returns to it.
     localStorage.setItem(activeKeyName(), key);
     sessionNameEl.textContent = session.name;
     setWindowTitle(session.projectName);
+    // The window is only tinted once from the URL's ?color= at launch (see
+    // window-chrome.js); the companion is single-instance, so switching to a
+    // session from a different project in an already-open window needs to
+    // re-fetch and re-apply that project's color itself.
+    if (projectChanged) {
+        const ws = await invoke("read_workspace", { path: session.projectPath }).catch(() => null);
+        setProjectColor((ws && ws.color) || "");
+    }
     modelSelect.value = session.model || "sonnet";
     permissionSelect.value = session.permissionMode || "default";
     cwdSelect.value = session.cwd || "project";
