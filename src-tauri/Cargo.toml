@@ -28,6 +28,7 @@ ureq = { version = "2", features = ["json"] }
 studio-claude-core = { path = "../crates/studio-claude-core" }
 tauri-plugin-window-state = "2.4.1"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-drag = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]

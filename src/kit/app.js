@@ -46,3 +46,46 @@ export function toast(msg, ms = 1800) {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toastEl.classList.remove("show"), ms);
 }
+
+/** A neutral PNG data-URL icon (optionally count-badged) for file drag-out —
+ *  the plugin requires an image, and not every surface has a thumbnail. */
+export function genericFileIcon(count = 1) {
+    const size = 72;
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#9a8f80";
+    ctx.beginPath();
+    ctx.roundRect(8, 6, size - 16, size - 12, 8);
+    ctx.fill();
+    if (count > 1) {
+        const r = 12;
+        ctx.beginPath();
+        ctx.arc(size - r - 2, r + 2, r, 0, Math.PI * 2);
+        ctx.fillStyle = "#e0392b";
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 15px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(count), size - r - 2, r + 3);
+    }
+    return c.toDataURL("image/png");
+}
+
+/** Native drag-out of real file(s) to Finder / a file picker / a web "drop
+ *  here" zone. Call synchronously inside a pointerdown/mousedown so the OS drag
+ *  attaches to the press the user is already holding. `paths` must be absolute;
+ *  pass an `icon` PNG data-URL to override the neutral default. */
+export async function dragFilesOut(paths, icon) {
+    if (!hasTauri || !paths || !paths.length) return;
+    try {
+        await window.__TAURI__.drag.startDrag({
+            item: paths,
+            icon: icon || genericFileIcon(paths.length),
+            mode: "copy",
+        });
+    } catch (e) {
+        console.error("drag-out failed:", e);
+    }
+}

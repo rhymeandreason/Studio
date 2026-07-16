@@ -171,6 +171,68 @@ function createImageNoteFromMedia(item) {
   selectTab("notes");
 }
 
+// Build a PNG data-URL drag image (what the cursor carries during drag-out).
+// Prefers the tile's own thumbnail; falls back to a neutral card if the
+// thumbnail can't be read (e.g. a tainted canvas from the asset:// protocol).
+// A count badge is drawn when dragging a multi-selection.
+function makeDragIcon(tile, count) {
+  const size = 72;
+  const drawBadge = (ctx) => {
+    if (count <= 1) return;
+    const r = 12;
+    ctx.beginPath();
+    ctx.arc(size - r - 2, r + 2, r, 0, Math.PI * 2);
+    ctx.fillStyle = "#e0392b";
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 15px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(count), size - r - 2, r + 3);
+  };
+  const img = tile.querySelector(".mediatile__img");
+  try {
+    if (!img || !img.complete || !img.naturalWidth) throw new Error("no thumb");
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const ctx = c.getContext("2d");
+    const s = Math.max(size / img.naturalWidth, size / img.naturalHeight);
+    const w = img.naturalWidth * s;
+    const h = img.naturalHeight * s;
+    ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+    drawBadge(ctx);
+    return c.toDataURL("image/png"); // throws if the canvas is tainted
+  } catch (_) {
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#9a8f80";
+    ctx.beginPath();
+    ctx.roundRect(8, 6, size - 16, size - 12, 8);
+    ctx.fill();
+    drawBadge(ctx);
+    return c.toDataURL("image/png");
+  }
+}
+
+// Drag the real file(s) out to other apps. Honors the current selection: if the
+// grabbed tile is part of a multi-selection, drag them all; otherwise just it.
+async function startNativeFileDrag(item, tile) {
+  const paths =
+    mediaSelection.has(item.path) && mediaSelection.size() > 1
+      ? mediaSelection.get()
+      : [item.path];
+  try {
+    await window.__TAURI__.drag.startDrag({
+      item: paths,
+      icon: makeDragIcon(tile, paths.length),
+      mode: "copy",
+    });
+  } catch (err) {
+    console.error("drag-out failed:", err);
+  }
+}
+
 function onMediaTilePointerDown(e, item, tile) {
   if (e.button !== 0) return;
   // The tile itself is a <button>, so only exclude the rename field / links /
@@ -179,6 +241,16 @@ function onMediaTilePointerDown(e, item, tile) {
   // would make WebKit retarget the resulting "click" to the tile instead of
   // the label, so click-to-rename would never fire.
   if (e.target.closest("textarea, input, a, .mediatile__name")) return;
+  // Option-drag drags the real file(s) OUT to Finder / a file picker / a web
+  // "drop here" zone, via the native drag plugin. Plain drag stays internal
+  // reorder. Starting the OS drag here (in the mouse-down) attaches it to the
+  // press the user is already holding — don't capture the pointer or set up the
+  // reorder gesture in this case.
+  if (e.altKey) {
+    e.preventDefault();
+    startNativeFileDrag(item, tile);
+    return;
+  }
   // Capture the pointer so WebKit doesn't hijack the drag over the image.
   try {
     tile.setPointerCapture(e.pointerId);

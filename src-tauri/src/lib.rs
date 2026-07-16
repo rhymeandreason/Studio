@@ -4062,6 +4062,21 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+/// Write Markdown to a temp file named after the note title, returning its
+/// absolute path. Backs dragging a text/checklist/table note out as a `.md`
+/// file without persisting anything in the project.
+#[tauri::command]
+fn write_temp_markdown(name: String, content: String) -> Result<String, String> {
+    let safe: String = name
+        .chars()
+        .map(|c| if "/\\:".contains(c) { '-' } else { c })
+        .collect();
+    let stem = if safe.trim().is_empty() { "note" } else { safe.trim() };
+    let file = std::env::temp_dir().join(format!("{stem}.md"));
+    std::fs::write(&file, content).map_err(|e| e.to_string())?;
+    Ok(file.to_string_lossy().into_owned())
+}
+
 /// Unified `git diff` for a single file against HEAD, deriving the repo from the
 /// file's own directory (the file may live outside any Studio project). Returns
 /// the raw diff text; errors (not a repo, etc.) are surfaced so the editor can
@@ -5395,6 +5410,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_drag::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -5530,6 +5546,7 @@ pub fn run() {
             open_code_preview,
             read_text_file,
             write_text_file,
+            write_temp_markdown,
             git_diff_file,
             git_log_week,
             open_git_pulse,

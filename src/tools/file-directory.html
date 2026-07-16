@@ -267,7 +267,7 @@ max-width:350px;
   <div id="tree"></div>
 
   <script type="module">
-    import { hasTauri, invoke, listen } from '../kit/app.js';
+    import { hasTauri, invoke, listen, dragFilesOut } from '../kit/app.js';
 
     const tree = document.getElementById('tree');
 
@@ -390,6 +390,14 @@ max-width:350px;
       name.className = 'name';
       name.textContent = entry.name;
       node.appendChild(name);
+
+      // Option-drag drags the real file/folder OUT to Finder, a file picker, or
+      // a web "drop here" zone. Plain click still opens/expands.
+      node.addEventListener('pointerdown', (e) => {
+        if (!e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        dragFilesOut([entry.path]);
+      });
 
       const isHtml = !entry.is_dir && entry.name.toLowerCase().endsWith('.html');
       if (isHtml) {

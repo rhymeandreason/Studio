@@ -11,6 +11,7 @@
     "core:window:allow-close",
     "core:window:allow-minimize",
     "dialog:default",
-    "opener:default"
+    "opener:default",
+    "drag:default"
   ]
 }

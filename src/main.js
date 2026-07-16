@@ -1951,8 +1951,76 @@ function setSelectedNoteStyle(key, value) {
   scheduleNotesSave();
 }
 
+// A PNG data-URL drag image for a note drag-out: prefers the card's own image
+// (for image / attached-image notes), else a neutral card.
+function noteDragIcon(card) {
+  const size = 72;
+  const neutral = () => {
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#9a8f80";
+    ctx.beginPath();
+    ctx.roundRect(8, 6, size - 16, size - 12, 8);
+    ctx.fill();
+    return c.toDataURL("image/png");
+  };
+  const img = card?.querySelector(".notecard__image");
+  try {
+    if (!img || !img.complete || !img.naturalWidth) return neutral();
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const ctx = c.getContext("2d");
+    const s = Math.max(size / img.naturalWidth, size / img.naturalHeight);
+    const w = img.naturalWidth * s;
+    const h = img.naturalHeight * s;
+    ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+    return c.toDataURL("image/png"); // throws if the canvas is tainted
+  } catch (_) {
+    return neutral();
+  }
+}
+
+// Drag a note out to Finder / a file picker / a web drop zone. Image notes
+// hand over their real asset; every other kind writes an on-the-fly `.md` to a
+// temp file (named after the title) and drags that — nothing persists.
+async function startNoteFileDrag(note, card) {
+  if (!state.notesProjectPath) return;
+  let path;
+  if (note.kind === "image" && note.src) {
+    path = `${state.notesProjectPath}/${note.src}`;
+  } else {
+    try {
+      path = await invoke("write_temp_markdown", {
+        name: noteFileStem(note),
+        content: noteToMarkdown(note),
+      });
+    } catch (e) {
+      console.error("note markdown temp write failed:", e);
+      return;
+    }
+  }
+  try {
+    await window.__TAURI__.drag.startDrag({
+      item: [path],
+      icon: noteDragIcon(card),
+      mode: "copy",
+    });
+  } catch (e) {
+    console.error("note drag-out failed:", e);
+  }
+}
+
 function onNotePointerDown(e, note, card) {
   if (e.button !== 0) return;
+  // Option-drag drags the note OUT as a file: an image note drags its asset;
+  // any other note drags an on-the-fly `.md`. Checked before the field
+  // exclusion below so it works even when the press lands on the body textarea.
+  if (e.altKey) {
+    e.preventDefault();
+    startNoteFileDrag(note, card);
+    return;
+  }
   if (e.target.closest("textarea, input, select, button, a, [contenteditable]"))
     return;
   noteDrag = { note, card, startX: e.clientX, startY: e.clientY, active: false };
