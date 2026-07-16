@@ -10,9 +10,10 @@ non-destructive image editor), notes, workspace, and artifacts.
 
 
 ## Stack
-- **Tauri v2** (Rust) + **vanilla JS/HTML/CSS**, no bundler. All
-  `#[tauri::command]`s + the tray live in `src-tauri/src/lib.rs`. Claude
-  subprocess/session logic shared with the companion app lives in
+- **Tauri v2** (Rust) + **vanilla JS/HTML/CSS**, no bundler. Most
+  `#[tauri::command]`s + the tray live in `src-tauri/src/lib.rs`; the pure
+  git-CLI commands are split out into `src-tauri/src/git.rs` (see docs/git.md).
+  Claude subprocess/session logic shared with the companion app lives in
   `crates/studio-claude-core/` (edit it there, not in either lib.rs).
 - Frontend `src/`: ES modules off `main.js`, `index.html`, `styles.css`. Design =
   "Runes" theme (Futura + Material Symbols); tokens in `src/tokens.css`

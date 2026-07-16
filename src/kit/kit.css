@@ -1182,8 +1182,14 @@ font-family: var(--sans);
     background: var(--text);
     color: var(--bg);
     padding: 8px 14px;
-    border-radius: 999px;
+    /* Rounded rect (not a pill) so multi-line error messages read cleanly. */
+    border-radius: 12px;
     font-size: 12px;
+    line-height: 1.4;
+    /* Long messages wrap and stay on-screen instead of running off both edges. */
+    max-width: min(90vw, 420px);
+    white-space: normal;
+    text-align: center;
     opacity: 0;
     transition: opacity 0.2s;
     pointer-events: none;

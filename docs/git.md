@@ -93,10 +93,21 @@ blink closed/reopen during the rebuild (the whole app is down then anyway). The
 heavier alternative, a separate standalone process like the Claude companion
 app (which stays visible *during* a rebuild), was deferred.
 
-## Commands (`lib.rs`)
+## Commands
 
-`open_git_window`, `git_status`, `git_commit`, `git_undo`, `git_open_file`,
-`git_get_draft`, `git_set_draft`. Git windows get the `git-*` capability
+The **pure git-CLI commands** — `git_status`, `git_commit`, `git_undo`,
+`git_push`, `git_commit_files`, `git_diff_file`, `git_diff_file_committed`,
+`git_log_week` (plus the `GitFile`/`GitCommit`/`GitStatus` structs) — live in
+[`src-tauri/src/git.rs`](../src-tauri/src/git.rs): they just shell out to `git`
+and return data, with no window/state coupling. The one seam is `git_commit`,
+which calls `crate::set_git_draft` to clear the saved draft.
+
+The **window/state plumbing** stays in
+[`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs): `open_git_window`,
+`open_git_pulse`, the `GitWindow` store (`read/write/upsert/remove_git_window`,
+`build_git_window`, `save_git_geometry`), `git_get_draft`/`git_set_draft`,
+`git_open_file`, and the `active_git_color*` helpers. Git windows get the
+`git-*` capability
 ([`src-tauri/capabilities/git.json`](../src-tauri/capabilities/git.json)).
 
 ## Window lifecycle gotcha

@@ -183,8 +183,15 @@ function buildCommitCard(repo, color, editor, pushUI) {
       toast("Pushed");
       await refresh();
     } catch (e) {
-      toast(String(e));
-      push.disabled = false;
+      const msg = String(e);
+      console.error("git push failed:", msg);
+      // HTTPS remotes with no cached credential can't prompt from here.
+      if (/could not read Username|Authentication failed|terminal prompts disabled|no credential/i.test(msg)) {
+        toast("Push failed — not signed in to GitHub. Run `git push` once in Terminal to save your credentials, or switch the remote to SSH.", 5000);
+      } else {
+        toast("Push failed: " + msg.split("\n")[0], 4000);
+      }
+      await refresh(); // restore the status label + re-enable Push
     }
   }
   push.addEventListener("click", doPush);
