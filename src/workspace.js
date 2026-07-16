@@ -479,63 +479,22 @@ export function addRow(list, value = "", autoBrowse = false) {
     });
     editorGroup.append(editorSel);
 
+    // The commit surface, Git Pulse, and the dev Server now live in the Git
+    // panel (its own tab, keyed off this repo) — see src/git.js. This button
+    // just jumps there.
     const gitBtn = document.createElement("button");
     gitBtn.type = "button";
     gitBtn.className = "ws-repo__git";
-    gitBtn.innerHTML = `${mi("commit")}Open`;
-    gitBtn.title = "Open Git window for this repo";
-    gitBtn.addEventListener("click", () => {
-      const repo = input.value.trim();
-      if (!repo) return;
-      invoke("open_git_window", { repo, color: wsColor, editor: wsEditor });
-    });
-    const pulseBtn = document.createElement("button");
-    pulseBtn.type = "button";
-    pulseBtn.className = "ws-repo__git ws-repo__git--ghost";
-    pulseBtn.innerHTML = `${mi("bar_chart")}Pulse`;
-    pulseBtn.title = "Open Git Pulse for this repo";
-    pulseBtn.addEventListener("click", () => {
-      const repo = input.value.trim();
-      if (!repo) return;
-      invoke("open_git_pulse", { repo });
-    });
+    gitBtn.innerHTML = `${mi("commit")}Git`;
+    gitBtn.title = "Open the Git panel for this repo";
+    gitBtn.addEventListener("click", () =>
+      document.querySelector('.tab[data-tab="git"]')?.click(),
+    );
     const gitBtns = document.createElement("div");
     gitBtns.className = "ws-repo__gitbtns";
-    gitBtns.append(gitBtn, pulseBtn);
+    gitBtns.append(gitBtn);
 
-    // Start/Stop the dev server now lives in its own tool window (an
-    // oscilloscope that follows the active project). The button is shown only
-    // if dev-open.sh / dev-stop.sh exist at the repo root (checked via
-    // repo_scripts, re-run whenever the path changes).
-    const serverBtn = document.createElement("button");
-    serverBtn.type = "button";
-    serverBtn.className = "ws-repo__git";
-    serverBtn.innerHTML = `${mi("dns")}Server`;
-    serverBtn.title = "Open the Server window for this repo";
-    serverBtn.hidden = true;
-    serverBtn.addEventListener("click", () =>
-      invoke("open_tool", { file: "server.html" }),
-    );
-    const scriptBtns = document.createElement("div");
-    scriptBtns.className = "ws-repo__gitbtns";
-    scriptBtns.append(serverBtn);
-
-    const refreshRepoScripts = async () => {
-      const repo = input.value.trim();
-      if (!repo) {
-        serverBtn.hidden = true;
-        return;
-      }
-      const { start, stop } = await invoke("repo_scripts", { repo });
-      serverBtn.hidden = !start && !stop;
-    };
-    refreshRepoScripts();
-    input.addEventListener("change", refreshRepoScripts);
-    browse.addEventListener("click", () =>
-      requestAnimationFrame(refreshRepoScripts),
-    );
-
-    primaryRow.append(editorGroup, gitBtns, scriptBtns);
+    primaryRow.append(editorGroup, gitBtns);
 
     // Window colors now come from the project's accent color (set via the
     // Mode switcher), not a per-repo swatch row.
@@ -596,6 +555,12 @@ function setList(list, values) {
 
 let wsClaude = "terminal";
 let wsSprite = DEFAULT_SPRITE;
+
+// The active project's repo path + theming, for the Git panel (git.js). Reads
+// the live repo card, so it reflects unsaved edits. Empty repo = no repo card.
+export function activeRepoInfo() {
+  return { repo: readList("repo")[0] || "", color: wsColor, editor: wsEditor };
+}
 
 // Reflect the active project's accent onto the app header (a CSS var on :root;
 // styles.css uses it for the .projhead background, falling back to --surface).

@@ -31,7 +31,24 @@ function closeWin() {
     TAURI?.window.getCurrentWindow().close();
 }
 
+// True when this tool page is embedded as an <iframe> inside another Studio
+// surface (e.g. the Git panel's Pulse/Server cards) rather than being its own
+// window. Same-origin, so the check is safe.
+const embedded = (() => {
+    try { return window.parent !== window; } catch { return false; }
+})();
+
 function init() {
+    // Embedded in a card: there's no OS window to drag or close, so drop the
+    // tool's own titlebar entirely (the host card provides its own header).
+    if (embedded) {
+        document.body.classList.add("is-embedded");
+        // No OS window frame in a card: drop the window border + titlebar.
+        document.body.classList.remove("outline-window");
+        document.querySelector("[data-window-bar]")?.remove();
+        return;
+    }
+
     // Harmonize grays/surfaces against the tint (tokens.css `.on-tint`) — only
     // when the window is actually color-tinted; paper windows keep solid grays.
     if (color) document.body.classList.add("on-tint");

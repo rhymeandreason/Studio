@@ -9,14 +9,28 @@
 // For "am I in Studio?" branching, test `hasTauri`, not `invoke` (which is
 // always a function).
 
-export const hasTauri = !!window.__TAURI__;
+// Tauri injects `window.__TAURI__` into the top-level webview only, not into
+// child frames. So a tool page embedded as a same-origin <iframe> (e.g. the
+// Git panel's Pulse/Server cards) borrows its parent's Tauri instead. Guarded
+// because a cross-origin parent would throw on access.
+function findTauri() {
+    if (window.__TAURI__) return window.__TAURI__;
+    try {
+        if (window.parent !== window && window.parent.__TAURI__)
+            return window.parent.__TAURI__;
+    } catch { /* cross-origin parent — ignore */ }
+    return null;
+}
+
+const tauri = findTauri();
+export const hasTauri = !!tauri;
 
 export const invoke = hasTauri
-    ? window.__TAURI__.core.invoke
+    ? tauri.core.invoke
     : () => Promise.reject(new Error("Tauri unavailable (browser preview)"));
 
 export const listen = hasTauri
-    ? window.__TAURI__.event.listen
+    ? tauri.event.listen
     : () => Promise.resolve(() => {});
 
 /** Escape a string for interpolation into HTML. */
