@@ -40,7 +40,8 @@ function buildFileRow(repo, f) {
 
 // Build the inline Commit card. Returns the card element and wires its own
 // refresh; the panel calls back into git_status/commit/undo/drafts directly.
-function buildCommitCard(repo, color, editor, push) {
+function buildCommitCard(repo, color, editor, pushUI) {
+  const { push, status } = pushUI;
   const card = el("section", "git-card git-card--commit");
 
   const head = el("div", "git-card__head");
@@ -72,21 +73,21 @@ function buildCommitCard(repo, color, editor, push) {
     commit.disabled = !msg.value.trim() || changedCount === 0;
   };
 
-  // Reflect the upstream state on the Push button: N commits ahead → "Push N";
-  // no upstream yet (but at least one commit) → first publish; else nothing to do.
+  // The button always reads "Push"; the toolbar label carries the state — N
+  // commits ahead, an unpublished branch, or up to date (button disabled).
   const syncPush = (st) => {
     if (!st.hasUpstream && st.lastCommit) {
       push.disabled = false;
-      push.textContent = "Publish branch";
       push.title = `Push ${st.branch} to origin and set upstream`;
+      status.textContent = "branch not published";
     } else if (st.ahead > 0) {
       push.disabled = false;
-      push.textContent = `Push ${st.ahead}`;
-      push.title = `Push ${st.ahead} commit${st.ahead === 1 ? "" : "s"} to ${st.branch}'s upstream`;
+      push.title = `Push to ${st.branch}'s upstream`;
+      status.textContent = `${st.ahead} commit${st.ahead === 1 ? "" : "s"} ahead`;
     } else {
       push.disabled = true;
-      push.textContent = "Push";
       push.title = "Nothing to push";
+      status.textContent = st.lastCommit ? "up to date" : "";
     }
   };
 
@@ -176,15 +177,13 @@ function buildCommitCard(repo, color, editor, push) {
 
   async function doPush() {
     push.disabled = true;
-    const label = push.textContent;
-    push.textContent = "Pushing…";
+    status.textContent = "pushing…";
     try {
       await invoke("git_push", { repo });
       toast("Pushed");
       await refresh();
     } catch (e) {
       toast(String(e));
-      push.textContent = label;
       push.disabled = false;
     }
   }
@@ -318,16 +317,18 @@ export async function renderGitPanel() {
     return;
   }
 
-  // Full-width toolbar pinned to the top of the panel (CSS: order + span). Holds
-  // the Push button, which the commit card drives from its status fetch.
+  // Full-width toolbar pinned to the top of the panel (CSS: order + span). A
+  // status label ("N commits ahead") + the Push button, both driven by the
+  // commit card's status fetch.
+  const status = el("span", "git-toolbar__status");
   const push = el("button", "git-push", { type: "button", textContent: "Push", disabled: true });
   const toolbar = el("div", "git-toolbar");
-  toolbar.append(el("span", "git-toolbar__title", { textContent: "Git" }), push);
+  toolbar.append(status, push);
   panel.append(toolbar);
 
   // Order: Server (top), Commit, Pulse, Repo (last). Server is prepended below
   // once its async details resolve.
-  panel.append(buildCommitCard(repo, color, editor, push));
+  panel.append(buildCommitCard(repo, color, editor, { push, status }));
   panel.append(
     buildToolCard("Pulse", "bar_chart", "tools/git-pulse.html?repo=" + encodeURIComponent(repo) +
       (color ? "&color=" + encodeURIComponent(color) : ""), () =>
