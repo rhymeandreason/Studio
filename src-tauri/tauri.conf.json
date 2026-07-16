@@ -21,7 +21,8 @@
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "shadow": false,
-        "backgroundColor": "#f7f5f0"
+        "backgroundColor": "#f7f5f0",
+        "acceptFirstMouse": true
       }
     ],
     "security": {
