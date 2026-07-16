@@ -3876,6 +3876,13 @@ struct GitStatus {
     files: Vec<GitFile>,
     #[serde(rename = "lastCommit")]
     last_commit: Option<GitCommit>,
+    /// Commits ahead of the upstream (from `## branch...origin/branch [ahead N]`).
+    /// 0 when in sync; also 0 when there's no upstream (nothing to compare).
+    ahead: u32,
+    /// Whether the branch has an upstream at all — no upstream means the first
+    /// push needs `-u origin <branch>`.
+    #[serde(rename = "hasUpstream")]
+    has_upstream: bool,
 }
 
 /// Read branch, changed files, and the last commit for a repo.
@@ -3890,6 +3897,8 @@ fn git_status(repo: String) -> Result<GitStatus, String> {
     }
     let text = String::from_utf8_lossy(&out.stdout);
     let mut branch = String::new();
+    let mut ahead: u32 = 0;
+    let mut has_upstream = false;
     let mut files = Vec::new();
     for line in text.lines() {
         if let Some(rest) = line.strip_prefix("## ") {
@@ -3903,6 +3912,13 @@ fn git_status(repo: String) -> Result<GitStatus, String> {
                 .unwrap_or(rest)
                 .trim()
                 .to_string();
+            // "...origin/main" present ⇒ the branch is tracking an upstream.
+            has_upstream = rest.contains("...");
+            // Parse the ahead count out of the "[ahead N, behind M]" suffix.
+            if let Some(seg) = rest.split_once("[ahead ").map(|(_, s)| s) {
+                let n: String = seg.chars().take_while(|c| c.is_ascii_digit()).collect();
+                ahead = n.parse().unwrap_or(0);
+            }
         } else if line.len() > 3 {
             let status = line[..2].to_string();
             // Renames show "old -> new"; keep the new path.
@@ -3939,6 +3955,8 @@ fn git_status(repo: String) -> Result<GitStatus, String> {
         branch,
         files,
         last_commit,
+        ahead,
+        has_upstream,
     })
 }
 
@@ -4160,6 +4178,46 @@ fn git_commit(app: AppHandle, repo: String, message: String) -> Result<(), Strin
 fn git_undo(repo: String) -> Result<(), String> {
     let out = Command::new("git")
         .args(["-C", &repo, "reset", "--soft", "HEAD~1"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+/// Push the current branch to its remote. If the branch has no upstream yet,
+/// set one on the first push (`push -u origin <branch>`). Runs with a terminal
+/// prompt disabled so a missing credential fails fast instead of hanging.
+#[tauri::command]
+fn git_push(repo: String) -> Result<(), String> {
+    // Current branch name (empty on a detached HEAD → error out clearly).
+    let head = Command::new("git")
+        .args(["-C", &repo, "symbolic-ref", "--short", "HEAD"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !head.status.success() {
+        return Err("Not on a branch (detached HEAD)".to_string());
+    }
+    let branch = String::from_utf8_lossy(&head.stdout).trim().to_string();
+
+    // Does the branch already track an upstream?
+    let has_upstream = Command::new("git")
+        .args([
+            "-C", &repo,
+            "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}",
+        ])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let mut args = vec!["-C", &repo, "push"];
+    if !has_upstream {
+        args.extend_from_slice(&["-u", "origin", &branch]);
+    }
+    let out = Command::new("git")
+        .args(&args)
+        .env("GIT_TERMINAL_PROMPT", "0")
         .output()
         .map_err(|e| e.to_string())?;
     if !out.status.success() {
@@ -5538,6 +5596,7 @@ pub fn run() {
             git_commit_files,
             git_commit,
             git_undo,
+            git_push,
             git_open_file,
             open_file_in_code_editor,
             git_get_draft,

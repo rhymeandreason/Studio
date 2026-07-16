@@ -13,7 +13,14 @@ column of cards:
 - **Commit** (inline) — ports the standalone Git window's logic (below), reusing
   the same `git_*` commands: branch, changed files (click → open in editor),
   commit box (⌘↵), last-commit footer with expand + Undo. A pop-out button opens
-  the floating window.
+  the floating window. A **Push** button lives in the panel's top toolbar (full-
+  width row above the card grid), driven by the commit card's status fetch:
+  `git_status` now returns `ahead`/`hasUpstream`, so it shows "Push N" when the
+  branch is ahead,
+  "Publish branch" on the first push of an untracked branch (`git_push` adds
+  `-u origin <branch>`), and disables when in sync. Push runs with
+  `GIT_TERMINAL_PROMPT=0` so a missing credential fails fast instead of hanging —
+  it relies on an already-configured credential helper / SSH key.
 - **Pulse** (inline) — embeds `tools/git-pulse.html?repo=…`.
 - **Server** (inline) — embeds `tools/server.html`, shown only when the repo has
   `dev-open.sh`/`dev-stop.sh` (`repo_scripts`).

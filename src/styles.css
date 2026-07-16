@@ -2748,6 +2748,41 @@ td.ntable__total-cell {
     background: var(--accent);
 }
 .git-commit:disabled { opacity: 0.35; cursor: default; }
+
+/* Top toolbar — full-width row above the card grid, holding the Push button. */
+.git-toolbar {
+    grid-column: 1 / -1;
+    order: -1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 2px 2px 4px;
+}
+.git-toolbar__title {
+    flex: 1 1 auto;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.git-push {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius);
+    background: var(--elevated);
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 7px 16px;
+    box-shadow: var(--shadow-sm);
+}
+.git-push:hover:not(:disabled) { background: var(--surface); }
+.git-push:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
 .git-prev {
     display: flex;
     flex-direction: column;

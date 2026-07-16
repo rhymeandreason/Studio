@@ -40,7 +40,7 @@ function buildFileRow(repo, f) {
 
 // Build the inline Commit card. Returns the card element and wires its own
 // refresh; the panel calls back into git_status/commit/undo/drafts directly.
-function buildCommitCard(repo, color, editor) {
+function buildCommitCard(repo, color, editor, push) {
   const card = el("section", "git-card git-card--commit");
 
   const head = el("div", "git-card__head");
@@ -72,6 +72,24 @@ function buildCommitCard(repo, color, editor) {
     commit.disabled = !msg.value.trim() || changedCount === 0;
   };
 
+  // Reflect the upstream state on the Push button: N commits ahead → "Push N";
+  // no upstream yet (but at least one commit) → first publish; else nothing to do.
+  const syncPush = (st) => {
+    if (!st.hasUpstream && st.lastCommit) {
+      push.disabled = false;
+      push.textContent = "Publish branch";
+      push.title = `Push ${st.branch} to origin and set upstream`;
+    } else if (st.ahead > 0) {
+      push.disabled = false;
+      push.textContent = `Push ${st.ahead}`;
+      push.title = `Push ${st.ahead} commit${st.ahead === 1 ? "" : "s"} to ${st.branch}'s upstream`;
+    } else {
+      push.disabled = true;
+      push.textContent = "Push";
+      push.title = "Nothing to push";
+    }
+  };
+
   async function refresh() {
     let st;
     try {
@@ -91,6 +109,7 @@ function buildCommitCard(repo, color, editor) {
       for (const f of st.files) files.append(buildFileRow(repo, f));
     }
     syncEnabled();
+    syncPush(st);
 
     prev.innerHTML = "";
     if (!st.lastCommit) return;
@@ -154,6 +173,22 @@ function buildCommitCard(repo, color, editor) {
       syncEnabled();
     }
   }
+
+  async function doPush() {
+    push.disabled = true;
+    const label = push.textContent;
+    push.textContent = "Pushing…";
+    try {
+      await invoke("git_push", { repo });
+      toast("Pushed");
+      await refresh();
+    } catch (e) {
+      toast(String(e));
+      push.textContent = label;
+      push.disabled = false;
+    }
+  }
+  push.addEventListener("click", doPush);
 
   let draftTimer;
   msg.addEventListener("input", () => {
@@ -283,9 +318,16 @@ export async function renderGitPanel() {
     return;
   }
 
+  // Full-width toolbar pinned to the top of the panel (CSS: order + span). Holds
+  // the Push button, which the commit card drives from its status fetch.
+  const push = el("button", "git-push", { type: "button", textContent: "Push", disabled: true });
+  const toolbar = el("div", "git-toolbar");
+  toolbar.append(el("span", "git-toolbar__title", { textContent: "Git" }), push);
+  panel.append(toolbar);
+
   // Order: Server (top), Commit, Pulse, Repo (last). Server is prepended below
   // once its async details resolve.
-  panel.append(buildCommitCard(repo, color, editor));
+  panel.append(buildCommitCard(repo, color, editor, push));
   panel.append(
     buildToolCard("Pulse", "bar_chart", "tools/git-pulse.html?repo=" + encodeURIComponent(repo) +
       (color ? "&color=" + encodeURIComponent(color) : ""), () =>
