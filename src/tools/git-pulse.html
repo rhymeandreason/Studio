@@ -123,7 +123,7 @@
   }
 </style>
 </head>
-<body>
+<body class="outline-window">
 
 <div class="titlebar" data-window-bar>
   <div class="tb-title" data-window-close>
@@ -137,7 +137,7 @@
   <div class="stat"><span class="stat-val" id="s-streak">—</span>day streak</div>
 </div>
 
-<div id="scroll-area"></div>
+<div id="scroll-area" class="main"></div>
 <div id="empty">No commits found in the last 7 days.</div>
 <div id="tooltip"></div>
 
@@ -151,6 +151,11 @@ const tooltip    = document.getElementById('tooltip');
 function repoFromUrl() {
   return new URLSearchParams(location.search).get('repo') || '';
 }
+
+// When embedded in the Git panel, ?color= carries the project accent — tint the
+// commit dots with it (they use var(--accent)).
+const _color = new URLSearchParams(location.search).get('color');
+if (_color) document.documentElement.style.setProperty('--accent', _color);
 
 function parseLog(raw) {
   return raw.trim().split('\n').filter(Boolean).map(line => {

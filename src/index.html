@@ -43,6 +43,9 @@
                     <button class="tab tab--round" data-tab="artifacts" title="Artifacts">
                         <span class="mi">palette</span>
                     </button>
+                    <button class="tab tab--round" data-tab="git" title="Git">
+                        <span class="mi">commit</span>
+                    </button>
                     <button class="btn btn-icon-only tab--round" id="workspace-btn" type="button" title="Workspace">
                         <span class="mi">tune</span>
                     </button>
@@ -201,14 +204,6 @@
                                     <button
                                         type="button"
                                         class="menu__item"
-                                        data-add-list="repo"
-                                        data-singleton
-                                    >
-                                        <span class="mi mi-sm">folder_open</span>Repo
-                                    </button>
-                                    <button
-                                        type="button"
-                                        class="menu__item"
                                         data-add-list="figma"
                                         data-singleton
                                     >
@@ -261,6 +256,10 @@
 
                 <section class="panel" data-panel="artifacts" hidden>
                     <div class="artifacts" id="artifacts-panel"></div>
+                </section>
+
+                <section class="panel" data-panel="git" hidden>
+                    <div class="git-panel" id="git-panel"></div>
                 </section>
             </div>
         </main>

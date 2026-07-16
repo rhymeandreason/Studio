@@ -32,6 +32,7 @@ import {
   togglePinnedTab,
 } from "./workspace.js";
 import { renderArtifacts, artifactsSelection, deleteArtifactsSelection, clearArtifactsSelection } from "./artifacts.js";
+import { renderGitPanel } from "./git.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -98,7 +99,7 @@ export function render(project) {
     header.hidden = false;
     empty.hidden = true;
     content.hidden = false;
-    loadWorkspace(project.path);
+    loadWorkspace(project.path).then(renderGitPanel);
     loadNotes(project.path);
     loadMedia(project.path);
     renderArtifacts();
@@ -554,6 +555,9 @@ export function selectTab(name) {
   // per-project CLAUDE.md block.
   if (name === "artifacts") renderArtifacts();
   else clearArtifactsSelection();
+
+  // Re-poll git status when opening the Git tab (cheap; keeps it live).
+  if (name === "git") renderGitPanel();
 
   // Close the editor column when leaving the media tab.
   if (name !== "media") {

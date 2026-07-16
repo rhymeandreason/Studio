@@ -113,6 +113,38 @@
       margin: -18px 0 0;
       min-height: 15px;
     }
+
+    /* Normally transparent to layout, so the stacked window view is unchanged. */
+    #controls { display: contents; }
+
+    /* Embedded in a card (window-chrome.js adds .is-embedded): lay out
+       horizontally — oscilloscope on the left, power + hint stacked right. */
+    .is-embedded #body {
+      flex-direction: row;
+      align-items: center;
+      padding: 14px 18px;
+      gap: 20px;
+      height: 100%;
+    }
+    .is-embedded #screen {
+      width: auto;
+      height: 100%;
+      aspect-ratio: 4 / 3;
+      border-radius: 14px;
+      flex: 0 1 auto;
+    }
+    .is-embedded #controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .is-embedded #power { width: 72px; height: 72px; }
+    .is-embedded #power .glyph { width: 26px; height: 26px; }
+    .is-embedded #hint { margin: 0; }
   </style>
 </head>
 
@@ -124,10 +156,14 @@
     </div>
     <div id="body">
       <div id="screen"><canvas id="scope"></canvas></div>
-      <button id="power" title="Start server">
-        <svg class="glyph" id="glyph" viewBox="0 0 24 24" aria-hidden="true"></svg>
-      </button>
-      <p id="hint"></p>
+      <!-- Wrapper is display:contents normally (layout unchanged); when the
+           tool is embedded in a card it becomes the right-hand control column. -->
+      <div id="controls">
+        <button id="power" title="Start server">
+          <svg class="glyph" id="glyph" viewBox="0 0 24 24" aria-hidden="true"></svg>
+        </button>
+        <p id="hint"></p>
+      </div>
     </div>
   </div>
 
