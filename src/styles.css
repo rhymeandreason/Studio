@@ -679,145 +679,8 @@ select.field__input {
     color: var(--text);
 }
 
-/* ── Repo card: the launchpad's anchor — wider, richer, clear hierarchy ── */
-.ws-item--repo {
-    /* Span the full row and grow as tall as its contents need. */
-    grid-column: 1 / -1;
-    aspect-ratio: auto;
-    /* Always render first, regardless of DOM order. */
-    order: -1;
-}
-
-/* Primary action: the path, with an inline Browse button. */
-.ws-repo__path {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.ws-repo__path .ws-item__input {
-    flex: 1 1 auto;
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-sm);
-    padding: 8px 10px;
-}
-
-.ws-repo__browse {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: var(--surface);
-    border: 1px solid var(--hairline-strong);
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    cursor: pointer;
-    font-family: var(--sans);
-    font-size: 12px;
-    padding: 8px 12px;
-    white-space: nowrap;
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
-
-.ws-repo__browse:hover {
-    color: var(--text);
-    border-color: var(--text);
-    background: var(--elevated);
-}
-
-/* Secondary actions: a primary row (editor + Open/Pulse), then a quieter
-   color row underneath — kept apart so neither has to fight the other for
-   space at narrow widths. */
-.ws-repo__actions {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: auto;
-    padding-top: 12px;
-    border-top: 1px solid var(--hairline);
-}
-
-.ws-repo__row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 16px;
-}
-
-.ws-repo__row--primary {
-    justify-content: space-between;
-}
-
-.ws-repo__group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.ws-repo__glabel {
-    flex-shrink: 0;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    color: var(--text-soft);
-}
-
-.ws-repo__editor {
-    background: var(--surface);
-    border: 1px solid var(--hairline-strong);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    cursor: pointer;
-    font-family: var(--sans);
-    font-size: 12px;
-    padding: 5px 8px;
-}
-
-.ws-repo__editor:hover {
-    border-color: var(--text);
-}
-
-.ws-repo__gitbtns {
-    display: flex;
-    flex-shrink: 0;
-    gap: 8px;
-}
-
-/* Git is the repo card's primary call-to-action: filled, not ghosted. */
-.ws-repo__git {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: var(--accent);
-    border: 1px solid var(--accent);
-    border-radius: var(--radius-sm);
-    color: var(--on-accent, #fff);
-    cursor: pointer;
-    font-family: var(--sans);
-    font-size: 12px;
-    font-weight: 500;
-    padding: 6px 12px;
-    transition: filter 0.15s;
-}
-
-.ws-repo__git:hover {
-    filter: brightness(1.08);
-}
-
-/* Pulse is secondary to the primary Git-window Open — ghost it down. */
-.ws-repo__git--ghost {
-    background: var(--surface);
-    border-color: var(--hairline-strong);
-    color: var(--text-muted);
-}
-
-.ws-repo__git--ghost:hover {
-    filter: none;
-    color: var(--text);
-    border-color: var(--text);
-    background: var(--elevated);
-}
+/* The repo path + editor now live in the Git panel (.git-repo__*, further
+   down), not a Workspace card. */
 
 .btn-remove {
     // flex: 0 0 auto;
@@ -2698,8 +2561,15 @@ td.ntable__total-cell {
    Repo/dev-tools cards: an inline Commit surface plus embedded Pulse/Server
    tool pages. One repo per project (git.js reads the Workspace repo card). */
 .git-panel {
-    display: flex;
-    flex-direction: column;
+    /* Project accent — git.js overrides this inline per project; the fallback
+       keeps the panel sane on its own. The Commit card tints itself from it. */
+    --git-accent: var(--accent);
+    /* Auto-bento: as many ~400px-max columns as fit; one full-width column when
+       narrow. No breakpoints — the grid reflows itself. */
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 400px));
+    grid-auto-flow: row dense;
+    align-items: start;
     gap: 14px;
     padding: 4px 2px 80px;
 }
@@ -2742,6 +2612,56 @@ td.ntable__total-cell {
     flex: 0 1 auto;
 }
 .git-branch::before { content: "⎇ "; opacity: 0.6; }
+
+/* ── Commit card: styled like the standalone Git window ──────────────────
+   Fully tinted with the project color (--git-accent), dark ink, translucent-
+   white inner surfaces. Mirrors src/git/index.html's look. */
+.git-card--commit {
+    --gc-ink: #1a1a1a;
+    --gc-ink-dim: rgba(26, 26, 26, 0.55);
+    --gc-line: rgba(26, 26, 26, 0.16);
+    --gc-fill: rgba(255, 255, 255, 0.45);
+    --gc-fill-strong: rgba(255, 255, 255, 0.72);
+    background: var(--git-accent);
+    border-color: color-mix(in srgb, var(--git-accent), #000 12%);
+    color: var(--gc-ink);
+}
+.git-card--commit .git-card__name { color: var(--gc-ink); }
+.git-card--commit .git-card__title .mi { color: var(--gc-ink-dim); }
+.git-card--commit .git-branch {
+    color: var(--gc-ink);
+    opacity: 0.85;
+}
+.git-card--commit .git-iconbtn { color: var(--gc-ink-dim); }
+.git-card--commit .git-iconbtn:hover {
+    background: var(--gc-fill);
+    color: var(--gc-ink);
+}
+.git-card--commit .git-files { background: var(--gc-fill); }
+.git-card--commit .git-file:hover { background: var(--gc-fill-strong); }
+.git-card--commit .git-file__code { color: var(--gc-ink); opacity: 0.75; }
+.git-card--commit .git-empty { color: var(--gc-ink-dim); }
+.git-card--commit .git-msg {
+    background: var(--gc-fill-strong);
+    border: none;
+    color: var(--gc-ink);
+}
+.git-card--commit .git-msg::placeholder { color: var(--gc-ink-dim); }
+.git-card--commit .git-commit {
+    background: var(--gc-ink);
+    color: var(--git-accent);
+}
+.git-card--commit .git-prev {
+    border-top: 1px solid var(--gc-line);
+    color: var(--gc-ink-dim);
+}
+.git-card--commit .git-prev__top { color: var(--gc-ink); }
+.git-card--commit .git-undo {
+    background: transparent;
+    color: var(--gc-ink);
+    border: 1px solid var(--gc-line);
+}
+.git-card--commit .git-undo:hover { background: var(--gc-fill); }
 .git-iconbtn {
     flex: 0 0 auto;
     display: flex;
@@ -2858,6 +2778,57 @@ td.ntable__total-cell {
 }
 .git-undo:hover { background: var(--surface); }
 
+/* Repo card — path input + Browse, and the "open in" editor picker */
+.git-repo__path {
+    display: flex;
+    gap: 8px;
+    padding: 0 12px 12px;
+}
+.git-repo__input {
+    flex: 1 1 auto;
+    min-width: 0;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    padding: 8px 10px;
+    outline: none;
+}
+.git-repo__input:focus { border-color: var(--accent-ring); }
+.git-repo__browse {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+.git-repo__browse:hover { background: var(--surface); }
+.git-repo__editorrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px 12px;
+}
+.git-repo__glabel { color: var(--text-muted); font-size: 12px; }
+.git-repo__editor {
+    flex: 1 1 auto;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    padding: 7px 10px;
+    cursor: pointer;
+}
+
 /* Embedded tool cards (Pulse, Server) */
 .git-card--embed .git-embed {
     width: 100%;
@@ -2866,6 +2837,15 @@ td.ntable__total-cell {
     display: block;
     background: transparent;
 }
+
+/* Bare card (Server): no card chrome, just header + embed. */
+.git-card--bare {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+.git-card--bare .git-card__head { padding-left: 2px; padding-right: 2px; }
 
 /* Empty state (no repo) */
 .git-panel__empty {
@@ -2880,3 +2860,15 @@ td.ntable__total-cell {
 .git-panel__empty .mi { font-size: 32px; color: var(--text-soft); margin-bottom: 4px; }
 .git-panel__empty p { margin: 0; }
 .git-panel__hint { color: var(--text-soft); font-size: 13px; max-width: 280px; }
+
+/* Narrow window: give the Commit card a tall fixed height and let its file
+   list flex to fill, like the standalone Git window. */
+@media (max-width: 450px) {
+    .git-card--commit { height: 500px; }
+    .git-card--commit .git-files {
+        flex: 1 1 auto;
+        max-height: none;
+        min-height: 60px;
+    }
+}
+

@@ -1,11 +1,36 @@
+# Git panel
+
+The **Git tab** (`data-panel="git"`, in the main tab row) is the repo's home in
+the main window. Implemented in [`src/git.js`](../src/git.js), styled in
+`styles.css` (`.git-*`), markup `#git-panel` in `index.html`. It's keyed off the
+project's single repo (via `activeRepoInfo()` from `workspace.js`) and renders a
+column of cards:
+
+- **Repo** — the repo path (+ Browse) and the "open in" editor picker. Edits go
+  through `setActiveRepo()`/`setActiveEditor()` in `workspace.js` (autosaved);
+  changing the path re-keys the panel. This is the *only* place the repo is
+  edited — it's no longer a Workspace card.
+- **Commit** (inline) — ports the standalone Git window's logic (below), reusing
+  the same `git_*` commands: branch, changed files (click → open in editor),
+  commit box (⌘↵), last-commit footer with expand + Undo. A pop-out button opens
+  the floating window.
+- **Pulse** (inline) — embeds `tools/git-pulse.html?repo=…`.
+- **Server** (inline) — embeds `tools/server.html`, shown only when the repo has
+  `dev-open.sh`/`dev-stop.sh` (`repo_scripts`).
+
+The last two are `<iframe>`s. Tauri only injects `window.__TAURI__` into the
+top-level webview, so `kit/app.js` borrows the parent window's Tauri for a
+same-origin embedded tool, and `kit/window-chrome.js` drops the tool's titlebar
++ window border when embedded (`.is-embedded` on `<body>`).
+
 # Git companion windows
 
 Small bright-colored windows, **one per repo**, that show a single repo's
-status and let you commit. Launched from a project's Workspace repo card.
-Implemented as a standalone webview window (`src/git/index.html`, self-contained
-HTML+CSS+JS like a tool) backed by git Tauri commands in
-[`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs) (the "Git companion windows"
-section).
+status and let you commit. Opened by the Git panel's Commit-card pop-out button
+(and reopened across rebuilds). Implemented as a standalone webview window
+(`src/git/index.html`, self-contained HTML+CSS+JS like a tool) backed by git
+Tauri commands in [`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs) (the "Git
+companion windows" section).
 
 The window uses the **minimal window style** (empty native title + transparent
 `--bg`-tinted title bar + in-page title strip — see
@@ -27,7 +52,7 @@ The window re-polls `git_status` on focus and after each action.
 
 ## Launching + theming
 
-The Workspace repo card ([`src/workspace.js`](../src/workspace.js)) has a **Git**
+The Git panel's Commit card ([`src/git.js`](../src/git.js)) has a pop-out
 button that calls `open_git_window(repo, color, editor)`. The window color comes
 from the project's **accent color** (`Workspace::color`, serde `color`), set via
 the Mode switcher's swatches (`Ctrl+Space` → project header → `Tab`), not a

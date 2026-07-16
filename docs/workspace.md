@@ -10,8 +10,11 @@ once. Implemented in `src/workspace.js`, styled in `src/styles.css`
 Each project stores `workspace.json` (read/written via the Rust `Workspace`
 struct in `src-tauri/src/lib.rs`):
 
-- `repo` — singleton path to the project's code repo.
+- `repo` — path to the project's code repo. Edited in the **Git panel**, not a
+  Workspace card (see [docs/git.md](git.md)); stored as plain module state
+  (`wsRepo`) in `workspace.js`, not derived from the DOM.
 - `editor` — which app to open the repo in (`open -a <editor>`). Blank = Zed.
+  Also edited in the Git panel ("open in" picker).
 - `figma` — singleton Figma file URL.
 - `apps` / `files` / `folders` / `urls` — arrays of strings.
 - `claude.mode` — `"terminal"` opens Terminal cd'd into the repo and runs
@@ -24,10 +27,11 @@ Saves are debounced via `scheduleWorkspaceSave()` (400ms after the last edit).
 
 ## Cards / `LIST_META`
 
-Each list type (`repo`, `figma`, `apps`, `files`, `folders`, `urls`) has an
+Each list type (`figma`, `apps`, `files`, `folders`, `urls`, `scripts`) has an
 entry in `LIST_META`: icon, label, placeholder, whether it's a `singleton`
-(repo/figma — only one card, "+" button disables once added), and whether it
-gets a `browse` button (`dir`/`file`/`app` → native picker).
+(figma — only one card, "+" button disables once added), and whether it
+gets a `browse` button (`dir`/`file`/`app` → native picker). (The repo is no
+longer a card — it lives in the Git panel.)
 
 Cards are `.ws-item` elements holding a `<textarea>` (not `<input>` —
 `readList()` queries `textarea`). Selection/keyboard nav follows the shared
@@ -36,25 +40,21 @@ multi-select via click/Cmd-click/Shift-click, arrow keys to move focus,
 Enter to open the item's value (`open` / `open -a` for apps), Delete/Backspace
 to remove.
 
-## Repo card: Git actions
+## Repo + editor: the Git panel
 
-Two buttons: **Open** (Git window) and **Pulse** (`src/tools/git-pulse.html` —
-dot-graph of this week's commits, one dot per commit, hover for message).
+The repo path and its "open in" editor picker now live in the **Git panel**
+(its own tab — see [docs/git.md](git.md)), not a Workspace card. `workspace.js`
+still owns the state and autosave: `wsRepo`/`wsEditor` module vars, the
+`setActiveRepo()`/`setActiveEditor()` setters the Git panel calls, and
+`activeRepoInfo()` (`{ repo, color, editor }`) it reads. `EDITOR_OPTIONS` and
+`pickPath()` are exported from `workspace.js` for the panel to reuse.
 
-## Repo card: editor picker
-
-The repo card has an `<select class="ws-item__editor">` ("open in") with
-`EDITOR_OPTIONS`: Zed (default/blank), Atom, VS Code, Sublime Text, Xcode.
-Changing it sets `wsEditor`, persisted as `workspace.json`'s `editor` field
-and copied onto the Git window's own `editor` field (`open_git_window` in
-`lib.rs`). `git_open_file` reads it back to decide how to open a changed
-file clicked from that Git window — `open -a <editor> <file>` (or
-`open -a Zed` if blank), or the in-app Studio Code Editor if `editor` is
-`STUDIO_EDITOR`.
-
-To add another editor option, add `{ value, label }` to `EDITOR_OPTIONS` in
-`src/workspace.js` — `value` must match the `.app` name macOS expects after
-`open -a` (e.g. `"Visual Studio Code"`, `"IntelliJ IDEA"`).
+`editor` is copied onto the Git window's own `editor` field (`open_git_window`
+in `lib.rs`); `git_open_file` reads it back to open a changed file — `open -a
+<editor> <file>` (or `open -a Zed` if blank), or the in-app Studio Code Editor
+if `editor` is `STUDIO_EDITOR`. To add another editor option, add
+`{ value, label }` to `EDITOR_OPTIONS` — `value` must match the `.app` name
+macOS expects after `open -a` (e.g. `"Visual Studio Code"`, `"IntelliJ IDEA"`).
 
 ### Activating a project: `activate_project` vs `open_project`
 

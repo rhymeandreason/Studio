@@ -13,7 +13,7 @@ const { invoke } = window.__TAURI__.core;
 
 // --- Native file/folder pickers --------------------------------------------
 
-async function pickPath(opts = {}) {
+export async function pickPath(opts = {}) {
   const dialog = window.__TAURI__.dialog;
   if (!dialog || !dialog.open) {
     console.error("Dialog plugin not available on window.__TAURI__.dialog");
@@ -174,13 +174,6 @@ function listContainer() {
 }
 
 const LIST_META = {
-  repo: {
-    icon: "folder_open",
-    label: "Repo",
-    placeholder: "~/code/my-repo",
-    singleton: true,
-    browse: "dir",
-  },
   figma: {
     icon: "pentagon",
     label: "Figma",
@@ -211,7 +204,7 @@ const LIST_META = {
 
 // Code editors offered for the Repo card's "Open in" picker. Empty value =
 // Zed, the Rust-side default when `editor` is blank.
-const EDITOR_OPTIONS = [
+export const EDITOR_OPTIONS = [
   { value: "Studio Code Editor", label: "Studio Code Editor" },
   { value: "", label: "Zed" },
   { value: "Atom", label: "Atom" },
@@ -351,8 +344,8 @@ export function addRow(list, value = "", autoBrowse = false) {
   // Resize after the card is in the DOM so scrollHeight is correct
   requestAnimationFrame(resizeInput);
 
-  // Folder/file/repo cards show the name prominently above the path.
-  if (list === "folders" || list === "files" || list === "repo") {
+  // Folder/file cards show the name prominently above the path.
+  if (list === "folders" || list === "files") {
     const name = document.createElement("div");
     name.className = "ws-item__name";
     const updateName = () => {
@@ -421,89 +414,10 @@ export function addRow(list, value = "", autoBrowse = false) {
     input.classList.add("ws-item__input--path");
   }
 
-  // For the repo card the input lives inside a dedicated path row (below);
-  // every other card appends it straight to the body.
-  if (list !== "repo") card.append(input);
+  card.append(input);
 
-  // The repo card is the launchpad's anchor: it gets a richer, wider layout
-  // with a clear action hierarchy — path (+ Browse) on top, then a footer
-  // grouping "Open in editor" and the Git window controls.
-  if (list === "repo") {
-    card.classList.add("ws-item--repo");
-
-    // Primary: the repo path, with an inline Browse button.
-    const pathRow = document.createElement("div");
-    pathRow.className = "ws-repo__path";
-    const browse = document.createElement("button");
-    browse.type = "button";
-    browse.className = "ws-repo__browse";
-    browse.innerHTML = `${mi("folder_open")}Browse`;
-    browse.title = "Choose repo folder";
-    browse.addEventListener("click", async () => {
-      const picked = await pickPath({ directory: true });
-      if (picked) {
-        input.value = picked;
-        input.dispatchEvent(new Event("input"));
-        requestAnimationFrame(resizeInput);
-        scheduleWorkspaceSave();
-      }
-    });
-    pathRow.append(input, browse);
-    card.append(pathRow);
-
-    // Footer: a primary action row (editor + Open/Pulse), with the color
-    // picker demoted to its own quiet row underneath — it's set once and
-    // rarely touched, so it shouldn't compete with the buttons for space.
-    const footer = document.createElement("div");
-    footer.className = "ws-repo__actions";
-
-    const primaryRow = document.createElement("div");
-    primaryRow.className = "ws-repo__row ws-repo__row--primary";
-
-    const editorGroup = document.createElement("label");
-    editorGroup.className = "ws-repo__group";
-    editorGroup.innerHTML = `<span class="ws-repo__glabel">Open in</span>`;
-    const editorSel = document.createElement("select");
-    editorSel.className = "ws-repo__editor";
-    editorSel.title = "Editor the repo opens in";
-    EDITOR_OPTIONS.forEach((opt) => {
-      const o = document.createElement("option");
-      o.value = opt.value;
-      o.textContent = opt.label;
-      editorSel.append(o);
-    });
-    editorSel.value = wsEditor;
-    editorSel.addEventListener("change", () => {
-      wsEditor = editorSel.value;
-      scheduleWorkspaceSave();
-    });
-    editorGroup.append(editorSel);
-
-    // The commit surface, Git Pulse, and the dev Server now live in the Git
-    // panel (its own tab, keyed off this repo) — see src/git.js. This button
-    // just jumps there.
-    const gitBtn = document.createElement("button");
-    gitBtn.type = "button";
-    gitBtn.className = "ws-repo__git";
-    gitBtn.innerHTML = `${mi("commit")}Git`;
-    gitBtn.title = "Open the Git panel for this repo";
-    gitBtn.addEventListener("click", () =>
-      document.querySelector('.tab[data-tab="git"]')?.click(),
-    );
-    const gitBtns = document.createElement("div");
-    gitBtns.className = "ws-repo__gitbtns";
-    gitBtns.append(gitBtn);
-
-    primaryRow.append(editorGroup, gitBtns);
-
-    // Window colors now come from the project's accent color (set via the
-    // Mode switcher), not a per-repo swatch row.
-    footer.append(primaryRow);
-    card.append(footer);
-  }
-
-  // Browse button for apps and files (the repo card has its own, above).
-  if (meta.browse && list !== "repo") {
+  // Browse button for apps and files.
+  if (meta.browse) {
     const browse = document.createElement("button");
     browse.type = "button";
     browse.className = "ws-item__browse";
@@ -556,10 +470,9 @@ function setList(list, values) {
 let wsClaude = "terminal";
 let wsSprite = DEFAULT_SPRITE;
 
-// The active project's repo path + theming, for the Git panel (git.js). Reads
-// the live repo card, so it reflects unsaved edits. Empty repo = no repo card.
+// The active project's repo path + theming, for the Git panel (git.js).
 export function activeRepoInfo() {
-  return { repo: readList("repo")[0] || "", color: wsColor, editor: wsEditor };
+  return { repo: wsRepo, color: wsColor, editor: wsEditor };
 }
 
 // Reflect the active project's accent onto the app header (a CSS var on :root;
@@ -575,7 +488,7 @@ export async function loadWorkspace(path) {
   applyHeaderColor();
   wsClaude = ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
   wsSprite = ws.sprite || DEFAULT_SPRITE;
-  setList("repo", ws.repo ? [ws.repo] : []);
+  wsRepo = ws.repo || "";
   setList("figma", ws.figma ? [ws.figma] : []);
   setList("apps", ws.apps);
   setList("files", ws.files);
@@ -636,10 +549,24 @@ let wsSaveTimer = null;
 let wsEditor = "Studio Code Editor";
 let wsColor = "";
 let wsPinnedTab = null;
+// The repo path + "open in" editor now live in the Git panel (git.js), not a
+// Workspace card, so they're plain module state here rather than DOM-derived.
+let wsRepo = "";
+
+// Setters used by the Git panel's Repo card. Each persists via autosave; repo
+// also re-keys the Git panel's cards (git.js re-reads activeRepoInfo).
+export function setActiveRepo(path) {
+  wsRepo = (path || "").trim();
+  scheduleWorkspaceSave();
+}
+export function setActiveEditor(value) {
+  wsEditor = value;
+  scheduleWorkspaceSave();
+}
 
 function readWorkspaceForm() {
   return {
-    repo: readList("repo")[0] || "",
+    repo: wsRepo,
     editor: wsEditor,
     color: wsColor,
     figma: readList("figma")[0] || "",

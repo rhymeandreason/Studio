@@ -10,7 +10,13 @@
 
 import { invoke, toast } from "./kit/app.js";
 import { el, mi } from "./dom.js";
-import { activeRepoInfo } from "./workspace.js";
+import {
+  activeRepoInfo,
+  setActiveRepo,
+  setActiveEditor,
+  pickPath,
+  EDITOR_OPTIONS,
+} from "./workspace.js";
 
 let currentRepo = "";
 
@@ -197,10 +203,66 @@ function buildToolCard(label, icon, src, popoutFn) {
   return card;
 }
 
+// The Repo card: the project's single repo path (+ Browse) and the editor it
+// opens in. Moved here from the Workspace tab — this panel is the repo's home.
+// Persists through workspace.js; changing the path re-keys the panel's cards.
+function buildRepoCard(repo, editor) {
+  const card = el("section", "git-card git-card--repo");
+  const head = el("div", "git-card__head");
+  head.innerHTML = mi("folder_open") + '<span class="git-card__name">Repo</span>';
+  card.append(head);
+
+  const pathRow = el("div", "git-repo__path");
+  const input = el("input", "git-repo__input", {
+    type: "text",
+    placeholder: "~/code/my-repo",
+    value: repo,
+  });
+  const commit = (val) => {
+    const v = (val ?? input.value).trim();
+    if (v === currentRepo) return;
+    setActiveRepo(v);
+    renderGitPanel();
+  };
+  input.addEventListener("change", () => commit());
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+  });
+  const browse = el("button", "git-repo__browse", {
+    type: "button",
+    title: "Choose repo folder",
+    innerHTML: mi("folder_open") + "Browse",
+  });
+  browse.addEventListener("click", async () => {
+    const picked = await pickPath({ directory: true });
+    if (picked) { input.value = picked; commit(picked); }
+  });
+  pathRow.append(input, browse);
+  card.append(pathRow);
+
+  // "Open in" editor — only meaningful once a repo is set.
+  if (repo) {
+    const editorRow = el("label", "git-repo__editorrow");
+    editorRow.innerHTML = '<span class="git-repo__glabel">Open in</span>';
+    const sel = el("select", "git-repo__editor", { title: "Editor the repo opens in" });
+    for (const o of EDITOR_OPTIONS)
+      sel.append(el("option", "", { value: o.value, textContent: o.label }));
+    sel.value = editor;
+    sel.addEventListener("change", () => setActiveEditor(sel.value));
+    editorRow.append(sel);
+    card.append(editorRow);
+  }
+  return card;
+}
+
 export async function renderGitPanel() {
   const panel = document.getElementById("git-panel");
   if (!panel) return;
   const { repo, color, editor } = activeRepoInfo();
+
+  // Tint the whole panel with the project's accent (cards read var(--git-accent),
+  // falling back to the app accent when the project has no color).
+  panel.style.setProperty("--git-accent", color || "var(--accent)");
 
   // Skip a full rebuild when nothing changed — keeps the commit draft/scroll and
   // avoids reloading the embedded tools on every tab switch.
@@ -212,31 +274,43 @@ export async function renderGitPanel() {
   panel.innerHTML = "";
 
   if (!repo) {
+    panel.append(buildRepoCard(repo, editor));
     const empty = el("div", "git-panel__empty");
     empty.innerHTML =
       mi("commit", false) +
-      "<p>No repo for this project.</p>" +
-      "<p class=\"git-panel__hint\">Add one in the Workspace tab to see commits, pulse, and the dev server here.</p>";
+      "<p class=\"git-panel__hint\">Add a repo above to see commits, pulse, and the dev server.</p>";
     panel.append(empty);
     return;
   }
 
+  // Order: Server (top), Commit, Pulse, Repo (last). Server is prepended below
+  // once its async details resolve.
   panel.append(buildCommitCard(repo, color, editor));
   panel.append(
-    buildToolCard("Pulse", "bar_chart", "tools/git-pulse.html?repo=" + encodeURIComponent(repo), () =>
+    buildToolCard("Pulse", "bar_chart", "tools/git-pulse.html?repo=" + encodeURIComponent(repo) +
+      (color ? "&color=" + encodeURIComponent(color) : ""), () =>
       invoke("open_git_pulse", { repo }),
     ),
   );
+  panel.append(buildRepoCard(repo, editor));
 
-  // Server card only when the repo has dev-open/dev-stop scripts.
+  // Server card only when the repo has dev-open/dev-stop scripts. Titled with
+  // the dev host:port (from repo_dev_url) rather than the word "Server", and
+  // rendered bare (no card chrome).
   try {
     const { start, stop } = await invoke("repo_scripts", { repo });
     if ((start || stop) && repo === currentRepo) {
-      panel.append(
-        buildToolCard("Server", "dns", "tools/server.html", () =>
-          invoke("open_tool", { file: "server.html" }),
-        ),
+      let label = "Server";
+      try {
+        const url = await invoke("repo_dev_url", { repo });
+        if (url) label = url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+      } catch {}
+      if (repo !== currentRepo) return;
+      const server = buildToolCard(label, "dns", "tools/server.html", () =>
+        invoke("open_tool", { file: "server.html" }),
       );
+      server.classList.add("git-card--bare");
+      panel.prepend(server);
     }
   } catch {}
 }
