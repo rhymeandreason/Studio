@@ -841,6 +841,73 @@ function noteToPlainText(n) {
   return title && n.kind !== "table" ? `${title}\n${body}` : body;
 }
 
+// Full Markdown form for on-disk export. Title becomes an H1; each kind maps to
+// its natural Markdown construct (task list, table, image). Text-note bodies are
+// assumed to already be Markdown and pass through verbatim.
+function noteToMarkdown(n) {
+  const parts = [];
+  const title = (n.title || "").trim();
+  if (title) parts.push(`# ${title}`);
+
+  if (n.kind === "checklist") {
+    parts.push(
+      (n.items || [])
+        .map((i) => `- [${i.done ? "x" : " "}] ${i.text || ""}`)
+        .join("\n"),
+    );
+  } else if (n.kind === "table") {
+    const cols = n.columns || [];
+    const rows = n.rows || [];
+    if (cols.length) {
+      parts.push(
+        [
+          `| ${cols.join(" | ")} |`,
+          `| ${cols.map(() => "---").join(" | ")} |`,
+          ...rows.map((r) => `| ${r.join(" | ")} |`),
+        ].join("\n"),
+      );
+    }
+  } else if (n.kind === "image") {
+    if (n.src) parts.push(`![${n.caption || ""}](${n.src})`);
+    else if (n.caption) parts.push(n.caption);
+  } else {
+    if (n.image) parts.push(`![](${n.image})`);
+    if (n.body) parts.push(n.body);
+  }
+
+  return parts.filter(Boolean).join("\n\n") + "\n";
+}
+
+// Turn a note's title into a safe filename stem; fall back to the note id so an
+// untitled note still exports somewhere predictable.
+function noteFileStem(n) {
+  const stem = (n.title || "")
+    .trim()
+    .replace(/[/\\:*?"<>|]+/g, "-") // filesystem-illegal chars
+    .replace(/\s+/g, " ")
+    .slice(0, 80)
+    .trim();
+  return stem || `note-${n.id}`;
+}
+
+// Export the selected note as a Markdown file in the project root, named after
+// its title. Reveals it in Finder so the file (the deliverable) is front and
+// centre.
+async function exportNoteMarkdown() {
+  const note = selectedNote();
+  if (!note || !state.notesProjectPath) return;
+  const file = `${noteFileStem(note)}.md`;
+  const path = `${state.notesProjectPath}/${file}`;
+  try {
+    await invoke("write_text_file", { path, content: noteToMarkdown(note) });
+    setNotesStatus(`Exported ${file}`);
+    invoke("reveal_in_finder", { path }).catch(() => {});
+  } catch (e) {
+    console.error(e);
+    setNotesStatus("Export failed");
+  }
+}
+
 // Mod+c: degraded text → system clipboard (for external apps); the rich
 // Studio-native payload → an app-cache sidecar keyed by that text (§7.3). WebKit
 // strips custom HTML on clipboard write, so the sidecar — not an HTML flavor —
@@ -1804,6 +1871,8 @@ function updateNotesChrome() {
   if (!group) return;
   const note = selectedNote();
   group.hidden = !note;
+  const mdBtn = document.getElementById("notes-md-btn");
+  if (mdBtn) mdBtn.hidden = !note;
   if (!note) return;
   noteThemeDrop?.setValue(note.theme || "default");
   noteTitleFontDrop?.setValue(note.titleFont || "");
@@ -2070,6 +2139,10 @@ function initNotes() {
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#notes-font-wrap")) fontMenu.hidden = true;
   });
+
+  document
+    .getElementById("notes-md-btn")
+    ?.addEventListener("click", exportNoteMarkdown);
 
   // Per-card style controls (toolbar) target the currently selected card.
   noteThemeDrop = createStyleDropdown(
