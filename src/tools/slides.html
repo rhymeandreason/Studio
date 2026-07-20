@@ -236,12 +236,16 @@
     const LAYOUTS = {
       "title":      { name: "Title",      slots: [["title","Title"],["subtitle","Subtitle"]] },
       "section":    { name: "Section",    slots: [["title","Section title"],["image","Background image","image"]] },
-      "title-body": { name: "Title + Body", slots: [["title","Title"],["body","Body","md"]] },
-      "two-col":    { name: "Two column", slots: [["title","Title"],["left","Left","md"],["right","Right","md"]] },
-      "three-col":  { name: "Three column", slots: [["title","Title"],["left","Left","md"],["middle","Middle","md"],["right","Right","md"]] },
+      "title-body": { name: "Title + Body", slots: [["title","Title"],["i1","Body","md"]] },
+      "two-col":    { name: "Two column", slots: [["title","Title"],["i1","Left","md"],["i2","Right","md"]] },
+      "three-col":  { name: "Three column", slots: [["title","Title"],["i1","Left","md"],["i2","Middle","md"],["i3","Right","md"]] },
+      "title-grid": { name: "Title + Grid", slots: [["title","Title"],["subtitle","Subtitle"],["i1","Item 1","md"],["i2","Item 2","md"],["i3","Item 3","md"],["i4","Item 4","md"]] },
+      "title-grid-6": { name: "Title + Grid (6)", slots: [["title","Title"],["subtitle","Subtitle"],["i1","Item 1","md"],["i2","Item 2","md"],["i3","Item 3","md"],["i4","Item 4","md"],["i5","Item 5","md"],["i6","Item 6","md"]] },
+      "stats":      { name: "Stats", slots: [["title","Title"],["subtitle","Subtitle"],["i1","Item 1","md"],["i2","Item 2","md"],["i3","Item 3","md"],["i4","Item 4","md"]] },
+      "steps":      { name: "Numbered steps", slots: [["title","Title"],["i1","Item 1","md"],["i2","Item 2","md"],["i3","Item 3","md"],["i4","Item 4","md"]] },
       "quote":      { name: "Quote",      slots: [["quote","Quote"],["attribution","Attribution"]] },
       "image-full": { name: "Image full", slots: [["image","Image","image"],["caption","Caption"]] },
-      "image-text": { name: "Image + Text", slots: [["title","Title"],["image","Image","image"],["body","Body","md"]] },
+      "image-text": { name: "Image + Text", slots: [["title","Title"],["image","Image","image"],["i1","Body","md"]] },
     };
 
     // The union of every slot across layouts, in a stable order. The inspector
@@ -250,15 +254,15 @@
     const ALL_SLOTS = [
       ["title","Title"], ["subtitle","Subtitle"],
       ["quote","Quote"], ["attribution","Attribution"],
-      ["body","Body","md"], ["left","Left","md"], ["middle","Middle","md"], ["right","Right","md"],
+      ["i1","Item 1","md"], ["i2","Item 2","md"], ["i3","Item 3","md"], ["i4","Item 4","md"], ["i5","Item 5","md"], ["i6","Item 6","md"],
       ["image","Image","image"], ["caption","Caption"],
     ];
 
     // The primary prose slot for each layout — used to carry body text across a
-    // layout change (e.g. title-body's `body` ↔ two-col's `left`).
-    const PRIMARY_BODY = {
-      "title-body": "body", "two-col": "left", "three-col": "left", "image-text": "body", "quote": "quote",
-    };
+    // layout change. Every content layout now shares the `i1`..`i6` item family,
+    // so items carry over position-for-position automatically; only `quote`
+    // needs an explicit mapping to/from `i1`.
+    const PRIMARY_BODY = { "quote": "quote" };
 
     // HEADING_DEFAULT, colorScheme, SCHEMES, and renderSlide come from
     // ../deck/render.js (shared with the theme editor + Artifacts preview).
@@ -268,7 +272,7 @@
     // prose slot when that slot is empty (so converting doesn't lose the content).
     function convertLayout(slide, next) {
       if (slide.layout === next) return;
-      const from = PRIMARY_BODY[slide.layout], to = PRIMARY_BODY[next];
+      const from = PRIMARY_BODY[slide.layout] || "i1", to = PRIMARY_BODY[next] || "i1";
       if (from && to && from !== to && slide[from] && !slide[to]) slide[to] = slide[from];
       slide.layout = next;
     }
@@ -449,7 +453,7 @@
     // Make the canvas's text regions click-to-edit. Markdown slots show their raw
     // source while focused and re-render (formatted) on blur. We avoid re-rendering
     // the canvas on each keystroke so the caret isn't lost — only the reel + save.
-    const MD_SLOTS = new Set(["body","left","right"]);
+    const MD_SLOTS = new Set(ALL_SLOTS.filter(s => s[2] === "md").map(s => s[0]));
     function makeEditable(node, slide){
       node.querySelectorAll("[data-slot]").forEach(elm => {
         const slot = elm.dataset.slot;
@@ -849,6 +853,14 @@
         case "two-col": g2=box(12,11,42,7,a)+box(12,26,32,4,g)+box(12,34,32,4,g)+box(12,42,22,4,g)+box(52,26,34,4,g)+box(52,34,34,4,g)+box(52,42,26,4,g); break;
         // three-col — heading over three columns.
         case "three-col": g2=box(12,11,42,7,a)+[12,40,68].map(x=>box(x,26,20,4,g)+box(x,34,20,4,g)+box(x,42,14,4,g)).join(""); break;
+        // title-grid — heading + subtitle left, 2×2 grid of boxes right.
+        case "title-grid": g2=box(10,20,30,8,a)+box(10,31,20,4,g)+[48,72].flatMap(x=>[16,34].map(y=>box(x,y,20,16,g))).join(""); break;
+        // title-grid-6 — heading + subtitle left, 3×2 grid of boxes right.
+        case "title-grid-6": g2=box(8,20,26,8,a)+box(8,31,16,4,g)+[44,64,84].flatMap(x=>[16,34].map(y=>box(x,y,14,16,g))).join(""); break;
+        // stats — heading + subtitle left, a row of tall stat cards right.
+        case "stats": g2=box(8,22,26,8,a)+box(8,32,16,4,g)+[42,62,82].map(x=>box(x,14,16,28,g)+box(x+3,18,8,6,a)).join(""); break;
+        // steps — heading top, a row of auto-numbered columns with accent tops.
+        case "steps": g2=box(10,10,40,7,a)+[10,34,58,82].map(x=>box(x,26,16,3,a)+box(x,32,16,3,g)+box(x,37,12,3,g)).join(""); break;
         // quote — two large quote bars, attribution under.
         case "quote": g2=box(16,18,68,8,a)+box(16,30,48,8,a)+box(16,45,22,4,g); break;
         // image-full — full-bleed image.
@@ -868,12 +880,16 @@
     const SLIDE_DEFAULTS = {
       "title": { title:"Title", subtitle:"Subtitle" },
       "section": { title:"Section" },
-      "title-body": { title:"Title", body:"Your content here." },
-      "two-col": { title:"Title", left:"- Point one\n- Point two", right:"- Point three\n- Point four" },
-      "three-col": { title:"Title", left:"**One**\n\nFirst point.", middle:"**Two**\n\nSecond point.", right:"**Three**\n\nThird point." },
+      "title-body": { title:"Title", i1:"Your content here." },
+      "two-col": { title:"Title", i1:"- Point one\n- Point two", i2:"- Point three\n- Point four" },
+      "three-col": { title:"Title", i1:"**One**\n\nFirst point.", i2:"**Two**\n\nSecond point.", i3:"**Three**\n\nThird point." },
+      "title-grid": { title:"Title", subtitle:"Subtitle", i1:"**One**\n\nFirst item.", i2:"**Two**\n\nSecond item.", i3:"**Three**\n\nThird item.", i4:"**Four**\n\nFourth item." },
+      "title-grid-6": { title:"Title", subtitle:"Subtitle", i1:"**One**\n\nFirst item.", i2:"**Two**\n\nSecond item.", i3:"**Three**\n\nThird item.", i4:"**Four**\n\nFourth item.", i5:"**Five**\n\nFifth item.", i6:"**Six**\n\nSixth item." },
+      "stats": { title:"By the Numbers", subtitle:"Key metrics", i1:"## 70%\n\n**Growth**\n\nShort description.", i2:"## 80%\n\n**Opportunity**\n\nShort description.", i3:"## 65%\n\n**Adoption**\n\nShort description." },
+      "steps": { title:"How It Evolved", i1:"**First**\n\nWhat happened.", i2:"**Then**\n\nWhat changed.", i3:"**Now**\n\nWhere it stands." },
       "quote": { quote:"A memorable line.", attribution:"Source" },
       "image-full": { image:"", caption:"" },
-      "image-text": { title:"Title", image:"", body:"Describe the image." },
+      "image-text": { title:"Title", image:"", i1:"Describe the image." },
     };
     document.getElementById("add-slide").onclick = () => {
       const layout = state.slides[current]?.layout || "title-body";

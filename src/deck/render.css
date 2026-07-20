@@ -50,6 +50,40 @@
 .l-three-col .cols > .deck-body { font-size: calc(var(--body-base, 24px) * var(--body-scale, 1) * .85); }
 .slide[data-scheme="light"] .l-three-col .cols > .deck-body,
 .slide[data-scheme="soft"] .l-three-col .cols > .deck-body { padding: 26px 28px; }
+/* title-grid — title + subtitle in a left column, a 2×2 grid of items on the right. */
+.l-title-grid { flex-direction: row; gap: 56px; align-items: stretch; }
+.l-title-grid .tg-left { flex: 0 0 32%; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.l-title-grid .tg-left .subtitle { font-family: var(--deck-body); font-size: 30px; margin-top: 20px; color: var(--deck-muted); }
+.l-title-grid .tg-grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 24px; min-height: 0; min-width: 0; }
+.l-title-grid .grid-cell { min-height: 0; min-width: 0; overflow: hidden; border-radius: 16px; padding: 24px 26px;
+  display: flex; flex-direction: column; justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--deck-text) 12%, transparent);
+  font-size: calc(var(--body-base, 24px) * var(--body-scale, 1) * .82); }
+/* Fill cells with a surface panel only where it reads as separation (as two-col). */
+.slide[data-scheme="light"] .l-title-grid .grid-cell,
+.slide[data-scheme="soft"] .l-title-grid .grid-cell { background: var(--deck-surface); border-color: color-mix(in srgb, var(--deck-text) 8%, transparent); }
+/* title-grid-6 — same left column, a 3×2 grid of six items on the right. */
+.l-title-grid.six .tg-grid { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.l-title-grid.six .grid-cell { padding: 18px 20px; font-size: calc(var(--body-base, 24px) * var(--body-scale, 1) * .72); }
+/* stats — title/subtitle in a left column, a row of big-figure cards on the right. */
+.l-stats { flex-direction: row; gap: 56px; align-items: center; }
+.l-stats .tg-left { flex: 0 0 30%; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.l-stats .tg-left .subtitle { font-family: var(--deck-body); font-size: 28px; margin-top: 16px; color: var(--deck-muted); }
+.l-stats .stat-row { flex: 1; display: flex; gap: 24px; min-width: 0; align-items: stretch; }
+.l-stats .stat-cell { flex: 1; min-width: 0; overflow: hidden; border-radius: 16px; padding: 30px 26px;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  border: 1px solid color-mix(in srgb, var(--deck-text) 12%, transparent); }
+.slide[data-scheme="light"] .l-stats .stat-cell,
+.slide[data-scheme="soft"] .l-stats .stat-cell { background: var(--deck-surface); border-color: color-mix(in srgb, var(--deck-text) 8%, transparent); }
+/* A leading `## value` becomes the big figure; `**label**` the caption. */
+.l-stats .stat-cell h2 { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); font-size: 2.6em; color: var(--deck-accent); line-height: 1; margin: 0 0 .18em; text-transform: none; letter-spacing: 0; }
+.l-stats .stat-cell strong { color: var(--deck-text); }
+/* steps — title (+ optional body) over a row of auto-numbered items. */
+.l-steps h1 { margin-bottom: 12px; }
+.l-steps .step-row { display: flex; gap: 32px; margin-top: auto; align-items: stretch; }
+.l-steps .step-cell { flex: 1; min-width: 0; padding-top: 18px; border-top: 3px solid color-mix(in srgb, var(--deck-text) 15%, transparent); }
+.l-steps .step-num { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); font-size: 2em; color: var(--deck-accent); line-height: 1; margin-bottom: 12px; }
+.l-steps .step-cell .deck-body { font-size: calc(var(--body-base, 24px) * var(--body-scale, 1) * .82); }
 .l-quote { justify-content: center; }
 .l-quote blockquote { font-family: var(--deck-heading); font-weight: var(--deck-heading-w); font-size: calc(var(--heading-base, 56px) * var(--heading-scale, 1)); line-height: 1.15; margin: 0; }
 .l-quote .attr { font-family: var(--deck-body); font-size: 30px; margin-top: 32px; color: var(--deck-muted); }

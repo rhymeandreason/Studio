@@ -77,11 +77,11 @@ Edited in the **Slides** tool; the Artifacts panel previews it. Shape:
   "slides": [
     { "layout": "title", "title": "Q3 Review", "subtitle": "Product & growth" },
     { "layout": "section", "title": "Where we are" },
-    { "layout": "title-body", "title": "Highlights", "body": "- Shipped **v2**\n- 3× signups" },
-    { "layout": "two-col", "title": "Wins vs risks", "left": "**Wins**\n- A\n- B", "right": "**Risks**\n- C" },
+    { "layout": "title-body", "title": "Highlights", "i1": "- Shipped **v2**\n- 3× signups" },
+    { "layout": "two-col", "title": "Wins vs risks", "i1": "**Wins**\n- A\n- B", "i2": "**Risks**\n- C" },
     { "layout": "quote", "quote": "Make the obvious thing easy.", "attribution": "Design principle" },
     { "layout": "image-full", "image": "media/chart.png", "caption": "Signups over time" },
-    { "layout": "image-text", "title": "The new flow", "image": "media/flow.png", "body": "Three steps, no signup wall." }
+    { "layout": "image-text", "title": "The new flow", "image": "media/flow.png", "i1": "Three steps, no signup wall." }
   ],
   "savedAt": "2026-06-16T18:00:00Z"
 }
@@ -105,16 +105,29 @@ Rules:
   - `title` → `title`, `subtitle`
   - `section` → `title`, optional `image` (full-bleed background, darkened so
     the heading stays legible in white)
-  - `title-body` → `title`, `body` (optional `columns`: `1` (default) or `2` —
-    flows the single body into that many columns via CSS column-count)
-  - `two-col` → `title`, `left`, `right`
-  - `three-col` → `title`, `left`, `middle`, `right`
+  - `title-body` → `title`, `i1` (the body; optional `columns`: `1` (default) or
+    `2` — flows the single body into that many columns via CSS column-count)
+  - `two-col` → `title`, `i1` (left), `i2` (right)
+  - `three-col` → `title`, `i1` (left), `i2` (middle), `i3` (right)
+  - `title-grid` → `title`, `subtitle`, and four grid items `i1`–`i4` (a 2×2
+    grid on the right, title + subtitle in a left column)
+  - `title-grid-6` → same as `title-grid` but a 3×2 grid of six items `i1`–`i6`
+  - `stats` → `title`, `subtitle`, and stat cards `i1`–`i4` (`i4` optional; a
+    row of big-figure cards). Author each stat as Markdown with a leading
+    `## value` (rendered as the large figure) then `**label**` and description,
+    e.g. `"## 70%\n\n**Growth**\n\nYear over year."`
+  - `steps` → `title` and numbered items `i1`–`i4` (`i4` optional). Each item's
+    `01`/`02`… number is generated automatically from its position — don't type
+    it into the text.
   - `quote` → `quote`, `attribution`
   - `image-full` → `image`, optional `caption`
-  - `image-text` → `title`, `image`, `body`, optional `caption`
+  - `image-text` → `title`, `image`, `i1` (the body), optional `caption`
   - Any image layout (`image-full`, `image-text`, `section`) accepts an optional
     `caption` that renders only when it has text.
-- Body-type slots (`body`, `left`, `middle`, `right`) accept **Markdown** (bold,
+  - **`i1`–`i6` are one shared "content region" family** used by every
+    text layout above, so switching a slide's layout keeps its content
+    (position-for-position). `quote` maps its `quote` to/from `i1`.
+- Body-type slots (`i1`–`i6`) accept **Markdown** (bold,
   lists, links, `##`/`###` headings, blockquotes, `code`, `---`). `**bold**`
   renders in the accent color.
 - Optional `listStyle` on a slide: `"bullets"` (default) or `"cards"` — renders

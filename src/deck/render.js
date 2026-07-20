@@ -16,7 +16,8 @@ export const BODY_SCALES    = { s: 0.8, m: 1, l: 1.2 };
 // Default heading size level per layout (overridable per slide via headingSize).
 export const HEADING_DEFAULT = {
   "title": "l", "section": "l", "title-body": "m", "two-col": "m",
-  "three-col": "m", "image-text": "m", "quote": "m",
+  "three-col": "m", "image-text": "m", "quote": "m", "title-grid": "m",
+  "title-grid-6": "m", "stats": "m", "steps": "m",
 };
 
 export const SCHEMES = ["light", "soft", "dark", "accent", "accent2"];
@@ -97,12 +98,42 @@ export function renderSlide(slide, theme, resolved = {}) {
       break;
     case "title-body":
       { const cols = slide.columns === 2 ? ` style="column-count:2;column-gap:56px"` : "";
-        inner = `<div class="slide__inner l-title-body"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="body"${cols}>${md(slide.body)}</div></div>`; }
+        inner = `<div class="slide__inner l-title-body"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="i1"${cols}>${md(slide.i1)}</div></div>`; }
       break;
     case "two-col":
-      inner = `<div class="slide__inner l-two-col"><h1 data-slot="title">${esc(slide.title)}</h1><div class="cols"><div class="${bodyCls}" data-slot="left">${md(slide.left)}</div><div class="${bodyCls}" data-slot="right">${md(slide.right)}</div></div></div>`; break;
+      inner = `<div class="slide__inner l-two-col"><h1 data-slot="title">${esc(slide.title)}</h1><div class="cols"><div class="${bodyCls}" data-slot="i1">${md(slide.i1)}</div><div class="${bodyCls}" data-slot="i2">${md(slide.i2)}</div></div></div>`; break;
     case "three-col":
-      inner = `<div class="slide__inner l-two-col l-three-col"><h1 data-slot="title">${esc(slide.title)}</h1><div class="cols"><div class="${bodyCls}" data-slot="left">${md(slide.left)}</div><div class="${bodyCls}" data-slot="middle">${md(slide.middle)}</div><div class="${bodyCls}" data-slot="right">${md(slide.right)}</div></div></div>`; break;
+      inner = `<div class="slide__inner l-two-col l-three-col"><h1 data-slot="title">${esc(slide.title)}</h1><div class="cols"><div class="${bodyCls}" data-slot="i1">${md(slide.i1)}</div><div class="${bodyCls}" data-slot="i2">${md(slide.i2)}</div><div class="${bodyCls}" data-slot="i3">${md(slide.i3)}</div></div></div>`; break;
+    // title-grid, stats, and steps all draw from one shared item family
+    // (i1..i6) — they differ only in how the items are laid out and styled.
+    case "title-grid":
+    case "title-grid-6":
+      { const n = slide.layout === "title-grid-6" ? 6 : 4;
+        const six = n === 6 ? " six" : "";
+        const cell = (k) => `<div class="grid-cell ${bodyCls}" data-slot="${k}">${md(slide[k])}</div>`;
+        let cells = ""; for (let i = 1; i <= n; i++) cells += cell("i" + i);
+        inner = `<div class="slide__inner l-title-grid${six}"><div class="tg-left"><h1 data-slot="title">${esc(slide.title)}</h1>${slide.subtitle?`<div class="subtitle" data-slot="subtitle">${esc(slide.subtitle)}</div>`:""}</div><div class="tg-grid">${cells}</div></div>`; }
+      break;
+    case "stats":
+      { // Render i1..i4, skipping empties (i4 optional). Each is Markdown; the
+        // CSS styles a leading `## value` as the big figure and `**label**` as
+        // the caption.
+        const cell = (k) => slide[k] ? `<div class="stat-cell ${bodyCls}" data-slot="${k}">${md(slide[k])}</div>` : "";
+        const cells = ["i1","i2","i3","i4"].map(cell).join("");
+        inner = `<div class="slide__inner l-stats"><div class="tg-left"><h1 data-slot="title">${esc(slide.title)}</h1>${slide.subtitle?`<div class="subtitle" data-slot="subtitle">${esc(slide.subtitle)}</div>`:""}</div><div class="stat-row">${cells}</div></div>`; }
+      break;
+    case "steps":
+      { // Numbered items i1..i4; number auto-derived from position among the
+        // non-empty items (i4 optional).
+        let i = 0;
+        const cell = (k) => {
+          if (!slide[k]) return "";
+          const num = String(++i).padStart(2, "0");
+          return `<div class="step-cell"><div class="step-num">${num}</div><div class="${bodyCls}" data-slot="${k}">${md(slide[k])}</div></div>`;
+        };
+        const cells = ["i1","i2","i3","i4"].map(cell).join("");
+        inner = `<div class="slide__inner l-steps"><h1 data-slot="title">${esc(slide.title)}</h1><div class="step-row">${cells}</div></div>`; }
+      break;
     case "quote":
       inner = `<div class="slide__inner l-quote"><blockquote data-slot="quote">${esc(slide.quote)}</blockquote>${slide.attribution?`<div class="attr">— <span data-slot="attribution">${esc(slide.attribution)}</span></div>`:""}</div>`; break;
     case "image-full":
@@ -113,7 +144,7 @@ export function renderSlide(slide, theme, resolved = {}) {
         inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${media}${slide.caption?`<div class="cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div>`; }
       break;
     case "image-text":
-      inner = `<div class="slide__inner l-image-text"><div class="split"><div class="split-media">${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}${slide.caption?`<div class="split-cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div><div class="split-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="body">${md(slide.body)}</div></div></div></div>`; break;
+      inner = `<div class="slide__inner l-image-text"><div class="split"><div class="split-media">${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}${slide.caption?`<div class="split-cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div><div class="split-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="i1">${md(slide.i1)}</div></div></div></div>`; break;
     default:
       inner = `<div class="slide__inner"><h1>${esc(slide.title||"")}</h1></div>`;
   }
@@ -139,8 +170,11 @@ export async function loadPresets(){
 export const PREVIEW_SLIDES = [
   { layout: "title", title: "Presentation Title", subtitle: "A subtitle goes here" },
   { layout: "section", title: "1. A Section" },
-  { layout: "title-body", title: "Title + Body", body: "Body copy with a **bold** phrase and a short list:\n\n- First point worth making\n- Second supporting point\n- A third for good measure" },
-  { layout: "two-col", title: "Two Column", left: "**Left column**\n\n- Point one\n- Point two", right: "**Right column**\n\n- Point three\n- Point four" },
+  { layout: "title-body", title: "Title + Body", i1: "Body copy with a **bold** phrase and a short list:\n\n- First point worth making\n- Second supporting point\n- A third for good measure" },
+  { layout: "two-col", title: "Two Column", i1: "**Left column**\n\n- Point one\n- Point two", i2: "**Right column**\n\n- Point three\n- Point four" },
+  { layout: "title-grid", title: "Four Up", subtitle: "A 2×2 grid of points", i1: "**One**\n\nFirst item.", i2: "**Two**\n\nSecond item.", i3: "**Three**\n\nThird item.", i4: "**Four**\n\nFourth item." },
+  { layout: "stats", title: "By the Numbers", subtitle: "Key metrics", i1: "## 70%\n\n**Growth**\n\nYear over year.", i2: "## 80%\n\n**Opportunity**\n\nUntapped market.", i3: "## 65%\n\n**Adoption**\n\nAmong teams." },
+  { layout: "steps", title: "How It Evolved", i1: "**First**\n\nWhere it began.", i2: "**Then**\n\nWhat changed.", i3: "**Now**\n\nWhere it stands.", i4: "**Next**\n\nWhat's ahead." },
   { layout: "quote", quote: "A memorable line that captures the idea.", attribution: "Someone notable" },
-  { layout: "image-text", title: "Image + Text", body: "Supporting copy sits beside the image, explaining what it shows." },
+  { layout: "image-text", title: "Image + Text", i1: "Supporting copy sits beside the image, explaining what it shows." },
 ];
