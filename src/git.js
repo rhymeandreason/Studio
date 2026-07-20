@@ -40,7 +40,7 @@ function buildFileRow(repo, f) {
 
 // Build the inline Commit card. Returns the card element and wires its own
 // refresh; the panel calls back into git_status/commit/undo/drafts directly.
-function buildCommitCard(repo, color, editor, pushUI) {
+function buildCommitCard(repo, color, editor, pushUI, onChange) {
   const { push, status } = pushUI;
   const card = el("section", "git-card git-card--commit");
 
@@ -127,7 +127,7 @@ function buildCommitCard(repo, color, editor, pushUI) {
     undo.addEventListener("click", (e) => {
       e.stopPropagation();
       invoke("git_undo", { repo })
-        .then(() => { toast("Un-committed"); refresh(); })
+        .then(() => { toast("Un-committed"); refresh(); onChange?.(); })
         .catch((err) => toast(String(err)));
     });
     top.append(pmsg, undo);
@@ -169,6 +169,7 @@ function buildCommitCard(repo, color, editor, pushUI) {
       msg.value = "";
       toast("Committed");
       await refresh();
+      onChange?.();
     } catch (e) {
       toast(String(e));
       syncEnabled();
@@ -241,6 +242,7 @@ function buildToolCard(label, icon, src, popoutFn) {
   }
   const frame = el("iframe", "git-embed", { src, loading: "lazy" });
   card.append(head, frame);
+  card._frame = frame;
   return card;
 }
 
@@ -335,13 +337,14 @@ export async function renderGitPanel() {
 
   // Order: Server (top), Commit, Pulse, Repo (last). Server is prepended below
   // once its async details resolve.
-  panel.append(buildCommitCard(repo, color, editor, { push, status }));
-  panel.append(
-    buildToolCard("Pulse", "bar_chart", "tools/git-pulse.html?repo=" + encodeURIComponent(repo) +
-      (color ? "&color=" + encodeURIComponent(color) : ""), () =>
-      invoke("open_git_pulse", { repo }),
-    ),
+  const pulseCard = buildToolCard("Pulse", "bar_chart", "tools/git-pulse.html?repo=" + encodeURIComponent(repo) +
+    (color ? "&color=" + encodeURIComponent(color) : ""), () =>
+    invoke("open_git_pulse", { repo }),
   );
+  // Reload the Pulse iframe after a commit/undo changes the graph.
+  const reloadPulse = () => { if (pulseCard._frame) pulseCard._frame.src = pulseCard._frame.src; };
+  panel.append(buildCommitCard(repo, color, editor, { push, status }, reloadPulse));
+  panel.append(pulseCard);
   panel.append(buildRepoCard(repo, editor));
 
   // Server card only when the repo has dev-open/dev-stop scripts. Titled with
