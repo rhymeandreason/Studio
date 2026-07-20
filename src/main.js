@@ -2286,6 +2286,12 @@ function initNotes() {
   window.addEventListener("resize", updateNotesGridTier);
 }
 
+// Re-poll git status when the app window regains focus, if the Git tab is
+// showing (cheap; mirrors the standalone Git window's focus refresh).
+window.addEventListener("focus", () => {
+  if (state.activePanel === "git") renderGitPanel();
+});
+
 // --- Boot ------------------------------------------------------------------
 
 window.addEventListener("DOMContentLoaded", async () => {
