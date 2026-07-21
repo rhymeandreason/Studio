@@ -609,6 +609,11 @@ select.field__input {
     display: flex;
     align-items: center;
     gap: 6px;
+    cursor: grab; /* drag handle for reordering (workspace.js) */
+}
+
+.ws-item.is-dragging {
+    opacity: 0.4;
 }
 
 .ws-item__type {

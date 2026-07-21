@@ -279,6 +279,95 @@ function workspaceCards() {
   return [...(listContainer()?.querySelectorAll(".ws-item") || [])];
 }
 
+// --- Card drag-reorder (pointer-based) -------------------------------------
+//
+// Cards reorder within their own list only: each list's saved order derives
+// straight from DOM order (readList queries `[data-list="X"]`), so moving a
+// card among its list-mates and saving is all that's needed — no data model.
+// Pointer events, not HTML5 drag (Tauri's file-drop swallows that). The card
+// header is the handle, so the value fields stay editable.
+let wsDrag = null; // { card, list, pointerId, startX, startY, active }
+let lastWsDragEnd = 0;
+
+function onWsCardPointerDown(e, card) {
+  if (e.button !== 0) return;
+  try {
+    card.setPointerCapture(e.pointerId);
+  } catch (_) {}
+  wsDrag = {
+    card,
+    list: card.dataset.list,
+    pointerId: e.pointerId,
+    startX: e.clientX,
+    startY: e.clientY,
+    active: false,
+  };
+  window.addEventListener("pointermove", onWsPointerMove);
+  window.addEventListener("pointerup", onWsPointerUp);
+  window.addEventListener("pointercancel", onWsPointerUp);
+}
+
+function onWsPointerMove(e) {
+  if (!wsDrag) return;
+  if (!wsDrag.active) {
+    if (Math.hypot(e.clientX - wsDrag.startX, e.clientY - wsDrag.startY) < 5)
+      return;
+    wsDrag.active = true;
+    wsDrag.card.classList.add("is-dragging");
+    document.body.classList.add("note-dragging");
+    document.body.style.cursor = "grabbing";
+    window.getSelection()?.removeAllRanges();
+  }
+  e.preventDefault();
+
+  // Live-insert among same-list siblings: find the nearest one to the pointer
+  // and drop before or after it depending on which side the pointer is on.
+  const siblings = [
+    ...listContainer().querySelectorAll(`.ws-item[data-list="${wsDrag.list}"]`),
+  ].filter((c) => c !== wsDrag.card);
+  if (!siblings.length) return;
+
+  let best = null;
+  let bestDist = Infinity;
+  for (const c of siblings) {
+    const r = c.getBoundingClientRect();
+    const dist = Math.hypot(
+      e.clientX - (r.left + r.width / 2),
+      e.clientY - (r.top + r.height / 2),
+    );
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = c;
+    }
+  }
+  const r = best.getBoundingClientRect();
+  const after =
+    e.clientY > r.top + r.height / 2 ||
+    (Math.abs(e.clientY - (r.top + r.height / 2)) < r.height / 2 &&
+      e.clientX > r.left + r.width / 2);
+  if (after) best.after(wsDrag.card);
+  else best.before(wsDrag.card);
+}
+
+function onWsPointerUp() {
+  window.removeEventListener("pointermove", onWsPointerMove);
+  window.removeEventListener("pointerup", onWsPointerUp);
+  window.removeEventListener("pointercancel", onWsPointerUp);
+  const drag = wsDrag;
+  wsDrag = null;
+  document.body.classList.remove("note-dragging");
+  document.body.style.cursor = "";
+  if (drag) {
+    try {
+      drag.card.releasePointerCapture(drag.pointerId);
+    } catch (_) {}
+    drag.card.classList.remove("is-dragging");
+  }
+  if (!drag || !drag.active) return; // was a click, not a drag
+  lastWsDragEnd = Date.now();
+  scheduleWorkspaceSave();
+}
+
 function repaintWorkspaceSelection() {
   workspaceCards().forEach((c) =>
     c.classList.toggle("is-selected", workspaceSelection.has(c.dataset.wsid)),
@@ -384,6 +473,7 @@ export function addRow(list, value = "", autoBrowse = false) {
   // Click a non-interactive part of the card to select it (interaction-spec §3).
   card.addEventListener("click", (e) => {
     if (e.target.closest("textarea, button, input, select, a")) return;
+    if (Date.now() - lastWsDragEnd < 300) return; // ignore click after a drag
     const ids = workspaceCards().map((c) => c.dataset.wsid);
     if (e.shiftKey) workspaceSelection.range(ids, card.dataset.wsid);
     else workspaceSelection.toggle(card.dataset.wsid, e.metaKey || e.ctrlKey);
@@ -393,10 +483,13 @@ export function addRow(list, value = "", autoBrowse = false) {
     openWorkspaceValue(card);
   });
 
-  // Header: icon + type label + remove button
+  // Header: icon + type label. Doubles as the drag handle for reordering the
+  // card among its list-mates (see onWsCardPointerDown) — no interactive
+  // children, so the whole strip is a safe grab area.
   const head = document.createElement("div");
   head.className = "ws-item__head";
   head.innerHTML = `${mi(meta.icon)}<span class="ws-item__type">${meta.label}</span>`;
+  head.addEventListener("pointerdown", (e) => onWsCardPointerDown(e, card));
 
   card.append(head);
 
