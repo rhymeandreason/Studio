@@ -1150,6 +1150,49 @@ fn start_watching(app: &AppHandle) {
     }
 }
 
+/// Paths watched in addition to `root` (e.g. a project's linked Repo/Folder
+/// entries that live outside ~/Projects) — tracked so `watch_extra_paths` can
+/// diff and unwatch stale ones instead of accumulating forever.
+static EXTRA_WATCHED: OnceLock<Mutex<Vec<std::path::PathBuf>>> = OnceLock::new();
+
+/// Called by the frontend (currently the File Directory tool) with the active
+/// project's Repo + Folder paths, so edits there also trigger `fs-changed` —
+/// `start_watching` only covers ~/Projects. Safe to call repeatedly with the
+/// same or overlapping paths; not persisted, so it's re-sent on every reload.
+#[tauri::command]
+fn watch_extra_paths(paths: Vec<String>) {
+    use notify_debouncer_mini::notify::RecursiveMode;
+
+    let Some(watcher_lock) = WATCHER.get() else {
+        return;
+    };
+    let mut guard = watcher_lock.lock().unwrap();
+    let Some(d) = guard.as_mut() else {
+        return;
+    };
+
+    let extra_lock = EXTRA_WATCHED.get_or_init(|| Mutex::new(Vec::new()));
+    let mut extra = extra_lock.lock().unwrap();
+
+    let new_paths: Vec<std::path::PathBuf> = paths
+        .into_iter()
+        .filter(|p| !p.is_empty())
+        .map(std::path::PathBuf::from)
+        .collect();
+
+    for old in extra.iter() {
+        if !new_paths.contains(old) {
+            let _ = d.watcher().unwatch(old.as_path());
+        }
+    }
+    for new in &new_paths {
+        if !extra.contains(new) {
+            let _ = d.watcher().watch(new.as_path(), RecursiveMode::Recursive);
+        }
+    }
+    *extra = new_paths;
+}
+
 /// Show and focus the single Studio window.
 fn show_studio(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
@@ -2071,6 +2114,19 @@ fn save_edited_thumb(
 fn open_path(path: String) -> Result<(), String> {
     Command::new("open")
         .arg(&path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Full-size preview of a file in a separate window, like Finder's spacebar
+/// Quick Look. Uses the native `qlmanage -p` panel (any file type).
+#[tauri::command]
+fn quicklook_preview(path: String) -> Result<(), String> {
+    Command::new("qlmanage")
+        .args(["-p", &path])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -5262,6 +5318,7 @@ pub fn run() {
             read_workspace,
             save_workspace,
             list_dir,
+            watch_extra_paths,
             list_videos,
             read_video,
             write_video,
@@ -5281,6 +5338,7 @@ pub fn run() {
             save_edited_thumb,
             open_path,
             open_in_chrome,
+            quicklook_preview,
             app_icon,
             open_in_zed,
             open_app,

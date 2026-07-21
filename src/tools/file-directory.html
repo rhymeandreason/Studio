@@ -605,12 +605,23 @@ max-width:350px;
         if (generation !== mainGeneration) return;
         tree.appendChild(folderRoot);
       }
+
+      // The global watcher only covers ~/Projects; extend it to the Repo and
+      // Folder entries (often elsewhere) so edits there also fire 'fs-changed'.
+      if (hasTauri) {
+        const extra = [...(workspace.repo ? [workspace.repo] : []), ...(workspace.folders || [])];
+        invoke('watch_extra_paths', { paths: extra }).catch(() => {});
+      }
     }
 
     main();
 
     if (hasTauri) {
       listen('project-activated', () => main());
+      // Studio's recursive watcher over ~/Projects broadcasts this on any
+      // relevant change; rebuild the tree (expanded folders persist via
+      // expandedSet/localStorage, so this doesn't reset the view).
+      listen('fs-changed', () => main());
     }
   </script>
   <script type="module">
