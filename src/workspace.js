@@ -57,6 +57,41 @@ export function initFileDirectoryButton() {
 
 let wsModes = [];
 
+// Mode-card selection (single). Selected card + Delete removes the mode.
+const modeSelection = createSelection({
+  mode: "single",
+  onChange: () => repaintModeSelection(),
+});
+
+function modeCards() {
+  return [...document.querySelectorAll("#ws-modes .ws-mode")];
+}
+
+function repaintModeSelection() {
+  modeCards().forEach((c) =>
+    c.classList.toggle("is-selected", modeSelection.has(c.dataset.modeId)),
+  );
+}
+
+function addMode() {
+  const n = wsModes.length + 1;
+  wsModes.push({ id: `mode-${Date.now()}`, name: `Mode ${n}`, layout: [] });
+  renderModes();
+  scheduleWorkspaceSave();
+}
+
+function deleteModeSelection() {
+  const ids = new Set(modeSelection.get());
+  if (!ids.size) return;
+  const before = wsModes.length;
+  wsModes = wsModes.filter((m) => !ids.has(m.id));
+  modeSelection.clear();
+  if (wsModes.length !== before) {
+    renderModes();
+    scheduleWorkspaceSave();
+  }
+}
+
 function flashBtn(btn, icon, ms = 1200) {
   const original = btn.innerHTML;
   btn.innerHTML = mi(icon);
@@ -112,8 +147,16 @@ function renderModes() {
   const wrap = document.getElementById("ws-modes");
   wrap.innerHTML = "";
   wsModes.forEach((mode) => {
+    if (!mode.id) mode.id = `mode-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const card = document.createElement("div");
     card.className = "ws-mode";
+    card.dataset.modeId = mode.id;
+    card.classList.toggle("is-selected", modeSelection.has(mode.id));
+    // Click the card (but not its inputs/buttons) to select for deletion.
+    card.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("input, button")) return;
+      modeSelection.toggle(mode.id);
+    });
 
     const head = document.createElement("div");
     head.className = "ws-mode__head";
@@ -292,15 +335,23 @@ function moveWorkspaceSelection(dir) {
   cards[idx].scrollIntoView({ block: "nearest" });
 }
 
+function deleteSelection() {
+  if (modeSelection.size()) deleteModeSelection();
+  else deleteWorkspaceSelection();
+}
+
 panelKeymaps.workspace = {
   Enter: openWorkspaceItem,
-  Delete: deleteWorkspaceSelection,
-  Backspace: deleteWorkspaceSelection,
+  Delete: deleteSelection,
+  Backspace: deleteSelection,
   ArrowLeft: () => moveWorkspaceSelection("left"),
   ArrowRight: () => moveWorkspaceSelection("right"),
   ArrowUp: () => moveWorkspaceSelection("up"),
   ArrowDown: () => moveWorkspaceSelection("down"),
-  Escape: () => workspaceSelection.clear(),
+  Escape: () => {
+    workspaceSelection.clear();
+    modeSelection.clear();
+  },
 };
 
 export function addRow(list, value = "", autoBrowse = false) {
@@ -622,6 +673,11 @@ export function initWorkspaceForm() {
   });
   document.addEventListener("click", closeAddMenu);
 
+  document.getElementById("ws-add-mode").addEventListener("click", () => {
+    closeAddMenu();
+    addMode();
+  });
+
   document
     .querySelectorAll("[data-add-list]")
     .forEach((btn) =>
@@ -639,9 +695,12 @@ export function initWorkspaceForm() {
 
   installOffClickDeselect({
     panel: "workspace",
-    keep: [".ws-item"],
-    hasSelection: () => workspaceSelection.size(),
-    clear: () => workspaceSelection.clear(),
+    keep: [".ws-item", ".ws-mode"],
+    hasSelection: () => workspaceSelection.size() || modeSelection.size(),
+    clear: () => {
+      workspaceSelection.clear();
+      modeSelection.clear();
+    },
   });
 
   // Re-run textarea auto-resize whenever the cards container changes width.

@@ -739,6 +739,11 @@ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     min-width: 140px;
 }
 
+.ws-mode.is-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent), var(--shadow-sm);
+}
+
 .ws-mode__head {
     display: flex;
     flex-direction: column;
