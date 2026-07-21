@@ -1355,8 +1355,9 @@ function initMedia() {
     if (ids.length !== 1) return;
     const item = mediaItemsByPath.get(ids[0]);
     if (!item) return;
-    if (item.kind === "image") openLightbox(item);
-    else invoke("open_path", { path: item.path });
+    // Spacebar previews full-size in a separate window (like Finder's Quick
+    // Look); the inline editor lightbox is reached via the side "expand" button.
+    invoke("quicklook_preview", { path: item.path });
   };
   panelKeymaps.media = {
     Enter: activateSelectedMedia,
