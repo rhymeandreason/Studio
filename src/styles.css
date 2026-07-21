@@ -612,6 +612,19 @@ select.field__input {
     cursor: grab; /* drag handle for reordering (workspace.js) */
 }
 
+/* Brand icon (Google Drive/Docs/…) that replaces the generic link glyph. */
+.ws-item__brand {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+}
+
+.ws-item__brand svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
 .ws-item.is-dragging {
     opacity: 0.4;
 }

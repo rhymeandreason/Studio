@@ -57,7 +57,6 @@
     <div id="sub"></div>
     <div id="buttons">
       <button class="btn btn-primary" id="primary">Join</button>
-      <button class="btn btn-ghost" id="snooze">Snooze</button>
       <button class="btn btn-ghost" id="dismiss">Dismiss</button>
     </div>
   </div>
@@ -120,14 +119,6 @@
     });
 
     document.getElementById("dismiss").addEventListener("click", () => win.close());
-
-    document.getElementById("snooze").addEventListener("click", async () => {
-      // Re-fire in 1 min: the background watcher fires again once snoozeUntil
-      // elapses (snooze overrides the once-fired guard).
-      task.snoozeUntil = new Date(Date.now() + 60 * 1000).toISOString();
-      await invoke("save_task", { id: task.id, data: JSON.stringify(task) });
-      win.close();
-    });
 
     load();
   </script>

@@ -3,6 +3,7 @@
 // interaction-spec / BACKLOG file-split.
 
 import { el, mi } from "./dom.js";
+import { brandIconFor } from "./brand-icons.js";
 import { createSelection } from "./selection.js";
 import { panelKeymaps } from "./keymap.js";
 import { state } from "./state.js";
@@ -582,9 +583,24 @@ export function addRow(list, value = "", autoBrowse = false) {
       custom = true;
       scheduleWorkspaceSave();
     });
+    // Swap the generic link glyph for a Google product icon when the URL is one
+    // (Drive/Docs/Sheets/Slides). The brand slot sits before the .mi glyph and
+    // hides it when a match is found.
+    const miIcon = head.querySelector(".mi");
+    const brand = document.createElement("span");
+    brand.className = "ws-item__brand";
+    head.insertBefore(brand, miIcon);
+    const updateBrand = () => {
+      const svg = brandIconFor(input.value.trim());
+      brand.innerHTML = svg;
+      brand.hidden = !svg;
+      if (miIcon) miIcon.hidden = !!svg;
+    };
     input.addEventListener("input", () => {
       if (!custom) name.value = hostOf();
+      updateBrand();
     });
+    updateBrand();
     card.append(name);
     input.classList.add("ws-item__input--path");
   }
