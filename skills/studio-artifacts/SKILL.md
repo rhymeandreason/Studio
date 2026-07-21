@@ -121,7 +121,9 @@ Rules:
     it into the text.
   - `quote` → `quote`, `attribution`
   - `image-full` → `image`, optional `caption`
-  - `image-text` → `title`, `image`, `i1` (the body), optional `caption`
+  - `image-text` → `title`, `image`, `i1` (the body), optional second `image2`
+    (stacks below `image` in the media column; a single image fills/centers the
+    column), optional `caption`
   - Any image layout (`image-full`, `image-text`, `section`) accepts an optional
     `caption` that renders only when it has text.
   - **`i1`–`i6` are one shared "content region" family** used by every

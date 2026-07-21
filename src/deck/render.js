@@ -144,7 +144,17 @@ export function renderSlide(slide, theme, resolved = {}) {
         inner = `<div class="slide__inner l-image-full" style="position:absolute;inset:0;">${media}${slide.caption?`<div class="cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div>`; }
       break;
     case "image-text":
-      inner = `<div class="slide__inner l-image-text"><div class="split"><div class="split-media">${img(slide.image,"No image").replace("<img","<img class=\"split-img\"")}${slide.caption?`<div class="split-cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div><div class="split-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="i1">${md(slide.i1)}</div></div></div></div>`; break;
+      { // Up to two images stack in the media column (each takes an equal share);
+        // a single image fills/centers the column via its object-fit.
+        const splitImg = (ref) => {
+          const url = resolved[ref];
+          if (isSvg(url)) return svgBox(url);
+          return url ? `<img class="split-img" src="${url}" style="object-fit:${fit}">` : "";
+        };
+        const refs = [slide.image, slide.image2].filter(Boolean);
+        const media = refs.length ? refs.map(splitImg).join("") : `<div class="img-placeholder">No image</div>`;
+        inner = `<div class="slide__inner l-image-text"><div class="split"><div class="split-media">${media}${slide.caption?`<div class="split-cap" data-slot="caption">${esc(slide.caption)}</div>`:""}</div><div class="split-text"><h1 data-slot="title">${esc(slide.title)}</h1><div class="${bodyCls}" data-slot="i1">${md(slide.i1)}</div></div></div></div>`; }
+      break;
     default:
       inner = `<div class="slide__inner"><h1>${esc(slide.title||"")}</h1></div>`;
   }

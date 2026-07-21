@@ -245,7 +245,7 @@
       "steps":      { name: "Numbered steps", slots: [["title","Title"],["i1","Item 1","md"],["i2","Item 2","md"],["i3","Item 3","md"],["i4","Item 4","md"]] },
       "quote":      { name: "Quote",      slots: [["quote","Quote"],["attribution","Attribution"]] },
       "image-full": { name: "Image full", slots: [["image","Image","image"],["caption","Caption"]] },
-      "image-text": { name: "Image + Text", slots: [["title","Title"],["image","Image","image"],["i1","Body","md"]] },
+      "image-text": { name: "Image + Text", slots: [["title","Title"],["image","Image","image"],["image2","Image 2","image"],["i1","Body","md"]] },
     };
 
     // The union of every slot across layouts, in a stable order. The inspector
@@ -255,7 +255,7 @@
       ["title","Title"], ["subtitle","Subtitle"],
       ["quote","Quote"], ["attribution","Attribution"],
       ["i1","Item 1","md"], ["i2","Item 2","md"], ["i3","Item 3","md"], ["i4","Item 4","md"], ["i5","Item 5","md"], ["i6","Item 6","md"],
-      ["image","Image","image"], ["caption","Caption"],
+      ["image","Image","image"], ["image2","Image 2","image"], ["caption","Caption"],
     ];
 
     // The primary prose slot for each layout — used to carry body text across a
@@ -414,13 +414,19 @@
     }
 
     // ---------- Slide rendering ----------
+    // Every image ref a slide references (its layout's image slots — image-text
+    // has two). Used for resolving/preloading/exporting so second images aren't
+    // missed.
+    const imageRefsOf = (slide) =>
+      (LAYOUTS[slide.layout]?.slots || []).filter(s => s[2] === "image").map(s => slide[s[0]]).filter(Boolean);
+
     // renderSlide lives in ../deck/render.js (pure: images come from a `resolved`
     // map). This wrapper feeds it the tool's imgCache for project-relative refs
     // unless the caller passes an explicit `resolved` map (e.g. export).
     function renderSlide(slide, theme, resolved) {
       if (!resolved) {
         resolved = {};
-        if (slide.image && imgCache.has(slide.image)) resolved[slide.image] = imgCache.get(slide.image);
+        for (const ref of imageRefsOf(slide)) if (imgCache.has(ref)) resolved[ref] = imgCache.get(ref);
       }
       return renderSlideBase(slide, theme, resolved);
     }
@@ -442,11 +448,10 @@
       canvas.appendChild(node);
       makeEditable(node, slide);
       fitCanvas();
-      // If this slide has an image we haven't cached yet, fetch it then re-render
-      // once (the cache hit on the next pass means no loop).
-      const ref = slide.image;
-      if (ref && !imgCache.has(ref) && !/^data:|^https?:/.test(ref)) {
-        resolveImage(ref).then(url => { if (url) renderStage(); });
+      // Fetch any of this slide's images we haven't cached yet, then re-render
+      // once each (the cache hit on the next pass means no loop).
+      for (const ref of imageRefsOf(slide)) {
+        if (!imgCache.has(ref) && !/^data:|^https?:/.test(ref)) resolveImage(ref).then(url => { if (url) renderStage(); });
       }
     }
 
@@ -510,8 +515,8 @@
           stage.style.transform = `scale(${s})`;
         });
         // async image for thumbs — fetch uncached refs, then re-render once
-        if (slide.image && !imgCache.has(slide.image) && !/^data:|^https?:/.test(slide.image)) {
-          resolveImage(slide.image).then(u => { if (u) renderReel(); });
+        for (const ref of imageRefsOf(slide)) {
+          if (!imgCache.has(ref) && !/^data:|^https?:/.test(ref)) resolveImage(ref).then(u => { if (u) renderReel(); });
         }
       });
     }
@@ -691,7 +696,7 @@
       const slots = LAYOUTS[slide.layout].slots;
       const hasBody = slots.some(s => s[2] === "md");
       const hasHeading = slots.some(s => s[0] === "title" || s[0] === "quote");
-      const imgSlot = slots.find(s => s[2] === "image");
+      const imgSlots = slots.filter(s => s[2] === "image");
 
       const addSelect = (label, opts, value, onchange) => {
         const ctl = document.createElement("div"); ctl.className = "stage-ctl";
@@ -702,21 +707,34 @@
         ctl.append(lab, sel); ctlBar.appendChild(ctl);
       };
 
-      if (imgSlot) {
-        const key = imgSlot[0];
-        const ctl = document.createElement("div"); ctl.className = "stage-ctl";
-        const tag = document.createElement("span"); tag.className = "label"; tag.textContent = imgSlot[1];
-        ctl.appendChild(tag);
-        const prev = document.createElement("img"); prev.className = "preview";
-        resolveImage(slide[key]).then(u => { if (u) prev.src = /^\s*<svg/i.test(u) ? svgDataUrl(u) : u; });
-        const nameEl = document.createElement("div"); nameEl.className = "img-name";
-        nameEl.textContent = slide[key] ? slide[key].split("/").pop() : "No image";
-        if (!slide[key]) nameEl.classList.add("img-name--empty");
-        const browse = document.createElement("button");
-        browse.className = "btn btn-ghost btn-icon"; browse.title = "Choose image";
-        browse.innerHTML = `<span class="mi mi-sm">photo_library</span>`;
-        browse.onclick = () => openMediaPicker(rel => { slide[key] = rel; renderAll(); });
-        ctl.append(prev, nameEl, browse); ctlBar.appendChild(ctl);
+      if (imgSlots.length) {
+        // One picker per image slot (image-text supports two stacked images).
+        for (const is of imgSlots) {
+          const key = is[0];
+          const ctl = document.createElement("div"); ctl.className = "stage-ctl";
+          const tag = document.createElement("span"); tag.className = "label"; tag.textContent = is[1];
+          ctl.appendChild(tag);
+          const prev = document.createElement("img"); prev.className = "preview";
+          resolveImage(slide[key]).then(u => { if (u) prev.src = /^\s*<svg/i.test(u) ? svgDataUrl(u) : u; });
+          const nameEl = document.createElement("div"); nameEl.className = "img-name";
+          nameEl.textContent = slide[key] ? slide[key].split("/").pop() : "No image";
+          if (!slide[key]) nameEl.classList.add("img-name--empty");
+          const browse = document.createElement("button");
+          browse.className = "btn btn-ghost btn-icon"; browse.title = "Choose image";
+          browse.innerHTML = `<span class="mi mi-sm">photo_library</span>`;
+          browse.onclick = () => openMediaPicker(rel => { slide[key] = rel; renderAll(); });
+          // A set image gets a button to clear it (so a second image is removable).
+          if (slide[key]) {
+            const clear = document.createElement("button");
+            clear.className = "btn btn-ghost btn-icon"; clear.title = "Remove image";
+            clear.innerHTML = `<span class="mi mi-sm">close</span>`;
+            clear.onclick = () => { slide[key] = ""; renderAll(); };
+            ctl.append(prev, nameEl, browse, clear);
+          } else {
+            ctl.append(prev, nameEl, browse);
+          }
+          ctlBar.appendChild(ctl);
+        }
         addSelect("Fit", [["cover","Fill"],["contain","Fit"]], slide.imageFit || "cover", v => { slide.imageFit = v; scheduleRender(); });
         // Optional caption — travels with the image on any image layout; only
         // renders on the slide when it has text.
@@ -965,22 +983,22 @@
       const assets = []; const seen = new Map();
       const resolved = {};
       for (const s of state.slides) {
-        if (s.image) {
-          if (isDiagramRef(s.image)) {
+        for (const ref of imageRefsOf(s)) {
+          if (isDiagramRef(ref)) {
             // Diagrams inline as SVG markup in both modes — no asset to copy.
-            resolved[s.image] = await resolveImage(s.image);
+            resolved[ref] = await resolveImage(ref);
           } else if (mode==="assets") {
-            if (!seen.has(s.image)) {
-              const base = s.image.split("/").pop().replace(/[^a-z0-9._-]/gi,"_");
+            if (!seen.has(ref)) {
+              const base = ref.split("/").pop().replace(/[^a-z0-9._-]/gi,"_");
               let name = base, n=1;
               const used = new Set(seen.values());
               while (used.has(name)) name = (n++)+"-"+base;
-              seen.set(s.image, name);
-              assets.push({ name, source: projectRoot ? projectRoot+"/"+s.image.replace(/^\//,"") : s.image });
+              seen.set(ref, name);
+              assets.push({ name, source: projectRoot ? projectRoot+"/"+ref.replace(/^\//,"") : ref });
             }
-            resolved[s.image] = "assets/"+seen.get(s.image);
+            resolved[ref] = "assets/"+seen.get(ref);
           } else {
-            resolved[s.image] = await resolveImage(s.image);
+            resolved[ref] = await resolveImage(ref);
           }
         }
       }
