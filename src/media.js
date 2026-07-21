@@ -1357,7 +1357,10 @@ function initMedia() {
     if (!item) return;
     // Spacebar previews full-size in a separate window (like Finder's Quick
     // Look); the inline editor lightbox is reached via the side "expand" button.
-    invoke("quicklook_preview", { path: item.path });
+    // qlmanage's preview panel crashes on AV items, so video opens in the
+    // default player instead.
+    if (item.kind === "video") invoke("open_path", { path: item.path });
+    else invoke("quicklook_preview", { path: item.path });
   };
   panelKeymaps.media = {
     Enter: activateSelectedMedia,
