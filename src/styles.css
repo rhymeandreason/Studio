@@ -342,10 +342,10 @@ body {
 
 .card {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
     text-align: left;
-    min-height: 150px;
     cursor: pointer;
     color: var(--text);
     font-family: inherit;
@@ -428,7 +428,21 @@ display:none !important;
     height: 64px;
     border-radius: var(--radius-lg);
     object-fit: cover;
-    margin-bottom: 4px;
+    flex: 0 0 auto;
+}
+
+.card__info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.card__info .card__name,
+.card__info .card__modified {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .card__icon--letter {
@@ -445,12 +459,11 @@ display:none !important;
 
 .card__name {
     font-family: var(--serif);
-    font-size: 16px;
+    font-size: 22px;
     font-weight: 600;
 }
 
 .card__modified {
-    margin-top: auto;
     font-size: 11px;
     color: var(--text-muted);
 }

@@ -437,17 +437,21 @@ function buildProjectCard(p) {
     card.append(sprite);
   }
 
+  const info = document.createElement("div");
+  info.className = "card__info";
+
   const name = document.createElement("span");
   name.className = "card__name";
   name.textContent = p.name;
-  card.append(name);
+  info.append(name);
 
   if (p.modified) {
     const modified = document.createElement("span");
     modified.className = "card__modified";
     modified.textContent = relativeDate(p.modified * 1000);
-    card.append(modified);
+    info.append(modified);
   }
+  card.append(info);
   card.addEventListener("pointerdown", (e) =>
     onProjectCardPointerDown(e, p, card),
   );
