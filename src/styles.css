@@ -295,8 +295,8 @@ body {
 
 .overview__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
     position: relative;
     padding-bottom: 100px;
 }
@@ -340,7 +340,8 @@ body {
     background: var(--hairline);
 }
 
-.card {
+.project-card {
+    position: relative;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -349,10 +350,11 @@ body {
     cursor: pointer;
     color: var(--text);
     font-family: inherit;
+    border-radius: var(--radius);
+    padding: 8px;
     transition:
         transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1),
-        box-shadow 0.2s,
-        border-color 0.2s;
+        background 0.2s;
 }
 
 .card__sprite {
@@ -391,23 +393,22 @@ display:none !important;
     background: var(--surface);
 }
 
-.project-card{
-    position:relative;
-}
 .project-card span, .project-card img{
     display:block;
 }
 
 .project-card:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
-    border-color: var(--hairline-strong);
+    background: var(--elevated);
+}
+
+.project-card.is-selected {
+    background: var(--elevated);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .project-card.is-active {
     background: var(--accent);
     color: #fdfaf4;
-    border-color: var(--accent);
     box-shadow: 0 6px 20px rgba(110, 97, 84, 0.25);
 }
 

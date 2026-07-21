@@ -403,7 +403,7 @@ panelKeymaps.projects = {
 
 function buildProjectCard(p) {
   const card = document.createElement("div");
-  card.className = "project-card card";
+  card.className = "project-card";
   card.dataset.path = p.path;
   if (archivedPaths.has(p.path)) card.classList.add("is-archived");
   if (projectsSelection.has(p.path)) card.classList.add("is-selected");
