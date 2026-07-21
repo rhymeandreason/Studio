@@ -24,9 +24,6 @@
                     <h1 class="projhead__name" id="project-name" data-tauri-drag-region></h1>
                 </div>
                 <div class="projhead__bar-group">
-                    <button class="btn btn-icon-only" id="file-directory-btn" type="button" title="File Directory">
-                        <span class="mi">folder_open</span>
-                    </button>
                     <button class="btn btn-icon-only" id="claude-btn" type="button">
                         <img class="claude-btn__icon" src="claude/claude-icon.svg" alt="">
                     </button>
@@ -45,6 +42,9 @@
                     </button>
                     <button class="tab tab--round" data-tab="git" title="Git">
                         <span class="mi">commit</span>
+                    </button>
+                    <button class="tab tab--round" id="file-directory-btn" data-tab="files" title="File Directory (⌥-click to pop out)">
+                        <span class="mi">folder_open</span>
                     </button>
                     <button class="btn btn-icon-only tab--round" id="workspace-btn" type="button" title="Workspace">
                         <span class="mi">tune</span>
@@ -267,6 +267,9 @@
 
                 <section class="panel" data-panel="git" hidden>
                     <div class="git-panel" id="git-panel"></div>
+                </section>
+                <section class="panel panel--files" data-panel="files" hidden>
+                    <iframe class="files-embed" id="files-frame" title="File Directory"></iframe>
                 </section>
             </div>
         </main>

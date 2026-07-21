@@ -557,6 +557,13 @@ export function selectTab(name) {
   // Re-list artifacts when the tab opens (picks up ones Claude wrote). Claude
   // learns the artifact formats from the `studio-artifacts` skill, not a
   // per-project CLAUDE.md block.
+  // File Directory tab embeds the standalone tool; load it on first open only.
+  // The tool follows the active project itself, so no further wiring is needed.
+  if (name === "files") {
+    const frame = document.getElementById("files-frame");
+    if (frame && !frame.src) frame.src = "tools/file-directory.html";
+  }
+
   if (name === "artifacts") renderArtifacts();
   else clearArtifactsSelection();
 

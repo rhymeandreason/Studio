@@ -278,6 +278,8 @@ max-width:350px;
     const TEXT_SCALE_KEY = 'studio-file-directory-text-large';
     customElements.whenDefined('studio-toggle').then(() => {
       const textScaleToggle = document.getElementById('text-scale-toggle');
+      // Absent when embedded as a tab: window-chrome.js drops the titlebar.
+      if (!textScaleToggle) return;
       textScaleToggle.checked = localStorage.getItem(TEXT_SCALE_KEY) === '1';
       document.body.classList.toggle('text-large', textScaleToggle.checked);
       textScaleToggle.addEventListener('change', () => {
@@ -564,12 +566,12 @@ max-width:350px;
       const project = await invoke('get_active_project').catch(() => null);
       if (generation !== mainGeneration) return;
       if (!project) {
-        pageTitle.textContent = 'File Directory';
+        if (pageTitle) pageTitle.textContent = 'File Directory';
         await showProjectPicker();
         return;
       }
 
-      pageTitle.textContent = project.name;
+      if (pageTitle) pageTitle.textContent = project.name;
       picker.hidden = true;
       tree.hidden = false;
       tree.innerHTML = '';
@@ -623,10 +625,6 @@ max-width:350px;
       // expandedSet/localStorage, so this doesn't reset the view).
       listen('fs-changed', () => main());
     }
-  </script>
-  <script type="module">
-    import { initDevInspect } from "../devinspect.js";
-    initDevInspect();
   </script>
 </body>
 

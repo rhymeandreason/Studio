@@ -42,11 +42,22 @@ export function initClaudeButton() {
   });
 }
 
+// File Directory is a tab (data-tab="files") that embeds tools/file-directory.html
+// in an iframe — the tool follows the active project on its own via events, so
+// no plumbing is needed. Option-click pops it out as the standalone window
+// (the pre-tab behaviour). Wired here, ahead of the generic #tabs handler.
 export function initFileDirectoryButton() {
   const btn = document.getElementById("file-directory-btn");
-  btn.addEventListener("click", () => {
-    invoke("open_tool", { file: "file-directory.html", query: null });
-  });
+  btn.addEventListener(
+    "click",
+    (e) => {
+      if (e.altKey) {
+        e.stopPropagation();
+        invoke("open_tool", { file: "file-directory.html", query: null });
+      }
+    },
+    true,
+  );
 }
 
 // --- Workspace modes ---------------------------------------------------
