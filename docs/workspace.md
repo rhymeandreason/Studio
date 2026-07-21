@@ -16,7 +16,12 @@ struct in `src-tauri/src/lib.rs`):
 - `editor` — which app to open the repo in (`open -a <editor>`). Blank = Zed.
   Also edited in the Git panel ("open in" picker).
 - `figma` — singleton Figma file URL.
-- `apps` / `files` / `folders` / `urls` — arrays of strings.
+- `apps` / `files` / `folders` — arrays of strings.
+- `urls` — array of `{ url, title }`. `title` is an editable display name shown
+  on the card (useful for Google Drive links etc. whose name isn't in the URL);
+  it defaults to the URL's host and, while left at that default, saves empty so
+  the card keeps tracking the host. Bare strings from older manifests still load
+  (Rust `UrlEntry` deserializes either form) and migrate to objects on next save.
 - `claude.mode` — `"terminal"` opens Terminal cd'd into the repo and runs
   `claude`.
 - `pinnedTab` (serde: `pinned_tab`) — which tab (`workspace`/`media`/`notes`)

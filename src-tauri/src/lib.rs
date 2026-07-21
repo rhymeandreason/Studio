@@ -46,6 +46,35 @@ struct ClaudeCfg {
     mode: String,
 }
 
+/// A URL card in the Workspace: the link plus an editable display title.
+/// Deserializes from either a bare string (legacy manifests) or `{url, title}`;
+/// always re-serializes as the object form, so old entries migrate on next save.
+#[derive(Clone, Serialize)]
+struct UrlEntry {
+    url: String,
+    #[serde(default)]
+    title: String,
+}
+
+impl<'de> Deserialize<'de> for UrlEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Str(String),
+            Obj {
+                url: String,
+                #[serde(default)]
+                title: String,
+            },
+        }
+        Ok(match Raw::deserialize(d)? {
+            Raw::Str(url) => UrlEntry { url, title: String::new() },
+            Raw::Obj { url, title } => UrlEntry { url, title },
+        })
+    }
+}
+
 /// workspace.json — the project's launch manifest. Missing fields default,
 /// so partial / hand-edited manifests load fine.
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -74,7 +103,7 @@ struct Workspace {
     #[serde(default)]
     folders: Vec<String>,
     #[serde(default)]
-    urls: Vec<String>,
+    urls: Vec<UrlEntry>,
     #[serde(default)]
     scripts: Vec<String>,
     #[serde(default)]

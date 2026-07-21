@@ -648,6 +648,25 @@ select.field__input {
     word-break: break-all;
 }
 
+/* Editable title on URL cards — looks like the static name, edits in place. */
+input.ws-item__name--edit {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 0;
+    outline: none;
+    font-family: inherit;
+}
+
+input.ws-item__name--edit::placeholder {
+    color: var(--text-muted);
+}
+
+input.ws-item__name--edit:focus {
+    box-shadow: 0 1px 0 var(--text-muted);
+}
+
 .ws-item__input {
     background: transparent;
     border: none;

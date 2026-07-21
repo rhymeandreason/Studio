@@ -369,6 +369,14 @@ export function addRow(list, value = "", autoBrowse = false) {
   const rows = listContainer();
   const meta = LIST_META[list];
 
+  // URL rows persist as { url, title } objects; every other list is a bare
+  // string. Unwrap here so the rest of addRow works with the URL string.
+  let urlTitle = "";
+  if (list === "urls" && value && typeof value === "object") {
+    urlTitle = value.title || "";
+    value = value.url || "";
+  }
+
   const card = document.createElement("div");
   card.className = "ws-item";
   card.dataset.list = list;
@@ -456,22 +464,34 @@ export function addRow(list, value = "", autoBrowse = false) {
     input.classList.add("ws-item__input--path");
   }
 
-  // URL cards show the bare domain (e.g. "etsy.com") in large text above the URL.
+  // URL cards show an editable title in large text above the URL. It defaults
+  // to the bare domain (e.g. "etsy.com") and follows the URL until you type
+  // your own — handy for links like Google Drive whose name isn't in the URL.
+  // Persisted as { url, title }; an untouched default saves as no title so it
+  // keeps tracking the host (see readList).
   if (list === "urls") {
-    const name = document.createElement("div");
-    name.className = "ws-item__name";
-    const updateName = () => {
+    const name = document.createElement("input");
+    name.type = "text";
+    name.className = "ws-item__name ws-item__name--edit";
+    name.placeholder = "Untitled";
+    const hostOf = () => {
       const url = input.value.trim();
-      let host = "";
       try {
-        host = new URL(url).hostname.replace(/^www\./, "");
+        return new URL(url).hostname.replace(/^www\./, "");
       } catch {
-        host = url;
+        return url;
       }
-      name.textContent = host;
     };
-    input.addEventListener("input", updateName);
-    updateName();
+    // Track the host live only while the title is still the default.
+    let custom = !!urlTitle;
+    name.value = urlTitle || hostOf();
+    name.addEventListener("input", () => {
+      custom = true;
+      scheduleWorkspaceSave();
+    });
+    input.addEventListener("input", () => {
+      if (!custom) name.value = hostOf();
+    });
     card.append(name);
     input.classList.add("ws-item__input--path");
   }
@@ -514,10 +534,30 @@ function setSingletonBtn(list, added) {
 }
 
 function readList(list) {
-  return [
-    ...listContainer().querySelectorAll(`.ws-item[data-list="${list}"] textarea`),
-  ]
-    .map((i) => i.value.trim())
+  const cards = [
+    ...listContainer().querySelectorAll(`.ws-item[data-list="${list}"]`),
+  ];
+  // URL rows carry an editable title alongside the URL. A title still equal to
+  // the derived host is treated as "no custom title" and saved empty, so the
+  // card keeps following the host on later edits.
+  if (list === "urls") {
+    return cards
+      .map((c) => {
+        const url = c.querySelector("textarea")?.value.trim() || "";
+        let title = c.querySelector(".ws-item__name")?.value.trim() || "";
+        let host = "";
+        try {
+          host = new URL(url).hostname.replace(/^www\./, "");
+        } catch {
+          host = url;
+        }
+        if (title === host) title = "";
+        return { url, title };
+      })
+      .filter((e) => e.url);
+  }
+  return cards
+    .map((c) => c.querySelector("textarea")?.value.trim() || "")
     .filter(Boolean);
 }
 
