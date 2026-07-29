@@ -37,6 +37,9 @@ struct Project {
     /// Animal sprite from workspace.json, if any (see sprites.js registry).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     sprite: String,
+    /// Project-wide accent color (hex) from workspace.json, if any.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    color: String,
 }
 
 /// The `claude` block of a workspace manifest.
@@ -164,16 +167,15 @@ struct WindowSnapshot {
     w: i32,
     #[serde(default)]
     h: i32,
-    /// Git-window-only: the repo path + companion-window color/editor, so a
-    /// Git window that's since been *closed* (which deletes its entry from
-    /// git-windows.json — see `remove_git_window`) can still be rebuilt from
-    /// the snapshot alone, not just reopened from a live store entry.
+    /// Git-window-only: the repo path + companion-window color, so a Git window
+    /// that's since been *closed* (which deletes its entry from git-windows.json
+    /// — see `remove_git_window`) can still be rebuilt from the snapshot alone,
+    /// not just reopened from a live store entry. (The editor pref lives in the
+    /// project's workspace.json, resolved at open time — not snapshotted here.)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     repo: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     color: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    editor: Option<String>,
     /// Tool-window-only (label starts with "tool-"): the `src/tools/*.html`
     /// file + query string it was opened with, captured at record time from
     /// `TOOL_WINDOWS` — needed to rebuild it if it's not open yet (e.g. a
@@ -362,14 +364,15 @@ fn scan_projects(app: &AppHandle) -> Vec<Project> {
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs())
                     .unwrap_or(0);
-                let sprite = read_workspace(path.to_string_lossy().to_string())
-                    .map(|ws| ws.sprite)
-                    .unwrap_or_default();
+                let ws = read_workspace(path.to_string_lossy().to_string());
+                let sprite = ws.as_ref().map(|ws| ws.sprite.clone()).unwrap_or_default();
+                let color = ws.map(|ws| ws.color).unwrap_or_default();
                 projects.push(Project {
                     name: name.to_string(),
                     path: path.to_string_lossy().to_string(),
                     modified,
                     sprite,
+                    color,
                 });
             }
         }
@@ -2518,7 +2521,6 @@ fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
                 h: size.height as i32,
                 repo: git.map(|w| w.repo.clone()),
                 color: git.map(|w| w.color.clone()),
-                editor: git.map(|w| w.editor.clone()),
                 tool_file: tool.map(|(file, _, _)| file.clone()),
                 tool_query: tool.and_then(|(_, query, _)| query.clone()),
                 tool_kind: tool.map(|(_, _, kind)| kind.clone()),
@@ -2595,7 +2597,6 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
             let win = GitWindow {
                 repo: repo.clone(),
                 color: target.color.clone().unwrap_or_default(),
-                editor: target.editor.clone().unwrap_or_default(),
                 ..Default::default()
             };
             upsert_git_window(&app, &win);
@@ -3738,8 +3739,6 @@ struct GitWindow {
     #[serde(default)]
     color: String,
     #[serde(default)]
-    editor: String,
-    #[serde(default)]
     draft: String,
     /// Last known window geometry (physical pixels), saved during the session so
     /// it survives a `tauri dev` rebuild — which SIGKILLs the process before the
@@ -3793,7 +3792,6 @@ fn upsert_git_window(app: &AppHandle, win: &GitWindow) {
     let mut list = read_git_windows(app);
     if let Some(existing) = list.iter_mut().find(|w| w.repo == win.repo) {
         existing.color = win.color.clone();
-        existing.editor = win.editor.clone();
     } else {
         list.push(win.clone());
     }
@@ -3898,18 +3896,13 @@ fn build_git_window(app: &AppHandle, win: &GitWindow) {
 }
 
 /// Open (or focus) a Git window for a repo, persisting it so it reopens after a
-/// Studio rebuild. `color`/`editor` come from the project's workspace.
+/// Studio rebuild. `color` comes from the project's workspace; the editor pref
+/// is resolved from workspace.json at file-open time (see `git_open_file`).
 #[tauri::command]
-fn open_git_window(
-    app: AppHandle,
-    repo: String,
-    color: String,
-    editor: String,
-) -> Result<(), String> {
+fn open_git_window(app: AppHandle, repo: String, color: String) -> Result<(), String> {
     let win = GitWindow {
         repo: repo.clone(),
         color,
-        editor,
         ..Default::default()
     };
     upsert_git_window(&app, &win);
@@ -4075,13 +4068,20 @@ fn git_open_file(
     state: tauri::State<AppState>,
     repo: String,
     file: String,
+    editor: Option<String>,
 ) -> Result<(), String> {
-    let editor = read_git_windows(&app)
-        .into_iter()
-        .find(|w| w.repo == repo)
-        .map(|w| w.editor)
-        .unwrap_or_default();
     let full = Path::new(&repo).join(&file);
+    // Editor pref lives in the owning project's workspace.json (the single
+    // source of truth). The inline Git panel passes it directly; the standalone
+    // window doesn't, so resolve it from the project that owns the file. Blank
+    // (never set) → the Studio Code Editor, matching the frontend default.
+    let editor = editor.filter(|e| !e.is_empty()).unwrap_or_else(|| {
+        project_path_for_file(&app, &full.to_string_lossy())
+            .and_then(|proj| read_workspace(proj).ok())
+            .map(|ws| ws.editor)
+            .filter(|e| !e.is_empty())
+            .unwrap_or_else(|| STUDIO_EDITOR.to_string())
+    });
 
     if editor == STUDIO_EDITOR {
         return open_in_code_editor(&app, &state, full.to_string_lossy().to_string());

@@ -419,6 +419,10 @@ function buildProjectCard(p) {
     const letter = document.createElement("div");
     letter.className = "card__icon card__icon--letter";
     letter.textContent = (p.name[0] || "?").toUpperCase();
+    if (p.color) {
+      letter.style.background = p.color;
+      letter.style.color = "#fdfaf4";
+    }
     icon.replaceWith(letter);
   });
   card.append(icon);

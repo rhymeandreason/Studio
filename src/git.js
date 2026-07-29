@@ -22,7 +22,7 @@ let currentRepo = "";
 
 // One row in a file list: status glyph + path, click to open in editor. New
 // files ("??") get a sticker star; otherwise the status letter (M/A/D/R…).
-function buildFileRow(repo, f) {
+function buildFileRow(repo, f, editor) {
   const row = el("div", "git-file", { title: "Open in editor" });
   const code = el("span", "git-file__code");
   const isNew = f.status.includes("?");
@@ -33,7 +33,7 @@ function buildFileRow(repo, f) {
   name.textContent = "⁦" + f.path + "⁩";
   row.append(code, name);
   row.addEventListener("click", () =>
-    invoke("git_open_file", { repo, file: f.path }).catch((e) => toast(String(e))),
+    invoke("git_open_file", { repo, file: f.path, editor }).catch((e) => toast(String(e))),
   );
   return row;
 }
@@ -55,7 +55,7 @@ function buildCommitCard(repo, color, editor, pushUI, onChange) {
     innerHTML: mi("open_in_new"),
   });
   popout.addEventListener("click", () =>
-    invoke("open_git_window", { repo, color, editor }),
+    invoke("open_git_window", { repo, color }),
   );
   head.append(title, popout);
 
@@ -107,7 +107,7 @@ function buildCommitCard(repo, color, editor, pushUI, onChange) {
     if (st.files.length === 0) {
       files.append(el("div", "git-empty", { textContent: "Working tree clean" }));
     } else {
-      for (const f of st.files) files.append(buildFileRow(repo, f));
+      for (const f of st.files) files.append(buildFileRow(repo, f, editor));
     }
     syncEnabled();
     syncPush(st);
@@ -148,7 +148,7 @@ function buildCommitCard(repo, color, editor, pushUI, onChange) {
       try {
         const cf = await invoke("git_commit_files", { repo, hash: st.lastCommit.hash });
         filesBox.innerHTML = "";
-        for (const f of cf) filesBox.append(buildFileRow(repo, f));
+        for (const f of cf) filesBox.append(buildFileRow(repo, f, editor));
       } catch (e) {
         loaded = false;
         toast(String(e));

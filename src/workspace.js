@@ -257,11 +257,12 @@ const LIST_META = {
   },
 };
 
-// Code editors offered for the Repo card's "Open in" picker. Empty value =
-// Zed, the Rust-side default when `editor` is blank.
+// Code editors offered for the Repo card's "Open in" picker. Values are the
+// macOS app name passed to `open -a` (except "Studio Code Editor", the in-app
+// tool). Blank/unset in workspace.json = the Studio Code Editor default.
 export const EDITOR_OPTIONS = [
   { value: "Studio Code Editor", label: "Studio Code Editor" },
-  { value: "", label: "Zed" },
+  { value: "Zed", label: "Zed" },
   { value: "Atom", label: "Atom" },
   { value: "Visual Studio Code", label: "VS Code" },
   { value: "Sublime Text", label: "Sublime Text" },
