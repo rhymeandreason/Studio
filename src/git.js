@@ -4,6 +4,8 @@
 //   - Commit: live git status + commit box + last-commit/undo (ports the
 //     standalone Git window's logic, reusing the same git_* commands). A
 //     pop-out button opens that floating window when you want it detached.
+//   - History: embeds tools/git-history.html?repo=… (vertical commit timeline
+//     with bookmarks + temporary "step back in time" checkouts).
 //   - Pulse:  embeds tools/git-pulse.html?repo=… (commit dot-graph).
 //   - Server: embeds tools/server.html (the dev-server oscilloscope, which
 //     already follows the active project) — only when the repo has dev scripts.
@@ -341,9 +343,17 @@ export async function renderGitPanel() {
     (color ? "&color=" + encodeURIComponent(color) : ""), () =>
     invoke("open_git_pulse", { repo }),
   );
-  // Reload the Pulse iframe after a commit/undo changes the graph.
-  const reloadPulse = () => { if (pulseCard._frame) pulseCard._frame.src = pulseCard._frame.src; };
-  panel.append(buildCommitCard(repo, color, editor, { push, status }, reloadPulse));
+  const historyCard = buildToolCard("History", "history", "tools/git-history.html?repo=" + encodeURIComponent(repo) +
+    (color ? "&color=" + encodeURIComponent(color) : ""), () =>
+    invoke("open_git_history", { repo }),
+  );
+  historyCard.classList.add("git-card--history");
+
+  // Reload the embedded tools after a commit/undo changes the log.
+  const reload = (card) => { if (card._frame) card._frame.src = card._frame.src; };
+  const onChange = () => { reload(pulseCard); reload(historyCard); };
+  panel.append(buildCommitCard(repo, color, editor, { push, status }, onChange));
+  panel.append(historyCard);
   panel.append(pulseCard);
   panel.append(buildRepoCard(repo, editor));
 

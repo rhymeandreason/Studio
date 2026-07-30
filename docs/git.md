@@ -21,11 +21,12 @@ column of cards:
   `-u origin <branch>`), and disables when in sync. Push runs with
   `GIT_TERMINAL_PROMPT=0` so a missing credential fails fast instead of hanging —
   it relies on an already-configured credential helper / SSH key.
+- **History** (inline) — embeds `tools/git-history.html?repo=…` (below).
 - **Pulse** (inline) — embeds `tools/git-pulse.html?repo=…`.
 - **Server** (inline) — embeds `tools/server.html`, shown only when the repo has
   `dev-open.sh`/`dev-stop.sh` (`repo_scripts`).
 
-The last two are `<iframe>`s. Tauri only injects `window.__TAURI__` into the
+The last three are `<iframe>`s. Tauri only injects `window.__TAURI__` into the
 top-level webview, so `kit/app.js` borrows the parent window's Tauri for a
 same-origin embedded tool, and `kit/window-chrome.js` drops the tool's titlebar
 + window border when embedded (`.is-embedded` on `<body>`).
@@ -119,3 +120,67 @@ shuffle when opening a file in an external editor could leave Tauri thinking no
 windows remain. The `run()` closure handles `RunEvent::ExitRequested` and calls
 `api.prevent_exit()` (only for `code: None` — the tray's "Quit Studio" passes a
 code, so it still quits). Never let the app exit on window close.
+
+# History browser
+
+`src/tools/git-history.html` — a tall, vertical timeline of commits. Same file
+serves both places: the Git panel embeds it as the **History** card
+(`git-history.html?repo=…&color=…`, `.git-card--history` gives the iframe extra
+height), and the card's pop-out button calls `open_git_history` for a standalone
+`360×780` window (`Tint::Project`). Opened from the tray with no `?repo=`, it
+falls back to the active project's repo (`get_active_project` +
+`read_workspace`), like `server.html`.
+
+**Embedding gotcha:** `window-chrome.js` *removes* the whole `[data-window-bar]`
+element when a tool is embedded, so nothing the script needs may live inside the
+titlebar — the branch label sits in the toolbar row below it for that reason.
+(Reading a removed element's `.textContent` throws and silently kills the render:
+the card showed only its search bar.)
+
+## What it shows
+
+Commits grouped under sticky day headers (Today / Yesterday / weekday), each row
+a rail dot + subject + `short hash · relative age` and chips for any ref
+decorations (branches plain, tags accent-colored). The search box filters by
+subject/hash/author; the star button in the toolbar filters to bookmarks only.
+Clicking a row expands its detail: absolute date + author, then the commit's
+files (`git_commit_files`); clicking a file expands its diff
+(`git_commit_file_diff`, unified, +/- colored, noise lines like `index …`
+stripped). Pages 100 commits at a time via a "Load older commits" button.
+
+## Time travel
+
+The clock button on a row **temporarily checks that commit out** so the working
+tree — and therefore your editor and dev server — is the old version:
+
+- `git_time_travel` stashes dirty work (`stash push -u -m "studio: time travel"`,
+  after a confirm in the UI), then `checkout --detach <hash>`. The branch it came
+  from and whether it stashed are recorded so it can get back. Hopping between
+  old commits keeps the original branch/stash rather than treating the detached
+  HEAD as home. A failed checkout pops the stash back.
+- While detached, a banner (`#travel`, project accent) names the commit and
+  offers **Return to `<branch>`** → `git_time_return`: checks the branch out and
+  pops *our* stash entry (matched by its message, so an unrelated stash isn't
+  disturbed).
+- The commit list keeps logging the *branch*, not `HEAD`, while travelling
+  (`git_history`'s `rev` arg) — otherwise stepping back would truncate the
+  timeline you're navigating.
+- `assert_no_op_in_progress` refuses to move HEAD when a rebase / merge /
+  cherry-pick / bisect is in flight (checks for the marker files in the git dir).
+
+`git_head_state` drives all of this: branch (empty ⇒ detached), HEAD hash, dirty
+flag, and the travel state. A stale travel entry (the user returned by hand in a
+terminal) is ignored whenever HEAD is *not* detached, so no phantom banner.
+
+## Bookmarks
+
+Starring a commit (`git_toggle_bookmark`, returns the new list) records
+`{ hash, short, subject }` in **`git-bookmarks.json`** in the app config dir,
+keyed by repo path — the same file holds the per-repo `travel` state. Deliberately
+*not* git tags: no refs added to the repo, nothing pushable, and it survives
+branch churn. `git_bookmarks` reads a repo's list.
+
+The history commands, the store, and the time-travel logic all live in
+[`src-tauri/src/git.rs`](../src-tauri/src/git.rs) — the store is per-repo JSON,
+not window plumbing, so it stays in the git domain. Only `open_git_history` (the
+pop-out) is in `lib.rs`.

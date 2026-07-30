@@ -2945,7 +2945,7 @@ td.ntable__total-cell {
     cursor: pointer;
 }
 
-/* Embedded tool cards (Pulse, Server) */
+/* Embedded tool cards (History, Pulse, Server) */
 .git-card--embed .git-embed {
     width: 100%;
     height: 200px;
@@ -2953,6 +2953,8 @@ td.ntable__total-cell {
     display: block;
     background: transparent;
 }
+/* History is a vertical timeline — give it room to scroll in. */
+.git-card--history .git-embed { height: 420px; }
 
 /* Bare card (Server): no card chrome, just header + embed. */
 .git-card--bare {

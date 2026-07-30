@@ -5,11 +5,12 @@
 //! window management. The one seam here is `git_commit`, which calls back into
 //! `crate::set_git_draft` to clear the saved draft on a successful commit.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 
-use serde::Serialize;
-use tauri::AppHandle;
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager};
 
 /// One changed file in `git status`: the two-char XY code and its path.
 #[derive(Serialize)]
@@ -303,4 +304,330 @@ pub fn git_log_week(repo: String) -> Result<String, String> {
         return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
     }
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+// ---------------------------------------------------------------------------
+// History browser (src/tools/git-history.html + the Git panel's History card)
+//
+// Three pieces: reading the commit list / per-commit diffs, "time travel"
+// (a detached checkout of an older commit, with auto-stash and a way back),
+// and bookmarks. The last two need a little persistence — a `git-bookmarks.json`
+// in the app config dir, keyed by repo path — but no window plumbing, so it
+// lives here with the rest of the git domain rather than in lib.rs.
+// ---------------------------------------------------------------------------
+
+/// Run `git -C <repo> <args>`, returning stdout or the trimmed stderr.
+fn git(repo: &str, args: &[&str]) -> Result<String, String> {
+    let mut all = vec!["-C", repo];
+    all.extend_from_slice(args);
+    let out = Command::new("git")
+        .args(&all)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(if err.is_empty() {
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        } else {
+            err
+        });
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+/// One row in the history list.
+#[derive(Serialize)]
+pub struct HistCommit {
+    hash: String,
+    short: String,
+    subject: String,
+    author: String,
+    /// Relative age ("3 days ago").
+    rel: String,
+    /// Absolute date, for the expanded detail.
+    date: String,
+    /// ISO day (`YYYY-MM-DD`), so the frontend can group by day.
+    day: String,
+    /// Ref decorations ("HEAD -> main, origin/main, tag: v1"), may be empty.
+    refs: String,
+}
+
+/// A page of commit history. `rev` is what to log (a branch name, or empty for
+/// `HEAD`) — while time travelling, HEAD is detached in the past, so the tool
+/// passes the original branch to keep showing the full timeline.
+#[tauri::command]
+pub fn git_history(
+    repo: String,
+    rev: Option<String>,
+    skip: u32,
+    limit: u32,
+) -> Result<Vec<HistCommit>, String> {
+    let rev = rev.unwrap_or_default();
+    let rev = if rev.trim().is_empty() { "HEAD" } else { rev.trim() };
+    let skip = format!("--skip={}", skip);
+    let limit = format!("-n{}", limit);
+    let text = git(
+        &repo,
+        &[
+            "log",
+            rev,
+            &skip,
+            &limit,
+            "--format=%H%x1f%h%x1f%s%x1f%an%x1f%cr%x1f%cd%x1f%cs%x1f%D",
+            "--date=format:%b %-d, %Y at %H:%M",
+        ],
+    )?;
+    let mut out = Vec::new();
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let p: Vec<&str> = line.split('\u{1f}').collect();
+        if p.len() < 8 || p[0].is_empty() {
+            continue;
+        }
+        out.push(HistCommit {
+            hash: p[0].to_string(),
+            short: p[1].to_string(),
+            subject: p[2].to_string(),
+            author: p[3].to_string(),
+            rel: p[4].to_string(),
+            date: p[5].to_string(),
+            day: p[6].to_string(),
+            refs: p[7].to_string(),
+        });
+    }
+    Ok(out)
+}
+
+/// Unified diff of one file as changed by one commit, for the expanded row.
+#[tauri::command]
+pub fn git_commit_file_diff(repo: String, hash: String, path: String) -> Result<String, String> {
+    git(
+        &repo,
+        &["show", "--no-color", "--format=", &hash, "--", &path],
+    )
+}
+
+// --- bookmarks + time-travel store ----------------------------------------
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Bookmark {
+    hash: String,
+    short: String,
+    subject: String,
+}
+
+/// Where a time-travelling repo came from, so it can get back: the branch that
+/// was checked out, and whether we stashed dirty work to leave it.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Travel {
+    branch: String,
+    stashed: bool,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct RepoHist {
+    #[serde(default)]
+    bookmarks: Vec<Bookmark>,
+    #[serde(default)]
+    travel: Option<Travel>,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct HistStore {
+    #[serde(default)]
+    repos: HashMap<String, RepoHist>,
+}
+
+fn store_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("git-bookmarks.json"))
+}
+
+fn read_store(app: &AppHandle) -> HistStore {
+    store_path(app)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+fn write_store(app: &AppHandle, store: &HistStore) {
+    if let Some(path) = store_path(app) {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Ok(text) = serde_json::to_string_pretty(store) {
+            let _ = std::fs::write(path, text);
+        }
+    }
+}
+
+/// Bookmarked commits for a repo (most recently added last).
+#[tauri::command]
+pub fn git_bookmarks(app: AppHandle, repo: String) -> Vec<Bookmark> {
+    read_store(&app)
+        .repos
+        .remove(&repo)
+        .map(|r| r.bookmarks)
+        .unwrap_or_default()
+}
+
+/// Star / unstar a commit. Returns the repo's new bookmark list.
+#[tauri::command]
+pub fn git_toggle_bookmark(
+    app: AppHandle,
+    repo: String,
+    hash: String,
+    short: String,
+    subject: String,
+) -> Vec<Bookmark> {
+    let mut store = read_store(&app);
+    let entry = store.repos.entry(repo).or_default();
+    if let Some(i) = entry.bookmarks.iter().position(|b| b.hash == hash) {
+        entry.bookmarks.remove(i);
+    } else {
+        entry.bookmarks.push(Bookmark { hash, short, subject });
+    }
+    let list = entry.bookmarks.clone();
+    write_store(&app, &store);
+    list
+}
+
+// --- time travel -----------------------------------------------------------
+
+/// Where HEAD is, plus the time-travel state the banner needs.
+#[derive(Serialize)]
+pub struct HeadState {
+    /// Current branch, or empty when HEAD is detached.
+    branch: String,
+    hash: String,
+    short: String,
+    detached: bool,
+    /// While time travelling: the branch to return to (empty otherwise).
+    #[serde(rename = "travelBranch")]
+    travel_branch: String,
+    /// Whether returning will also restore stashed work.
+    stashed: bool,
+    /// True when the working tree has changes (staged or not, incl. untracked).
+    dirty: bool,
+}
+
+#[tauri::command]
+pub fn git_head_state(app: AppHandle, repo: String) -> Result<HeadState, String> {
+    let hash = git(&repo, &["rev-parse", "HEAD"])?.trim().to_string();
+    let short = hash.chars().take(7).collect();
+    let branch = git(&repo, &["symbolic-ref", "--short", "-q", "HEAD"])
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let dirty = !git(&repo, &["status", "--porcelain"])?.trim().is_empty();
+    let travel = read_store(&app).repos.remove(&repo).and_then(|r| r.travel);
+    // A stale entry (the user returned by hand in a terminal) shouldn't show a
+    // banner — only trust it while HEAD really is detached.
+    let travelling = branch.is_empty();
+    Ok(HeadState {
+        detached: branch.is_empty(),
+        branch,
+        hash,
+        short,
+        travel_branch: if travelling {
+            travel.as_ref().map(|t| t.branch.clone()).unwrap_or_default()
+        } else {
+            String::new()
+        },
+        stashed: travelling && travel.map(|t| t.stashed).unwrap_or(false),
+        dirty,
+    })
+}
+
+/// Refuse to move HEAD mid-operation — a rebase/merge/cherry-pick in flight
+/// would be wrecked by a checkout.
+fn assert_no_op_in_progress(repo: &str) -> Result<(), String> {
+    let git_dir = git(repo, &["rev-parse", "--absolute-git-dir"])?
+        .trim()
+        .to_string();
+    let dir = PathBuf::from(git_dir);
+    for (marker, name) in [
+        ("rebase-merge", "rebase"),
+        ("rebase-apply", "rebase"),
+        ("MERGE_HEAD", "merge"),
+        ("CHERRY_PICK_HEAD", "cherry-pick"),
+        ("BISECT_LOG", "bisect"),
+    ] {
+        if dir.join(marker).exists() {
+            return Err(format!("A {} is in progress — finish it first", name));
+        }
+    }
+    Ok(())
+}
+
+/// Temporarily check out an older commit (detached HEAD), stashing any dirty
+/// work first so the checkout can't fail or lose changes. Remembers the branch
+/// (and whether it stashed) so `git_time_return` can put everything back.
+#[tauri::command]
+pub fn git_time_travel(app: AppHandle, repo: String, hash: String) -> Result<(), String> {
+    assert_no_op_in_progress(&repo)?;
+
+    let mut store = read_store(&app);
+    let existing = store.repos.get(&repo).and_then(|r| r.travel.clone());
+    let branch = git(&repo, &["symbolic-ref", "--short", "-q", "HEAD"])
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    // Already time travelling? Keep the original branch/stash — hopping between
+    // old commits shouldn't lose the way home.
+    let (home, already_stashed) = match (&branch, existing) {
+        (b, _) if !b.is_empty() => (b.clone(), false),
+        (_, Some(t)) => (t.branch, t.stashed),
+        (_, None) => return Err("Detached HEAD with no branch to return to".to_string()),
+    };
+
+    let dirty = !git(&repo, &["status", "--porcelain"])?.trim().is_empty();
+    if dirty {
+        git(
+            &repo,
+            &["stash", "push", "-u", "-m", "studio: time travel"],
+        )?;
+    }
+    if let Err(e) = git(&repo, &["checkout", "--detach", &hash]) {
+        // Checkout failed — undo the stash so the tree is as we found it.
+        if dirty {
+            let _ = git(&repo, &["stash", "pop"]);
+        }
+        return Err(e);
+    }
+
+    store.repos.entry(repo).or_default().travel = Some(Travel {
+        branch: home,
+        stashed: already_stashed || dirty,
+    });
+    write_store(&app, &store);
+    Ok(())
+}
+
+/// Come back to the present: check the remembered branch out again and pop the
+/// stash we took on the way out.
+#[tauri::command]
+pub fn git_time_return(app: AppHandle, repo: String) -> Result<(), String> {
+    assert_no_op_in_progress(&repo)?;
+    let mut store = read_store(&app);
+    let travel = store
+        .repos
+        .get(&repo)
+        .and_then(|r| r.travel.clone())
+        .ok_or("No time-travel state for this repo")?;
+
+    git(&repo, &["checkout", &travel.branch])?;
+    if travel.stashed {
+        // Pop only our own stash entry, in case something else stashed since.
+        let list = git(&repo, &["stash", "list"]).unwrap_or_default();
+        if let Some(line) = list.lines().find(|l| l.contains("studio: time travel")) {
+            if let Some(reference) = line.split(':').next() {
+                git(&repo, &["stash", "pop", reference])?;
+            }
+        }
+    }
+    store.repos.entry(repo).or_default().travel = None;
+    write_store(&app, &store);
+    Ok(())
 }

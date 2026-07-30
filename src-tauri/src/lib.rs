@@ -4,8 +4,9 @@ mod patchmatch;
 // Pure git-CLI commands live in git.rs; bring them into scope for the
 // `generate_handler!` list below (they call back into `git_set_draft` here).
 use git::{
-    git_commit, git_commit_files, git_diff_file, git_diff_file_committed, git_log_week, git_push,
-    git_status, git_undo,
+    git_bookmarks, git_commit, git_commit_file_diff, git_commit_files, git_diff_file,
+    git_diff_file_committed, git_head_state, git_history, git_log_week, git_push, git_status,
+    git_time_return, git_time_travel, git_toggle_bookmark, git_undo,
 };
 
 use std::collections::HashMap;
@@ -591,6 +592,8 @@ fn tool_style(filename: &str) -> ToolStyle {
         "tasks.html" => s(800.0, 800.0, Tint::Paper),
         "modes.html" => s(320.0, 480.0, Tint::Paper),
         "git-pulse.html" => s(820.0, 600.0, Tint::Paper),
+        // Tall and narrow: a vertical timeline of commits.
+        "git-history.html" => s(360.0, 780.0, Tint::Project),
         "server.html" => s(240.0, 440.0, Tint::Project),
         "daily-briefing.html" => s(1080.0, 760.0, Tint::Paper),
         "mycelium.html" => s(1100.0, 760.0, Tint::Paper),
@@ -3924,6 +3927,14 @@ fn open_git_pulse(app: AppHandle, repo: String) {
     open_tool_window(&app, "git-pulse.html", Some(query), None, None);
 }
 
+/// Pop the History tool out of the Git panel into its own tall window. Like
+/// Pulse, the repo rides the query so each repo gets its own window label.
+#[tauri::command]
+fn open_git_history(app: AppHandle, repo: String) {
+    let query = format!("repo={}", url_encode(&repo));
+    open_tool_window(&app, "git-history.html", Some(query), None, None);
+}
+
 #[tauri::command]
 fn git_get_draft(app: AppHandle, repo: String) -> String {
     read_git_windows(&app)
@@ -5431,6 +5442,14 @@ pub fn run() {
             git_diff_file,
             git_log_week,
             open_git_pulse,
+            git_history,
+            git_commit_file_diff,
+            git_head_state,
+            git_bookmarks,
+            git_toggle_bookmark,
+            git_time_travel,
+            git_time_return,
+            open_git_history,
             get_focused_window_bounds,
             list_windows,
             apply_window_layout

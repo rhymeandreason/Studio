@@ -9,6 +9,7 @@
   { "file": "theme-editor.html", "name": "Theme Editor" },
 { "file": "code-editor.html", "name": "Code Editor" },
   { "file": "image-editor.html", "name": "Image Editor" },
+  { "file": "git-history.html", "name": "Git History" },
   { "file": "server.html", "name": "Server" },
   { "file": "window-size.html", "name": "Window Size" },
   { "file": "file-directory.html", "name": "File Directory" },

@@ -195,6 +195,14 @@ half-done tool opens with no way to drag or close it.
    `overflow:hidden` clip is what rounds them. Every region of the window must
    be covered by an opaque child or the desktop shows through.
 
+   > **Don't put live content in the bar.** When the tool is embedded as an
+   > iframe (Git panel cards), `window-chrome.js` *removes* `[data-window-bar]`
+   > outright — the host card has its own header. Anything the script reads or
+   > writes there (a branch label, a status count) becomes a detached node
+   > embedded-only, and the first `.textContent` on it throws mid-render, so the
+   > card renders blank below the bar. Keep such elements in a row *below* the
+   > bar; the bar is for the title alone.
+
 4. **Runtime retint** (optional): `?color=` is applied automatically; a tool
    that retints later (Code Editor, per open file) sets `--titlebar-tint` on
    `documentElement` itself.
