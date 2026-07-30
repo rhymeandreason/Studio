@@ -12,6 +12,7 @@
 
 import { invoke, toast } from "./kit/app.js";
 import { el, mi } from "./dom.js";
+import { state } from "./state.js";
 import {
   activeRepoInfo,
   setActiveRepo,
@@ -21,6 +22,21 @@ import {
 } from "./workspace.js";
 
 let currentRepo = "";
+// The Commit card's poll for outside-Studio changes. Module-level so a panel
+// rebuild can't leave a second timer running against a stale card.
+let statusTimer = 0;
+
+// Everything the Commit card draws, flattened — if this string is unchanged
+// there's nothing to re-render.
+function statusSignature(st) {
+  return [
+    st.branch,
+    st.ahead,
+    st.hasUpstream,
+    st.lastCommit?.hash || "",
+    st.files.map((f) => f.status + f.path).join(","),
+  ].join("|");
+}
 
 // One row in a file list: status glyph + path, click to open in editor. New
 // files ("??") get a sticker star; otherwise the status letter (M/A/D/R…).
@@ -42,7 +58,7 @@ function buildFileRow(repo, f, editor) {
 
 // Build the inline Commit card. Returns the card element and wires its own
 // refresh; the panel calls back into git_status/commit/undo/drafts directly.
-function buildCommitCard(repo, color, editor, pushUI, onChange) {
+function buildCommitCard(repo, color, editor, pushUI, onChange, onExternal) {
   const { push, status } = pushUI;
   const card = el("section", "git-card git-card--commit");
 
@@ -71,6 +87,7 @@ function buildCommitCard(repo, color, editor, pushUI, onChange) {
   const prev = el("div", "git-prev");
 
   let changedCount = 0;
+  let lastStatus = "";
   const syncEnabled = () => {
     commit.disabled = !msg.value.trim() || changedCount === 0;
   };
@@ -103,6 +120,13 @@ function buildCommitCard(repo, color, editor, pushUI, onChange) {
       files.append(el("div", "git-empty", { textContent: String(e) }));
       return;
     }
+    apply(st);
+  }
+
+  // Everything that changes when a status arrives. Split from the fetch so the
+  // watcher below can reuse the status it already polled.
+  function apply(st) {
+    lastStatus = statusSignature(st);
     branch.textContent = st.branch || "(detached)";
     changedCount = st.files.length;
     files.innerHTML = "";
@@ -222,6 +246,25 @@ function buildCommitCard(repo, color, editor, pushUI, onChange) {
   // Restore the saved draft, then load status.
   invoke("git_get_draft", { repo }).then((d) => { if (d) msg.value = d; }).catch(() => {});
   refresh();
+
+  // Watch for changes made outside this card — a branch switch or commit in a
+  // terminal, edits from the editor, the History card time travelling. Polls
+  // git_status but only re-renders when the signature changes, so the commit
+  // box and scroll position aren't disturbed. Idle while another tab is up
+  // (switching back to Git re-runs refresh anyway); the panel clears the timer
+  // when it rebuilds.
+  clearInterval(statusTimer);
+  statusTimer = setInterval(async () => {
+    if (document.hidden || state.activePanel !== "git") return;
+    try {
+      const st = await invoke("git_status", { repo });
+      if (statusSignature(st) !== lastStatus) {
+        apply(st);
+        onExternal?.();
+      }
+    } catch { /* repo busy or gone; the next tick retries */ }
+  }, 3000);
+
   card._refresh = refresh;
   return card;
 }
@@ -317,6 +360,8 @@ export async function renderGitPanel() {
   }
   currentRepo = repo;
   panel.innerHTML = "";
+  // The cards this timer polled for are gone; the new Commit card starts its own.
+  clearInterval(statusTimer);
 
   if (!repo) {
     panel.append(buildRepoCard(repo, editor));
@@ -352,7 +397,10 @@ export async function renderGitPanel() {
   // Reload the embedded tools after a commit/undo changes the log.
   const reload = (card) => { if (card._frame) card._frame.src = card._frame.src; };
   const onChange = () => { reload(pulseCard); reload(historyCard); };
-  panel.append(buildCommitCard(repo, color, editor, { push, status }, onChange));
+  // A change made outside Studio only reloads Pulse — History polls for itself,
+  // and reloading its iframe would throw away its scroll + expanded row.
+  const onExternal = () => reload(pulseCard);
+  panel.append(buildCommitCard(repo, color, editor, { push, status }, onChange, onExternal));
   panel.append(historyCard);
   panel.append(pulseCard);
   panel.append(buildRepoCard(repo, editor));

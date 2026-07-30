@@ -20,7 +20,14 @@ column of cards:
   "Publish branch" on the first push of an untracked branch (`git_push` adds
   `-u origin <branch>`), and disables when in sync. Push runs with
   `GIT_TERMINAL_PROMPT=0` so a missing credential fails fast instead of hanging —
-  it relies on an already-configured credential helper / SSH key.
+  it relies on an already-configured credential helper / SSH key. The card also
+  **polls `git_status` every 3s** (idle while another tab is up or the window is
+  hidden) and re-renders only when its signature — branch, ahead count, last
+  commit, changed-file list — actually changes, so a branch switch or commit made
+  in a terminal shows up without a click. `statusTimer` is module-level and
+  cleared on every panel rebuild so a stale card can't keep a timer alive. An
+  externally-detected change reloads the Pulse iframe but *not* History (which
+  polls itself, and would lose its scroll + expanded row on a reload).
 - **History** (inline) — embeds `tools/git-history.html?repo=…` (below).
 - **Pulse** (inline) — embeds `tools/git-pulse.html?repo=…`.
 - **Server** (inline) — embeds `tools/server.html`, shown only when the repo has
@@ -130,6 +137,15 @@ height), and the card's pop-out button calls `open_git_history` for a standalone
 `360×780` window (`Tint::Project`). Opened from the tray with no `?repo=`, it
 falls back to the active project's repo (`get_active_project` +
 `read_workspace`), like `server.html`.
+
+**Staying current:** a 3s poll of `git_head_state` (skipped while the page is
+hidden) reloads the list whenever `branch|hash|travelBranch` changes — a branch
+switch, commit, or rebase done in a terminal or another window shows up on its
+own. Only the signature check is on the timer; the full reload runs only on a
+real change, and `refresh()` restores scroll and updates the signature so our own
+refreshes don't cause a second one. A `focus` listener alone wasn't enough:
+embedded in the panel this page is an iframe, so it only gets `focus` when you
+click *inside* it.
 
 **Embedding gotcha:** `window-chrome.js` *removes* the whole `[data-window-bar]`
 element when a tool is embedded, so nothing the script needs may live inside the

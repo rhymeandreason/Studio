@@ -518,6 +518,7 @@ starFilter.addEventListener("click", () => {
 });
 
 async function refresh() {
+  const scroll = listEl.scrollTop;
   await loadHead();
   await loadMarks();
   try {
@@ -528,6 +529,28 @@ async function refresh() {
   }
   await loadHead(); // now that subjects are loaded, the banner can name the commit
   render();
+  listEl.scrollTop = scroll;
+  // Keep the watcher in sync so our own refreshes don't trigger another one.
+  lastSignature = headSignature(head);
+}
+
+// Poll for HEAD moving under us — a branch switch, commit, or rebase done in a
+// terminal or another window. Cheap (one `git` call) and only when visible;
+// a full reload happens only when the branch/commit actually changed. Focus
+// alone isn't enough: embedded in the Git panel this page is an iframe, so it
+// only ever gets `focus` when you click *inside* it.
+function headSignature(h) {
+  return h ? `${h.branch}|${h.hash}|${h.travelBranch}` : "";
+}
+let lastSignature = "";
+async function checkHead() {
+  if (document.hidden) return;
+  try {
+    const sig = headSignature(await invoke("git_head_state", { repo }));
+    if (sig === lastSignature) return;
+    lastSignature = sig;
+    await refresh();
+  } catch { /* repo busy or gone mid-poll; the next tick retries */ }
 }
 
 if (hasTauri) {
@@ -537,8 +560,11 @@ if (hasTauri) {
       return;
     }
     await refresh();
-    // Re-poll on focus (a commit may have landed elsewhere).
-    window.addEventListener("focus", refresh);
+    lastSignature = headSignature(head);
+    setInterval(checkHead, 3000);
+    // Coming back to the window is a good moment to catch up immediately.
+    window.addEventListener("focus", checkHead);
+    document.addEventListener("visibilitychange", checkHead);
   })();
 } else {
   // Browser preview.
