@@ -21,19 +21,19 @@
     overflow: hidden;
   }
 
-  .titlebar {
-    height: 44px;
+  /* Titlebar geometry comes from window-chrome.css (.titlebar). The close dot is
+     prepended into [data-window-close], so the title sits on its row. */
+  .tb-title {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 0 14px;
-    flex-shrink: 0;
+    gap: 10px;
   }
   .titlebar h1 {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
+    line-height: 1;
   }
   /* The branch label lives in the toolbar, not the titlebar: window-chrome.js
      *removes* [data-window-bar] entirely when the tool is embedded in a card. */
@@ -220,7 +220,7 @@
   #more { margin: 8px 12px; width: calc(100% - 24px); }
 </style>
 </head>
-<body class="outline-window">
+<body>
 
 <div class="titlebar" data-window-bar>
   <div class="tb-title" data-window-close>
@@ -242,7 +242,8 @@
   </button>
 </div>
 
-<div id="list"></div>
+<!-- .main gets the bottom corner rounding from window-chrome.css -->
+<div id="list" class="main"></div>
 
 <script type="module">
 import { hasTauri, invoke, esc, toast } from "../kit/app.js";
