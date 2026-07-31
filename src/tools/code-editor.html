@@ -414,6 +414,16 @@
   .md-body .md-block.chg { background: var(--add-bg); box-shadow: inset 3px 0 0 var(--add-bar); }
   .md-body .md-block.del { box-shadow: inset 3px 0 0 #e5484d; }   /* same red as the gutter's deletion marker */
   .md-body .md-block > :last-child { margin-bottom: 0; }
+  .md-body .md-block { cursor: text; }
+  /* Edit-in-preview: the clicked block is swapped for a textarea holding just
+     that block's raw Markdown lines. Auto-sized in JS (no inner scrolling). */
+  .md-edit {
+    display: block; box-sizing: border-box;
+    margin: 0 -12px; padding: 4px 12px; width: calc(100% + 24px);
+    border: 0; border-left: 3px solid var(--accent); outline: none; resize: none;
+    overflow: hidden; background: var(--accent-ring);
+    font: var(--code-font); color: var(--text); white-space: pre-wrap;
+  }
   .md-body .md-block + .md-block { margin-top: 1em; }
 </style>
 </head>
@@ -667,6 +677,7 @@ function loadText(text) {
 }
 
 async function saveFile() {
+  commitBlockEditor();          // fold an open edit-in-preview block into the source
   if (!currentPath) return;
   if (hasTauri) {
     await invoke("write_text_file", { path: currentPath, content: code.value });
@@ -686,6 +697,7 @@ async function saveFile() {
 
 // Re-read the current file from disk (picks up external edits) and refresh diff.
 async function reloadFromDisk() {
+  commitBlockEditor();
   if (!hasTauri || !currentPath) return;
   const text = await invoke("read_text_file", { path: currentPath });
   diskText = text;
@@ -1029,7 +1041,7 @@ function mdBlocksHTML(src) {
     if (cls === "md-block") {
       for (let i = start; i <= end + 1; i++) if (deletedAt.has(i)) { cls += " del"; break; }
     }
-    out += `<div class="${cls}" data-line="${start}">${html}</div>`;
+    out += `<div class="${cls}" data-line="${start}" data-end="${end}">${html}</div>`;
   }
   return out;
 }
@@ -1038,12 +1050,113 @@ function mdBlocksHTML(src) {
 // preview window if it's open.
 let lastRendered = "";
 async function render() {
-  if (isMarkdown() && window.marked) {             // keep inline preview current
+  // Keep the inline preview current — but never while a block is being edited
+  // in place (rebuilding the HTML would blow the open textarea away).
+  if (isMarkdown() && window.marked && !mdEdit) {
+    const keep = mdView.scrollTop;
     mdView.innerHTML = `<div class="md-body">${mdBlocksHTML(code.value)}</div>`;
+    mdView.scrollTop = keep;                       // innerHTML resets scroll
   }
   lastRendered = await renderedHTML();
   parser.srcdoc = lastRendered;
   pushPreview();
+}
+
+// ---------- edit-in-preview (Markdown) ----------
+// Click a rendered block to edit *its* source lines in place. We never convert
+// the rendered HTML back to Markdown — each block knows its line range
+// (data-line/data-end from mdBlocksHTML), so committing just splices those
+// lines back into the source. Everything else in the file is untouched.
+let mdEdit = null;   // { block, ta, start, end } while a block is open
+
+function openBlockEditor(block, ev) {
+  if (mdEdit) { if (mdEdit.block === block) return; commitBlockEditor(); return; }
+  const start = parseInt(block.dataset.line, 10);
+  const end = parseInt(block.dataset.end, 10);
+  if (!start || !end) return;
+  const lines = code.value.split("\n");
+  const raw = lines.slice(start - 1, end).join("\n");
+
+  // Measure the space the rendered block occupies, so the textarea can take up
+  // the same room and nothing shifts. The block's vertical margins come from its
+  // children collapsing through it (computed margin is 0), so we measure the
+  // *gaps* to the neighbours instead — a gap is the already-collapsed margin, and
+  // re-applying it to the textarea survives collapsing (max(gap, gap) === gap).
+  const r = block.getBoundingClientRect();
+  const minH = block.offsetHeight;
+  const prev = block.previousElementSibling;
+  const after = block.nextElementSibling;
+  const body = block.parentNode.getBoundingClientRect();
+  const padTop = parseFloat(getComputedStyle(block.parentNode).paddingTop) || 0;
+  const gapAbove = prev ? r.top - prev.getBoundingClientRect().bottom : r.top - (body.top + padTop);
+  const gapBelow = after ? after.getBoundingClientRect().top - r.bottom : 0;
+
+  const ta = document.createElement("textarea");
+  ta.className = "md-edit";
+  ta.value = raw;
+  block.style.display = "none";
+  block.parentNode.insertBefore(ta, block);
+  mdEdit = { block, ta, start, end };
+
+  // Never shorter than the block it replaces, so nothing below jumps up.
+  const autosize = () => {
+    ta.style.height = "auto";
+    ta.style.height = Math.max(ta.scrollHeight, minH) + "px";
+  };
+  ta.style.marginTop = gapAbove + "px";
+  ta.style.marginBottom = gapBelow + "px";
+  autosize();
+  ta.addEventListener("input", autosize);
+  ta.addEventListener("blur", () => commitBlockEditor());
+  ta.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); commitBlockEditor(); }
+    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commitBlockEditor(); }
+    // Typing and undo stay inside the textarea (its own native undo covers the
+    // block); Cmd+S falls through to the window handler, which commits first.
+    if (!(e.metaKey || e.ctrlKey) || e.key === "z" || e.key === "Z" || e.key === "y") e.stopPropagation();
+  });
+  ta.focus();
+  const caret = caretOffsetInRaw(block, raw, ev);
+  ta.setSelectionRange(caret, caret);
+}
+
+// Put the caret roughly where the click landed: take the rendered text before
+// the click point and look for its tail in the raw source. Markdown syntax
+// around the click makes this miss sometimes — then we fall back to the end.
+function caretOffsetInRaw(block, raw, ev) {
+  try {
+    const pos = document.caretRangeFromPoint(ev.clientX, ev.clientY);
+    if (!pos) return raw.length;
+    const before = document.createRange();
+    before.selectNodeContents(block);
+    before.setEnd(pos.startContainer, pos.startOffset);
+    const tail = before.toString().slice(-16);
+    if (!tail.trim()) return raw.length;
+    const at = raw.indexOf(tail);
+    if (at >= 0) return at + tail.length;
+  } catch {}
+  return raw.length;
+}
+
+// Splice the edited lines back into the source and re-render. Idempotent, so
+// anything that needs the source settled first (save, view switch, reload) can
+// just call it.
+function commitBlockEditor() {
+  if (!mdEdit) return;
+  const { block, ta, start, end } = mdEdit;
+  mdEdit = null;                       // before render(), which rebuilds mdView
+  const next = ta.value;
+  ta.remove();
+  block.style.display = "";
+  const lines = code.value.split("\n");
+  const wasnt = lines.slice(start - 1, end).join("\n");
+  if (next === wasnt) return;          // nothing typed — leave undo/dirty alone
+  commitUndo();                        // the edit is one undo step
+  lines.splice(start - 1, end - start + 1, ...next.split("\n"));
+  code.value = lines.join("\n");
+  setDirty(true);
+  paint(); persist(); commitUndo();
+  render();
 }
 
 // ---------- Markdown section browser + inline preview ----------
@@ -1063,6 +1176,7 @@ function setViewToggle(showingPreview) {
 // Switch views (Markdown only), keeping scroll position by syncing to the
 // nearest preceding heading between the two views.
 function setView(toPreview) {
+  commitBlockEditor();
   if (toPreview === inPreview()) return;
   const idx = toPreview ? currentCodeSectionIdx() : currentPreviewSectionIdx();
   document.body.classList.toggle("md-preview", toPreview);
@@ -1080,7 +1194,11 @@ function inPreview() { return document.body.classList.contains("md-preview"); }
 // paths open that file in this editor; external URLs are left alone.
 mdView.addEventListener("click", (e) => {
   const a = e.target.closest("a");
-  if (!a) return;
+  if (!a) {
+    const block = e.target.closest(".md-block");     // click to edit that block
+    if (block) openBlockEditor(block, e);
+    return;
+  }
   const href = a.getAttribute("href") || "";
   if (!href) return;
   e.preventDefault();

@@ -114,6 +114,16 @@ Markdown files also swap the UI (toggled by a `body.is-markdown` class set in
   too — and a deletion point gets a red `.md-block.del` bar. `refreshDiff()`
   re-renders the preview so the tint follows mode switches and reloads. The
   blocks stay unpositioned; heading `offsetTop` scroll-sync depends on it.
+- **Edit in the preview (WYSIWYG-ish).** Clicking a rendered block swaps it for a
+  textarea holding *only that block's raw Markdown lines* (`openBlockEditor`),
+  auto-sized, caret placed near the click (`caretOffsetInRaw` matches the
+  rendered text before the click against the raw source, falling back to the
+  end). Blur / Escape / Cmd+Enter commits: `commitBlockEditor()` splices those
+  lines back into `code.value` — the rendered HTML is **never** converted back to
+  Markdown, so nothing outside the edited block can be rewritten. It's one undo
+  step, and it's idempotent, so `saveFile`, `setView`, and `reloadFromDisk` call
+  it to settle the source first. `render()` skips rebuilding `#md-view` while a
+  block is open (it would destroy the textarea) and preserves scroll otherwise.
 - **Clickable links.** In the preview, relative links open in the editor
   (resolved by `resolveRelative` against the current path), in-page `#anchors`
   scroll, external URLs are left alone.
