@@ -940,12 +940,18 @@ function parseDiff(diff) {
 let renderTimer = null;
 function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 250); }
 
+// Markdown options, shared by every marked call. `gfm` has to be explicit:
+// marked.lexer()/parser() *replace* the defaults with whatever object you pass
+// (marked.parse() merges), so passing just { breaks } silently turned GFM off
+// and tables came back as paragraphs.
+const MD_OPTS = { gfm: true, breaks: true };
+
 // The HTML shown in the preview / parsed for the tree. For Markdown files this
 // is marked-rendered HTML wrapped in a readable stylesheet; otherwise the raw
 // source (which is already HTML/CSS/JS).
 async function renderedHTML() {
   const raw = (isMarkdown() && window.marked)
-    ? mdWrap(window.marked.parse(code.value, { breaks: true }))
+    ? mdWrap(window.marked.parse(code.value, MD_OPTS))
     : code.value;
   return await resolveAssets(raw);
 }
@@ -1027,7 +1033,7 @@ function mdWrap(body) {
 // go gives each block its source line range — any line in it that the diff
 // marked as changed tints the whole block.
 function mdBlocksHTML(src) {
-  const opts = { breaks: true };
+  const opts = MD_OPTS;
   let tokens;
   try { tokens = window.marked.lexer(src, opts); }
   catch { return window.marked.parse(src, opts); }
