@@ -422,7 +422,10 @@
     margin: 0 -12px; padding: 4px 12px; width: calc(100% + 24px);
     border: 0; border-left: 3px solid var(--accent); outline: none; resize: none;
     overflow: hidden; background: var(--accent-ring);
-    font: var(--code-font); color: var(--text); white-space: pre-wrap;
+    /* Same typography as the rendered view, so a block doesn't change size or
+       face when you click into it (JS copies the block's own font on open). */
+    font: 16px/1.65 -apple-system, system-ui, "Segoe UI", sans-serif;
+    color: var(--text); white-space: pre-wrap;
   }
   .md-body .md-block + .md-block { margin-top: 1em; }
 </style>
@@ -1103,6 +1106,13 @@ function openBlockEditor(block, ev) {
     ta.style.height = "auto";
     ta.style.height = Math.max(ta.scrollHeight, minH) + "px";
   };
+  // Edit in the block's own typography — a heading stays big and bold, a fenced
+  // code block stays mono — so clicking in doesn't resize or reface the text.
+  const first = block.firstElementChild;
+  if (first) {
+    const fs = getComputedStyle(first);
+    ta.style.font = `${fs.fontStyle} ${fs.fontWeight} ${fs.fontSize}/${fs.lineHeight} ${fs.fontFamily}`;
+  }
   ta.style.marginTop = gapAbove + "px";
   ta.style.marginBottom = gapBelow + "px";
   autosize();
