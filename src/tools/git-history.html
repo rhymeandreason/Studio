@@ -130,10 +130,11 @@
 
     /* One commit. The rail (dot + connecting line) is drawn in the left gutter. */
     .row {
+      --row-pad: 6px;
       display: grid;
       grid-template-columns: 26px 1fr auto;
       align-items: start;
-      padding: 6px 12px 6px 0;
+      padding: var(--row-pad) 12px var(--row-pad) 0;
       cursor: pointer;
       position: relative;
     }
@@ -147,19 +148,35 @@
       justify-content: center;
       padding-top: 4px;
       position: relative;
+      /* Full row height (the grid is align-items:start for the text) so the
+         line reaches its neighbours — rows sit flush, so they join up. */
+      align-self: stretch;
     }
 
-    /* Line to the next commit, hidden on the last row of the list. */
+    /* The line runs behind the dot for the whole row, then stops at the dot's
+       center on the first and last row of a day's run. Dot center = 4px of
+       rail padding + half of the 8px dot. */
     .rail::after {
       content: "";
       position: absolute;
-      top: 14px;
-      bottom: -12px;
+      /* The rail is inset by the row's vertical padding, so bleed the line into
+         it — otherwise consecutive rows' lines stop short of each other. */
+      top: calc(-1 * var(--row-pad));
+      bottom: calc(-1 * var(--row-pad));
       width: 1px;
       background: var(--hairline);
     }
 
-    .row:last-child .rail::after {
+    .row.is-first .rail::after {
+      top: 8px;
+    }
+
+    .row.is-last .rail::after {
+      bottom: calc(100% - 8px);
+    }
+
+    /* A lone commit on its day has no neighbour to reach for. */
+    .row.is-first.is-last .rail::after {
       display: none;
     }
 
@@ -492,17 +509,27 @@ border-color: var(--elevated);
         return;
       }
 
+      // The rail line runs the full height of each row, so it joins up between
+      // rows on its own. Only the ends of a day's run need trimming to the dot —
+      // marked here, where the grouping is known (CSS can't see "last of group").
       let lastDay = "";
+      let prevRow = null;
       for (const c of rows) {
-        if (c.day !== lastDay) {
+        const newDay = c.day !== lastDay;
+        if (newDay) {
           lastDay = c.day;
+          prevRow?.classList.add("is-last");
           const h = document.createElement("div");
           h.className = "day eyebrow";
           h.textContent = dayLabel(c.day);
           listEl.append(h);
         }
-        listEl.append(buildRow(c));
+        const row = buildRow(c);
+        if (newDay) row.classList.add("is-first");
+        listEl.append(row);
+        prevRow = row;
       }
+      prevRow?.classList.add("is-last");
 
       if (commits.length >= PAGE && !onlyMarked) {
         const more = document.createElement("button");
@@ -762,6 +789,26 @@ border-color: var(--elevated);
         {
           hash: "b".repeat(40),
           short: "bbbbbbb",
+          subject: "Workspace: drag cards to reorder within their list",
+          author: "Mary Huang",
+          rel: "5 hours ago",
+          date: "Jul 29, 2026 at 08:12",
+          day: "2026-07-29",
+          refs: ""
+        },
+        {
+          hash: "c".repeat(40),
+          short: "ccccccc",
+          subject: "Workspace URLs: editable per-link title",
+          author: "Mary Huang",
+          rel: "6 hours ago",
+          date: "Jul 29, 2026 at 07:40",
+          day: "2026-07-29",
+          refs: ""
+        },
+        {
+          hash: "d".repeat(40),
+          short: "ddddddd",
           subject: "Workspace URLs: show Google product icons on cards",
           author: "Mary Huang",
           rel: "yesterday",
