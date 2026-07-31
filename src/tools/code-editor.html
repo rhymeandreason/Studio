@@ -299,22 +299,22 @@
   }
   #code::selection { background: var(--accent-ring); }
 
-  /* minimap */
-  #minimap {
+  /* minimap — one rail for the code view, one for the rendered Markdown view */
+  #minimap, #md-minimap {
     flex: 0 0 14px;
     position: relative;
     background: var(--surface);
     border-left: 1px solid var(--hairline);
     cursor: pointer;
   }
-  #minimap .mm {
+  #minimap .mm, #md-minimap .mm {
     position: absolute;
     left: 2px; right: 2px;
     min-height: 2px;
     background: var(--add-bar);
     border-radius: 1px;
   }
-  #minimap .mm-view {
+  #minimap .mm-view, #md-minimap .mm-view {
     position: absolute;
     left: 0; right: 0;
     background: var(--accent-ring);
@@ -381,14 +381,17 @@
 
   /* Inline Markdown preview: hidden by default; the Code/Preview toggle and the
      separate-window button only apply to Markdown. */
-  #md-view { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; position: relative; background: var(--elevated); }
+  /* #md-pane is the preview's row: the scroller + its own diff minimap, laid
+     out like #editor's codebox + minimap so the two views feel identical. */
+  #md-pane { display: none; flex: 1 1 auto; min-height: 0; }
+  #md-view { flex: 1 1 auto; min-width: 0; overflow: auto; position: relative; background: var(--elevated); }
 
   /* The Code | Preview toggle is a kit <studio-icon-toggle> (.icon-toggle). */
   #view-toggle { display: none; }
   body.is-markdown #view-toggle { display: inline-flex; }
   body.is-markdown #preview-btn { display: none; }
   body.md-preview #editor { display: none; }
-  body.md-preview #md-view { display: block; }
+  body.md-preview #md-pane { display: flex; }
 
   /* Rendered Markdown typography (scoped to the inline view). */
   .md-body { max-width: 740px; margin: 0 auto; padding: 32px 32px 80px;
@@ -489,7 +492,10 @@
       <!-- Inline rendered preview, shown in place of the code panel when a
            Markdown file is in Preview mode. A plain scrollable div (not an
            iframe) so scrolling stays reliable across show/hide. -->
-      <div id="md-view"></div>
+      <div id="md-pane">
+        <div id="md-view"></div>
+        <div id="md-minimap"><div class="mm-view"></div></div>
+      </div>
 
       <div id="find-bar" hidden>
         <input id="find-input" type="text" placeholder="Find" spellcheck="false" />
@@ -554,6 +560,7 @@ async function applyTitleColor() {
 const code = $("code"), hl = $("hl"), gutter = $("gutter"), minimap = $("minimap");
 const treeEl = $("tree"), inspector = $("inspector"), parser = $("parser");
 const sectionsEl = $("sections"), mdView = $("md-view"), linksEl = $("links");
+const mdMinimap = $("md-minimap");
 let mdHeadings = [];   // parsed ATX headings { level, text, line } for the section browser
 const filenameEl = $("filename"), dirtyEl = $("dirty");
 
@@ -1059,11 +1066,41 @@ async function render() {
     const keep = mdView.scrollTop;
     mdView.innerHTML = `<div class="md-body">${mdBlocksHTML(code.value)}</div>`;
     mdView.scrollTop = keep;                       // innerHTML resets scroll
+    paintMdMinimap();
   }
   lastRendered = await renderedHTML();
   parser.srcdoc = lastRendered;
   pushPreview();
 }
+
+// The preview's diff minimap. Same rail as the code view's, but positioned from
+// the rendered blocks' own geometry (not line numbers), so a mark sits where the
+// changed content actually is on screen.
+function paintMdMinimap() {
+  mdMinimap.querySelectorAll(".mm").forEach((e) => e.remove());
+  const total = mdView.scrollHeight || 1;
+  for (const b of mdView.querySelectorAll(".md-block.chg, .md-block.del")) {
+    const d = document.createElement("div");
+    d.className = "mm";
+    d.style.top = (b.offsetTop / total * 100) + "%";
+    d.style.height = Math.max(0.4, b.offsetHeight / total * 100) + "%";
+    if (b.classList.contains("del") && !b.classList.contains("chg")) d.style.background = "#e5484d";
+    mdMinimap.appendChild(d);
+  }
+  updateMdViewport();
+}
+
+function updateMdViewport() {
+  const view = mdMinimap.querySelector(".mm-view");
+  const total = mdView.scrollHeight || 1;
+  view.style.top = (mdView.scrollTop / total * 100) + "%";
+  view.style.height = (mdView.clientHeight / total * 100) + "%";
+}
+
+mdMinimap.addEventListener("click", (e) => {
+  const frac = (e.clientY - mdMinimap.getBoundingClientRect().top) / mdMinimap.clientHeight;
+  mdView.scrollTop = frac * mdView.scrollHeight - mdView.clientHeight / 2;
+});
 
 // ---------- edit-in-preview (Markdown) ----------
 // Click a rendered block to edit *its* source lines in place. We never convert
@@ -1192,13 +1229,17 @@ function setView(toPreview) {
   document.body.classList.toggle("md-preview", toPreview);
   setViewToggle(toPreview);
   requestAnimationFrame(() => {
-    if (toPreview) scrollPreviewToSection(idx);
+    // Block geometry only exists once the pane is shown, so the minimap has to
+    // be (re)painted on the way into Preview, not when the HTML was built.
+    if (toPreview) { paintMdMinimap(); scrollPreviewToSection(idx); }
     else if (idx >= 0 && mdHeadings[idx]) scrollCodeToLine(mdHeadings[idx].line);
     else { code.scrollTop = 0; syncScroll(); }
   });
 }
 $("view-toggle").addEventListener("change", (e) => setView(e.target.value === "preview"));
 function inPreview() { return document.body.classList.contains("md-preview"); }
+
+mdView.addEventListener("scroll", updateMdViewport);
 
 // Clicking a link in the rendered Markdown: in-page anchors scroll; relative
 // paths open that file in this editor; external URLs are left alone.
@@ -1430,7 +1471,10 @@ $("wrap-btn").addEventListener("click", () => {
   code.setAttribute("wrap", on ? "soft" : "off");  // attribute overrides CSS
   paint();
 });
-window.addEventListener("resize", () => { if (document.body.classList.contains("soft-wrap")) paint(); });
+window.addEventListener("resize", () => {
+  if (document.body.classList.contains("soft-wrap")) paint();
+  if (inPreview()) paintMdMinimap();      // block geometry reflows with the width
+});
 
 // ---------- preview window ----------
 let previewOpen = false;

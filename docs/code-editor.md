@@ -124,6 +124,12 @@ Markdown files also swap the UI (toggled by a `body.is-markdown` class set in
   step, and it's idempotent, so `saveFile`, `setView`, and `reloadFromDisk` call
   it to settle the source first. `render()` skips rebuilding `#md-view` while a
   block is open (it would destroy the textarea) and preserves scroll otherwise.
+- **Diff minimap.** The preview has its own rail (`#md-minimap`, sibling of
+  `#md-view` inside `#md-pane`, sharing the code minimap's CSS). `paintMdMinimap`
+  positions marks from the rendered blocks' `offsetTop`/`offsetHeight` — not line
+  numbers — so a mark sits where the changed content actually is; it repaints on
+  render, on the way into Preview (blocks have no geometry while the pane is
+  hidden), and on resize. Clicking it scrolls; `.mm-view` tracks the viewport.
 - **Clickable links.** In the preview, relative links open in the editor
   (resolved by `resolveRelative` against the current path), in-page `#anchors`
   scroll, external URLs are left alone.
