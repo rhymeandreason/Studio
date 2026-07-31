@@ -106,6 +106,14 @@ Markdown files also swap the UI (toggled by a `body.is-markdown` class set in
   iframes don't scroll reliably in WKWebView). `render()` fills it via `marked`
   into a scoped `.md-body`. The offscreen parser and the separate preview window
   still get full wrapped HTML (`renderedHTML()` / `mdWrap`).
+- **Diff in the rendered view.** `mdBlocksHTML()` renders block-by-block instead
+  of in one `marked.parse` call: each top-level lexer token's `raw` gives its
+  source line range (newline counting, trailing blank lines ignored), so a block
+  containing a changed line gets `.md-block.chg` — the same `--add-bg` /
+  `--add-bar` tint as the code view, so the teal/blue mode toggle applies here
+  too — and a deletion point gets a red `.md-block.del` bar. `refreshDiff()`
+  re-renders the preview so the tint follows mode switches and reloads. The
+  blocks stay unpositioned; heading `offsetTop` scroll-sync depends on it.
 - **Clickable links.** In the preview, relative links open in the editor
   (resolved by `resolveRelative` against the current path), in-page `#anchors`
   scroll, external URLs are left alone.

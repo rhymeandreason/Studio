@@ -407,6 +407,14 @@
   .md-body th, .md-body td { border: 1px solid #e0dcd2; padding: 6px 12px; }
   .md-body th { background: #f3f1ea; } .md-body img { max-width: 100%; }
   .md-body hr { border: 0; border-top: 1px solid #e5e2db; margin: 2em 0; }
+  /* Diff in the rendered view: blocks whose source lines changed get the same
+     tint as the code view (teal working / blue last-commit), plus a left bar.
+     Keep these blocks unpositioned — heading offsetTop math relies on it. */
+  .md-body .md-block { padding: 0 12px; margin: 0 -12px; }
+  .md-body .md-block.chg { background: var(--add-bg); box-shadow: inset 3px 0 0 var(--add-bar); }
+  .md-body .md-block.del { box-shadow: inset 3px 0 0 #e5484d; }   /* same red as the gutter's deletion marker */
+  .md-body .md-block > :last-child { margin-bottom: 0; }
+  .md-body .md-block + .md-block { margin-top: 1em; }
 </style>
 </head>
 <body>
@@ -883,6 +891,9 @@ async function refreshDiff() {
     // not a git repo / no previous commit — just leave the diff empty
   }
   paint();
+  // The rendered Markdown carries the diff tint too, so it has to be rebuilt
+  // whenever the diff changes (mode toggle, reload, save).
+  if (isMarkdown() && window.marked) scheduleRender();
 }
 
 function parseDiff(diff) {
@@ -989,12 +1000,46 @@ function mdWrap(body) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>${MD_CSS}</style></head><body>${body}</body></html>`;
 }
 
+// Render Markdown block-by-block so the git diff can be shown in the preview:
+// marked's top-level tokens carry their `raw` source, so counting newlines as we
+// go gives each block its source line range — any line in it that the diff
+// marked as changed tints the whole block.
+function mdBlocksHTML(src) {
+  const opts = { breaks: true };
+  let tokens;
+  try { tokens = window.marked.lexer(src, opts); }
+  catch { return window.marked.parse(src, opts); }
+  const nl = (s) => (s.match(/\n/g) || []).length;
+  let line = 1, out = "";
+  for (const t of tokens) {
+    const raw = t.raw || "";
+    const start = line;
+    const end = start + nl(raw.replace(/\n+$/, ""));  // ignore trailing blank lines
+    line += nl(raw);
+    if (t.type === "space") continue;
+    const one = [t];
+    one.links = tokens.links || {};                    // reference-link defs
+    let html;
+    try { html = window.marked.parser(one, opts); } catch { html = ""; }
+    if (!html) continue;
+    let cls = "md-block";
+    for (let i = start; i <= end; i++) {
+      if (changedLines.has(i)) { cls += " chg"; break; }
+    }
+    if (cls === "md-block") {
+      for (let i = start; i <= end + 1; i++) if (deletedAt.has(i)) { cls += " del"; break; }
+    }
+    out += `<div class="${cls}" data-line="${start}">${html}</div>`;
+  }
+  return out;
+}
+
 // Re-parse into the offscreen iframe (rebuilds the tree) and push to the
 // preview window if it's open.
 let lastRendered = "";
 async function render() {
   if (isMarkdown() && window.marked) {             // keep inline preview current
-    mdView.innerHTML = `<div class="md-body">${window.marked.parse(code.value, { breaks: true })}</div>`;
+    mdView.innerHTML = `<div class="md-body">${mdBlocksHTML(code.value)}</div>`;
   }
   lastRendered = await renderedHTML();
   parser.srcdoc = lastRendered;
