@@ -50,7 +50,9 @@ the tool's main script to be `<script type="module">`.
 **Icons:** `<span class="mi">icon_name</span>` (Material Symbols Rounded font +
 the `.mi` class are defined in `tokens.css`; add `.mi-sm` for 16px). Note: the
 class is `.mi`, **not** `material-symbols-rounded` — that class isn't defined, so
-the icon name renders as plain text.
+the icon name renders as plain text. For the "on" state of a toggle icon, add
+`.mi-fill` (the Symbols FILL axis) rather than swapping glyph names — the `_border`
+/ `_outline` names are Material *Icons*, not Symbols, and render as plain text.
 
 [`kit-gallery.html`](../src/tools/kit-gallery.html) (Tools → Design System) is the living reference. 
 

@@ -1,581 +1,779 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>History</title>
-<link rel="stylesheet" href="../tokens.css" />
-<link rel="stylesheet" href="../kit/kit.css" />
-<link rel="stylesheet" href="../kit/window-chrome.css" />
-<script type="module" src="../kit/components.js"></script>
-<script type="module" src="../kit/window-chrome.js"></script>
-<style>
-  /* Tall vertical timeline of commits. body stays transparent so the window's
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>History</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
+  <script type="module" src="../kit/components.js"></script>
+  <script type="module" src="../kit/window-chrome.js"></script>
+  <style>
+    /* .btn-icon-only's hover paints the glyph in --window-color on --text; window-
+     chrome.js only sets that from ?color=, which the embedded card doesn't pass,
+     so give it a default (the inline style it sets still wins when tinted). */
+    :root {
+      --window-color: var(--bg);
+    }
+
+    /* Tall vertical timeline of commits. body stays transparent so the window's
      rounded corners round; the opaque --bg lives on the rows below the bar. */
-  body {
-    font-family: var(--sans);
-    color: var(--text);
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+    body {
+      font-family: var(--sans);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
 
-  /* Titlebar geometry comes from window-chrome.css (.titlebar). The close dot is
+    /* Titlebar geometry comes from window-chrome.css (.titlebar). The close dot is
      prepended into [data-window-close], so the title sits on its row. */
-  .tb-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .titlebar h1 {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    line-height: 1;
-  }
-  /* The branch label lives in the toolbar, not the titlebar: window-chrome.js
+    .tb-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .titlebar h1 {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      line-height: 1;
+    }
+
+    /* The branch label lives in the toolbar, not the titlebar: window-chrome.js
      *removes* [data-window-bar] entirely when the tool is embedded in a card. */
-  #branch {
-    font-family: var(--mono);
-    flex-shrink: 0;
-    max-width: 90px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  #branch:empty { display: none; }
+    #branch {
+      font-family: var(--mono);
+      flex-shrink: 0;
+      max-width: 90px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
-  .bar {
-    background: var(--bg);
-    border-bottom: 1px solid var(--hairline);
-    flex-shrink: 0;
-    padding: 8px 12px;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
-  #search { flex: 1; min-width: 0; }
-  #star-filter.is-on { color: var(--accent); }
+    #branch:empty {
+      display: none;
+    }
 
-  /* Time-travel banner — only while HEAD is detached at an older commit. */
-  #travel {
-    background: var(--accent);
-    color: var(--bg);
-    flex-shrink: 0;
-    display: none;
-    gap: 8px;
-    align-items: center;
-    padding: 8px 12px;
-  }
-  #travel.is-on { display: flex; }
-  #travel-text { flex: 1; min-width: 0; font-size: 11px; line-height: 1.35; }
-  #travel-text strong { display: block; font-size: 12px; }
-  #travel .btn {
-    background: var(--bg);
-    color: var(--text);
-    border-color: transparent;
-    flex-shrink: 0;
-  }
+    .bar {
+      background: var(--bg);
+      border-bottom: 1px solid var(--hairline);
+      flex-shrink: 0;
+      padding: 8px 12px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
 
-  #list {
-    background: var(--bg);
-    flex: 1;
-    overflow-y: auto;
-    padding: 4px 0 20px;
-  }
+    #search {
+      flex: 1;
+      min-width: 0;
+    }
 
-  .day {
-    padding: 12px 12px 4px;
-    position: sticky;
-    top: 0;
-    background: var(--bg);
-    z-index: 2;
-  }
+    #star-filter.is-on {
+      color: var(--accent);
+    }
 
-  /* One commit. The rail (dot + connecting line) is drawn in the left gutter. */
-  .row {
-    display: grid;
-    grid-template-columns: 26px 1fr auto;
-    align-items: start;
-    padding: 6px 12px 6px 0;
-    cursor: pointer;
-    position: relative;
-  }
-  .row:hover { background: var(--surface); }
-  .rail {
-    display: flex;
-    justify-content: center;
-    padding-top: 4px;
-    position: relative;
-  }
-  /* Line to the next commit, hidden on the last row of the list. */
-  .rail::after {
-    content: "";
-    position: absolute;
-    top: 14px;
-    bottom: -12px;
-    width: 1px;
-    background: var(--hairline);
-  }
-  .row:last-child .rail::after { display: none; }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--border);
-    flex-shrink: 0;
-    z-index: 1;
-  }
-  .row.is-head .dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
-  .row.is-here .dot { background: var(--accent); }
-  .row.is-marked .dot { background: var(--accent); }
+    /* Time-travel banner — only while HEAD is detached at an older commit. */
+    #travel {
+      background: var(--accent);
+      color: var(--bg);
+      flex-shrink: 0;
+      display: none;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 12px;
+    }
 
-  .subject {
-    font-size: 12px;
-    line-height: 1.35;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-  .meta {
-    font-size: 10px;
-    color: var(--text-muted);
-    font-family: var(--mono);
-    margin-top: 2px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    align-items: center;
-  }
-  .ref {
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-sm);
-    padding: 0 4px;
-    font-size: 9px;
-  }
-  .ref.is-tag { border-color: var(--accent); color: var(--accent); }
+    #travel.is-on {
+      display: flex;
+    }
 
-  .acts {
-    display: flex;
-    gap: 2px;
-    opacity: 0;
-    transition: opacity var(--dur-fast) var(--ease-standard);
-  }
-  .row:hover .acts, .row.is-marked .acts, .row.is-open .acts { opacity: 1; }
-  .acts .btn-icon { width: 24px; height: 24px; }
-  .star.is-on { color: var(--accent); }
+    #travel-text {
+      flex: 1;
+      min-width: 0;
+      font-size: 11px;
+      line-height: 1.35;
+    }
 
-  /* Expanded detail: the commit's files, each expandable to its diff. */
-  .detail {
-    grid-column: 2 / -1;
-    margin: 6px 0 8px;
-    border-left: 1px solid var(--hairline);
-    padding-left: 8px;
-  }
-  .file {
-    display: flex;
-    gap: 6px;
-    align-items: baseline;
-    font-size: 11px;
-    padding: 2px 0;
-    cursor: pointer;
-  }
-  .file:hover { color: var(--accent); }
-  .file__code {
-    font-family: var(--mono);
-    font-size: 9px;
-    width: 10px;
-    color: var(--text-muted);
-    flex-shrink: 0;
-  }
-  .file__name {
-    font-family: var(--mono);
-    font-size: 10px;
-    direction: rtl;
-    text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .diff {
-    font-family: var(--mono);
-    font-size: 9.5px;
-    line-height: 1.5;
-    white-space: pre;
-    overflow-x: auto;
-    background: var(--surface);
-    border-radius: var(--radius-sm);
-    padding: 6px 8px;
-    margin: 4px 0 6px;
-  }
-  .diff .add { color: #2e7d32; }
-  .diff .del { color: #c62828; }
-  .diff .hunk { color: var(--text-muted); }
+    #travel-text strong {
+      display: block;
+      font-size: 12px;
+    }
 
-  .hint { padding: 16px 12px; font-size: 11px; color: var(--text-muted); }
-  #more { margin: 8px 12px; width: calc(100% - 24px); }
-</style>
+    #travel .btn {
+      background: var(--bg);
+      color: var(--text);
+      border-color: transparent;
+      flex-shrink: 0;
+    }
+
+    #list {
+      background: var(--bg);
+      flex: 1;
+      overflow-y: auto;
+      padding: 0px 0 20px;
+    }
+
+    .day {
+      padding: 12px 12px 4px;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 2;
+    }
+
+    /* One commit. The rail (dot + connecting line) is drawn in the left gutter. */
+    .row {
+      display: grid;
+      grid-template-columns: 26px 1fr auto;
+      align-items: start;
+      padding: 6px 12px 6px 0;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .row:hover {
+      background: var(--surface);
+    }
+
+    .rail {
+      display: flex;
+      justify-content: center;
+      padding-top: 4px;
+      position: relative;
+    }
+
+    /* Line to the next commit, hidden on the last row of the list. */
+    .rail::after {
+      content: "";
+      position: absolute;
+      top: 14px;
+      bottom: -12px;
+      width: 1px;
+      background: var(--hairline);
+    }
+
+    .row:last-child .rail::after {
+      display: none;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      flex-shrink: 0;
+      z-index: 1;
+    }
+
+    .row.is-head .dot {
+      background: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+    }
+
+    .row.is-here .dot {
+      background: var(--accent);
+    }
+
+    .row.is-marked .dot {
+      background: var(--accent);
+    }
+
+    .subject {
+      font-size: 12px;
+      line-height: 1.35;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .meta {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      margin-top: 2px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .ref {
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-sm);
+      padding: 0 4px;
+      font-size: 9px;
+    }
+
+    .ref.is-tag {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .acts {
+      display: flex;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity var(--dur-fast) var(--ease-standard);
+    }
+
+    .row:hover .acts,
+    .row.is-marked .acts,
+    .row.is-open .acts {
+      opacity: 1;
+    }
+
+    .acts .btn-icon-only {
+      width: 26px;
+      height: 26px;
+    }
+
+    .star.is-on {
+      color: var(--accent);
+    }
+
+    /* Expanded detail: the commit's files, each expandable to its diff. */
+    .detail {
+      grid-column: 2 / -1;
+      margin: 6px 0 8px;
+      border-left: 1px solid var(--hairline);
+      padding-left: 8px;
+    }
+
+    .file {
+      display: flex;
+      gap: 6px;
+      align-items: baseline;
+      font-size: 11px;
+      padding: 2px 0;
+      cursor: pointer;
+    }
+
+    .file:hover {
+      color: var(--accent);
+    }
+
+    .file__code {
+      font-family: var(--mono);
+      font-size: 9px;
+      width: 10px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .file__name {
+      font-family: var(--mono);
+      font-size: 10px;
+      direction: rtl;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .diff {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      line-height: 1.5;
+      white-space: pre;
+      overflow-x: auto;
+      background: var(--surface);
+      border-radius: var(--radius-sm);
+      padding: 6px 8px;
+      margin: 4px 0 6px;
+    }
+
+    .diff .add {
+      color: #2e7d32;
+    }
+
+    .diff .del {
+      color: #c62828;
+    }
+
+    .diff .hunk {
+      color: var(--text-muted);
+    }
+
+    .hint {
+      padding: 16px 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    #more {
+      margin: 8px 12px;
+      width: calc(100% - 24px);
+    }
+.btn-icon-only:hover{
+color: var(--text);
+background: var(--surface);
+border-color: var(--surface);
+}
+
+.row .btn-icon-only:hover{
+color: var(--text);
+background: var(--elevated);
+border-color: var(--elevated);
+}
+
+  </style>
 </head>
+
 <body>
 
-<div class="titlebar" data-window-bar>
-  <div class="tb-title" data-window-close>
-    <h1>History</h1>
+  <div class="titlebar" data-window-bar>
+    <div class="tb-title" data-window-close>
+      <h1>History</h1>
+    </div>
   </div>
-</div>
 
-<div id="travel">
-  <span class="mi mi-sm">history_toggle_off</span>
-  <div id="travel-text"></div>
-  <button class="btn" id="travel-back" type="button">Return</button>
-</div>
+  <div id="travel">
+    <span class="mi mi-sm">history_toggle_off</span>
+    <div id="travel-text"></div>
+    <button class="btn" id="travel-back" type="button">Return</button>
+  </div>
 
-<div class="bar">
-  <span id="branch" class="text-xs text-muted"></span>
-  <input id="search" class="field" type="search" placeholder="Search commits…" />
-  <button id="star-filter" class="btn-icon" type="button" title="Show bookmarked only">
-    <span class="mi mi-sm">star</span>
-  </button>
-</div>
+  <div class="bar">
+    <span id="branch" class="text-xs text-muted"></span>
+    <input id="search" class="field" type="search" placeholder="Search commits…" />
+    <button id="star-filter" class="btn btn-icon-only" type="button" title="Show bookmarked only">
+      <span class="mi mi-sm">star</span>
+    </button>
+  </div>
 
-<!-- .main gets the bottom corner rounding from window-chrome.css -->
-<div id="list" class="main"></div>
+  <!-- .main gets the bottom corner rounding from window-chrome.css -->
+  <div id="list" class="main"></div>
 
-<script type="module">
-import { hasTauri, invoke, esc, toast } from "../kit/app.js";
+  <script type="module">
+    import {
+      hasTauri,
+      invoke,
+      esc,
+      toast
+    } from "../kit/app.js";
 
-const PAGE = 100;
-const listEl   = document.getElementById("list");
-const branchEl = document.getElementById("branch");
-const travelEl = document.getElementById("travel");
-const travelText = document.getElementById("travel-text");
-const searchEl = document.getElementById("search");
-const starFilter = document.getElementById("star-filter");
+    const PAGE = 100;
+    const listEl = document.getElementById("list");
+    const branchEl = document.getElementById("branch");
+    const travelEl = document.getElementById("travel");
+    const travelText = document.getElementById("travel-text");
+    const searchEl = document.getElementById("search");
+    const starFilter = document.getElementById("star-filter");
 
-const params = new URLSearchParams(location.search);
-// Embedded, the Git panel passes ?repo=. Opened from the tray there's no query,
-// so fall back to the active project's repo (same as server.html does).
-let repo = params.get("repo") || "";
-async function resolveRepo() {
-  if (repo) return repo;
-  try {
-    const project = await invoke("get_active_project");
-    if (!project) return "";
-    const ws = await invoke("read_workspace", { path: project.path });
-    repo = (ws.repo || "").trim();
-  } catch {}
-  return repo;
-}
-// Embedded in the Git panel: ?color= carries the project accent.
-const color = params.get("color");
-if (color) document.documentElement.style.setProperty("--accent", color);
-
-let commits = [];        // loaded so far, newest first
-let marks = new Map();   // hash → bookmark
-let head = null;         // HeadState
-let onlyMarked = false;
-let query = "";
-let openHash = "";       // the one expanded row
-let generation = 0;      // guards overlapping renders (see docs/tools.md)
-
-/* ---------- data ---------- */
-
-async function loadHead() {
-  try {
-    head = await invoke("git_head_state", { repo });
-  } catch (e) {
-    head = null;
-    branchEl.textContent = String(e).split("\n")[0];
-    return;
-  }
-  const travelling = head.detached && head.travelBranch;
-  branchEl.textContent = travelling ? head.travelBranch : (head.branch || "detached");
-  travelEl.classList.toggle("is-on", !!travelling);
-  if (travelling) {
-    const c = commits.find((c) => c.hash === head.hash);
-    travelText.innerHTML =
-      `<strong>Time travelling · ${esc(head.short)}</strong>` +
-      esc(c ? c.subject : "an earlier commit") +
-      (head.stashed ? " — your changes are stashed" : "");
-    document.getElementById("travel-back").textContent = "Return to " + head.travelBranch;
-  }
-}
-
-async function loadMarks() {
-  try {
-    const list = await invoke("git_bookmarks", { repo });
-    marks = new Map(list.map((b) => [b.hash, b]));
-  } catch {}
-}
-
-// The timeline always follows the branch, even while HEAD sits in the past.
-function rev() {
-  return head && head.detached && head.travelBranch ? head.travelBranch : "";
-}
-
-async function loadPage(skip) {
-  return invoke("git_history", { repo, rev: rev(), skip, limit: PAGE });
-}
-
-/* ---------- render ---------- */
-
-function visible() {
-  const q = query.trim().toLowerCase();
-  return commits.filter((c) => {
-    if (onlyMarked && !marks.has(c.hash)) return false;
-    if (!q) return true;
-    return (c.subject + " " + c.short + " " + c.author).toLowerCase().includes(q);
-  });
-}
-
-function dayLabel(day) {
-  const d = new Date(day + "T00:00:00");
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const diff = Math.round((today - d) / 86400000);
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Yesterday";
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) +
-    (d.getFullYear() !== today.getFullYear() ? ", " + d.getFullYear() : "");
-}
-
-// "HEAD -> main, origin/main, tag: v1" → chips (HEAD-> prefix stripped).
-function refChips(refs) {
-  return refs
-    .split(",")
-    .map((r) => r.trim().replace(/^HEAD -> /, ""))
-    .filter((r) => r && r !== "HEAD")
-    .map((r) => {
-      const tag = r.startsWith("tag: ");
-      return `<span class="ref${tag ? " is-tag" : ""}">${esc(tag ? r.slice(5) : r)}</span>`;
-    })
-    .join("");
-}
-
-function render() {
-  const rows = visible();
-  listEl.innerHTML = "";
-  if (!rows.length) {
-    listEl.innerHTML = `<p class="hint">${commits.length ? "No commits match." : "No commits yet."}</p>`;
-    return;
-  }
-
-  let lastDay = "";
-  for (const c of rows) {
-    if (c.day !== lastDay) {
-      lastDay = c.day;
-      const h = document.createElement("div");
-      h.className = "day eyebrow";
-      h.textContent = dayLabel(c.day);
-      listEl.append(h);
+    const params = new URLSearchParams(location.search);
+    // Embedded, the Git panel passes ?repo=. Opened from the tray there's no query,
+    // so fall back to the active project's repo (same as server.html does).
+    let repo = params.get("repo") || "";
+    async function resolveRepo() {
+      if (repo) return repo;
+      try {
+        const project = await invoke("get_active_project");
+        if (!project) return "";
+        const ws = await invoke("read_workspace", {
+          path: project.path
+        });
+        repo = (ws.repo || "").trim();
+      } catch {}
+      return repo;
     }
-    listEl.append(buildRow(c));
-  }
+    // Embedded in the Git panel: ?color= carries the project accent.
+    const color = params.get("color");
+    if (color) document.documentElement.style.setProperty("--accent", color);
 
-  if (commits.length >= PAGE && !onlyMarked) {
-    const more = document.createElement("button");
-    more.id = "more";
-    more.className = "btn";
-    more.type = "button";
-    more.textContent = "Load older commits";
-    more.addEventListener("click", async () => {
-      more.disabled = true;
+    let commits = []; // loaded so far, newest first
+    let marks = new Map(); // hash → bookmark
+    let head = null; // HeadState
+    let onlyMarked = false;
+    let query = "";
+    let openHash = ""; // the one expanded row
+    let generation = 0; // guards overlapping renders (see docs/tools.md)
+
+    /* ---------- data ---------- */
+
+    async function loadHead() {
       try {
-        const next = await loadPage(commits.length);
-        if (next.length) { commits = commits.concat(next); render(); }
-        else { more.textContent = "That's the whole history"; }
-      } catch (e) { toast(String(e)); more.disabled = false; }
-    });
-    listEl.append(more);
-  }
-}
+        head = await invoke("git_head_state", {
+          repo
+        });
+      } catch (e) {
+        head = null;
+        branchEl.textContent = String(e).split("\n")[0];
+        return;
+      }
+      const travelling = head.detached && head.travelBranch;
+      branchEl.textContent = travelling ? head.travelBranch : (head.branch || "detached");
+      travelEl.classList.toggle("is-on", !!travelling);
+      if (travelling) {
+        const c = commits.find((c) => c.hash === head.hash);
+        travelText.innerHTML =
+          `<strong>Time travelling · ${esc(head.short)}</strong>` +
+          esc(c ? c.subject : "an earlier commit") +
+          (head.stashed ? " — your changes are stashed" : "");
+        document.getElementById("travel-back").textContent = "Return to " + head.travelBranch;
+      }
+    }
 
-function buildRow(c) {
-  const row = document.createElement("div");
-  row.className = "row";
-  const marked = marks.has(c.hash);
-  if (marked) row.classList.add("is-marked");
-  if (head && c.hash === head.hash) row.classList.add(head.detached ? "is-here" : "is-head");
-  if (openHash === c.hash) row.classList.add("is-open");
+    async function loadMarks() {
+      try {
+        const list = await invoke("git_bookmarks", {
+          repo
+        });
+        marks = new Map(list.map((b) => [b.hash, b]));
+      } catch {}
+    }
 
-  row.innerHTML =
-    `<div class="rail"><span class="dot"></span></div>` +
-    `<div><div class="subject">${esc(c.subject)}</div>` +
-    `<div class="meta"><span>${esc(c.short)}</span><span>${esc(c.rel)}</span>${refChips(c.refs)}</div></div>` +
-    `<div class="acts">` +
-    `<button class="btn-icon star${marked ? " is-on" : ""}" type="button" title="${marked ? "Remove bookmark" : "Bookmark this commit"}"><span class="mi mi-sm">${marked ? "star" : "star_border"}</span></button>` +
-    `<button class="btn-icon travel" type="button" title="Step back in time to this commit"><span class="mi mi-sm">history</span></button>` +
-    `</div>`;
+    // The timeline always follows the branch, even while HEAD sits in the past.
+    function rev() {
+      return head && head.detached && head.travelBranch ? head.travelBranch : "";
+    }
 
-  row.querySelector(".star").addEventListener("click", async (e) => {
-    e.stopPropagation();
-    try {
-      const list = await invoke("git_toggle_bookmark", {
-        repo, hash: c.hash, short: c.short, subject: c.subject,
+    async function loadPage(skip) {
+      return invoke("git_history", {
+        repo,
+        rev: rev(),
+        skip,
+        limit: PAGE
       });
-      marks = new Map(list.map((b) => [b.hash, b]));
-      render();
-    } catch (err) { toast(String(err)); }
-  });
+    }
 
-  row.querySelector(".travel").addEventListener("click", (e) => {
-    e.stopPropagation();
-    timeTravel(c);
-  });
+    /* ---------- render ---------- */
 
-  row.addEventListener("click", () => {
-    openHash = openHash === c.hash ? "" : c.hash;
-    render(); // the rebuilt row fills its own detail
-  });
+    function visible() {
+      const q = query.trim().toLowerCase();
+      return commits.filter((c) => {
+        if (onlyMarked && !marks.has(c.hash)) return false;
+        if (!q) return true;
+        return (c.subject + " " + c.short + " " + c.author).toLowerCase().includes(q);
+      });
+    }
 
-  if (openHash === c.hash) fillDetail(c, row);
-  return row;
-}
+    function dayLabel(day) {
+      const d = new Date(day + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diff = Math.round((today - d) / 86400000);
+      if (diff === 0) return "Today";
+      if (diff === 1) return "Yesterday";
+      return d.toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric"
+        }) +
+        (d.getFullYear() !== today.getFullYear() ? ", " + d.getFullYear() : "");
+    }
 
-/* ---------- expanded detail ---------- */
+    // "HEAD -> main, origin/main, tag: v1" → chips (HEAD-> prefix stripped).
+    function refChips(refs) {
+      return refs
+        .split(",")
+        .map((r) => r.trim().replace(/^HEAD -> /, ""))
+        .filter((r) => r && r !== "HEAD")
+        .map((r) => {
+          const tag = r.startsWith("tag: ");
+          return `<span class="ref${tag ? " is-tag" : ""}">${esc(tag ? r.slice(5) : r)}</span>`;
+        })
+        .join("");
+    }
 
-async function fillDetail(c, row) {
-  let box = row.querySelector(".detail");
-  if (box) return; // already built for this render
-  box = document.createElement("div");
-  box.className = "detail";
-  box.innerHTML = `<p class="text-xs text-muted">${esc(c.date)} · ${esc(c.author)}</p>`;
-  row.append(box);
+    function render() {
+      const rows = visible();
+      listEl.innerHTML = "";
+      if (!rows.length) {
+        listEl.innerHTML = `<p class="hint">${commits.length ? "No commits match." : "No commits yet."}</p>`;
+        return;
+      }
 
-  const gen = ++generation;
-  let files;
-  try {
-    files = await invoke("git_commit_files", { repo, hash: c.hash });
-  } catch (e) {
-    box.append(Object.assign(document.createElement("p"), { className: "text-xs text-muted", textContent: String(e) }));
-    return;
-  }
-  if (gen !== generation || !box.isConnected) return;
+      let lastDay = "";
+      for (const c of rows) {
+        if (c.day !== lastDay) {
+          lastDay = c.day;
+          const h = document.createElement("div");
+          h.className = "day eyebrow";
+          h.textContent = dayLabel(c.day);
+          listEl.append(h);
+        }
+        listEl.append(buildRow(c));
+      }
 
-  for (const f of files) {
-    const fileEl = document.createElement("div");
-    fileEl.className = "file";
-    fileEl.innerHTML =
-      `<span class="file__code">${esc(f.status)}</span>` +
-      `<span class="file__name" title="${esc(f.path)}">⁦${esc(f.path)}⁩</span>`;
-    let diffEl = null;
-    fileEl.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (diffEl) { diffEl.remove(); diffEl = null; return; }
-      diffEl = document.createElement("div");
-      diffEl.className = "diff";
-      diffEl.textContent = "…";
-      fileEl.after(diffEl);
+      if (commits.length >= PAGE && !onlyMarked) {
+        const more = document.createElement("button");
+        more.id = "more";
+        more.className = "btn";
+        more.type = "button";
+        more.textContent = "Load older commits";
+        more.addEventListener("click", async () => {
+          more.disabled = true;
+          try {
+            const next = await loadPage(commits.length);
+            if (next.length) {
+              commits = commits.concat(next);
+              render();
+            } else {
+              more.textContent = "That's the whole history";
+            }
+          } catch (e) {
+            toast(String(e));
+            more.disabled = false;
+          }
+        });
+        listEl.append(more);
+      }
+    }
+
+    function buildRow(c) {
+      const row = document.createElement("div");
+      row.className = "row";
+      const marked = marks.has(c.hash);
+      if (marked) row.classList.add("is-marked");
+      if (head && c.hash === head.hash) row.classList.add(head.detached ? "is-here" : "is-head");
+      if (openHash === c.hash) row.classList.add("is-open");
+
+      row.innerHTML =
+        `<div class="rail"><span class="dot"></span></div>` +
+        `<div><div class="subject">${esc(c.subject)}</div>` +
+        `<div class="meta"><span>${esc(c.short)}</span><span>${esc(c.rel)}</span>${refChips(c.refs)}</div></div>` +
+        `<div class="acts">` +
+        `<button class="btn btn-icon-only star${marked ? " is-on" : ""}" type="button" title="${marked ? "Remove bookmark" : "Bookmark this commit"}"><span class="mi mi-sm${marked ? " mi-fill" : ""}">star</span></button>` +
+        `<button class="btn btn-icon-only travel" type="button" title="Step back in time to this commit"><span class="mi mi-sm">history</span></button>` +
+        `</div>`;
+
+      row.querySelector(".star").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        try {
+          const list = await invoke("git_toggle_bookmark", {
+            repo,
+            hash: c.hash,
+            short: c.short,
+            subject: c.subject,
+          });
+          marks = new Map(list.map((b) => [b.hash, b]));
+          render();
+        } catch (err) {
+          toast(String(err));
+        }
+      });
+
+      row.querySelector(".travel").addEventListener("click", (e) => {
+        e.stopPropagation();
+        timeTravel(c);
+      });
+
+      row.addEventListener("click", () => {
+        openHash = openHash === c.hash ? "" : c.hash;
+        render(); // the rebuilt row fills its own detail
+      });
+
+      if (openHash === c.hash) fillDetail(c, row);
+      return row;
+    }
+
+    /* ---------- expanded detail ---------- */
+
+    async function fillDetail(c, row) {
+      let box = row.querySelector(".detail");
+      if (box) return; // already built for this render
+      box = document.createElement("div");
+      box.className = "detail";
+      box.innerHTML = `<p class="text-xs text-muted">${esc(c.date)} · ${esc(c.author)}</p>`;
+      row.append(box);
+
+      const gen = ++generation;
+      let files;
       try {
-        const raw = await invoke("git_commit_file_diff", { repo, hash: c.hash, path: f.path });
-        diffEl.innerHTML = raw
-          .split("\n")
-          .filter((l) => !/^(diff --git|index |--- |\+\+\+ |new file|deleted file|similarity|rename )/.test(l))
-          .map((l) => {
-            const cls = l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : l.startsWith("@@") ? "hunk" : "";
-            return cls ? `<span class="${cls}">${esc(l)}</span>` : esc(l);
-          })
-          .join("\n") || "(no textual diff)";
-      } catch (err) {
-        diffEl.textContent = String(err);
+        files = await invoke("git_commit_files", {
+          repo,
+          hash: c.hash
+        });
+      } catch (e) {
+        box.append(Object.assign(document.createElement("p"), {
+          className: "text-xs text-muted",
+          textContent: String(e)
+        }));
+        return;
+      }
+      if (gen !== generation || !box.isConnected) return;
+
+      for (const f of files) {
+        const fileEl = document.createElement("div");
+        fileEl.className = "file";
+        fileEl.innerHTML =
+          `<span class="file__code">${esc(f.status)}</span>` +
+          `<span class="file__name" title="${esc(f.path)}">⁦${esc(f.path)}⁩</span>`;
+        let diffEl = null;
+        fileEl.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if (diffEl) {
+            diffEl.remove();
+            diffEl = null;
+            return;
+          }
+          diffEl = document.createElement("div");
+          diffEl.className = "diff";
+          diffEl.textContent = "…";
+          fileEl.after(diffEl);
+          try {
+            const raw = await invoke("git_commit_file_diff", {
+              repo,
+              hash: c.hash,
+              path: f.path
+            });
+            diffEl.innerHTML = raw
+              .split("\n")
+              .filter((l) => !/^(diff --git|index |--- |\+\+\+ |new file|deleted file|similarity|rename )/.test(l))
+              .map((l) => {
+                const cls = l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : l.startsWith("@@") ? "hunk" : "";
+                return cls ? `<span class="${cls}">${esc(l)}</span>` : esc(l);
+              })
+              .join("\n") || "(no textual diff)";
+          } catch (err) {
+            diffEl.textContent = String(err);
+          }
+        });
+        box.append(fileEl);
+      }
+    }
+
+    /* ---------- time travel ---------- */
+
+    async function timeTravel(c) {
+      if (head && head.hash === c.hash && head.detached) return;
+      if (head && !head.detached && head.dirty &&
+        !confirm("You have uncommitted changes. They'll be stashed while you're in the past, and restored when you return.")) return;
+      try {
+        await invoke("git_time_travel", {
+          repo,
+          hash: c.hash
+        });
+        toast("Stepped back to " + c.short);
+        await refresh();
+      } catch (e) {
+        toast(String(e), 4000);
+      }
+    }
+
+    document.getElementById("travel-back").addEventListener("click", async () => {
+      try {
+        await invoke("git_time_return", {
+          repo
+        });
+        toast("Back to the present");
+        await refresh();
+      } catch (e) {
+        toast(String(e), 4000);
       }
     });
-    box.append(fileEl);
-  }
-}
 
-/* ---------- time travel ---------- */
+    /* ---------- wiring ---------- */
 
-async function timeTravel(c) {
-  if (head && head.hash === c.hash && head.detached) return;
-  if (head && !head.detached && head.dirty &&
-      !confirm("You have uncommitted changes. They'll be stashed while you're in the past, and restored when you return.")) return;
-  try {
-    await invoke("git_time_travel", { repo, hash: c.hash });
-    toast("Stepped back to " + c.short);
-    await refresh();
-  } catch (e) { toast(String(e), 4000); }
-}
+    searchEl.addEventListener("input", () => {
+      query = searchEl.value;
+      render();
+    });
+    starFilter.addEventListener("click", () => {
+      onlyMarked = !onlyMarked;
+      starFilter.classList.toggle("is-on", onlyMarked);
+      starFilter.querySelector(".mi").classList.toggle("mi-fill", onlyMarked);
+      render();
+    });
 
-document.getElementById("travel-back").addEventListener("click", async () => {
-  try {
-    await invoke("git_time_return", { repo });
-    toast("Back to the present");
-    await refresh();
-  } catch (e) { toast(String(e), 4000); }
-});
-
-/* ---------- wiring ---------- */
-
-searchEl.addEventListener("input", () => { query = searchEl.value; render(); });
-starFilter.addEventListener("click", () => {
-  onlyMarked = !onlyMarked;
-  starFilter.classList.toggle("is-on", onlyMarked);
-  render();
-});
-
-async function refresh() {
-  const scroll = listEl.scrollTop;
-  await loadHead();
-  await loadMarks();
-  try {
-    commits = await loadPage(0);
-  } catch (e) {
-    listEl.innerHTML = `<p class="hint">${esc(String(e))}</p>`;
-    return;
-  }
-  await loadHead(); // now that subjects are loaded, the banner can name the commit
-  render();
-  listEl.scrollTop = scroll;
-  // Keep the watcher in sync so our own refreshes don't trigger another one.
-  lastSignature = headSignature(head);
-}
-
-// Poll for HEAD moving under us — a branch switch, commit, or rebase done in a
-// terminal or another window. Cheap (one `git` call) and only when visible;
-// a full reload happens only when the branch/commit actually changed. Focus
-// alone isn't enough: embedded in the Git panel this page is an iframe, so it
-// only ever gets `focus` when you click *inside* it.
-function headSignature(h) {
-  return h ? `${h.branch}|${h.hash}|${h.travelBranch}` : "";
-}
-let lastSignature = "";
-async function checkHead() {
-  if (document.hidden) return;
-  try {
-    const sig = headSignature(await invoke("git_head_state", { repo }));
-    if (sig === lastSignature) return;
-    lastSignature = sig;
-    await refresh();
-  } catch { /* repo busy or gone mid-poll; the next tick retries */ }
-}
-
-if (hasTauri) {
-  (async () => {
-    if (!(await resolveRepo())) {
-      listEl.innerHTML = `<p class="hint">No repo — set one in the Git panel.</p>`;
-      return;
+    async function refresh() {
+      const scroll = listEl.scrollTop;
+      await loadHead();
+      await loadMarks();
+      try {
+        commits = await loadPage(0);
+      } catch (e) {
+        listEl.innerHTML = `<p class="hint">${esc(String(e))}</p>`;
+        return;
+      }
+      await loadHead(); // now that subjects are loaded, the banner can name the commit
+      render();
+      listEl.scrollTop = scroll;
+      // Keep the watcher in sync so our own refreshes don't trigger another one.
+      lastSignature = headSignature(head);
     }
-    await refresh();
-    lastSignature = headSignature(head);
-    setInterval(checkHead, 3000);
-    // Coming back to the window is a good moment to catch up immediately.
-    window.addEventListener("focus", checkHead);
-    document.addEventListener("visibilitychange", checkHead);
-  })();
-} else {
-  // Browser preview.
-  head = { branch: "main", hash: "a".repeat(40), short: "aaaaaaa", detached: false, travelBranch: "", stashed: false, dirty: false };
-  branchEl.textContent = "main";
-  commits = [
-    { hash: "a".repeat(40), short: "aaaaaaa", subject: "Git: resolve file-open editor from workspace.json", author: "Mary Huang", rel: "2 hours ago", date: "Jul 29, 2026 at 11:04", day: "2026-07-29", refs: "HEAD -> main, origin/main" },
-    { hash: "b".repeat(40), short: "bbbbbbb", subject: "Workspace URLs: show Google product icons on cards", author: "Mary Huang", rel: "yesterday", date: "Jul 28, 2026 at 17:20", day: "2026-07-28", refs: "tag: v0.1" },
-  ];
-  render();
-}
-</script>
+
+    // Poll for HEAD moving under us — a branch switch, commit, or rebase done in a
+    // terminal or another window. Cheap (one `git` call) and only when visible;
+    // a full reload happens only when the branch/commit actually changed. Focus
+    // alone isn't enough: embedded in the Git panel this page is an iframe, so it
+    // only ever gets `focus` when you click *inside* it.
+    function headSignature(h) {
+      return h ? `${h.branch}|${h.hash}|${h.travelBranch}` : "";
+    }
+    let lastSignature = "";
+    async function checkHead() {
+      if (document.hidden) return;
+      try {
+        const sig = headSignature(await invoke("git_head_state", {
+          repo
+        }));
+        if (sig === lastSignature) return;
+        lastSignature = sig;
+        await refresh();
+      } catch {
+        /* repo busy or gone mid-poll; the next tick retries */ }
+    }
+
+    if (hasTauri) {
+      (async () => {
+        if (!(await resolveRepo())) {
+          listEl.innerHTML = `<p class="hint">No repo — set one in the Git panel.</p>`;
+          return;
+        }
+        await refresh();
+        lastSignature = headSignature(head);
+        setInterval(checkHead, 3000);
+        // Coming back to the window is a good moment to catch up immediately.
+        window.addEventListener("focus", checkHead);
+        document.addEventListener("visibilitychange", checkHead);
+      })();
+    } else {
+      // Browser preview.
+      head = {
+        branch: "main",
+        hash: "a".repeat(40),
+        short: "aaaaaaa",
+        detached: false,
+        travelBranch: "",
+        stashed: false,
+        dirty: false
+      };
+      branchEl.textContent = "main";
+      commits = [{
+          hash: "a".repeat(40),
+          short: "aaaaaaa",
+          subject: "Git: resolve file-open editor from workspace.json",
+          author: "Mary Huang",
+          rel: "2 hours ago",
+          date: "Jul 29, 2026 at 11:04",
+          day: "2026-07-29",
+          refs: "HEAD -> main, origin/main"
+        },
+        {
+          hash: "b".repeat(40),
+          short: "bbbbbbb",
+          subject: "Workspace URLs: show Google product icons on cards",
+          author: "Mary Huang",
+          rel: "yesterday",
+          date: "Jul 28, 2026 at 17:20",
+          day: "2026-07-28",
+          refs: "tag: v0.1"
+        },
+      ];
+      render();
+    }
+
+  </script>
 </body>
+
 </html>

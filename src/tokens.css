@@ -99,6 +99,17 @@
     font-size: 16px;
 }
 
+/* Filled variant (Material Symbols' FILL axis) — for the "on" state of a
+   toggle icon: <span class="mi mi-sm mi-fill">star</span>. Same glyph name,
+   solid instead of outline. */
+.mi-fill {
+    font-variation-settings:
+        "FILL" 1,
+        "wght" 300,
+        "GRAD" 0,
+        "opsz" 24;
+}
+
 * {
     margin: 0;
     padding: 0;
