@@ -413,8 +413,7 @@
   .md-body th { background: #f3f1ea; } .md-body img { max-width: 100%; }
   .md-body hr { border: 0; border-top: 1px solid #e5e2db; margin: 2em 0; }
   /* Diff in the rendered view: blocks whose source lines changed get the same
-     tint as the code view (teal working / blue last-commit), plus a left bar.
-     Keep these blocks unpositioned — heading offsetTop math relies on it. */
+     tint as the code view (teal working / blue last-commit), plus a left bar. */
   /* content-box + max-width 740 + auto side margins = a centred 740px measure
      whose tint bleeds 12px past the text on each side. */
   .md-body .md-block {
@@ -422,7 +421,21 @@
     margin-left: auto; margin-right: auto; padding: 0 12px;
   }
   .md-body .md-block.chg { background: var(--add-bg); box-shadow: inset 3px 0 0 var(--add-bar); }
-  .md-body .md-block.del { box-shadow: inset 3px 0 0 #e5484d; }   /* same red as the gutter's deletion marker */
+  /* Deletion: the same small red triangle the gutter draws, pointing at the
+     seam where the removed content was — not a bar, which would read as a
+     change bar. `.del` = content went missing above this block, `.del-end` =
+     at its end, so the marker sits on the matching edge. */
+  .md-body .md-block.del, .md-body .md-block.del-end { position: relative; }
+  .md-body .md-block.del::before, .md-body .md-block.del-end::after {
+    content: "";
+    position: absolute;
+    left: -2px;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #e5484d;
+  }
+  .md-body .md-block.del::before { top: -4px; }
+  .md-body .md-block.del-end::after { bottom: -4px; }
   .md-body .md-block > :last-child { margin-bottom: 0; }
   .md-body .md-block { cursor: text; }
   /* Tables get the full pane width instead of the prose measure, and scroll
@@ -1069,11 +1082,15 @@ function mdBlocksHTML(src) {
     let html;
     try { html = window.marked.parser(one, opts); } catch { html = ""; }
     if (!html) continue;
-    let chg = false, del = false;
+    let chg = false, delAt = 0;
     for (let i = start; i <= end; i++) if (changedLines.has(i)) { chg = true; break; }
-    // A deletion marker only matters where nothing was added to tint.
-    if (!chg) for (let i = start; i <= end + 1; i++) if (deletedAt.has(i)) { del = true; break; }
-    const cls = "md-block" + (chg ? " chg" : "") + (del ? " del" : "")
+    // A deletion marker only matters where nothing was added to tint. `deletedAt`
+    // holds the first *kept* line after the removed run, so a hit on the block's
+    // own first line means content went missing above it; anywhere else (inside
+    // it, or the blank line after it) means the removal was at its end.
+    if (!chg) for (let i = start; i <= end + 1; i++) if (deletedAt.has(i)) { delAt = i; break; }
+    const cls = "md-block" + (chg ? " chg" : "")
+      + (delAt ? (delAt === start ? " del" : " del-end") : "")
       + (t.type === "table" ? " md-table" : "");   // wide tables scroll in place
     out += `<div class="${cls}" data-line="${start}" data-end="${end}">${html}</div>`;
   }
@@ -1103,12 +1120,12 @@ async function render() {
 function paintMdMinimap() {
   mdMinimap.querySelectorAll(".mm").forEach((e) => e.remove());
   const total = mdView.scrollHeight || 1;
-  for (const b of mdView.querySelectorAll(".md-block.chg, .md-block.del")) {
+  for (const b of mdView.querySelectorAll(".md-block.chg, .md-block.del, .md-block.del-end")) {
     const d = document.createElement("div");
     d.className = "mm";
-    d.style.top = (b.offsetTop / total * 100) + "%";
+    d.style.top = (previewTop(b) / total * 100) + "%";
     d.style.height = Math.max(0.4, b.offsetHeight / total * 100) + "%";
-    if (b.classList.contains("del") && !b.classList.contains("chg")) d.style.background = "#e5484d";
+    if (!b.classList.contains("chg")) d.style.background = "#e5484d";   // deletion-only mark
     mdMinimap.appendChild(d);
   }
   updateMdViewport();
@@ -1283,7 +1300,7 @@ mdView.addEventListener("click", (e) => {
   e.preventDefault();
   if (href.startsWith("#")) {
     const t = mdView.querySelector("#" + CSS.escape(decodeURIComponent(href.slice(1))));
-    if (t) mdView.scrollTo({ top: t.offsetTop, behavior: "smooth" });
+    if (t) mdView.scrollTo({ top: previewTop(t), behavior: "smooth" });
     return;
   }
   if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) return;   // external scheme
@@ -1309,6 +1326,13 @@ function resolveRelative(base, rel) {
 
 function previewHeadings() { return mdView.querySelectorAll("h1, h2, h3, h4, h5, h6"); }
 
+// Scroll offset of an element inside the preview. Measured from rects rather
+// than offsetTop, so it stays correct no matter which blocks are positioned
+// (a `.del` block is, to hang its marker off the edge).
+function previewTop(el) {
+  return el.getBoundingClientRect().top - mdView.getBoundingClientRect().top + mdView.scrollTop;
+}
+
 // Index of the last heading at or above the code panel's current top.
 function currentCodeSectionIdx() {
   const top = code.scrollTop;
@@ -1326,14 +1350,14 @@ function currentPreviewSectionIdx() {
   const hs = previewHeadings();
   const top = mdView.scrollTop;
   let idx = -1;
-  for (let i = 0; i < hs.length && hs[i].offsetTop <= top + 4; i++) idx = i;
+  for (let i = 0; i < hs.length && previewTop(hs[i]) <= top + 4; i++) idx = i;
   return idx;
 }
 
 // Scroll the inline preview to the idx-th heading (top-aligned).
 function scrollPreviewToSection(idx) {
   const hs = previewHeadings();
-  mdView.scrollTop = (idx >= 0 && hs[idx]) ? hs[idx].offsetTop : 0;
+  mdView.scrollTop = (idx >= 0 && hs[idx]) ? previewTop(hs[idx]) : 0;
 }
 
 function scrollCodeToLine(line) {
@@ -1375,7 +1399,7 @@ function buildSections() {
 // headings, since both come from the same Markdown).
 function revealPreviewHeading(idx, behavior = "smooth") {
   const hs = previewHeadings();
-  if (hs[idx]) mdView.scrollTo({ top: hs[idx].offsetTop, behavior });
+  if (hs[idx]) mdView.scrollTo({ top: previewTop(hs[idx]), behavior });
 }
 
 // Scroll the code panel to a 1-based source line and select it.
