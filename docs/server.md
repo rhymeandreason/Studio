@@ -77,3 +77,31 @@ this ceremony — `port` mode reads the port from `dev-open.sh` and probes it.
 > Note: this is impractical for Studio's *own* repo — you can't usefully
 > start/stop the app you're working in, and its Stop would kill the running
 > Studio. It's meant for other projects.
+
+## Opening an HTML file through the dev server
+
+Clicking the ⧉ button on an `.html` file — in the **File Directory** tool or on a
+changed-file row in the **Git panel** — opens it in the browser at the dev
+server's URL rather than as a `file://` path, so it runs with real module
+imports, API calls, and live reload instead of the filesystem's restrictions.
+
+`open_in_browser(path)` (lib.rs) does the whole thing: resolve, then `open`
+whatever it got. The resolution is `dev_url_for_file(path)`, which returns `None`
+— meaning "just open the file" — unless *all* of these hold: the file is `.html`,
+it sits inside a repo (nearest ancestor with `.git`, via `repo_root_of`), that
+repo's `dev-open.sh` yields a port (`repo_dev_url`), and the server is up
+(`server_status`).
+
+**Finding the file's URL path** is the interesting part: which directory a server
+treats as its web root isn't discoverable from outside (Studio serves `src/`, a
+Next app `public/`, plenty serve the repo root). Rather than guess or add config,
+it asks the server: try the repo-relative path, then that path with leading
+directories peeled off one at a time, and take the first that answers 200
+(`serves_ok` — HEAD, falling back to GET, since some dev servers reject HEAD).
+So `<repo>/src/tools/x.html` on a server rooted at `src/` tries
+`/src/tools/x.html`, then matches `/tools/x.html`. A file the server doesn't
+serve at all matches nothing and falls back to `file://`.
+
+Note an SPA dev server with a history fallback answers 200 for everything, so the
+first candidate (the repo-relative path) wins — the right answer for a server
+rooted at the repo.

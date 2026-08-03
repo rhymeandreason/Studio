@@ -2285,6 +2285,75 @@ fn repo_dev_url(repo: String) -> Option<String> {
     extract_port(&script).map(|port| format!("http://localhost:{port}"))
 }
 
+/// The repo a file belongs to: nearest ancestor directory containing `.git`.
+fn repo_root_of(path: &Path) -> Option<PathBuf> {
+    path.ancestors()
+        .find(|dir| dir.join(".git").exists())
+        .map(|d| d.to_path_buf())
+}
+
+/// The dev-server URL that serves this file, if there is one — for opening an
+/// HTML file at `http://localhost:PORT/…` instead of as a `file://` path, so it
+/// runs against the real server (imports, APIs, live reload) rather than the
+/// filesystem. `None` (open the file directly) when the file isn't in a repo,
+/// the repo has no `dev-open.sh` port, the server isn't up, or nothing there
+/// answers for the file.
+///
+/// Which directory the server treats as its web root isn't knowable from the
+/// outside (Studio serves `src/`, a Next app serves `public/`, plenty serve the
+/// repo root), so rather than guess or add config we *ask the server*: try the
+/// repo-relative path, then the same path with leading directories peeled off
+/// one at a time, and take the first that answers 200. One quick request per
+/// candidate against localhost.
+#[tauri::command]
+fn dev_url_for_file(path: String) -> Option<String> {
+    let file = PathBuf::from(path.trim());
+    if !file.extension().is_some_and(|e| e.eq_ignore_ascii_case("html")) {
+        return None;
+    }
+    let repo = repo_root_of(&file)?;
+    let base = repo_dev_url(repo.to_string_lossy().to_string())?;
+    if !server_status(base.clone()) {
+        return None;
+    }
+
+    let rel = file.strip_prefix(&repo).ok()?;
+    let segments: Vec<String> = rel
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().to_string())
+        .collect();
+    let base = base.trim_end_matches('/');
+    for start in 0..segments.len() {
+        let candidate = format!("{base}/{}", segments[start..].join("/"));
+        if serves_ok(&candidate) {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+/// Open an HTML file in the default browser: at its dev-server URL when one
+/// serves it, else the file itself (`file://`). Returns what was actually
+/// opened so the caller can say which it was.
+#[tauri::command]
+fn open_in_browser(path: String) -> Result<String, String> {
+    let target = dev_url_for_file(path.clone()).unwrap_or(path);
+    open_path(target.clone())?;
+    Ok(target)
+}
+
+/// Does a URL answer 200? HEAD first; some dev servers answer 405/501 to HEAD,
+/// so fall back to GET before believing a "no".
+fn serves_ok(url: &str) -> bool {
+    let probe = |req: ureq::Request| {
+        req.timeout(std::time::Duration::from_millis(600))
+            .call()
+            .map(|r| r.status() == 200)
+            .unwrap_or(false)
+    };
+    probe(ureq::head(url)) || probe(ureq::get(url))
+}
+
 /// Split a dev-server URL like `http://localhost:3000/` into `(host, port)`.
 /// Tolerates a missing scheme and a trailing path; defaults the port from the
 /// scheme (80/443) when none is given.
@@ -5387,6 +5456,8 @@ pub fn run() {
             server_status,
             dev_pid_alive,
             repo_dev_url,
+            dev_url_for_file,
+            open_in_browser,
             open_in_photos,
             run_shortcut,
             heic_preview,
@@ -5573,3 +5644,4 @@ pub fn run() {
             }
         });
 }
+

@@ -2797,6 +2797,27 @@ td.ntable__total-cell {
     direction: rtl;
     text-align: left;
 }
+/* Open-in-browser button on an HTML row — revealed on hover, like File
+   Directory's. */
+.git-file__browser {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-soft);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--dur-fast);
+}
+.git-file:hover .git-file__browser { opacity: 1; }
+.git-file__browser:hover { color: var(--text); }
+.git-file__browser .mi { font-size: 15px; }
+
 .git-empty {
     padding: 18px;
     text-align: center;

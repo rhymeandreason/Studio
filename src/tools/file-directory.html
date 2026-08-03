@@ -409,7 +409,9 @@ max-width:350px;
         browserBtn.innerHTML = '<span class="mi">open_in_new</span>';
         browserBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          invoke('open_path', { path: entry.path }).catch(() => {});
+          // Prefers the repo's running dev server over a file:// path — see
+          // open_in_browser in lib.rs.
+          invoke('open_in_browser', { path: entry.path }).catch(() => {});
         });
         node.appendChild(browserBtn);
       }

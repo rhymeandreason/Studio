@@ -53,6 +53,22 @@ function buildFileRow(repo, f, editor) {
   row.addEventListener("click", () =>
     invoke("git_open_file", { repo, file: f.path, editor }).catch((e) => toast(String(e))),
   );
+
+  // HTML files also get a browser button (same affordance as File Directory):
+  // the dev server's URL for the file when one is running, else the file itself.
+  if (/\.html?$/i.test(f.path)) {
+    const open = el("button", "git-file__browser", {
+      type: "button",
+      title: "Open in browser",
+      innerHTML: mi("open_in_new"),
+    });
+    open.addEventListener("click", (e) => {
+      e.stopPropagation();
+      invoke("open_in_browser", { path: repo.replace(/\/$/, "") + "/" + f.path })
+        .catch((err) => toast(String(err)));
+    });
+    row.append(open);
+  }
   return row;
 }
 
