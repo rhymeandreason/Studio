@@ -392,6 +392,8 @@ function openWorkspaceValue(card) {
   else if (card.dataset.list === "scripts") invoke("run_script", { path: value });
   else if (card.dataset.list === "files" && CODE_EDITOR_EXTENSIONS.has(ext))
     invoke("open_file_in_code_editor", { file: value });
+  else if (card.dataset.list === "urls")
+    invoke("open_path", { path: /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}` });
   else invoke("open_path", { path: value });
 }
 
