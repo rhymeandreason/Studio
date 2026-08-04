@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Controls</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
+  <script type="module" src="../kit/components.js"></script>
+  <script type="module" src="../kit/window-chrome.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      /* Transparent so the custom window's corners round (window-chrome.css). */
+      background: transparent;
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .bar-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    main {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 2px 14px 14px;
+    }
+
+    .group + .group {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 28px;
+    }
+
+    .value {
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .muted { color: var(--text-muted); }
+
+    /* A pill switch — the kit has no toggle component yet. */
+    .switch {
+      width: 34px;
+      height: 20px;
+      flex: 0 0 auto;
+      border: 0;
+      border-radius: 10px;
+      background: var(--hairline-strong);
+      position: relative;
+      transition: background var(--dur-fast) var(--ease-standard);
+    }
+
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--elevated);
+      transition: transform var(--dur-fast) var(--ease-standard);
+    }
+
+    .switch[aria-checked="true"] { background: var(--sage); }
+    .switch[aria-checked="true"]::after { transform: translateX(14px); }
+
+    .settings-link {
+      margin-top: 10px;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 11px;
+    }
+
+    .settings-link:hover { color: var(--text); }
+  </style>
+</head>
+
+<body>
+  <div id="titlebar" data-window-bar>
+    <div class="bar-title" data-window-close>
+      <span class="eyebrow">Controls</span>
+    </div>
+  </div>
+
+  <main>
+    <div class="group">
+      <div class="row">
+        <span class="label">Wi-Fi</span>
+        <button class="switch" id="wifi-switch" role="switch" aria-checked="false"></button>
+      </div>
+      <div class="row"><span class="value muted" id="ssid">—</span></div>
+      <button class="settings-link" data-pane="com.apple.wifi-settings-extension">Wi-Fi settings…</button>
+    </div>
+
+    <div class="group">
+      <div class="row">
+        <span class="label">Sound</span>
+        <button class="switch" id="mute-switch" role="switch" aria-checked="true"></button>
+      </div>
+      <input type="range" class="range" id="volume" min="0" max="100" value="0" />
+      <div class="row"><span class="value muted" id="vol-label">—</span></div>
+      <button class="settings-link" data-pane="com.apple.Sound-Settings.extension">Sound settings…</button>
+    </div>
+
+    <div class="group">
+      <div class="row">
+        <span class="label">Battery</span>
+        <span class="value" id="battery">—</span>
+      </div>
+      <button class="settings-link" data-pane="com.apple.Battery-Settings.extension">Battery settings…</button>
+    </div>
+  </main>
+
+  <script type="module">
+    import { invoke, toast } from "../kit/app.js";
+
+    const wifiSwitch = document.getElementById("wifi-switch");
+    const ssidEl = document.getElementById("ssid");
+    const muteSwitch = document.getElementById("mute-switch");
+    const volume = document.getElementById("volume");
+    const volLabel = document.getElementById("vol-label");
+    const batteryEl = document.getElementById("battery");
+
+    let status = null;
+    // Set while the slider is being dragged, so a poll landing mid-gesture can't
+    // yank the thumb back to the last-read value.
+    let dragging = false;
+
+    function render() {
+      wifiSwitch.setAttribute("aria-checked", String(status.wifi_on));
+      ssidEl.textContent = status.ssid || (status.wifi_on ? "Not connected" : "Off");
+
+      muteSwitch.setAttribute("aria-checked", String(!status.muted));
+      if (!dragging) volume.value = status.volume;
+      volLabel.textContent = status.muted ? "Muted" : `${status.volume}%`;
+
+      batteryEl.textContent = status.battery < 0
+        ? "No battery"
+        : `${status.battery}% · ${status.charging ? "Charging" : "On battery"}`;
+    }
+
+    async function refresh() {
+      status = await invoke("dock_status");
+      render();
+    }
+
+    wifiSwitch.onclick = async () => {
+      await invoke("dock_toggle_wifi", { on: !status.wifi_on });
+      // networksetup returns before the radio settles.
+      setTimeout(() => refresh().catch(() => {}), 900);
+    };
+
+    muteSwitch.onclick = async () => {
+      await invoke("dock_toggle_mute");
+      refresh().catch(() => {});
+    };
+
+    volume.oninput = () => {
+      dragging = true;
+      const level = +volume.value;
+      status.volume = level;
+      status.muted = false;
+      volLabel.textContent = `${level}%`;
+      muteSwitch.setAttribute("aria-checked", "true");
+      invoke("dock_set_volume", { level });
+    };
+    volume.onchange = () => { dragging = false; };
+
+    for (const link of document.querySelectorAll(".settings-link")) {
+      link.onclick = () => invoke("dock_open_settings", { pane: link.dataset.pane });
+    }
+
+    refresh().catch((e) => {
+      console.error(e);
+      toast("Couldn't read system status");
+    });
+    // Each poll shells out to networksetup/pmset/osascript, so keep it lazy.
+    setInterval(() => refresh().catch(() => {}), 10000);
+  </script>
+</body>
+
+</html>

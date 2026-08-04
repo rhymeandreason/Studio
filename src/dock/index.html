@@ -7,21 +7,23 @@
 <style>
 /* The Dock is the one surface that deliberately does NOT use the Runes paper
    palette: it has to read as screen bezel rather than as a window, so it runs
-   its own near-black scale. Type, icons and motion still come from tokens. */
+   its own near-black scale. Type, icons and motion still come from tokens.
+
+   This page is only ever 56px wide and never resizes. Everything it opens is a
+   normal tool window in src/tools/ — see the module comment in dock.rs. */
 :root {
     --dock-bg: #000;
     --dock-text: #e8e4dc;
     --dock-dim: #6b6862;
     --dock-line: rgba(232, 228, 220, 0.1);
     --dock-hover: rgba(232, 228, 220, 0.08);
-    --strip: 56px;
 }
 
 * { box-sizing: border-box; margin: 0; }
 
 html, body {
     height: 100%;
-    background: transparent; /* the widened area must stay see-through */
+    background: var(--dock-bg);
     font-family: var(--sans);
     color: var(--dock-text);
     overflow: hidden;
@@ -30,15 +32,7 @@ html, body {
     -webkit-user-select: none;
 }
 
-body { display: flex; justify-content: flex-end; }
-
-/* ---- the strip itself ---- */
-
-.strip {
-    width: var(--strip);
-    height: 100%;
-    flex: 0 0 auto;
-    background: var(--dock-bg);
+body {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -73,7 +67,6 @@ body { display: flex; justify-content: flex-end; }
 }
 
 .item:hover { background: var(--dock-hover); }
-.item.on { color: var(--dock-text); }
 .item.off { color: var(--dock-dim); }
 
 .item .mi { font-size: 20px; }
@@ -131,167 +124,53 @@ body { display: flex; justify-content: flex-end; }
 }
 
 .batt.low .mi { color: var(--rose); }
-
-/* ---- flyouts ----
-   Live in the widened region left of the strip. The window is only that wide
-   while one is open (dock_expand), so this area never eats stray clicks. */
-
-.flyout {
-    flex: 1 1 auto;
-    position: relative;
-    display: none;
-}
-
-.flyout.open { display: block; }
-
-.panel {
-    position: absolute;
-    right: 8px;
-    width: 180px;
-    background: #131311;
-    border: 1px solid var(--dock-line);
-    border-radius: var(--radius);
-    padding: 12px;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
-}
-
-.panel h4 {
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--dock-dim);
-    margin-bottom: 8px;
-}
-
-.panel .row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: 12px;
-}
-
-.panel .ssid {
-    color: var(--dock-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.panel .link {
-    display: block;
-    width: 100%;
-    margin-top: 10px;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--dock-dim);
-    font-family: inherit;
-    font-size: 11px;
-    text-align: left;
-}
-
-.panel .link:hover { color: var(--dock-text); }
-
-/* A plain range, restyled dark — kit's .range is tuned for the paper theme. */
-.panel input[type="range"] {
-    -webkit-appearance: none;
-    width: 100%;
-    height: 3px;
-    border-radius: 2px;
-    background: var(--dock-line);
-    margin: 6px 0 2px;
-}
-
-.panel input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--dock-text);
-}
-
-/* A pill toggle, dark variant. */
-.switch {
-    width: 32px;
-    height: 18px;
-    flex: 0 0 auto;
-    border: 0;
-    border-radius: 9px;
-    background: var(--dock-line);
-    position: relative;
-    transition: background var(--dur-fast) var(--ease-standard);
-}
-
-.switch::after {
-    content: "";
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--dock-text);
-    transition: transform var(--dur-fast) var(--ease-standard);
-}
-
-.switch[aria-checked="true"] { background: var(--sage); }
-.switch[aria-checked="true"]::after { transform: translateX(14px); }
 </style>
 </head>
 <body>
 
-<!-- Flyout layer: only visible (and only wide) while a panel is open. -->
-<div class="flyout" id="flyout">
-    <div class="panel" id="panel"></div>
-</div>
+<button class="item" data-tool="projects.html" title="Projects">
+    <span class="mi">workspaces</span>
+</button>
 
-<div class="strip">
-    <button class="item" data-tool="studio" title="All Projects">
-        <span class="mi">workspaces</span>
-    </button>
+<div class="rule"></div>
 
-    <div class="rule"></div>
+<button class="item" data-tool="daily-notes.html" title="Daily Notes">
+    <span class="mi">format_list_bulleted</span>
+</button>
+<button class="item" data-tool="tasks.html" title="Tasks">
+    <span class="mi">calendar_month</span>
+</button>
+<button class="item" data-tool="file-directory.html" title="Files">
+    <span class="mi">folder</span>
+</button>
+<button class="item" data-tool="server.html" title="Server">
+    <span class="mi">dns</span>
+</button>
 
-    <button class="item" data-tool="daily-notes.html" title="Daily Notes">
-        <span class="mi">format_list_bulleted</span>
-    </button>
-    <button class="item" data-tool="tasks.html" title="Tasks">
-        <span class="mi">calendar_month</span>
-    </button>
-    <button class="item" data-tool="file-directory.html" title="Files">
-        <span class="mi">folder</span>
-    </button>
-    <button class="item" data-tool="server.html" title="Server">
-        <span class="mi">dns</span>
-    </button>
+<div class="spacer"></div>
 
-    <div class="spacer"></div>
+<button class="item" id="wifi" data-tool="system-controls.html" title="Wi-Fi">
+    <span class="mi">wifi</span>
+</button>
+<button class="item" id="vol" data-tool="system-controls.html" title="Sound">
+    <span class="mi">volume_up</span>
+</button>
+<button class="item batt" id="batt" data-tool="system-controls.html" title="Battery">
+    <span class="mi">battery_full</span>
+    <span class="pct"></span>
+</button>
 
-    <button class="item" id="wifi" title="Wi-Fi">
-        <span class="mi">wifi</span>
-    </button>
-    <button class="item" id="vol" title="Sound">
-        <span class="mi">volume_up</span>
-    </button>
-    <button class="item batt" id="batt" title="Battery">
-        <span class="mi">battery_full</span>
-        <span class="pct"></span>
-    </button>
+<div class="rule"></div>
 
-    <div class="rule"></div>
-
-    <div class="clock">
-        <div class="time" id="time">--:--</div>
-        <div class="day" id="day"></div>
-        <div class="date" id="date"></div>
-        <div class="progress"><i id="dayfill"></i></div>
-    </div>
+<div class="clock">
+    <div class="time" id="time">--:--</div>
+    <div class="day" id="day"></div>
+    <div class="date" id="date"></div>
+    <div class="progress"><i id="dayfill"></i></div>
 </div>
 
 <script type="module">
-import { invoke, esc } from "../kit/app.js";
+import { invoke } from "../kit/app.js";
 
 // ---------------------------------------------------------------- clock ----
 
@@ -341,7 +220,6 @@ function batteryIcon() {
 
 function render() {
     wifiBtn.querySelector(".mi").textContent = status.wifi_on ? "wifi" : "wifi_off";
-    wifiBtn.classList.toggle("on", status.wifi_on);
     wifiBtn.classList.toggle("off", !status.wifi_on);
 
     volBtn.querySelector(".mi").textContent = volumeIcon();
@@ -350,8 +228,6 @@ function render() {
     battBtn.querySelector(".mi").textContent = batteryIcon();
     battBtn.querySelector(".pct").textContent = status.battery >= 0 ? status.battery : "";
     battBtn.classList.toggle("low", status.battery >= 0 && status.battery < 20 && !status.charging);
-
-    if (openPanel) drawPanel();
 }
 
 async function refresh() {
@@ -365,109 +241,14 @@ refresh();
 // Each poll shells out to networksetup/pmset/osascript, so keep it lazy.
 setInterval(refresh, 10000);
 
-// -------------------------------------------------------------- flyouts ----
+// ---------------------------------------------------------------- views ----
 
-const flyout = document.getElementById("flyout");
-const panel = document.getElementById("panel");
-let openPanel = null;
-
-/** Widen/narrow the native window so the panel has room to draw. */
-async function setExpanded(on) {
-    try { await invoke("dock_expand", { expanded: on }); } catch { /* preview */ }
-}
-
-async function showPanel(which, anchorEl) {
-    if (openPanel === which) return closePanel();
-    openPanel = which;
-    await setExpanded(true);
-    flyout.classList.add("open");
-    // Vertically align the panel with the button that opened it, then nudge it
-    // up if that would run it off the bottom of the screen (the sound and
-    // battery buttons sit close to the end of the strip).
-    drawPanel();
-    const top = anchorEl.getBoundingClientRect().top;
-    panel.style.top = `${Math.min(top, window.innerHeight - panel.offsetHeight - 12)}px`;
-}
-
-async function closePanel() {
-    openPanel = null;
-    flyout.classList.remove("open");
-    await setExpanded(false);
-}
-
-function drawPanel() {
-    if (openPanel === "wifi") {
-        panel.innerHTML = `
-            <h4>Wi-Fi</h4>
-            <div class="row">
-                <span class="ssid">${esc(status.ssid || (status.wifi_on ? "Not connected" : "Off"))}</span>
-                <button class="switch" id="wifi-switch" role="switch"
-                        aria-checked="${status.wifi_on}"></button>
-            </div>
-            <button class="link" data-pane="com.apple.wifi-settings-extension">Wi-Fi settings…</button>`;
-        panel.querySelector("#wifi-switch").onclick = async () => {
-            await invoke("dock_toggle_wifi", { on: !status.wifi_on });
-            // networksetup returns before the radio settles.
-            setTimeout(refresh, 900);
-        };
-    } else if (openPanel === "vol") {
-        panel.innerHTML = `
-            <h4>Sound</h4>
-            <input type="range" id="vol-range" min="0" max="100" value="${status.volume}" />
-            <div class="row">
-                <span style="color:var(--dock-dim)">${status.muted ? "Muted" : status.volume + "%"}</span>
-                <button class="switch" id="mute-switch" role="switch"
-                        aria-checked="${!status.muted}"></button>
-            </div>
-            <button class="link" data-pane="com.apple.Sound-Settings.extension">Sound settings…</button>`;
-        panel.querySelector("#vol-range").oninput = (e) => {
-            status.volume = +e.target.value;
-            status.muted = false;
-            invoke("dock_set_volume", { level: status.volume });
-            render();
-        };
-        panel.querySelector("#mute-switch").onclick = async () => {
-            await invoke("dock_toggle_mute");
-            refresh();
-        };
-    } else if (openPanel === "batt") {
-        const label = status.battery < 0
-            ? "No battery"
-            : `${status.battery}% · ${status.charging ? "Charging" : "On battery"}`;
-        panel.innerHTML = `
-            <h4>Battery</h4>
-            <div class="row"><span class="ssid">${esc(label)}</span></div>
-            <button class="link" data-pane="com.apple.Battery-Settings.extension">Battery settings…</button>`;
-    }
-
-    const link = panel.querySelector(".link");
-    if (link) link.onclick = () => {
-        invoke("dock_open_settings", { pane: link.dataset.pane });
-        closePanel();
-    };
-}
-
-wifiBtn.onclick = () => showPanel("wifi", wifiBtn);
-volBtn.onclick = () => showPanel("vol", volBtn);
-battBtn.onclick = () => showPanel("batt", battBtn);
-
-// Clicking the strip (or pressing Escape) dismisses an open panel. There's no
-// blur to rely on: the window is non-activating by design.
-document.querySelector(".strip").addEventListener("click", (e) => {
-    if (openPanel && !e.target.closest("#wifi, #vol, #batt")) closePanel();
-});
-document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && openPanel) closePanel();
-});
-
-// ---------------------------------------------------------------- tools ----
-
+// Every view the strip opens is a normal tool window (src/tools/), opened the
+// same way the Tools menu opens them. Bespoke borderless windows built hidden
+// and revealed with show() never appeared — see the module comment in dock.rs.
 for (const btn of document.querySelectorAll("[data-tool]")) {
-    btn.onclick = () => {
-        const tool = btn.dataset.tool;
-        if (tool === "studio") invoke("show_studio_window").catch(() => {});
-        else invoke("open_tool", { file: tool });
-    };
+    btn.onclick = () => invoke("open_tool", { file: btn.dataset.tool })
+        .catch((e) => console.error("open_tool failed:", e));
 }
 </script>
 </body>

@@ -7,13 +7,17 @@
 //! an elevated window level (`NSStatusWindowLevel`, above the menu bar's 24),
 //! and no chrome at all — borderless, shadowless, square corners, pure black.
 //!
-//! ## The width trick
+//! ## Views open as tool windows
 //!
-//! Flyouts (the volume slider, the Wi-Fi panel) need to draw *left* of the
-//! strip, but a webview can't paint outside its window. Rather than making the
-//! window permanently wide and transparent — which would swallow clicks meant
-//! for whatever is underneath — the window is strip-width by default and the
-//! page asks Rust to widen it (`dock_expand`) only while a flyout is open.
+//! The strip is only the strip. Anything it needs to *show* — the project
+//! switcher, the system controls — is a normal tool in `src/tools/`, opened via
+//! `open_tool`, exactly like every other Studio tool.
+//!
+//! This was not the first design. Flyout panels were tried in a dedicated
+//! borderless window built hidden and revealed with `show()`, first sized to its
+//! measured content and then at fixed size. Neither ever appeared. Tool windows,
+//! which are built **visible** in one step, work reliably — so new Dock views
+//! should follow that pattern rather than growing another bespoke window.
 //!
 //! Not handled yet (deliberate, prototype): the strip does not reserve screen
 //! space, so maximized windows slide underneath it.
@@ -24,9 +28,7 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const DOCK_LABEL: &str = "studio-dock";
 
-/// Visible strip width, and the widened width while a flyout is open.
 const STRIP_W: f64 = 56.0;
-const EXPANDED_W: f64 = 260.0;
 
 // ---------------------------------------------------------------- window ----
 
@@ -128,15 +130,6 @@ pub fn toggle_studio_dock(app: &AppHandle) {
 #[tauri::command]
 pub fn toggle_dock(app: AppHandle) {
     toggle_studio_dock(&app);
-}
-
-/// Widen the window while a flyout is open, then shrink it back — see the
-/// module comment.
-#[tauri::command]
-pub fn dock_expand(app: AppHandle, expanded: bool) {
-    if let Some(win) = app.get_webview_window(DOCK_LABEL) {
-        place(&win, if expanded { EXPANDED_W } else { STRIP_W });
-    }
 }
 
 // --------------------------------------------------------------- status -----

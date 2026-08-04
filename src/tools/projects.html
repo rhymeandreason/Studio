@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Projects</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
+  <script type="module" src="../kit/components.js"></script>
+  <script type="module" src="../kit/window-chrome.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      /* Transparent so the custom window's corners round; the bar and the
+         content below carry the paper fill (see window-chrome.css). */
+      background: transparent;
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #titlebar {
+      justify-content: space-between;
+    }
+
+    .bar-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    main {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 4px 8px 10px;
+    }
+
+    .proj {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px;
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: none;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      text-align: left;
+      transition: background var(--dur-fast) var(--ease-standard);
+    }
+
+    .proj:hover { background: var(--surface); }
+
+    .proj .dot {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--text-soft);
+    }
+
+    .proj .name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .proj.active .name { font-weight: 600; }
+
+    .proj .check {
+      margin-left: auto;
+      font-size: 16px;
+      color: var(--text-muted);
+    }
+
+    #empty {
+      padding: 16px 10px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="titlebar" data-window-bar>
+    <div class="bar-title" data-window-close>
+      <span class="eyebrow">Projects</span>
+    </div>
+    <button class="btn btn-ghost btn-icon" id="all" title="All Projects">
+      <span class="mi mi-sm">workspaces</span>
+    </button>
+  </div>
+
+  <main id="list"></main>
+
+  <script type="module">
+    import { invoke, esc, toast } from "../kit/app.js";
+
+    const list = document.getElementById("list");
+
+    async function load() {
+      const [projects, active] = await Promise.all([
+        invoke("list_projects"),
+        invoke("get_active_project"),
+      ]);
+      const activePath = active?.path || "";
+
+      if (!projects.length) {
+        list.innerHTML = '<div id="empty">Nothing in ~/Projects</div>';
+        return;
+      }
+
+      list.innerHTML = projects.map((p) => `
+        <button class="proj ${p.path === activePath ? "active" : ""}" data-path="${esc(p.path)}">
+          <span class="dot" ${p.color ? `style="background:${esc(p.color)}"` : ""}></span>
+          <span class="name">${esc(p.name)}</span>
+          ${p.path === activePath ? '<span class="mi check">check</span>' : ""}
+        </button>`).join("");
+
+      for (const row of list.querySelectorAll(".proj")) {
+        row.onclick = () => {
+          // Activates the way the tray menu does — saved Mode layout included —
+          // rather than the main window's browse-only open_project.
+          invoke("activate_project_full", { path: row.dataset.path });
+          window.close();
+        };
+      }
+    }
+
+    document.getElementById("all").onclick = () => {
+      invoke("show_studio_window");
+      window.close();
+    };
+
+    load().catch((e) => {
+      console.error(e);
+      toast("Couldn't load projects");
+    });
+  </script>
+</body>
+
+</html>

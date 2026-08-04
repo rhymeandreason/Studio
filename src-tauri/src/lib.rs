@@ -3,8 +3,8 @@ mod git;
 mod patchmatch;
 
 use dock::{
-    dock_expand, dock_open_settings, dock_set_volume, dock_status, dock_toggle_mute,
-    dock_toggle_wifi, toggle_dock,
+    dock_open_settings, dock_set_volume, dock_status, dock_toggle_mute, dock_toggle_wifi,
+    toggle_dock,
 };
 
 // Pure git-CLI commands live in git.rs; bring them into scope for the
@@ -595,6 +595,9 @@ fn tool_style(filename: &str) -> ToolStyle {
         "daily-notes.html" => s(300.0, 600.0, Tint::Paper),
         "ram-overview.html" => s(380.0, 440.0, Tint::Paper),
         "file-directory.html" => s(350.0, 640.0, Tint::Paper),
+        // Both opened from the Studio Dock strip: narrow, list-shaped.
+        "projects.html" => s(260.0, 460.0, Tint::Paper),
+        "system-controls.html" => s(260.0, 400.0, Tint::Paper),
         "tasks.html" => s(800.0, 800.0, Tint::Paper),
         "modes.html" => s(320.0, 480.0, Tint::Paper),
         "git-pulse.html" => s(820.0, 600.0, Tint::Paper),
@@ -1267,6 +1270,14 @@ fn set_window_width(app: AppHandle, width: u32) -> Result<(), String> {
     let logical_height = (size.height as f64 / scale).round() as u32;
     win.set_size(tauri::LogicalSize::new(width, logical_height))
         .map_err(|e| e.to_string())
+}
+
+/// Activate a project from the Dock's project list. The Dock is a tray-like
+/// surface, so it activates the way the tray menu does — Mode layout included —
+/// rather than the main window's browse-only `open_project`.
+#[tauri::command]
+fn activate_project_full(app: AppHandle, path: String) {
+    activate_project(&app, &path);
 }
 
 /// Activate a project: store it, refresh the tray, open the window, notify the UI.
@@ -5434,8 +5445,8 @@ pub fn run() {
             get_active_project,
             clear_active_project,
             show_studio_window,
+            activate_project_full,
             toggle_dock,
-            dock_expand,
             dock_status,
             dock_set_volume,
             dock_toggle_mute,
