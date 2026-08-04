@@ -9,8 +9,9 @@
    palette: it has to read as screen bezel rather than as a window, so it runs
    its own near-black scale. Type, icons and motion still come from tokens.
 
-   This page is only ever 56px wide and never resizes. Everything it opens is a
-   normal tool window in src/tools/ — see the module comment in dock.rs. */
+   This page is only ever STRIP_W (76px, in dock.rs) wide and never resizes.
+   Everything it opens is a normal tool window in src/tools/ — see the module
+   comment in dock.rs. */
 :root {
     --dock-bg: #000;
     --dock-text: #e8e4dc;
@@ -43,7 +44,7 @@ body {
 .spacer { flex: 1 1 auto; }
 
 .rule {
-    width: 20px;
+    width: 28px;
     height: 1px;
     background: var(--dock-line);
     margin: 8px 0;
@@ -53,8 +54,8 @@ body {
 /* ---- buttons ---- */
 
 .item {
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    height: 48px;
     flex: 0 0 auto;
     display: grid;
     place-items: center;
@@ -69,7 +70,7 @@ body {
 .item:hover { background: var(--dock-hover); }
 .item.off { color: var(--dock-dim); }
 
-.item .mi { font-size: 20px; }
+.item .mi { font-size: 22px; }
 
 /* ---- clock ---- */
 
@@ -81,44 +82,37 @@ body {
 }
 
 .clock .time {
-    font-size: 15px;
-    letter-spacing: 0.02em;
+    font-size: 23px;
+    letter-spacing: 0.01em;
     font-variant-numeric: tabular-nums;
 }
 
 .clock .day,
 .clock .date {
-    font-size: 10px;
+    font-size: 13px;
     color: var(--dock-dim);
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
 }
 
-/* Day progress — midnight to midnight, a quiet reminder of where you are. */
-.progress {
-    width: 20px;
-    height: 2px;
-    margin: 7px auto 0;
-    background: var(--dock-line);
-    border-radius: 1px;
-    overflow: hidden;
+.clock .day { margin-top: 4px; }
+
+/* ---- battery ----
+   A horizontal battery is wide and short, so the percentage sits *under* it
+   rather than overlapping — which is also why this one item stacks instead of
+   centring a single glyph like the others. */
+
+.batt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
 }
-
-.progress i {
-    display: block;
-    height: 100%;
-    background: var(--dock-text);
-    opacity: 0.55;
-}
-
-/* ---- battery ---- */
-
-.batt { position: relative; }
 
 .batt .pct {
-    position: absolute;
-    bottom: 3px;
-    font-size: 9px;
+    font-size: 10px;
+    line-height: 1;
     color: var(--dock-dim);
     font-variant-numeric: tabular-nums;
 }
@@ -152,11 +146,8 @@ body {
 <button class="item" id="wifi" data-tool="system-controls.html" title="Wi-Fi">
     <span class="mi">wifi</span>
 </button>
-<button class="item" id="vol" data-tool="system-controls.html" title="Sound">
-    <span class="mi">volume_up</span>
-</button>
 <button class="item batt" id="batt" data-tool="system-controls.html" title="Battery">
-    <span class="mi">battery_full</span>
+    <span class="mi">battery_android_frame_full</span>
     <span class="pct"></span>
 </button>
 
@@ -166,7 +157,6 @@ body {
     <div class="time" id="time">--:--</div>
     <div class="day" id="day"></div>
     <div class="date" id="date"></div>
-    <div class="progress"><i id="dayfill"></i></div>
 </div>
 
 <script type="module">
@@ -177,7 +167,6 @@ import { invoke } from "../kit/app.js";
 const timeEl = document.getElementById("time");
 const dayEl = document.getElementById("day");
 const dateEl = document.getElementById("date");
-const fillEl = document.getElementById("dayfill");
 
 function tickClock() {
     const now = new Date();
@@ -188,9 +177,6 @@ function tickClock() {
     });
     dayEl.textContent = now.toLocaleDateString([], { weekday: "short" });
     dateEl.textContent = now.toLocaleDateString([], { month: "short", day: "numeric" });
-
-    const secs = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-    fillEl.style.width = `${(secs / 86400) * 100}%`;
 }
 
 tickClock();
@@ -198,32 +184,29 @@ setInterval(tickClock, 1000);
 
 // --------------------------------------------------------------- status ----
 
-let status = { wifi_on: false, ssid: "", volume: 0, muted: false, battery: -1, charging: false };
+// Volume/mute are in dock_status too, but only the controls tool shows them.
+let status = { wifi_on: false, battery: -1, charging: false };
 
 const wifiBtn = document.getElementById("wifi");
-const volBtn = document.getElementById("vol");
 const battBtn = document.getElementById("batt");
 
-function volumeIcon() {
-    if (status.muted || status.volume === 0) return "volume_off";
-    return status.volume < 45 ? "volume_down" : "volume_up";
-}
-
-// Material Symbols ships battery levels as `battery_<n>_bar` (1–6).
+// The `battery_android_frame_*` set is the horizontal outline battery: levels
+// 1–6 plus `full`, `bolt` and `alert`. (The plain `battery_*` names are the
+// vertical ones, and `battery_horiz_*` only has three levels.) All confirmed
+// present in the vendored Material Symbols subset — a name the font lacks
+// renders as literal text.
 function batteryIcon() {
-    if (status.charging) return "battery_charging_full";
     if (status.battery < 0) return "power";
-    if (status.battery >= 95) return "battery_full";
-    const bars = Math.max(1, Math.ceil((status.battery / 100) * 6));
-    return `battery_${bars}_bar`;
+    if (status.charging) return "battery_android_frame_bolt";
+    if (status.battery < 10) return "battery_android_frame_alert";
+    if (status.battery >= 95) return "battery_android_frame_full";
+    const bars = Math.min(6, Math.max(1, Math.ceil((status.battery / 100) * 6)));
+    return `battery_android_frame_${bars}`;
 }
 
 function render() {
     wifiBtn.querySelector(".mi").textContent = status.wifi_on ? "wifi" : "wifi_off";
     wifiBtn.classList.toggle("off", !status.wifi_on);
-
-    volBtn.querySelector(".mi").textContent = volumeIcon();
-    volBtn.classList.toggle("off", status.muted || status.volume === 0);
 
     battBtn.querySelector(".mi").textContent = batteryIcon();
     battBtn.querySelector(".pct").textContent = status.battery >= 0 ? status.battery : "";

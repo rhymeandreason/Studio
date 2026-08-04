@@ -28,7 +28,9 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const DOCK_LABEL: &str = "studio-dock";
 
-const STRIP_W: f64 = 56.0;
+/// Wide enough for a legible stacked clock (time over weekday over date), which
+/// is what sets the floor here — the icons alone would fit in far less.
+const STRIP_W: f64 = 76.0;
 
 // ---------------------------------------------------------------- window ----
 
