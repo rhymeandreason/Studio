@@ -1,5 +1,11 @@
+mod dock;
 mod git;
 mod patchmatch;
+
+use dock::{
+    dock_expand, dock_open_settings, dock_set_volume, dock_status, dock_toggle_mute,
+    dock_toggle_wifi, toggle_dock,
+};
 
 // Pure git-CLI commands live in git.rs; bring them into scope for the
 // `generate_handler!` list below (they call back into `git_set_draft` here).
@@ -902,6 +908,13 @@ fn build_tray_menu(
     items.push(Box::new(PredefinedMenuItem::separator(app)?));
     items.push(Box::new(MenuItem::with_id(
         app,
+        "toggle_dock",
+        "Studio Dock",
+        true,
+        None::<&str>,
+    )?));
+    items.push(Box::new(MenuItem::with_id(
+        app,
         "quit",
         "Quit Studio",
         true,
@@ -980,6 +993,7 @@ fn build_studio_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Re
                     show_studio(app);
                     let _ = app.emit("new-project-request", ());
                 }
+                "toggle_dock" => dock::toggle_studio_dock(app),
                 "quit" => app.exit(0),
                 _ if id.starts_with(PROJECT_PREFIX) => {
                     activate_project(app, &id[PROJECT_PREFIX.len()..]);
@@ -1235,6 +1249,13 @@ fn show_studio(app: &AppHandle) {
         let _ = win.unminimize();
         let _ = win.set_focus();
     }
+}
+
+/// Show the main Studio window from another window (the Dock strip).
+#[tauri::command]
+fn show_studio_window(app: AppHandle) {
+    show_studio(&app);
+    let _ = app.emit("show-overview", ());
 }
 
 /// Resize the window to a new logical width, keeping the current height.
@@ -5412,6 +5433,14 @@ pub fn run() {
             get_claude_usage,
             get_active_project,
             clear_active_project,
+            show_studio_window,
+            toggle_dock,
+            dock_expand,
+            dock_status,
+            dock_set_volume,
+            dock_toggle_mute,
+            dock_toggle_wifi,
+            dock_open_settings,
             save_tool_export,
             save_export_dir,
             list_artifacts,
