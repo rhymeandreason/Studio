@@ -604,6 +604,7 @@ const refreshBtn = $("refresh-btn");
 function setStale(v) { refreshBtn.classList.toggle("stale", v); }
 let changedLines = new Set();   // 1-based line numbers (new file) marked as added/changed
 let deletedAt = new Set();      // lines where preceding content was deleted (triangle marker)
+let diffVersion = 0;            // bumped whenever the two sets above are replaced
 // In-editor undo/redo. WKWebView's native textarea undo is flaky and resets, so
 // we keep our own stack of states ({value, selection}), coalescing typing
 // bursts into one step. `undoStack`'s last entry is always the current state.
@@ -702,7 +703,7 @@ $("fallback-file").addEventListener("change", (e) => {
   const f = e.target.files[0];
   if (!f) return;
   const r = new FileReader();
-  r.onload = () => { currentPath = f.name; loadText(r.result); changedLines = new Set(); paint(); };
+  r.onload = () => { currentPath = f.name; loadText(r.result); changedLines = new Set(); diffVersion++; paint(); };
   r.readAsText(f);
 });
 
@@ -798,8 +799,19 @@ function persist() {
   } catch {}
 }
 
+// Session persistence stringifies the whole file into localStorage, which is a
+// synchronous write — debounced while typing, flushed when the window goes away
+// so a reload still restores the latest text.
+let persistTimer = null;
+function schedulePersist() {
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(persist, 400);
+}
+window.addEventListener("beforeunload", () => { clearTimeout(persistTimer); persist(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) { clearTimeout(persistTimer); persist(); } });
+
 // ---------- editor: gutter + highlight + minimap ----------
-code.addEventListener("input", () => { setDirty(true); paint(); persist(); scheduleRender(); scheduleUndo(); });
+code.addEventListener("input", () => { setDirty(true); paint(); schedulePersist(); scheduleRender(); scheduleUndo(); });
 let scrollPersistScheduled = false;
 code.addEventListener("scroll", () => {
   syncScroll();
@@ -857,36 +869,75 @@ function highlightLines(text) {
   return out;
 }
 
-function paint() {
+// Rows are updated in place, not rebuilt: a keystroke usually changes one line,
+// and re-creating thousands of <div>s per keystroke is what made typing lag in
+// big files. Caches hold the last HTML/class per row so we can tell which ones
+// actually changed. Returns the changed row indices.
+function syncRows(container, n, htmlFor, clsFor, cache) {
+  while (container.children.length > n) container.lastChild.remove();
+  while (container.children.length < n) {
+    container.append(document.createElement("div"));
+    cache.html.push(null); cache.cls.push(null);
+  }
+  cache.html.length = cache.cls.length = n;
+  const dirty = [];
+  for (let i = 0; i < n; i++) {
+    const row = container.children[i];
+    const html = htmlFor(i), cls = clsFor(i);
+    if (cache.html[i] !== html) { row.innerHTML = html; cache.html[i] = html; dirty.push(i); }
+    if (cache.cls[i] !== cls) { row.className = cls; cache.cls[i] = cls; }
+  }
+  return dirty;
+}
+const gutterCache = { html: [], cls: [] }, hlCache = { html: [], cls: [] };
+
+function paint(reflow = false) {
   lineStartsCache = null;          // the text changed; find's line index is stale
   const n = lineCount();
   const hi = highlightLines(code.value);
-  // gutter
-  let g = "";
-  for (let i = 1; i <= n; i++) g += `<div class="gl${changedLines.has(i) ? " chg" : ""}${deletedAt.has(i) ? " del" : ""}">${i}</div>`;
-  gutter.innerHTML = g;
+  const gutterDirty = syncRows(gutter, n,
+    (i) => String(i + 1),
+    (i) => "gl" + (changedLines.has(i + 1) ? " chg" : "") + (deletedAt.has(i + 1) ? " del" : ""),
+    gutterCache);
   // highlight layer — colored tokens; wraps exactly like the textarea so the
   // diff row backgrounds and soft-wrap line heights stay aligned.
-  let h = "";
-  for (let i = 1; i <= n; i++) h += `<div class="hline${changedLines.has(i) ? " chg" : ""}">${hi[i - 1] || "&#8203;"}</div>`;
-  hl.innerHTML = h;
-  syncWrap();
+  const hlDirty = syncRows(hl, n,
+    (i) => hi[i] || "&#8203;",
+    (i) => "hline" + (changedLines.has(i + 1) ? " chg" : ""),
+    hlCache);
+  // Only rows whose content changed can have changed height. (A new row shows up
+  // in both lists; measuring the union covers insertions.)
+  // A reflow (wrap toggle, resize) changes every row's height without changing
+  // any row's content, so it has to sync them all.
+  syncWrap(reflow ? null : [...new Set([...gutterDirty, ...hlDirty])]);
   paintMinimap(n);
   syncScroll();
-  if (isMarkdown()) { buildSections(); buildLinks(); }
+  if (isMarkdown()) scheduleSections();
 }
 
 // When wrapping, match each gutter row's height to its (possibly multi-row)
-// highlight line so numbers and change-bars stay aligned.
-function syncWrap() {
+// highlight line so numbers and change-bars stay aligned. `rows` limits the work
+// to the rows that changed; pass null after anything that reflows everything
+// (resize, wrap toggle, font change). Reads are batched before writes — the old
+// read/write interleave forced a layout per row.
+function syncWrap(rows = null) {
   const on = document.body.classList.contains("soft-wrap");
   const gls = gutter.children, hls = hl.children;
-  for (let i = 0; i < gls.length; i++) {
-    gls[i].style.height = on ? hls[i].offsetHeight + "px" : "";
-  }
+  const idx = rows || Array.from({ length: gls.length }, (_, i) => i);
+  if (!on) { for (const i of idx) if (gls[i]) gls[i].style.height = ""; return; }
+  const heights = [];
+  for (const i of idx) heights.push(hls[i] ? hls[i].offsetHeight : 0);
+  idx.forEach((i, k) => { if (gls[i]) gls[i].style.height = heights[k] + "px"; });
 }
 
+// The marks only move when the diff changes or the line count does, so typing
+// inside a line doesn't need to rebuild them. `diffVersion` is bumped whenever
+// the diff sets are replaced (refreshDiff).
+let mmSig = "";
 function paintMinimap(n) {
+  const sig = n + ":" + diffVersion;
+  if (sig === mmSig) { updateViewport(); return; }
+  mmSig = sig;
   minimap.querySelectorAll(".mm").forEach((e) => e.remove());
   for (const ln of changedLines) {
     const d = document.createElement("div");
@@ -946,6 +997,7 @@ $("diff-mode").addEventListener("click", () => {
 async function refreshDiff() {
   changedLines = new Set();
   deletedAt = new Set();
+  diffVersion++;
   if (!hasTauri || !currentPath) { paint(); return; }
   const cmd = diffMode === "committed" ? "git_diff_file_committed" : "git_diff_file";
   try {
@@ -1384,6 +1436,14 @@ function scrollCodeToLine(line) {
   syncScroll();
 }
 
+// The section + link lists rescan the whole file and rebuild their columns —
+// too much for every keystroke, and nobody reads them mid-word.
+let sectionsTimer = null;
+function scheduleSections() {
+  clearTimeout(sectionsTimer);
+  sectionsTimer = setTimeout(() => { buildSections(); buildLinks(); }, 200);
+}
+
 // Parse ATX headings (#…######) from the source, skipping fenced code blocks.
 function buildSections() {
   const lines = code.value.split("\n");
@@ -1539,10 +1599,10 @@ $("wrap-btn").addEventListener("click", () => {
   const on = document.body.classList.toggle("soft-wrap");
   $("wrap-btn").classList.toggle("active", on);
   code.setAttribute("wrap", on ? "soft" : "off");  // attribute overrides CSS
-  paint();
+  paint(true);
 });
 window.addEventListener("resize", () => {
-  if (document.body.classList.contains("soft-wrap")) paint();
+  if (document.body.classList.contains("soft-wrap")) paint(true);
   if (inPreview()) paintMdMinimap();      // block geometry reflows with the width
 });
 
