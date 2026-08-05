@@ -314,6 +314,8 @@
     background: var(--add-bar);
     border-radius: 1px;
   }
+  /* Deletion tick: a thin red line at the seam, in both rails. */
+  #minimap .mm-del, #md-minimap .mm-del { height: 2px; background: #e5484d; }
   #minimap .mm-view, #md-minimap .mm-view {
     position: absolute;
     left: 0; right: 0;
@@ -856,6 +858,7 @@ function highlightLines(text) {
 }
 
 function paint() {
+  lineStartsCache = null;          // the text changed; find's line index is stale
   const n = lineCount();
   const hi = highlightLines(code.value);
   // gutter
@@ -892,6 +895,13 @@ function paintMinimap(n) {
     d.style.height = Math.max(2, 100 / n) + "%";
     minimap.appendChild(d);
   }
+  // Deletions get a thin red tick at the seam, matching the preview's rail.
+  for (const ln of deletedAt) {
+    const d = document.createElement("div");
+    d.className = "mm mm-del";
+    d.style.top = ((ln - 1) / n * 100) + "%";
+    minimap.appendChild(d);
+  }
   updateViewport();
 }
 
@@ -903,7 +913,7 @@ function syncScroll() {
   hl.style.transform = `translate(${-code.scrollLeft}px, ${y}px)`;
   // Find marks are positioned from live text geometry (which already reflects
   // #hl's transform), so the layer itself isn't transformed — recompute on scroll.
-  if (!findBar.hidden) renderFindMarks();
+  if (!findBar.hidden) scheduleFindMarks();
   updateViewport();
 }
 
@@ -1120,12 +1130,20 @@ async function render() {
 function paintMdMinimap() {
   mdMinimap.querySelectorAll(".mm").forEach((e) => e.remove());
   const total = mdView.scrollHeight || 1;
-  for (const b of mdView.querySelectorAll(".md-block.chg, .md-block.del, .md-block.del-end")) {
+  for (const b of mdView.querySelectorAll(".md-block.chg")) {
     const d = document.createElement("div");
     d.className = "mm";
     d.style.top = (previewTop(b) / total * 100) + "%";
     d.style.height = Math.max(0.4, b.offsetHeight / total * 100) + "%";
-    if (!b.classList.contains("chg")) d.style.background = "#e5484d";   // deletion-only mark
+    mdMinimap.appendChild(d);
+  }
+  // Deletion ticks sit on the block edge the caret points at, so the rail says
+  // the same thing as the marker (and as the code view's rail).
+  for (const b of mdView.querySelectorAll(".md-block.del, .md-block.del-end")) {
+    const d = document.createElement("div");
+    d.className = "mm mm-del";
+    const at = previewTop(b) + (b.classList.contains("del-end") ? b.offsetHeight : 0);
+    d.style.top = (at / total * 100) + "%";
     mdMinimap.appendChild(d);
   }
   updateMdViewport();
@@ -1581,8 +1599,7 @@ function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 function revealRange(start, len) {
   code.focus();
   code.setSelectionRange(start, start + len);
-  const line = code.value.slice(0, start).split("\n").length;
-  const row = hl.children[line - 1];
+  const row = hl.children[lineAt(start) - 1];
   if (row) code.scrollTop = Math.max(0, row.offsetTop - code.clientHeight / 2 + row.offsetHeight / 2);
   syncScroll();
 }
@@ -1664,30 +1681,66 @@ function rowRange(row, c0, c1) {
   return null;
 }
 
-// Draw a highlight box over every match (current one emphasized), placed from
-// the live text geometry of the #hl layer.
+// Offset → line lookups. Built once per edit instead of slicing the whole file
+// per match (which made find O(file × matches)); invalidated in paint().
+let lineStartsCache = null;
+function lineStarts() {
+  if (lineStartsCache) return lineStartsCache;
+  const t = code.value, a = [0];
+  for (let i = t.indexOf("\n"); i !== -1; i = t.indexOf("\n", i + 1)) a.push(i + 1);
+  return (lineStartsCache = a);
+}
+function lineAt(pos) {                   // 1-based line containing `pos`
+  const a = lineStarts();
+  let lo = 0, hi = a.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (a[mid] <= pos) lo = mid; else hi = mid - 1; }
+  return lo + 1;
+}
+
+// Draw a highlight box over every *visible* match (current one emphasized),
+// placed from the live text geometry of the #hl layer. Two things keep this
+// cheap on big files: matches outside the viewport are skipped entirely (you
+// can't see them, and each one costs a Range measurement), and every rect is
+// read before anything is inserted — interleaving reads with appends forced a
+// re-layout per match.
 function renderFindMarks() {
   findLayer.innerHTML = "";
   if (findBar.hidden || !findMatches.length) return;
-  const len = findInput.value.length, text = code.value;
+  const len = findInput.value.length;
   const base = findLayer.getBoundingClientRect();
-  findMatches.forEach((start, i) => {
-    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
-    const line = text.slice(0, start).split("\n").length;
+  const starts = lineStarts();
+  const pad = 200;                       // a little past the edges, so scrolling looks continuous
+  const top = code.scrollTop - pad, bottom = code.scrollTop + code.clientHeight + pad;
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < findMatches.length; i++) {
+    const start = findMatches[i];
+    const line = lineAt(start);
     const row = hl.children[line - 1];
-    if (!row) return;
-    const r = rowRange(row, start - lineStart, start - lineStart + len);
-    if (!r) return;
+    if (!row) continue;
+    if (row.offsetTop + row.offsetHeight < top || row.offsetTop > bottom) continue;
+    const col = start - starts[line - 1];
+    const r = rowRange(row, col, col + len);
+    if (!r) continue;
     const rect = r.getBoundingClientRect();
-    if (!rect.width && !rect.height) return;
+    if (!rect.width && !rect.height) continue;
     const m = document.createElement("div");
     m.className = "find-mark" + (i === findIdx ? " cur" : "");
     m.style.top = (rect.top - base.top) + "px";
     m.style.left = (rect.left - base.left) + "px";
     m.style.width = rect.width + "px";
     m.style.height = rect.height + "px";
-    findLayer.append(m);
-  });
+    frag.append(m);
+  }
+  findLayer.append(frag);
+}
+
+// Scroll fires far faster than we need to redraw marks — coalesce to one pass
+// per frame.
+let findMarksScheduled = false;
+function scheduleFindMarks() {
+  if (findMarksScheduled) return;
+  findMarksScheduled = true;
+  requestAnimationFrame(() => { findMarksScheduled = false; renderFindMarks(); });
 }
 
 function openFind() {
@@ -1725,8 +1778,7 @@ function stepFind(dir) {
 function gotoMatch() {
   const start = findMatches[findIdx], len = findInput.value.length;
   code.setSelectionRange(start, start + len);   // shown as a (gray) selection while the bar holds focus
-  const line = code.value.slice(0, start).split("\n").length;
-  const row = hl.children[line - 1];
+  const row = hl.children[lineAt(start) - 1];
   if (row) code.scrollTop = Math.max(0, row.offsetTop - code.clientHeight / 2 + row.offsetHeight / 2);
   syncScroll();
   renderFindMarks();
