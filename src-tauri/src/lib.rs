@@ -1285,6 +1285,36 @@ fn activate_project(app: &AppHandle, path: &str) {
     activate_project_ex(app, path, true);
 }
 
+/// How many visits to keep. Long enough to be a useful "recently worked on"
+/// list, short enough that the file stays hand-readable.
+const VISIT_HISTORY_LEN: usize = 20;
+
+/// Append a project to the visit history (`project-visits` store): most recent
+/// first, one entry per project, capped at `VISIT_HISTORY_LEN`.
+///
+/// This sits in `activate_project_ex` rather than in the Mode switcher's page,
+/// so *every* way of navigating to a project is recorded — the Mode switcher,
+/// the tray menu, the Projects overview — and none can bypass it.
+///
+/// It exists because folder mtime is a poor proxy for "recently worked on": a
+/// directory's mtime only moves when an entry is added, removed or renamed
+/// inside it, so editing a project's notes in place never touches it.
+fn record_project_visit(app: &AppHandle, path: &str) {
+    let now = chrono::Local::now().to_rfc3339();
+    let mut visits: Vec<serde_json::Value> = read_store(app.clone(), "project-visits".into())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+
+    visits.retain(|v| v.get("path").and_then(|p| p.as_str()) != Some(path));
+    visits.insert(0, serde_json::json!({ "path": path, "at": now }));
+    visits.truncate(VISIT_HISTORY_LEN);
+
+    if let Ok(text) = serde_json::to_string(&visits) {
+        let _ = save_store(app.clone(), "project-visits".into(), text);
+    }
+}
+
 /// `apply_mode` controls whether the project's first recorded Mode layout is
 /// auto-applied. The Modes spotlight tool and tray relies on this; the main
 /// window's "All Projects" list wants to just browse into a project without
@@ -1296,6 +1326,7 @@ fn activate_project_ex(app: &AppHandle, path: &str, apply_mode: bool) {
     };
 
     *app.state::<AppState>().active.lock().unwrap() = Some(project.clone());
+    record_project_visit(app, &project.path);
     refresh_tray(app, Some(&project.path));
     show_studio(app);
     let _ = app.emit("project-activated", &project);
@@ -3098,6 +3129,9 @@ fn store_spec(name: &str) -> Option<(StoreDir, &'static str, &'static str)> {
         "project-order" => (StoreDir::Config, "project-order.json", ""),
         // Archived project paths (Projects list "Archived" section).
         "archived-projects" => (StoreDir::Config, "archived-projects.json", ""),
+        // Project visit history — most recent first, written by
+        // `activate_project_ex`. See `record_project_visit`.
+        "project-visits" => (StoreDir::Config, "project-visits.json", "[]"),
         // Daily Notes store.
         "daily-notes" => (StoreDir::Config, "daily-notes.json", "{}"),
         // Mycelium — the local social graph (trees, people, your card).
