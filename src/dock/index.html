@@ -9,9 +9,14 @@
    palette: it has to read as screen bezel rather than as a window, so it runs
    its own near-black scale. Type, icons and motion still come from tokens.
 
-   This page is only ever STRIP_W (76px, in dock.rs) wide and never resizes.
-   Everything it opens is a normal tool window in src/tools/ — see the module
-   comment in dock.rs. */
+   This page is only ever STRIP_W (290px, in dock.rs) wide and never resizes.
+   That width is set by covering the menu bar's clock + Control Center.
+
+   Layout: the 3 most recently *visited* projects (project-visits store), then
+   the selected one's 10 latest notes (the flexible, scrolling region), then
+   Wi-Fi/Battery and the clock pinned at the bottom. Picking a project only swaps the notes list —
+   it deliberately does NOT activate the project, so browsing stays cheap.
+   The system rows open a normal tool window from src/tools/ (see dock.rs). */
 :root {
     --dock-bg: #000;
     --dock-text: #e8e4dc;
@@ -36,34 +41,35 @@ html, body {
 body {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    padding: 10px 0 12px;
-    gap: 4px;
+    padding: 12px 0 16px;
+    gap: 2px;
 }
 
-.spacer { flex: 1 1 auto; }
-
+/* Inset to line up with the row labels rather than spanning edge to edge. */
 .rule {
-    width: 28px;
     height: 1px;
     background: var(--dock-line);
-    margin: 8px 0;
+    margin: 10px 16px;
     flex: 0 0 auto;
 }
 
-/* ---- buttons ---- */
+/* ---- rows ---- */
 
 .item {
-    width: 48px;
-    height: 48px;
     flex: 0 0 auto;
-    display: grid;
-    place-items: center;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 44px;
+    margin: 0 8px;
+    padding: 0 8px;
     border: 0;
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--dock-text);
     font-family: inherit;
+    font-size: 15px;
+    text-align: left;
     transition: background var(--dur-fast) var(--ease-standard);
 }
 
@@ -72,100 +78,204 @@ body {
 
 .item .mi { font-size: 22px; }
 
+/* ---- projects ---- */
+
+.proj {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: calc(100% - 16px);
+    margin: 0 8px;
+    padding: 0 8px;
+    height: 38px;
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--dock-dim);
+    font-family: inherit;
+    font-size: 15px;
+    text-align: left;
+    transition: background var(--dur-fast) var(--ease-standard),
+                color var(--dur-fast) var(--ease-standard);
+}
+
+.proj:hover { background: var(--dock-hover); }
+
+.proj.selected {
+    color: var(--dock-text);
+    background: var(--dock-hover);
+}
+
+.proj .dot {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.proj .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- notes ----
+   The one scrolling region: projects, system rows and clock are all fixed, so
+   a long note body expands inside here rather than pushing the clock off. */
+
+.notes {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 8px;
+}
+
+.notes::-webkit-scrollbar { width: 0; }
+
+.note {
+    display: block;
+    width: 100%;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--dock-text);
+    font-family: inherit;
+    text-align: left;
+    transition: background var(--dur-fast) var(--ease-standard);
+}
+
+.note:hover { background: var(--dock-hover); }
+.note.open { background: var(--dock-hover); }
+
+.note-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.note-title {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Untitled notes lead with their body, dimmed, so the row is never blank. */
+.note-title.untitled { color: var(--dock-dim); }
+
+.note-thumb {
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    border-radius: 4px;
+    object-fit: cover;
+    background: var(--dock-line);
+}
+
+.note-kind {
+    font-size: 15px;
+    color: var(--dock-dim);
+    flex: 0 0 auto;
+}
+
+.note-body {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--dock-dim);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.note-body img {
+    width: 100%;
+    border-radius: var(--radius-sm);
+    display: block;
+}
+
+.note-body ul {
+    margin: 0;
+    padding-left: 16px;
+}
+
+.empty {
+    padding: 10px;
+    font-size: 12px;
+    color: var(--dock-dim);
+}
+
+/* Secondary text at the end of a row — SSID, battery percentage. */
+.item .meta {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--dock-dim);
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 130px;
+}
+
+.batt.low .mi { color: var(--rose); }
+
 /* ---- clock ---- */
 
 .clock {
     flex: 0 0 auto;
-    text-align: center;
-    line-height: 1.15;
-    padding: 6px 0 2px;
+    padding: 4px 16px 0;
+    line-height: 1.05;
 }
 
 .clock .time {
-    font-size: 23px;
-    letter-spacing: 0.01em;
+    font-size: 52px;
+    letter-spacing: -0.01em;
     font-variant-numeric: tabular-nums;
 }
 
-.clock .day,
 .clock .date {
-    font-size: 13px;
+    margin-top: 6px;
+    font-size: 15px;
     color: var(--dock-dim);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
 }
-
-.clock .day { margin-top: 4px; }
-
-/* ---- battery ----
-   A horizontal battery is wide and short, so the percentage sits *under* it
-   rather than overlapping — which is also why this one item stacks instead of
-   centring a single glyph like the others. */
-
-.batt {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1px;
-}
-
-.batt .pct {
-    font-size: 10px;
-    line-height: 1;
-    color: var(--dock-dim);
-    font-variant-numeric: tabular-nums;
-}
-
-.batt.low .mi { color: var(--rose); }
 </style>
 </head>
 <body>
 
-<button class="item" data-tool="projects.html" title="Projects">
-    <span class="mi">workspaces</span>
-</button>
+<div class="projects" id="projects"></div>
 
 <div class="rule"></div>
 
-<button class="item" data-tool="daily-notes.html" title="Daily Notes">
-    <span class="mi">format_list_bulleted</span>
-</button>
-<button class="item" data-tool="tasks.html" title="Tasks">
-    <span class="mi">calendar_month</span>
-</button>
-<button class="item" data-tool="file-directory.html" title="Files">
-    <span class="mi">folder</span>
-</button>
-<button class="item" data-tool="server.html" title="Server">
-    <span class="mi">dns</span>
-</button>
+<!-- The notes list is the flexible region; nothing else grows, so there's no
+     separate spacer pushing the system rows down. -->
+<div class="notes" id="notes"></div>
 
-<div class="spacer"></div>
-
-<button class="item" id="wifi" data-tool="system-controls.html" title="Wi-Fi">
-    <span class="mi">wifi</span>
+<button class="item" id="wifi" data-tool="system-controls.html">
+    <span class="mi">wifi</span>Wi-Fi
+    <span class="meta" id="ssid"></span>
 </button>
-<button class="item batt" id="batt" data-tool="system-controls.html" title="Battery">
-    <span class="mi">battery_android_frame_full</span>
-    <span class="pct"></span>
+<button class="item batt" id="batt" data-tool="system-controls.html">
+    <span class="mi">battery_android_frame_full</span>Battery
+    <span class="meta" id="pct"></span>
 </button>
 
 <div class="rule"></div>
 
 <div class="clock">
     <div class="time" id="time">--:--</div>
-    <div class="day" id="day"></div>
     <div class="date" id="date"></div>
 </div>
 
 <script type="module">
-import { invoke } from "../kit/app.js";
+import { invoke, listen, esc } from "../kit/app.js";
 
 // ---------------------------------------------------------------- clock ----
 
 const timeEl = document.getElementById("time");
-const dayEl = document.getElementById("day");
 const dateEl = document.getElementById("date");
 
 function tickClock() {
@@ -175,20 +285,290 @@ function tickClock() {
         minute: "2-digit",
         hour12: false,
     });
-    dayEl.textContent = now.toLocaleDateString([], { weekday: "short" });
-    dateEl.textContent = now.toLocaleDateString([], { month: "short", day: "numeric" });
+    // One line now that there's width for it — "TUE 4 AUG" rather than a stack.
+    dateEl.textContent = now.toLocaleDateString([], {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+    });
 }
 
 tickClock();
 setInterval(tickClock, 1000);
 
+// ------------------------------------------------------- projects + notes ----
+
+const { convertFileSrc } = window.__TAURI__?.core ?? {};
+const projectsEl = document.getElementById("projects");
+const notesEl = document.getElementById("notes");
+
+const RECENT_PROJECTS = 3;
+const RECENT_NOTES = 10;
+/** Poll interval. Local file reads, and no DOM work unless something changed. */
+const REFRESH_MS = 5000;
+
+let selectedPath = "";
+let openNoteId = "";
+
+/** Notes carry `createdAt` but no updated timestamp, and 11 of ~240 have no
+ *  createdAt at all — those sort last rather than to the top of the list. */
+function noteTime(note) {
+    const t = Date.parse(note.createdAt ?? "");
+    return Number.isNaN(t) ? 0 : t;
+}
+
+const firstLine = (s) => String(s ?? "").trim().split("\n")[0];
+
+/** Row label: the title, or the body's first line for the many untitled notes,
+ *  so a row is never blank. */
+function noteLabel(note) {
+    const title = String(note.title ?? "").trim();
+    if (title) return { text: title, untitled: false };
+    if (note.kind === "image") {
+        const cap = String(note.caption ?? "").trim();
+        return { text: cap || "Image", untitled: !cap };
+    }
+    const body = firstLine(note.body);
+    if (body) return { text: body, untitled: true };
+    return { text: `Untitled ${note.kind}`, untitled: true };
+}
+
+const KIND_ICON = { checklist: "checklist", table: "table" };
+
+function assetUrl(projectPath, rel) {
+    if (!convertFileSrc || !rel) return "";
+    return convertFileSrc(`${projectPath}/${rel}`);
+}
+
+/** The expanded content under a row, per note kind. */
+function noteDetail(note, projectPath) {
+    if (note.kind === "image") {
+        const src = assetUrl(projectPath, note.src);
+        return src ? `<img src="${esc(src)}" alt="" />` : "";
+    }
+    if (note.kind === "checklist") {
+        const items = Array.isArray(note.items) ? note.items : [];
+        if (!items.length) return "";
+        return `<ul>${items.map((i) =>
+            `<li>${i.done ? "☑" : "☐"} ${esc(i.text ?? "")}</li>`).join("")}</ul>`;
+    }
+    if (note.kind === "table") {
+        const rows = Array.isArray(note.rows) ? note.rows.length : 0;
+        const cols = Array.isArray(note.columns) ? note.columns.length : 0;
+        return esc(`Table · ${rows}×${cols}`);
+    }
+    // A text note may also carry one attached image above its body.
+    const img = note.image ? `<img src="${esc(assetUrl(projectPath, note.image))}" alt="" />` : "";
+    return img + esc(String(note.body ?? "").trim());
+}
+
+/** Rendering is destructive (innerHTML), so anything the user is in the middle
+ *  of — scroll position, the expanded note — has to be carried across. A poll
+ *  landing while you're reading should be invisible. */
+function renderNotes(notes, projectPath) {
+    const scroll = notesEl.scrollTop;
+
+    if (!notes.length) {
+        notesEl.innerHTML = '<div class="empty">No notes yet</div>';
+        return;
+    }
+
+    notesEl.innerHTML = notes.map((n) => {
+        const { text, untitled } = noteLabel(n);
+        const lead = n.kind === "image"
+            ? `<img class="note-thumb" src="${esc(assetUrl(projectPath, n.src))}" alt="" />`
+            : KIND_ICON[n.kind]
+                ? `<span class="mi note-kind">${KIND_ICON[n.kind]}</span>`
+                : "";
+        const open = n.id === openNoteId;
+        return `
+            <div class="note ${open ? "open" : ""}" role="button" tabindex="0"
+                 aria-expanded="${open}" data-id="${esc(n.id)}">
+                <span class="note-head">
+                    ${lead}
+                    <span class="note-title ${untitled ? "untitled" : ""}">${esc(text)}</span>
+                </span>
+                ${open ? `<div class="note-body">${noteDetail(n, projectPath)}</div>` : ""}
+            </div>`;
+    }).join("");
+
+    for (const row of notesEl.querySelectorAll(".note")) {
+        // A div rather than a button: the expanded body holds <div>/<ul>/<img>,
+        // which a button may not contain. Keyboard handling comes back by hand.
+        const toggle = () => {
+            // Second activation on the open note collapses it.
+            openNoteId = row.dataset.id === openNoteId ? "" : row.dataset.id;
+            renderNotes(notes, projectPath);
+        };
+        row.onclick = toggle;
+        row.onkeydown = (e) => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+        };
+    }
+
+    notesEl.scrollTop = scroll;
+}
+
+/** Cheap change detector: only what the list actually shows. Re-rendering on
+ *  every poll regardless would fight the user for the scrollbar. */
+const notesSignature = (notes) =>
+    notes.map((n) => `${n.id}:${n.title}:${n.caption ?? ""}:${n.body ?? ""}`).join("|");
+
+let lastNotesSig = null;
+
+/** `force` re-renders even if nothing changed — used when switching projects,
+ *  where the previous project's identical-looking list must still be replaced. */
+async function loadNotes(path, { force = false } = {}) {
+    if (!path) return;
+    let notes;
+    try {
+        const data = await invoke("read_notes", { path });
+        notes = (data?.notes ?? [])
+            .slice()
+            .sort((a, b) => noteTime(b) - noteTime(a))
+            .slice(0, RECENT_NOTES);
+    } catch (e) {
+        console.error("read_notes failed:", e);
+        notesEl.innerHTML = `<div class="empty">Couldn't read notes</div>`;
+        return;
+    }
+
+    const sig = notesSignature(notes);
+    if (!force && sig === lastNotesSig) return;
+    lastNotesSig = sig;
+    renderNotes(notes, path);
+}
+
+function selectProject(path) {
+    selectedPath = path;
+    openNoteId = "";
+    for (const b of projectsEl.querySelectorAll(".proj")) {
+        b.classList.toggle("selected", b.dataset.path === path);
+    }
+    return loadNotes(path, { force: true });
+}
+
+let lastProjectsSig = null;
+
+async function loadProjects() {
+    let projects = [];
+    let active = null;
+    let visits = [];
+
+    try {
+        projects = await invoke("list_projects");
+    } catch (e) {
+        console.error("list_projects failed:", e);
+        notesEl.innerHTML = `<div class="empty">Can't reach Studio</div>`;
+        return;
+    }
+
+    // These two are each optional and independently caught: a failure here
+    // should cost the *ordering*, not the whole list. Sharing one try/catch
+    // meant a single rejected call silently left the previous render on screen.
+    try {
+        active = await invoke("get_active_project");
+    } catch (e) {
+        console.error("get_active_project failed:", e);
+    }
+    try {
+        const raw = await invoke("read_store", { name: "project-visits" });
+        const parsed = JSON.parse(raw || "[]");
+        if (Array.isArray(parsed)) visits = parsed;
+    } catch (e) {
+        console.error("project-visits unreadable, falling back to mtime:", e);
+    }
+
+    // Order by when you last navigated to the project (Mode switcher, tray,
+    // overview — all recorded by activate_project_ex). Anything never visited
+    // falls back behind those, ordered by folder mtime; that's only a starting
+    // point, since a folder's mtime doesn't move when notes are edited in place.
+    const rank = new Map(visits.map((v, i) => [v.path, i]));
+    const recent = projects
+        .slice()
+        .sort((a, b) => {
+            const ra = rank.has(a.path) ? rank.get(a.path) : Infinity;
+            const rb = rank.has(b.path) ? rank.get(b.path) : Infinity;
+            return ra - rb || b.modified - a.modified;
+        })
+        .slice(0, RECENT_PROJECTS);
+
+    if (!recent.length) {
+        projectsEl.innerHTML = "";
+        notesEl.innerHTML = '<div class="empty">Nothing in ~/Projects</div>';
+        return;
+    }
+
+    // Only touch the DOM when the row set actually changed — otherwise every
+    // poll would drop the hover state and the selected highlight.
+    const sig = recent.map((p) => `${p.path}:${p.color}`).join("|");
+    if (sig !== lastProjectsSig) {
+        lastProjectsSig = sig;
+        projectsEl.innerHTML = recent.map((p) => `
+            <button class="proj ${p.path === selectedPath ? "selected" : ""}"
+                    data-path="${esc(p.path)}">
+                <span class="dot" ${p.color ? `style="background:${esc(p.color)}"` : ""}></span>
+                <span class="name">${esc(p.name)}</span>
+            </button>`).join("");
+
+        for (const b of projectsEl.querySelectorAll(".proj")) {
+            b.onclick = () => selectProject(b.dataset.path);
+        }
+    }
+
+    // Re-select only when there's no valid selection — a refresh must not yank
+    // you back to another project while you're reading.
+    if (!recent.some((p) => p.path === selectedPath)) {
+        const start = recent.find((p) => p.path === active?.path) ?? recent[0];
+        await selectProject(start.path);
+    }
+}
+
+/** Pick up notes written elsewhere (the main app, Claude) and any change to the
+ *  visit order. Both renders are change-gated, so a tick with nothing new
+ *  touches no DOM at all. */
+async function refreshLists() {
+    await loadProjects();
+    await loadNotes(selectedPath);
+}
+
+loadProjects();
+
+// Re-order as soon as a project is activated anywhere, so the visit history the
+// Dock reads is never a refresh behind what you just did.
+listen("project-activated", () => loadProjects());
+
+// The Dock is always on screen, so it has to keep up with notes edited in the
+// main app or written by Claude. Both reads are local file reads and both
+// renders are change-gated, so an idle tick is nearly free.
+setInterval(refreshLists, REFRESH_MS);
+
+// Catch up immediately when the Dock comes back into view rather than waiting
+// out the remainder of a tick.
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshLists();
+});
+window.addEventListener("focus", refreshLists);
+
+// Cmd+R reloads the page. The Dock has no chrome and no menu, and the tray item
+// only hides/shows the existing window — so without this there is no way to pick
+// up an edit to this file short of restarting Studio.
+document.addEventListener("keydown", (e) => {
+    if (e.key === "r" && e.metaKey) {
+        e.preventDefault();
+        location.reload();
+    }
+});
+
 // --------------------------------------------------------------- status ----
 
 // Volume/mute are in dock_status too, but only the controls tool shows them.
-let status = { wifi_on: false, battery: -1, charging: false };
+let status = { wifi_on: false, ssid: "", battery: -1, charging: false };
 
 const wifiBtn = document.getElementById("wifi");
 const battBtn = document.getElementById("batt");
+const ssidEl = document.getElementById("ssid");
+const pctEl = document.getElementById("pct");
 
 // The `battery_android_frame_*` set is the horizontal outline battery: levels
 // 1–6 plus `full`, `bolt` and `alert`. (The plain `battery_*` names are the
@@ -207,9 +587,11 @@ function batteryIcon() {
 function render() {
     wifiBtn.querySelector(".mi").textContent = status.wifi_on ? "wifi" : "wifi_off";
     wifiBtn.classList.toggle("off", !status.wifi_on);
+    // The row has room for the network name, which the icon alone never carried.
+    ssidEl.textContent = status.wifi_on ? (status.ssid || "Not connected") : "Off";
 
     battBtn.querySelector(".mi").textContent = batteryIcon();
-    battBtn.querySelector(".pct").textContent = status.battery >= 0 ? status.battery : "";
+    pctEl.textContent = status.battery >= 0 ? `${status.battery}%` : "";
     battBtn.classList.toggle("low", status.battery >= 0 && status.battery < 20 && !status.charging);
 }
 

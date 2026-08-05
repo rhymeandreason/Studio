@@ -28,9 +28,10 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const DOCK_LABEL: &str = "studio-dock";
 
-/// Wide enough for a legible stacked clock (time over weekday over date), which
-/// is what sets the floor here — the icons alone would fit in far less.
-const STRIP_W: f64 = 76.0;
+/// Wide enough to cover the right end of the menu bar — the system clock and
+/// Control Center — so they're hidden behind the Dock rather than sitting above
+/// it. (The strip is at `NSStatusWindowLevel`, so it genuinely covers them.)
+const STRIP_W: f64 = 290.0;
 
 // ---------------------------------------------------------------- window ----
 
