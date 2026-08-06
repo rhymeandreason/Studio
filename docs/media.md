@@ -71,3 +71,48 @@ to full image bounds if no crop is set.
 `tauri.conf.json` (`assetProtocol.scope`) must list paths — note that the
 glob `**` does **not** match leading-dot files, so dotfiles (e.g.
 `.studio-icon.png`) need an explicit scope entry.
+
+## Drag-out
+
+Plain-drag a tile to hand the real file(s) to macOS via `tauri-plugin-drag` —
+`startNativeFileDrag`/`makeDragIcon`. Option-drag copies instead of moving,
+matching the File Directory. The **internal** gesture — reorder within the grid,
+and dropping an image tile onto the Notes tab to make an image note — is on
+**⌘-drag**, since dragging out is much the more common intent.
+
+**Never call `window.__TAURI__.drag.startDrag`.** The plugin's global wrapper
+ships its own inlined `Channel` that expects a `{message, id}` envelope this
+Tauri version no longer sends, so its drop callback throws `undefined is not an
+object (evaluating 'o.toString')` at the end of every drag. Invoke the command
+directly with Tauri's own `Channel` instead — all three drag-out surfaces
+(media, notes, `dragFilesOut` in `kit/app.js`) do:
+
+```js
+const onEvent = new window.__TAURI__.core.Channel();
+onEvent.onmessage = (e) => { if (e.result === "Dropped") … };
+await invoke("plugin:drag|start_drag", { item: paths, image: iconDataUrl, options: { mode: "move" }, onEvent });
+```
+
+Note the key names differ from the wrapper's: `image`, not `icon`, and `mode`
+nested under `options`.
+
+**Dropping into Finder moves the file out of `media/`**, and Studio has to do
+that itself. `mode: "move"` only sets the drag session's *source* mask; macOS
+gives the destination the final say and Finder answers cross-app file drags with
+Copy regardless, so the mode flag alone can never move anything.
+
+So the drag's `onEvent` callback calls `finish_drag_out` (lib.rs) on drop — the
+shared command, also used by `dragFilesOut` in `kit/app.js`:
+
+1. It samples **which app is under the cursor** — the `winowner` Swift helper
+   (`CGWindowListCopyWindowInfo` + live `NSEvent.mouseLocation`, reporting
+   "Finder" for the bare Desktop). Sampled first, before any waiting, because
+   the cursor wanders off the destination almost immediately.
+2. Only if that's Finder does it remove the source, after a ~900ms grace period
+   so Finder's copy has read the bytes first. Everywhere else — a web upload
+   zone, a file picker — the source is left alone, because deleting it there
+   would be real data loss.
+3. Either way the hidden edits sidecar goes with the file, and removals go to
+   the **Trash**, so a misfire is recoverable.
+
+If anything left, the grid reloads.

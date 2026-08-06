@@ -22,7 +22,7 @@ non-destructive image editor), notes, workspace, and artifacts.
 - Vendored & offline (never CDN): `src/vendor/` — `marked`, `coloris`,
   `motion-one`, Material Symbols woff2.
 - Native Swift helpers via `build.rs`, run as subprocesses: `bgremove` (Vision),
-  `qlthumb`, `pbimage`, `winbounds` (CGWindowListCopyWindowInfo). WebP via the `webp` crate; HEIC via `sips`.
+  `qlthumb`, `pbimage`, `winbounds` / `winowner` (CGWindowListCopyWindowInfo). WebP via the `webp` crate; HEIC via `sips`.
 
 ## Run
 `npm install` then `npm run tauri dev`. macOS 14+ (Vision). Menu-bar app, no Dock
@@ -47,6 +47,9 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
 - **Studio Dock** (full-height black strip on the right screen edge, above the
   menu bar; own clock/Wi-Fi/volume/battery controls) — `src-tauri/src/dock.rs` +
   `src/dock/`. [docs/dock.md](docs/dock.md)
+- **File Directory** (Finder-like project tree: multi-select, drag out / drop to
+  move, rename, trash) — `src/tools/file-directory.html` + `src-tauri/src/files.rs`.
+  [docs/file-directory.md](docs/file-directory.md)
 - **Code Editor** (HTML/CSS/JS tool: DOM tree, inspector, git diff, syntax
   highlighting, separate preview window) — `src/tools/code-editor.html` +
   `code-preview.html`. [docs/code-editor.md](docs/code-editor.md)

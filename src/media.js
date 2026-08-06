@@ -217,16 +217,38 @@ function makeDragIcon(tile, count) {
 
 // Drag the real file(s) out to other apps. Honors the current selection: if the
 // grabbed tile is part of a multi-selection, drag them all; otherwise just it.
-async function startNativeFileDrag(item, tile) {
+async function startNativeFileDrag(item, tile, move = true) {
   const paths =
     mediaSelection.has(item.path) && mediaSelection.size() > 1
       ? mediaSelection.get()
       : [item.path];
   try {
-    await window.__TAURI__.drag.startDrag({
+    // Invoked directly rather than through `__TAURI__.drag.startDrag`, because
+    // the plugin ships its own inlined Channel implementation that expects a
+    // `{message, id}` envelope this Tauri version no longer sends — passing an
+    // onEvent callback through it throws "undefined is not an object". Tauri's
+    // own Channel always matches its own envelope.
+    const onEvent = new window.__TAURI__.core.Channel();
+    onEvent.onmessage = async (e) => {
+      if (!move || e.result !== "Dropped") return;
+      try {
+        // "move" only states intent: macOS gives the destination the final say
+        // and Finder answers cross-app file drags with Copy regardless, so the
+        // move is finished on our side — and only when the drop landed in
+        // Finder. See finish_drag_out in lib.rs.
+        const res = await invoke("finish_drag_out", { paths });
+        if (res.removed.length && mediaProjectPath) loadMedia(mediaProjectPath);
+      } catch (err) {
+        // Never swallow this — a silent failure here is indistinguishable from
+        // "the move just didn't happen".
+        console.error("[drag-out] finish failed:", err);
+      }
+    };
+    await invoke("plugin:drag|start_drag", {
       item: paths,
-      icon: makeDragIcon(tile, paths.length),
-      mode: "copy",
+      image: makeDragIcon(tile, paths.length),
+      options: { mode: move ? "move" : "copy" },
+      onEvent,
     });
   } catch (err) {
     console.error("drag-out failed:", err);
@@ -241,14 +263,30 @@ function onMediaTilePointerDown(e, item, tile) {
   // would make WebKit retarget the resulting "click" to the tile instead of
   // the label, so click-to-rename would never fire.
   if (e.target.closest("textarea, input, a, .mediatile__name")) return;
-  // Option-drag drags the real file(s) OUT to Finder / a file picker / a web
-  // "drop here" zone, via the native drag plugin. Plain drag stays internal
-  // reorder. Starting the OS drag here (in the mouse-down) attaches it to the
-  // press the user is already holding — don't capture the pointer or set up the
-  // reorder gesture in this case.
-  if (e.altKey) {
-    e.preventDefault();
-    startNativeFileDrag(item, tile);
+  // Plain drag hands the file(s) to macOS, same as the File Directory: dropping
+  // in Finder moves them out of the project, Option-drag copies instead. The
+  // internal gesture — reorder within the grid, or drop onto the Notes tab to
+  // make an image note — is on ⌘-drag, since dragging out is the far more
+  // common intent.
+  if (!e.metaKey) {
+    const startX = e.clientX, startY = e.clientY;
+    let started = false;
+    const onMove = (ev) => {
+      if (started) return;
+      // Threshold, so a plain click still selects instead of starting a drag.
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return;
+      started = true;
+      cleanup();
+      // Modifier read at drag start, not at press — you can decide to copy
+      // after you've already started moving.
+      startNativeFileDrag(item, tile, !ev.altKey);
+    };
+    const cleanup = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", cleanup);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", cleanup);
     return;
   }
   // Capture the pointer so WebKit doesn't hijack the drag over the image.
@@ -1055,7 +1093,14 @@ async function initDragDrop() {
     return { icon: "note_add", label: "Move files into the project" };
   }
 
-  const blocked = () => state.draggingNoteId || state.mediaDragActive || !state.activeProject;
+  // The Files tab embeds the File Directory tool, which handles OS drops itself
+  // (dropping onto a folder row moves the files there) — so the project-wide
+  // "add to this project" routing steps aside while that tab is open.
+  const blocked = () =>
+    state.draggingNoteId ||
+    state.mediaDragActive ||
+    state.activePanel === "files" ||
+    !state.activeProject;
   // Only drag-enter carries paths in Tauri v2 (drag-over is position-only), so
   // set the label on enter and just keep the overlay visible on over.
   await listen("tauri://drag-enter", (e) => {

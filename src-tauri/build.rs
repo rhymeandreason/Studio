@@ -54,6 +54,14 @@ fn main() {
     println!("cargo:rustc-env=WINBOUNDS_BIN={}", wb_bin.display());
     println!("cargo:rerun-if-changed={wb_src}");
 
+    // Window owner helper (which app is under the cursor) — used to tell a
+    // drag-out that landed in Finder from one that landed anywhere else.
+    let wo_src = "swift/winowner.swift";
+    let wo_bin = Path::new(&out_dir).join("winowner");
+    swiftc(wo_src, &wo_bin, "macosx11.0");
+    println!("cargo:rustc-env=WINOWNER_BIN={}", wo_bin.display());
+    println!("cargo:rerun-if-changed={wo_src}");
+
     // Window layout helper (AXUIElement) — record/restore window positions
     // across apps for Workspace modes.
     let wl_src = "swift/winlayout.swift";

@@ -135,6 +135,15 @@
       font-size: 12.5px;
       line-height: 1.3;
       white-space: nowrap;
+      /* Rows are drag handles, not text — without this, starting a drag paints
+         a text selection across the tree. The rename field opts back in. */
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .node .rename {
+      -webkit-user-select: text;
+      user-select: text;
     }
 
     .node:hover {
@@ -253,6 +262,84 @@ max-width:350px;
       flex-direction: column;
     }
 
+    /* ── Finder-like interaction states ─────────────────────────────────── */
+
+    .node.selected {
+      background: var(--project-hover, var(--accent));
+    }
+
+    body.has-project-color .node.selected,
+    body.has-project-color .node.selected .twirl,
+    body.has-project-color .node.selected .icon .mi,
+    body.has-project-color .node.selected .name {
+      color: #000;
+    }
+
+    /* The folder a drag is currently hovering — outlined rather than filled so
+       it stays legible on top of a .selected fill. */
+    .node.drop-target {
+      outline: 1.5px solid var(--accent);
+      outline-offset: -1.5px;
+    }
+
+    /* Inline rename field — sized to sit exactly where the name text was, so
+       committing doesn't visibly reflow the row. */
+    .node .rename {
+      flex: 1 1 auto;
+      min-width: 0;
+      font: inherit;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--accent);
+      border-radius: 3px;
+      padding: 0 3px;
+      margin: -1px 0;
+      outline: none;
+    }
+
+    #fd-menu {
+      position: fixed;
+      z-index: 50;
+      min-width: 168px;
+      padding: 4px;
+      background: var(--bg);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-sm);
+      box-shadow: 0 6px 24px rgb(0 0 0 / 0.28);
+      font-size: 12.5px;
+    }
+
+    #fd-menu[hidden] {
+      display: none;
+    }
+
+    #fd-menu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 5px 8px;
+      border: none;
+      border-radius: 3px;
+      background: none;
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    #fd-menu button:hover {
+      background: var(--project-hover, var(--surface));
+    }
+
+    body.has-project-color #fd-menu button:hover {
+      color: #000;
+    }
+
+    #fd-menu hr {
+      margin: 4px 6px;
+      border: none;
+      border-top: 1px solid var(--hairline);
+    }
+
   </style>
 </head>
 
@@ -265,9 +352,10 @@ max-width:350px;
   </div>
   <div id="project-picker" hidden></div>
   <div id="tree"></div>
+  <div id="fd-menu" hidden></div>
 
   <script type="module">
-    import { hasTauri, invoke, listen, dragFilesOut } from '../kit/app.js';
+    import { hasTauri, invoke, listen, dragFilesOut, toast } from '../kit/app.js';
 
     const tree = document.getElementById('tree');
 
@@ -360,6 +448,195 @@ max-width:350px;
     // Files modified within this window are flagged "recent" in the tree.
     const RECENT_SECONDS = 24 * 60 * 60;
 
+    // ── Selection ───────────────────────────────────────────────────────────
+    // Paths, not elements: the tree is torn down and rebuilt wholesale on every
+    // 'fs-changed', so element identity doesn't survive but the selection does.
+    const selected = new Set();
+    let anchorPath = null;   // shift-click range anchor
+
+    function selPaths() {
+      return [...selected];
+    }
+
+    // Repaints .selected across the live tree. Called after every selection
+    // change instead of tracking per-node, which keeps the rebuild path honest.
+    function paintSelection() {
+      for (const node of tree.querySelectorAll('.node[data-path]')) {
+        node.classList.toggle('selected', selected.has(node.dataset.path));
+      }
+    }
+
+    // Every node in DOM order — the range shift-click walks, and the order
+    // arrow keys will follow.
+    function visibleNodes() {
+      return [...tree.querySelectorAll('.node[data-path]')];
+    }
+
+    function clickSelect(path, e) {
+      if (e.metaKey) {
+        if (selected.has(path)) selected.delete(path);
+        else selected.add(path);
+        anchorPath = path;
+      } else if (e.shiftKey && anchorPath) {
+        const paths = visibleNodes().map((n) => n.dataset.path);
+        const a = paths.indexOf(anchorPath);
+        const b = paths.indexOf(path);
+        if (a >= 0 && b >= 0) {
+          selected.clear();
+          for (let i = Math.min(a, b); i <= Math.max(a, b); i++) selected.add(paths[i]);
+        }
+      } else {
+        selected.clear();
+        selected.add(path);
+        anchorPath = path;
+      }
+      paintSelection();
+    }
+
+    // ── Mutations ───────────────────────────────────────────────────────────
+    // Each move batch is pushed here as its inverse, so Cmd+Z is just another
+    // fs_move back to where things came from.
+    const undoStack = [];
+
+    // Rebuilt lazily to dodge the temporal dead zone — main() is defined below.
+    const refresh = () => main();
+
+    async function moveInto(paths, destDir) {
+      // Dropping a folder onto one of its own children is caught in Rust, but
+      // dropping onto itself is common enough (fat-finger) to swallow here.
+      const targets = paths.filter((p) => p !== destDir);
+      if (!targets.length) return;
+      try {
+        const moved = await invoke('fs_move', { paths: targets, destDir });
+        if (!moved.length) return;
+        undoStack.push(moved);
+        selected.clear();
+        for (const m of moved) selected.add(m.from);
+        toast(moved.length === 1 ? 'Moved 1 item' : `Moved ${moved.length} items`);
+        await refresh();
+      } catch (err) {
+        toast(String(err));
+      }
+    }
+
+    async function undoMove() {
+      const batch = undoStack.pop();
+      if (!batch) return;
+      try {
+        // Group by destination folder — one fs_move call per parent.
+        const byDir = new Map();
+        for (const m of batch) {
+          const dir = m.to.slice(0, m.to.lastIndexOf('/'));
+          if (!byDir.has(dir)) byDir.set(dir, []);
+          byDir.get(dir).push(m.from);
+        }
+        selected.clear();
+        for (const [dir, paths] of byDir) {
+          await invoke('fs_move', { paths, destDir: dir });
+        }
+        for (const m of batch) selected.add(m.to);
+        toast('Move undone');
+        await refresh();
+      } catch (err) {
+        toast(String(err));
+      }
+    }
+
+    async function trashSelection() {
+      const paths = selPaths();
+      if (!paths.length) return;
+      try {
+        await invoke('fs_trash', { paths });
+        selected.clear();
+        toast(paths.length === 1 ? 'Moved to Trash' : `${paths.length} items to Trash`);
+        await refresh();
+      } catch (err) {
+        toast(String(err));
+      }
+    }
+
+    // The path that should own a "New Folder" — the selected folder, else the
+    // selected file's parent, else the project root.
+    function newFolderParent() {
+      const path = selPaths()[0];
+      if (!path) return currentProjectPath;
+      const node = tree.querySelector(`.node[data-path="${CSS.escape(path)}"]`);
+      if (node && node.classList.contains('dir')) return path;
+      return path.slice(0, path.lastIndexOf('/'));
+    }
+
+    async function newFolder(dir) {
+      if (!dir) return;
+      try {
+        const path = await invoke('fs_new_folder', { dir, name: 'untitled folder' });
+        expandedSet.add(dir);
+        saveExpanded();
+        selected.clear();
+        selected.add(path);
+        await refresh();
+        // Land straight in rename, the way Finder does.
+        const node = tree.querySelector(`.node[data-path="${CSS.escape(path)}"]`);
+        if (node) node._beginRename();
+      } catch (err) {
+        toast(String(err));
+      }
+    }
+
+    async function duplicate(path) {
+      try {
+        const made = await invoke('fs_duplicate', { path });
+        selected.clear();
+        selected.add(made);
+        await refresh();
+      } catch (err) {
+        toast(String(err));
+      }
+    }
+
+    function copyPaths() {
+      const paths = selPaths();
+      if (!paths.length) return;
+      navigator.clipboard.writeText(paths.join('\n'));
+      toast(paths.length === 1 ? 'Path copied' : `${paths.length} paths copied`);
+    }
+
+    // ── Context menu ────────────────────────────────────────────────────────
+    const menu = document.getElementById('fd-menu');
+
+    function closeMenu() {
+      menu.hidden = true;
+      menu.innerHTML = '';
+    }
+
+    function openMenu(x, y, items) {
+      menu.innerHTML = '';
+      for (const item of items) {
+        if (item === '-') {
+          menu.appendChild(document.createElement('hr'));
+          continue;
+        }
+        const btn = document.createElement('button');
+        btn.textContent = item.label;
+        btn.addEventListener('click', () => {
+          closeMenu();
+          item.run();
+        });
+        menu.appendChild(btn);
+      }
+      // Placed offscreen-safe: measure once visible, then nudge back inside.
+      menu.hidden = false;
+      menu.style.left = '0px';
+      menu.style.top = '0px';
+      const r = menu.getBoundingClientRect();
+      menu.style.left = Math.min(x, window.innerWidth - r.width - 4) + 'px';
+      menu.style.top = Math.min(y, window.innerHeight - r.height - 4) + 'px';
+    }
+
+    window.addEventListener('pointerdown', (e) => {
+      if (!menu.hidden && !menu.contains(e.target)) closeMenu();
+    }, true);
+    window.addEventListener('blur', closeMenu);
+
     async function buildNode(entry, isRoot = false) {
       const row = document.createElement('div');
       row.className = 'row';
@@ -393,12 +670,116 @@ max-width:350px;
       name.textContent = entry.name;
       node.appendChild(name);
 
-      // Option-drag drags the real file/folder OUT to Finder, a file picker, or
-      // a web "drop here" zone. Plain click still opens/expands.
+      node.dataset.path = entry.path;
+      node.dataset.dir = entry.is_dir ? '1' : '';
+      if (selected.has(entry.path)) node.classList.add('selected');
+
+      // Drag past a small threshold hands the real file(s) to macOS. Dropping
+      // in Finder MOVES them out of the project, like dragging between two
+      // Finder windows; Option-drag copies instead, also like Finder. Dropping
+      // back in this tree moves them between folders (see the tauri://drag-*
+      // listeners below). A drag that never passes the threshold stays a plain
+      // click, so click-to-select still works.
       node.addEventListener('pointerdown', (e) => {
-        if (!e.altKey || e.button !== 0) return;
+        if (e.button !== 0) return;
+        if (e.target.closest('.twirl, .open-browser, .rename')) return;
+        const startX = e.clientX, startY = e.clientY;
+        let started = false;
+        const onMove = async (ev) => {
+          if (started) return;
+          if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return;
+          started = true;
+          cleanup();
+          // Dragging an unselected row drags just that row, Finder-style.
+          if (!selected.has(entry.path)) {
+            selected.clear();
+            selected.add(entry.path);
+            anchorPath = entry.path;
+            paintSelection();
+          }
+          // Modifier read at drag start, not at press — you can decide to copy
+          // after you've already started moving.
+          const removed = await dragFilesOut(selPaths(), { move: !ev.altKey });
+          if (removed.length) {
+            for (const p of removed) selected.delete(p);
+            await refresh();
+          }
+        };
+        const cleanup = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', cleanup);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', cleanup);
+      });
+
+      // ── Inline rename ────────────────────────────────────────────────────
+      // Swaps the name span for a field in place; Enter commits, Esc/blur
+      // cancels. Exposed on the node so New Folder can jump straight into it.
+      node._beginRename = () => {
+        if (node.querySelector('.rename')) return;
+        const input = document.createElement('input');
+        input.className = 'rename';
+        input.value = entry.name;
+        name.replaceWith(input);
+        input.focus();
+        // Select the stem only, leaving the extension alone.
+        const dot = entry.is_dir ? -1 : entry.name.lastIndexOf('.');
+        input.setSelectionRange(0, dot > 0 ? dot : entry.name.length);
+
+        let done = false;
+        const cancel = () => {
+          if (done) return;
+          done = true;
+          input.replaceWith(name);
+        };
+        const commit = async () => {
+          if (done) return;
+          const next = input.value.trim();
+          if (!next || next === entry.name) return cancel();
+          done = true;
+          input.replaceWith(name);
+          try {
+            const path = await invoke('fs_rename', { path: entry.path, newName: next });
+            selected.delete(entry.path);
+            selected.add(path);
+            await refresh();
+          } catch (err) {
+            toast(String(err));
+          }
+        };
+        input.addEventListener('keydown', (e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') commit();
+          else if (e.key === 'Escape') cancel();
+        });
+        input.addEventListener('blur', cancel);
+      };
+
+      node.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        dragFilesOut([entry.path]);
+        // Right-clicking outside the selection retargets it, like Finder.
+        if (!selected.has(entry.path)) {
+          selected.clear();
+          selected.add(entry.path);
+          anchorPath = entry.path;
+          paintSelection();
+        }
+        const many = selected.size > 1;
+        const parentDir = entry.path.slice(0, entry.path.lastIndexOf('/'));
+        openMenu(e.clientX, e.clientY, [
+          ...(many ? [] : [{ label: entry.is_dir ? 'Open' : 'Open in Editor', run: toggle }]),
+          { label: 'Reveal in Finder', run: () => invoke('reveal_in_finder', { path: entry.path }).catch(() => {}) },
+          '-',
+          ...(many ? [] : [
+            { label: 'Rename…', run: () => node._beginRename() },
+            { label: 'Duplicate', run: () => duplicate(entry.path) },
+          ]),
+          { label: 'New Folder', run: () => newFolder(entry.is_dir ? entry.path : parentDir) },
+          '-',
+          { label: many ? `Copy ${selected.size} Paths` : 'Copy Path', run: copyPaths },
+          { label: many ? `Move ${selected.size} Items to Trash` : 'Move to Trash', run: trashSelection },
+        ]);
       });
 
       const isHtml = !entry.is_dir && entry.name.toLowerCase().endsWith('.html');
@@ -473,12 +854,19 @@ max-width:350px;
         row.appendChild(childrenEl);
       }
 
-      twirl.addEventListener('click', toggle);
-      name.addEventListener('click', toggle);
+      // Finder's split: the disclosure triangle expands on a single click, but
+      // a click on the row only selects — opening takes a double-click.
+      twirl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggle();
+      });
+      node.addEventListener('click', (e) => clickSelect(entry.path, e));
+      node.addEventListener('dblclick', () => toggle());
       // Exposed so buildRoot can force-open the root directly — a synthetic
       // click() on .node wouldn't reach the listeners above, which live on
       // its twirl/name children, not .node itself.
       row._toggle = toggle;
+      node._toggle = toggle;
 
       if (!isRoot && entry.is_dir && expandedSet.has(entry.path)) {
         await toggle();
@@ -618,9 +1006,153 @@ max-width:350px;
       }
     }
 
+    // ── Dropping in ─────────────────────────────────────────────────────────
+    // One path for both cases: a drag started in this tree leaves the window as
+    // a real macOS drag and comes back as an OS drop, so Finder drops and
+    // internal moves land in the same handler.
+
+    let dropNode = null;      // the .node currently highlighted
+    let springTimer = null;   // spring-loaded folder: hover to auto-expand
+
+    // Drag positions arrive relative to the WINDOW's content area. Tauri types
+    // them as PhysicalPosition, but on macOS wry passes AppKit points straight
+    // through (`convertPoint:fromView:nil` in wry's drag_drop.rs) — they're
+    // already CSS pixels, so dividing by devicePixelRatio would land the drop
+    // half a window too high. When this page is the Files tab it's an iframe
+    // partway down the main window, so subtract its offset as well.
+    function toCss(position) {
+      let x = position.x, y = position.y;
+      const frame = window.frameElement;
+      if (frame) {
+        const box = frame.getBoundingClientRect();
+        x -= box.left;
+        y -= box.top;
+      }
+      return { x, y };
+    }
+
+    // The folder a drop at this point lands in: a folder row itself, a file
+    // row's parent, or — over empty tree space — the project root.
+    function dropDirAt(x, y) {
+      const el = document.elementFromPoint(x, y);
+      if (!el || !tree.contains(el)) return null;
+      const node = el.closest('.node[data-path]');
+      if (!node) return currentProjectPath;
+      if (node.dataset.dir) return node.dataset.path;
+      return node.dataset.path.slice(0, node.dataset.path.lastIndexOf('/'));
+    }
+
+    function highlightDrop(dir) {
+      const next = dir
+        ? tree.querySelector(`.node[data-path="${CSS.escape(dir)}"]`)
+        : null;
+      if (next === dropNode) return;
+      if (dropNode) dropNode.classList.remove('drop-target');
+      dropNode = next;
+      clearTimeout(springTimer);
+      if (!dropNode) return;
+      dropNode.classList.add('drop-target');
+      // Hovering a closed folder for a beat opens it, so you can drill down
+      // mid-drag without letting go.
+      if (dropNode.dataset.dir && !dropNode.classList.contains('open')) {
+        const target = dropNode;
+        springTimer = setTimeout(() => target._toggle && target._toggle(), 700);
+      }
+    }
+
+    function clearDrop() {
+      clearTimeout(springTimer);
+      if (dropNode) dropNode.classList.remove('drop-target');
+      dropNode = null;
+    }
+
+    // ── Keyboard ────────────────────────────────────────────────────────────
+    document.addEventListener('keydown', (e) => {
+      if (e.target.closest('.rename')) return;   // rename field owns its keys
+      const paths = selPaths();
+
+      if (e.key === 'Escape') {
+        selected.clear();
+        paintSelection();
+        closeMenu();
+        return;
+      }
+      if (e.metaKey && e.key === 'z') {
+        e.preventDefault();
+        undoMove();
+        return;
+      }
+      if (e.metaKey && (e.key === 'Backspace' || e.key === 'Delete')) {
+        e.preventDefault();
+        trashSelection();
+        return;
+      }
+      if (e.metaKey && e.altKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        copyPaths();
+        return;
+      }
+      if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        newFolder(newFolderParent());
+        return;
+      }
+      if (!paths.length) return;
+      const node = tree.querySelector(`.node[data-path="${CSS.escape(paths[paths.length - 1])}"]`);
+      if (!node) return;
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        node._beginRename();
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const nodes = visibleNodes();
+        const i = nodes.indexOf(node);
+        const next = nodes[i + (e.key === 'ArrowDown' ? 1 : -1)];
+        if (next) {
+          clickSelect(next.dataset.path, e);
+          next.scrollIntoView({ block: 'nearest' });
+        }
+      } else if (e.key === 'ArrowRight' && node.dataset.dir && !node.classList.contains('open')) {
+        e.preventDefault();
+        node._toggle();
+      } else if (e.key === 'ArrowLeft' && node.classList.contains('open')) {
+        e.preventDefault();
+        node._toggle();
+      }
+    });
+
+    // Clicking empty tree space deselects; right-clicking it offers New Folder
+    // at the project root.
+    tree.addEventListener('click', (e) => {
+      if (e.target.closest('.node')) return;
+      selected.clear();
+      paintSelection();
+    });
+    tree.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('.node')) return;
+      e.preventDefault();
+      openMenu(e.clientX, e.clientY, [
+        { label: 'New Folder', run: () => newFolder(currentProjectPath) },
+      ]);
+    });
+
     main();
 
     if (hasTauri) {
+      listen('tauri://drag-over', (e) => {
+        const { x, y } = toCss(e.payload.position);
+        highlightDrop(dropDirAt(x, y));
+      });
+      listen('tauri://drag-leave', clearDrop);
+      listen('tauri://drag-drop', async (e) => {
+        const { x, y } = toCss(e.payload.position);
+        const dir = dropDirAt(x, y);
+        clearDrop();
+        const paths = e.payload.paths || [];
+        if (dir && paths.length) await moveInto(paths, dir);
+      });
+
       listen('project-activated', () => main());
       // Studio's recursive watcher over ~/Projects broadcasts this on any
       // relevant change; rebuild the tree (expanded folders persist via

@@ -89,17 +89,48 @@ export function genericFileIcon(count = 1) {
 
 /** Native drag-out of real file(s) to Finder / a file picker / a web "drop
  *  here" zone. Call synchronously inside a pointerdown/mousedown so the OS drag
- *  attaches to the press the user is already holding. `paths` must be absolute;
- *  pass an `icon` PNG data-URL to override the neutral default. */
-export async function dragFilesOut(paths, icon) {
-    if (!hasTauri || !paths || !paths.length) return;
+ *  attaches to the press the user is already holding. `paths` must be absolute.
+ *
+ *  Options: `icon` — a PNG data-URL overriding the neutral default. `move` —
+ *  remove the source once the drop lands, Finder-style. That removal is ours to
+ *  do: macOS only lets the drag *state* an intent, and Finder answers cross-app
+ *  file drags with Copy no matter what the source mask says. `finish_drag_out`
+ *  (lib.rs) is the one that decides, and it only removes when the drop actually
+ *  landed in Finder — never into a web upload zone or a file picker.
+ *
+ *  Returns the paths that left, so a caller can refresh its view. */
+export async function dragFilesOut(paths, { icon, move = false } = {}) {
+    if (!hasTauri || !paths || !paths.length) return [];
     try {
-        await window.__TAURI__.drag.startDrag({
-            item: paths,
-            icon: icon || genericFileIcon(paths.length),
-            mode: "copy",
+        // The plugin command is invoked directly rather than through
+        // `tauri.drag.startDrag`: that wrapper ships its own inlined Channel
+        // that expects a `{message, id}` envelope this Tauri version no longer
+        // sends, so its drop callback throws "undefined is not an object" at
+        // the end of every drag. Tauri's own Channel matches its own envelope.
+        // (`tauri`, not `window.__TAURI__` — plugin globals are injected
+        // main-frame only, so an embedded tool borrows its parent's.)
+        const onEvent = new tauri.core.Channel();
+        const dropped = new Promise((resolve) => {
+            onEvent.onmessage = (e) => resolve(e.result === "Dropped");
         });
+        await invoke("plugin:drag|start_drag", {
+            item: paths,
+            image: icon || genericFileIcon(paths.length),
+            options: { mode: move ? "move" : "copy" },
+            onEvent,
+        });
+        // start_drag resolves only once the session ends, so the channel
+        // message has normally already arrived — but never hang waiting for one
+        // that isn't coming.
+        const landed = await Promise.race([
+            dropped,
+            new Promise((r) => setTimeout(() => r(false), 300)),
+        ]);
+        if (!move || !landed) return [];
+        const res = await invoke("finish_drag_out", { paths });
+        return res.removed;
     } catch (e) {
         console.error("drag-out failed:", e);
+        return [];
     }
 }

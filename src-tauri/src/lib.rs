@@ -1,4 +1,5 @@
 mod dock;
+mod files;
 mod git;
 mod patchmatch;
 
@@ -2483,6 +2484,7 @@ fn dev_pid_alive(repo: String) -> bool {
 }
 
 const WINBOUNDS_BIN: &str = env!("WINBOUNDS_BIN");
+const WINOWNER_BIN: &str = env!("WINOWNER_BIN");
 const DAYAGENDA_BIN: &str = env!("DAYAGENDA_BIN");
 const CALREAD_BIN: &str = env!("CALREAD_BIN");
 const TRANSIT_BIN: &str = env!("TRANSIT_BIN");
@@ -3392,6 +3394,72 @@ fn trash_media(paths: Vec<String>) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// The app owning the topmost window under the cursor right now, or "Finder"
+/// when the cursor is over the bare Desktop. Empty string if unknown.
+fn app_under_cursor() -> String {
+    Command::new(WINOWNER_BIN)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
+/// Finishes a native drag-out, called once the drop lands. Shared by every
+/// drag-out surface (Media grid, File Directory) — the sidecar sweep below is
+/// simply a no-op for files that never had one.
+///
+/// macOS won't let us force a move: `mode: "move"` only sets the drag session's
+/// source mask, and Finder answers file drags from other apps with Copy anyway.
+/// So Studio performs the move itself — but only when the drop landed in Finder
+/// or on the Desktop, since deleting the source after a drop into a web upload
+/// zone or a file picker would be real data loss.
+///
+/// Anything already gone (a receiver that *did* honour the move) just gets its
+/// hidden edits sidecar swept up. Removals go to the Trash, so a misfire is
+/// recoverable. Returns the paths that left, so the grid knows to reload.
+#[derive(serde::Serialize)]
+struct DragOutResult {
+    /// The app the drop landed in, as `winowner` saw it (for logging — this is
+    /// the whole decision, so it's worth being able to read it back).
+    app: String,
+    removed: Vec<String>,
+}
+
+#[tauri::command]
+async fn finish_drag_out(paths: Vec<String>) -> Result<DragOutResult, String> {
+    // Sampled first, before any waiting — by the time the copy finishes the
+    // cursor has usually wandered off the destination window.
+    let app = app_under_cursor();
+    let to_finder = app == "Finder";
+    // Off the main thread — the sleep below would otherwise freeze the UI.
+    tauri::async_runtime::spawn_blocking(move || {
+        // Give Finder's copy a moment to actually read the bytes before the
+        // source moves out from under it.
+        if to_finder {
+            std::thread::sleep(std::time::Duration::from_millis(900));
+        }
+        let mut gone = Vec::new();
+        for path in &paths {
+            let exists = std::path::Path::new(path).exists();
+            if exists && !to_finder {
+                continue;
+            }
+            if exists {
+                trash::delete(path).map_err(|e| e.to_string())?;
+            }
+            let sidecar = sidecar_path(path);
+            if std::path::Path::new(&sidecar).exists() {
+                let _ = trash::delete(&sidecar);
+            }
+            gone.push(path.clone());
+        }
+        Ok(DragOutResult { app, removed: gone })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Write an image's edit sidecar.
@@ -5501,6 +5569,11 @@ pub fn run() {
             read_workspace,
             save_workspace,
             list_dir,
+            files::fs_move,
+            files::fs_rename,
+            files::fs_trash,
+            files::fs_duplicate,
+            files::fs_new_folder,
             watch_extra_paths,
             list_videos,
             read_video,
@@ -5560,6 +5633,7 @@ pub fn run() {
             read_edits,
             save_edits,
             trash_media,
+            finish_drag_out,
             write_image,
             rename_media,
             rotate_video,

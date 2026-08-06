@@ -2020,10 +2020,14 @@ async function startNoteFileDrag(note, card) {
     }
   }
   try {
-    await window.__TAURI__.drag.startDrag({
+    // Direct invoke, not `drag.startDrag` — that wrapper's inlined Channel
+    // expects a `{message, id}` envelope this Tauri version no longer sends
+    // and throws at the end of every drag. Same reasoning as media.js.
+    await invoke("plugin:drag|start_drag", {
       item: [path],
-      icon: noteDragIcon(card),
-      mode: "copy",
+      image: noteDragIcon(card),
+      options: { mode: "copy" },
+      onEvent: new window.__TAURI__.core.Channel(),
     });
   } catch (e) {
     console.error("note drag-out failed:", e);
