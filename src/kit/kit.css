@@ -299,7 +299,6 @@ select.field {
  *
  * .tab-pin — icon button that right-aligns via margin-left:auto.
  *   Add .is-active to fill the pin icon with accent.
- * .tab.is-drop-target — accent tint when a drag hovers the tab.
  */
 .tabs {
     display: flex;
@@ -337,11 +336,6 @@ select.field {
 .tab.is-active {
     color: var(--text);
     border-bottom-color: var(--accent);
-}
-.tab.is-drop-target {
-    background: color-mix(in srgb, var(--accent) 16%, transparent);
-    border-radius: var(--radius-sm);
-    color: var(--text);
 }
 /* Round icon-only variant — used in the project header's tab row. */
 .tab--round {

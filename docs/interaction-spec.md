@@ -392,7 +392,6 @@ classifies each path (image-file / other-file / folder) and routes.
 | Notes | reorder cards (done; horizontal indicator between column items) |
 | Media | manual reorder + sort-toggle buttons: **date added** (newest first, default) / **date edited** (newest first) / **name** / **user-sorted**. Switching to user-sorted seeds order from date-added, then manual drag overrides. |
 | Projects | reorder tiles |
-| Cross-panel | drag a media tile into the Notes tab → create an image note (references the `media/` file in place, §9.1) |
 
 ### 8.3 Drag + selection interplay
 
@@ -458,11 +457,9 @@ folder, separate from `media/` so note images don't appear in the Media tab.
 ### 9.4 Creation paths
 
 - **Paste** a clipboard image in Notes → `paste_note_image` → image note.
-- **Internal drag** of a media tile into the Notes tab → image note referencing
-  the `media/` file in place (§8.2).
 - **External image-file drop does NOT create an image note** — it goes to
   `media/` (§8.1).
-- No toolbar "Image" add-button (paste / drag only).
+- No toolbar "Image" add-button (paste / external drop only).
 
 ### 9.5 Copy/paste of image notes
 

@@ -76,9 +76,8 @@ glob `**` does **not** match leading-dot files, so dotfiles (e.g.
 
 Plain-drag a tile to hand the real file(s) to macOS via `tauri-plugin-drag` —
 `startNativeFileDrag`/`makeDragIcon`. Option-drag copies instead of moving,
-matching the File Directory. The **internal** gesture — reorder within the grid,
-and dropping an image tile onto the Notes tab to make an image note — is on
-**⌘-drag**, since dragging out is much the more common intent.
+matching the File Directory. Grid reorder — the only remaining internal drag —
+is on **⌘-drag**, since dragging out is much the more common intent.
 
 **Never call `window.__TAURI__.drag.startDrag`.** The plugin's global wrapper
 ships its own inlined `Channel` that expects a `{message, id}` envelope this

@@ -2,7 +2,7 @@
 // (tonal/crop/geometry), lightbox, export, and the tools (remove-bg, extend,
 // generate). Extracted from main.js. See interaction-spec / BACKLOG file-split.
 
-import { el, mi, genId } from "./dom.js";
+import { el, mi } from "./dom.js";
 import { loadImage, renderOriented, defaultEdits } from "./imageutil.js";
 import { createSelection } from "./selection.js";
 import { panelKeymaps } from "./keymap.js";
@@ -33,8 +33,6 @@ import { state } from "./state.js";
 import {
   selectTab,
   render,
-  scheduleNotesSave,
-  renderNotes,
   pasteFromClipboard,
   installOffClickDeselect,
   scheduleBentoLayout,
@@ -147,29 +145,6 @@ let mediaDrag = null; // { item, tile, startX, startY, active }
 state.mediaDragActive = false; // suppresses the OS file-drop overlay
 let lastMediaDragEnd = 0;
 let mediaDropIndex = null;
-let mediaDropToNotes = false; // dragging an image tile onto the Notes tab
-
-// Create an image note referencing a media file in place (no copy); §9.1/§8.2.
-function createImageNoteFromMedia(item) {
-  if (!state.notesProjectPath || item.kind !== "image") return;
-  const prefix = state.notesProjectPath + "/";
-  const src = item.path.startsWith(prefix)
-    ? item.path.slice(prefix.length)
-    : item.path;
-  state.notesData.notes.unshift({
-    id: genId(),
-    kind: "image",
-    title: "",
-    src,
-    w: item.width || 0,
-    h: item.height || 0,
-    caption: "",
-    createdAt: new Date().toISOString(),
-  });
-  renderNotes();
-  scheduleNotesSave();
-  selectTab("notes");
-}
 
 // Build a PNG data-URL drag image (what the cursor carries during drag-out).
 // Prefers the tile's own thumbnail; falls back to a neutral card if the
@@ -318,21 +293,6 @@ function onMediaPointerMove(e) {
   }
   e.preventDefault();
 
-  // Over the Notes tab? An image tile dropped there becomes an image note.
-  const notesTab = document.querySelector('.tab[data-tab="notes"]');
-  const overNotes =
-    mediaDrag.item.kind === "image" &&
-    !!notesTab &&
-    document
-      .elementFromPoint(e.clientX, e.clientY)
-      ?.closest('.tab[data-tab="notes"]') === notesTab;
-  mediaDropToNotes = overNotes;
-  notesTab?.classList.toggle("is-drop-target", overNotes);
-  if (overNotes) {
-    hideMediaDropIndicator();
-    return;
-  }
-
   const grid = document.getElementById("media-grid");
   const target = computeMediaDrop(grid, e.clientX, e.clientY);
   mediaDropIndex = target ? target.index : null;
@@ -353,22 +313,9 @@ function onMediaPointerUp() {
   state.mediaDragActive = false;
   document.body.classList.remove("note-dragging");
   hideMediaDropIndicator();
-  document
-    .querySelector('.tab[data-tab="notes"]')
-    ?.classList.remove("is-drop-target");
-  if (!drag || !drag.active) {
-    mediaDropToNotes = false;
-    return;
-  }
+  if (!drag || !drag.active) return;
   lastMediaDragEnd = Date.now();
   drag.tile.classList.remove("is-dragging");
-
-  // Dropped on the Notes tab → image note (no reorder).
-  if (mediaDropToNotes) {
-    mediaDropToNotes = false;
-    createImageNoteFromMedia(drag.item);
-    return;
-  }
 
   const to = mediaDropIndex;
   mediaDropIndex = null;
