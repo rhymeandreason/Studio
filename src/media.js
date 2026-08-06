@@ -940,10 +940,16 @@ async function loadMedia(path) {
   // Drop the inline edit focus if its file is gone.
   if (state.activeItem && !present.has(state.activeItem.path)) {
     state.activeItem = null;
-    document.getElementById("media-side").hidden = true;
-    document.getElementById("app-right").hidden = true;
-    invoke("set_window_width", { width: window.innerWidth - 320 });
-
+    // Only reclaim the column if it was actually showing. The width change is
+    // *relative*, so an unguarded shrink here compounds — every reload that
+    // notices a missing file takes another 320px off, which is how dragging a
+    // file out used to leave the window a sliver.
+    const appRight = document.getElementById("app-right");
+    if (appRight && !appRight.hidden) {
+      document.getElementById("media-side").hidden = true;
+      appRight.hidden = true;
+      invoke("set_window_width", { width: window.innerWidth - 320 });
+    }
   }
 
   if (!items.length) {
@@ -1294,13 +1300,16 @@ function setEditorSidebar(enabled) {
   editorSidebarEnabled = enabled;
   state.editorSidebarEnabled = enabled;
   document.getElementById("media-editor-toggle").checked = enabled;
-  if (!enabled && state.activeItem) {
+  // Guarded both ways: the width change is relative, so toggling toward the
+  // state the column is already in would resize the window for nothing.
+  const appRight = document.getElementById("app-right");
+  if (!enabled && state.activeItem && appRight && !appRight.hidden) {
     document.getElementById("media-side").hidden = true;
-    document.getElementById("app-right").hidden = true;
+    appRight.hidden = true;
     invoke("set_window_width", { width: window.innerWidth - 320 });
-  } else if (enabled && state.activeItem) {
+  } else if (enabled && state.activeItem && appRight && appRight.hidden) {
     document.getElementById("media-side").hidden = false;
-    document.getElementById("app-right").hidden = false;
+    appRight.hidden = false;
     invoke("set_window_width", { width: window.innerWidth + 320 });
   }
 }
