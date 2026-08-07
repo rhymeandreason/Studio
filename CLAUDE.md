@@ -53,6 +53,9 @@ icon. Editing `src/` is live (reload the window); Rust changes need a restart.
 - **Code Editor** (HTML/CSS/JS tool: DOM tree, inspector, git diff, syntax
   highlighting, separate preview window) — `src/tools/code-editor.html` +
   `code-preview.html`. [docs/code-editor.md](docs/code-editor.md)
+- **Markdown Editor** (Typora-style WYSIWYG for .md; vendored ProseMirror
+  bundle; .md files route here instead of the Code Editor) —
+  `src/tools/markdown-editor.html`. [docs/markdown-editor.md](docs/markdown-editor.md)
 - **Slides** (presentation builder: `presentation` + `theme` artifacts, shared
   renderer in `src/deck/`, Slides + Theme editor tools) — [docs/slides.md](docs/slides.md)
 - **Diagrams** (`diagram` artifacts: templated concept diagrams, SVG renderer

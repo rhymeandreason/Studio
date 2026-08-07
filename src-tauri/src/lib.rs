@@ -592,6 +592,8 @@ fn tool_style(filename: &str) -> ToolStyle {
     let s = |w, h, tint| ToolStyle { w, h, tint };
     match filename {
         "code-editor.html" => s(900.0, 640.0, Tint::Project),
+        // A writing surface: narrower, taller, one centered column.
+        "markdown-editor.html" => s(760.0, 720.0, Tint::Project),
         "code-preview.html" => s(900.0, 640.0, Tint::Project),
         "daily-notes.html" => s(300.0, 600.0, Tint::Paper),
         "ram-overview.html" => s(380.0, 440.0, Tint::Paper),
@@ -706,6 +708,67 @@ fn open_code_editor_window(app: &AppHandle, color: &str, project_path: &str, ope
     let _ = apply_tool_chrome(builder, filename).build();
 }
 
+/// Per-project window label for the Markdown Editor (same scheme as the Code
+/// Editor's — see `code_editor_label`).
+fn markdown_editor_label(project_path: &str) -> String {
+    let scope = if project_path.is_empty() {
+        "none".to_string()
+    } else {
+        slugify(project_path)
+    };
+    format!("tool-markdown-editor-html-{}", scope)
+}
+
+/// Open (or focus) the Markdown Editor window for `project_path` — the Code
+/// Editor's twin for .md files (see `open_code_editor_window` for the
+/// pending_open / event-delivery contract; this uses the `mde:open-file`
+/// event instead of `ce:open-file`).
+fn open_markdown_editor_window(
+    app: &AppHandle,
+    color: &str,
+    project_path: &str,
+    open_file: Option<String>,
+) {
+    let filename = "markdown-editor.html";
+    let label = markdown_editor_label(project_path);
+    track_tool_window(&label, filename, Some(project_path.to_string()), "markdown-editor");
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        if let Some(file) = open_file {
+            let _ = app.emit_to(
+                &label,
+                "mde:open-file",
+                serde_json::json!({ "label": label, "file": file }),
+            );
+        }
+        return;
+    }
+    if let Some(file) = open_file {
+        app.state::<AppState>()
+            .pending_open
+            .lock()
+            .unwrap()
+            .insert(label.clone(), file);
+    }
+    let mut params: Vec<String> = Vec::new();
+    if !color.is_empty() {
+        params.push(format!("color={}", url_encode(color)));
+    }
+    if !project_path.is_empty() {
+        params.push(format!("session={}", url_encode(project_path)));
+    }
+    let qs = if params.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", params.join("&"))
+    };
+    let url = format!("tools/{}{}", filename, qs);
+    let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
+        .title(String::new());
+    let _ = apply_tool_chrome(builder, filename).build();
+}
+
 /// The active project's folder path, or empty if none is active.
 fn active_project_path(app: &AppHandle) -> String {
     app.state::<AppState>()
@@ -779,6 +842,15 @@ fn open_tool_window(
             .or_else(|| active_git_color_hex(app))
             .unwrap_or_default();
         open_code_editor_window(app, &color, &active_project_path(app), None);
+        return;
+    }
+    // Same per-project scheme for its Markdown twin.
+    if Path::new(path).file_name().and_then(|n| n.to_str()) == Some("markdown-editor.html") {
+        let color = color
+            .filter(|c| !c.is_empty())
+            .or_else(|| active_git_color_hex(app))
+            .unwrap_or_default();
+        open_markdown_editor_window(app, &color, &active_project_path(app), None);
         return;
     }
     let Some(filename) = Path::new(path).file_name().and_then(|n| n.to_str()) else {
@@ -2755,6 +2827,15 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
                     };
                     open_code_editor_window(&app, &color, &proj, None);
                 }
+                Some("markdown-editor") => {
+                    let proj = target.tool_query.clone().unwrap_or_default();
+                    let color = if proj.is_empty() {
+                        active_git_color_hex(&app).unwrap_or_default()
+                    } else {
+                        git_color_for_path(app.clone(), proj.clone())
+                    };
+                    open_markdown_editor_window(&app, &color, &proj, None);
+                }
                 Some("schedules") => {
                     let _ = open_schedules_window(app.clone());
                 }
@@ -4325,7 +4406,28 @@ fn open_in_code_editor(
     // file from Yuniku always opens in Yuniku's editor even while Studio is
     // active. open_code_editor_window handles the pending/event load itself.
     let proj = project_path_for_file(app, &file).unwrap_or_else(|| active_project_path(app));
-    open_code_editor_window(app, &color, &proj, Some(file));
+    // Markdown files prefer the WYSIWYG Markdown Editor; its "open in Code
+    // Editor" button (`open_md_in_code_editor`) is the way back to raw source.
+    let is_md = Path::new(&file)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
+        .unwrap_or(false);
+    if is_md {
+        open_markdown_editor_window(app, &color, &proj, Some(file));
+    } else {
+        open_code_editor_window(app, &color, &proj, Some(file));
+    }
+    Ok(())
+}
+
+/// Escape hatch from the Markdown Editor: open the file as raw source in the
+/// Code Editor, bypassing the .md routing in `open_in_code_editor`.
+#[tauri::command]
+fn open_md_in_code_editor(app: AppHandle, file: String) -> Result<(), String> {
+    let color = git_color_for_path(app.clone(), file.clone());
+    let proj = project_path_for_file(&app, &file).unwrap_or_else(|| active_project_path(&app));
+    open_code_editor_window(&app, &color, &proj, Some(file));
     Ok(())
 }
 
@@ -5647,6 +5749,7 @@ pub fn run() {
             git_push,
             git_open_file,
             open_file_in_code_editor,
+            open_md_in_code_editor,
             git_get_draft,
             git_set_draft,
             take_pending_open,

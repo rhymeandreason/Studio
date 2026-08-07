@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Markdown Editor</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
+  <script type="module" src="../kit/components.js"></script>
+  <style>
+    /* Transparent shell; the opaque fill lives on #main (window-chrome quirk:
+       a background on html/body paints the square viewport and defeats the
+       rounded corners). */
+    html, body { background: transparent; }
+    body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    #bar { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 40px; flex: none; }
+    #main { flex: 1; min-height: 0; background: var(--bg); display: flex; flex-direction: column; }
+
+    /* Toolbar row below the bar (the bar itself is title-only: it gets removed
+       when a tool is embedded, so nothing live may sit inside it). */
+    #toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 14px; flex: none; }
+    #filename { font-size: 13px; color: var(--text); opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    #dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #888); opacity: 0; transition: opacity 0.2s; flex: none; }
+    #dirty.on { opacity: 0.9; }
+    #toolbar .spacer { flex: 1; }
+
+    /* Writing surface: one centered column, Typora-style. */
+    #scroller { flex: 1; overflow-y: auto; min-height: 0; }
+    #editor { max-width: 680px; margin: 0 auto; padding: 28px 40px 45vh; }
+
+    .ProseMirror { outline: none; white-space: pre-wrap; word-wrap: break-word; font-size: 15px; line-height: 1.65; color: var(--text); }
+    .ProseMirror p { margin: 0 0 0.9em; }
+    .ProseMirror h1, .ProseMirror h2, .ProseMirror h3,
+    .ProseMirror h4, .ProseMirror h5, .ProseMirror h6 { line-height: 1.25; margin: 1.4em 0 0.5em; font-weight: 600; }
+    .ProseMirror h1 { font-size: 1.9em; margin-top: 0.6em; }
+    .ProseMirror h2 { font-size: 1.5em; }
+    .ProseMirror h3 { font-size: 1.2em; }
+    .ProseMirror h4, .ProseMirror h5, .ProseMirror h6 { font-size: 1em; }
+    .ProseMirror ul, .ProseMirror ol { padding-left: 1.5em; margin: 0 0 0.9em; }
+    .ProseMirror li > p { margin-bottom: 0.25em; }
+    .ProseMirror blockquote { margin: 0 0 0.9em; padding: 2px 0 2px 14px; border-left: 3px solid color-mix(in srgb, var(--text) 25%, transparent); color: color-mix(in srgb, var(--text) 70%, transparent); }
+    .ProseMirror code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.88em; background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 4px; padding: 1px 4px; }
+    .ProseMirror pre { background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: var(--radius, 8px); padding: 12px 14px; margin: 0 0 0.9em; overflow-x: auto; }
+    .ProseMirror pre code { background: none; padding: 0; font-size: 0.85em; line-height: 1.5; }
+    .ProseMirror hr { border: none; border-top: 1px solid color-mix(in srgb, var(--text) 18%, transparent); margin: 1.6em 0; }
+    .ProseMirror a { color: var(--accent, inherit); text-decoration: underline; text-underline-offset: 2px; }
+    .ProseMirror img { max-width: 100%; border-radius: 4px; }
+    .ProseMirror table { border-collapse: collapse; margin: 0 0 0.9em; width: 100%; table-layout: fixed; }
+    .ProseMirror th, .ProseMirror td { border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); padding: 5px 10px; text-align: left; vertical-align: top; }
+    .ProseMirror th { font-weight: 600; background: color-mix(in srgb, var(--text) 4%, transparent); }
+    .ProseMirror .selectedCell { background: color-mix(in srgb, var(--accent, #888) 14%, transparent); }
+
+    /* Git-changed blocks: same teal/blue language as the Code Editor. */
+    :root { --md-add-bar: #14b8a6; }
+    body.diff-committed { --md-add-bar: #2563eb; }
+    .md-changed { position: relative; }
+    .md-changed::before {
+      content: ""; position: absolute; left: -16px; top: 2px; bottom: 2px;
+      width: 3px; border-radius: 2px; background: var(--md-add-bar); opacity: 0.75;
+    }
+
+    /* Empty state (no file open). */
+    #empty { flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text); opacity: 0.6; }
+    body.no-file #empty { display: flex; }
+    body.no-file #scroller, body.no-file #toolbar { display: none; }
+  </style>
+</head>
+<body>
+  <div id="bar" data-window-bar><div data-window-close></div></div>
+  <div id="main">
+    <div id="toolbar">
+      <span id="filename" class="text-mono">No file</span>
+      <span id="dirty" title="Unsaved changes"></span>
+      <span class="spacer"></span>
+      <button class="btn btn-icon-only" id="table-btn" title="Insert table"><span class="mi">table</span></button>
+      <button class="btn btn-icon-only" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
+      <button class="btn btn-icon-only" id="code-btn" title="Open in Code Editor"><span class="mi">code</span></button>
+      <button class="btn btn-icon-only" id="open-btn" title="Open file…"><span class="mi">folder_open</span></button>
+    </div>
+    <div id="empty">
+      <span class="mi" style="font-size:40px">edit_note</span>
+      <div class="text-body">Open a Markdown file to start writing</div>
+      <button class="btn" id="empty-open">Open…</button>
+    </div>
+    <div id="scroller"><div id="editor"></div></div>
+  </div>
+
+  <script type="module">
+    import "../kit/window-chrome.js";
+    import { hasTauri, invoke, listen, toast } from "../kit/app.js";
+    import {
+      EditorState, EditorView, Plugin, PluginKey, Decoration, DecorationSet,
+      schema as baseSchema, defaultMarkdownParser, defaultMarkdownSerializer,
+      Schema, MarkdownParser, MarkdownSerializer,
+      baseKeymap, toggleMark, keymap, history, undo, redo, chainCommands,
+      inputRules, wrappingInputRule, textblockTypeInputRule, InputRule, undoInputRule,
+      splitListItem, liftListItem, sinkListItem, MarkdownIt, Selection,
+      tableNodes, tableEditing, goToNextCell,
+    } from "../vendor/prosemirror-md.js";
+
+    // ---------- schema: CommonMark + GFM pipe tables ----------
+    // Cells hold inline content directly (markdown table cells are single-line),
+    // which keeps the parser simple and the serializer lossless.
+    const schema = new Schema({
+      nodes: baseSchema.spec.nodes.append(tableNodes({
+        tableGroup: "block",
+        cellContent: "inline*",
+        cellAttributes: {},
+      })),
+      marks: baseSchema.spec.marks,
+    });
+
+    // Remap the default parser/serializer onto the extended schema, plus the
+    // table token/node handlers. markdown-it's commonmark preset has tables
+    // off; .enable("table") turns on the GFM pipe-table rule only.
+    const mdit = MarkdownIt("commonmark", { html: false }).enable("table");
+    const parser = new MarkdownParser(schema, mdit, {
+      ...defaultMarkdownParser.tokens,
+      table: { block: "table" },
+      thead: { ignore: true },
+      tbody: { ignore: true },
+      tr: { block: "table_row" },
+      th: { block: "table_header" },
+      td: { block: "table_cell" },
+    });
+    const serializer = new MarkdownSerializer({
+      ...defaultMarkdownSerializer.nodes,
+      table(state, node) {
+        // Each cell is serialized on its own (wrapped in a one-paragraph doc)
+        // rather than into the table's serializer state — writing into `state`
+        // mid-block would swallow the block separator into the first cell.
+        const cellText = (cell) =>
+          serializer
+            .serialize(schema.nodes.doc.create(null, [schema.nodes.paragraph.create(null, cell.content)]))
+            .trim()
+            .replace(/\n/g, " ")
+            .replace(/\|/g, "\\|");
+        const rows = [];
+        node.forEach((row) => {
+          const cells = [];
+          row.forEach((cell) => cells.push(cellText(cell)));
+          rows.push(cells);
+        });
+        const header = rows[0] || [];
+        state.write("| " + header.join(" | ") + " |\n");
+        state.write("|" + header.map(() => " --- |").join("") + "\n");
+        for (const r of rows.slice(1)) state.write("| " + r.join(" | ") + " |\n");
+        state.closeBlock(node);
+      },
+      table_row() {}, table_cell() {}, table_header() {},
+    }, defaultMarkdownSerializer.marks);
+
+    const $ = (id) => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+    const sessionKey = "mde-last:" + (params.get("session") || "none");
+
+    let currentPath = "";
+    let diskText = "";          // last text known to be on disk
+    let dirty = false;
+    let saveTimer = null;
+    let diffMode = "working";   // "working" | "committed"
+    let changedLines = new Set(); // 1-based new-file line numbers from git
+
+    // ---------- diff decorations ----------
+    const diffKey = new PluginKey("git-diff");
+    const diffPlugin = new Plugin({
+      key: diffKey,
+      state: {
+        init: () => DecorationSet.empty,
+        apply(tr, set) {
+          const next = tr.getMeta(diffKey);
+          if (next) return next;
+          return set.map(tr.mapping, tr.doc);
+        },
+      },
+      props: { decorations(state) { return diffKey.getState(state); } },
+    });
+
+    // The same markdown-it instance also supplies token line maps: after a
+    // save, disk text === serialized doc, so top-level token maps pair 1:1
+    // with the doc's top-level children.
+    function blockLineRanges(text) {
+      const toks = mdit.parse(text, {});
+      const ranges = [];
+      for (const t of toks) {
+        if (t.level !== 0 || !t.map) continue;
+        if (t.type.endsWith("_open") || ["fence", "code_block", "hr", "html_block"].includes(t.type)) {
+          ranges.push(t.map); // [startLine, endLine) 0-based
+        }
+      }
+      return ranges;
+    }
+
+    function applyDiffDecorations() {
+      if (!view) return;
+      const doc = view.state.doc;
+      const decos = [];
+      if (changedLines.size) {
+        const ranges = blockLineRanges(diskText);
+        // Pair top-level doc children with top-level token ranges by index;
+        // bail on mismatch rather than mis-tint.
+        if (ranges.length === doc.childCount) {
+          let pos = 0;
+          for (let i = 0; i < doc.childCount; i++) {
+            const node = doc.child(i);
+            const [a, b] = ranges[i];
+            let hit = false;
+            for (let ln = a + 1; ln <= b; ln++) if (changedLines.has(ln)) { hit = true; break; }
+            if (hit) decos.push(Decoration.node(pos, pos + node.nodeSize, { class: "md-changed" }));
+            pos += node.nodeSize;
+          }
+        }
+      }
+      view.dispatch(view.state.tr.setMeta(diffKey, DecorationSet.create(doc, decos)));
+    }
+
+    // Parse a unified diff into the set of changed (added) new-file lines.
+    function parseDiff(diff) {
+      changedLines = new Set();
+      let ln = 0;
+      for (const line of diff.split("\n")) {
+        const h = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+        if (h) { ln = parseInt(h[1], 10); continue; }
+        if (line.startsWith("+++") || line.startsWith("---")) continue;
+        if (line.startsWith("+")) { changedLines.add(ln); ln++; }
+        else if (!line.startsWith("-")) ln++;
+      }
+    }
+
+    async function refreshDiff() {
+      if (!hasTauri || !currentPath) return;
+      const cmd = diffMode === "committed" ? "git_diff_file_committed" : "git_diff_file";
+      try {
+        parseDiff(await invoke(cmd, { path: currentPath }));
+      } catch {
+        changedLines = new Set(); // not a repo, etc.
+      }
+      applyDiffDecorations();
+    }
+
+    // ---------- input rules (the Typora feel) ----------
+    function markInputRule(regexp, markType) {
+      return new InputRule(regexp, (state, match, start, end) => {
+        const content = match[1];
+        if (!content) return null;
+        const from = start + match[0].indexOf(match[0].trimStart());
+        return state.tr
+          .delete(from, end)
+          .insertText(content, from)
+          .addMark(from, from + content.length, markType.create())
+          .removeStoredMark(markType);
+      });
+    }
+
+    const rules = inputRules({
+      rules: [
+        textblockTypeInputRule(/^(#{1,6})\s$/, schema.nodes.heading, (m) => ({ level: m[1].length })),
+        wrappingInputRule(/^\s*>\s$/, schema.nodes.blockquote),
+        wrappingInputRule(/^\s*([-+*])\s$/, schema.nodes.bullet_list),
+        wrappingInputRule(
+          /^(\d+)\.\s$/, schema.nodes.ordered_list,
+          (m) => ({ order: +m[1] }),
+          (m, node) => node.childCount + node.attrs.order === +m[1],
+        ),
+        textblockTypeInputRule(/^```$/, schema.nodes.code_block),
+        new InputRule(/^(?:---|\*\*\*)$/, (state, match, start, end) =>
+          state.tr.replaceRangeWith(start, end, schema.nodes.horizontal_rule.create())),
+        markInputRule(/\*\*([^*]+)\*\*$/, schema.marks.strong),
+        markInputRule(/(?<!\*)\*([^*\s][^*]*)\*$/, schema.marks.em),
+        markInputRule(/(?<![_\w])_([^_\s][^_]*)_$/, schema.marks.em),
+        markInputRule(/`([^`]+)`$/, schema.marks.code),
+      ],
+    });
+
+    const keys = keymap({
+      "Mod-b": toggleMark(schema.marks.strong),
+      "Mod-i": toggleMark(schema.marks.em),
+      "Mod-`": toggleMark(schema.marks.code),
+      "Mod-z": undo,
+      "Shift-Mod-z": redo,
+      "Mod-y": redo,
+      "Backspace": undoInputRule,
+      "Enter": splitListItem(schema.nodes.list_item),
+      "Tab": chainCommands(goToNextCell(1), sinkListItem(schema.nodes.list_item)),
+      "Shift-Tab": chainCommands(goToNextCell(-1), liftListItem(schema.nodes.list_item)),
+      "Mod-s": () => { flushSave(); return true; },
+    });
+
+    // ---------- editor ----------
+    let view = null;
+    function makeState(doc) {
+      return EditorState.create({
+        doc,
+        plugins: [rules, keys, keymap(baseKeymap), history(), tableEditing(), diffPlugin],
+      });
+    }
+
+    function mountEditor(markdown) {
+      const doc = parser.parse(markdown);
+      if (view) { view.updateState(makeState(doc)); return; }
+      view = new EditorView($("editor"), {
+        state: makeState(doc),
+        dispatchTransaction(tr) {
+          view.updateState(view.state.apply(tr));
+          if (tr.docChanged) { setDirty(true); scheduleSave(); }
+        },
+      });
+    }
+
+    function serialize() { return serializer.serialize(view.state.doc); }
+    window.__mde = { serialize: () => serialize() }; // console debugging
+
+    function setDirty(on) { dirty = on; $("dirty").classList.toggle("on", on); }
+
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(flushSave, 600);
+    }
+
+    async function flushSave() {
+      clearTimeout(saveTimer);
+      if (!dirty || !currentPath || !view) return;
+      const text = serialize();
+      if (hasTauri) {
+        try { await invoke("write_text_file", { path: currentPath, content: text }); }
+        catch (e) { toast("Save failed: " + e); return; }
+      }
+      diskText = text;
+      setDirty(false);
+      refreshDiff();
+    }
+
+    // ---------- open / load ----------
+    async function loadPath(path) {
+      await flushSave(); // don't drop edits in the previous file
+      let text = "";
+      try { text = await invoke("read_text_file", { path }); }
+      catch (e) { toast("Couldn't open: " + e); return; }
+      currentPath = path;
+      diskText = text;
+      setDirty(false);
+      document.body.classList.remove("no-file");
+      $("filename").textContent = path.split("/").pop();
+      mountEditor(text);
+      localStorage.setItem(sessionKey, path);
+      try {
+        const color = await invoke("git_color_for_path", { path });
+        if (color) document.documentElement.style.setProperty("--titlebar-tint", color);
+      } catch {}
+      refreshDiff();
+      view.focus();
+    }
+
+    async function pickFile() {
+      try {
+        const path = await invoke("pick_text_file");
+        if (path) loadPath(path);
+      } catch {}
+    }
+
+    $("open-btn").addEventListener("click", pickFile);
+    $("empty-open").addEventListener("click", pickFile);
+    $("code-btn").addEventListener("click", async () => {
+      if (!currentPath) return;
+      await flushSave();
+      invoke("open_md_in_code_editor", { file: currentPath });
+    });
+    // Insert a 2-column table (header row + one body row) at the selection.
+    $("table-btn").addEventListener("click", () => {
+      if (!view) return;
+      const { table, table_row, table_header, table_cell } = schema.nodes;
+      const cells = (type) => [type.create(), type.create()];
+      const node = table.create(null, [
+        table_row.create(null, cells(table_header)),
+        table_row.create(null, cells(table_cell)),
+      ]);
+      view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());
+      view.focus();
+    });
+
+    $("diff-mode").addEventListener("click", () => {
+      diffMode = diffMode === "working" ? "committed" : "working";
+      document.body.classList.toggle("diff-committed", diffMode === "committed");
+      const b = $("diff-mode");
+      b.classList.toggle("active", diffMode === "committed");
+      b.title = diffMode === "committed" ? "Diff: last commit" : "Diff: uncommitted changes";
+      refreshDiff();
+    });
+
+    // Clicking the empty space below the document puts the caret at the end
+    // (Typora behavior) — the editor column has tall bottom padding, so most
+    // "click anywhere to write" clicks land outside the ProseMirror node.
+    $("scroller").addEventListener("mousedown", (e) => {
+      if (!view || e.target.closest(".ProseMirror")) return;
+      e.preventDefault();
+      view.dispatch(view.state.tr.setSelection(Selection.atEnd(view.state.doc)));
+      view.focus();
+    });
+
+    // Pick up external edits when the window regains focus — only when clean,
+    // so a re-read never clobbers in-flight typing.
+    window.addEventListener("focus", async () => {
+      if (!hasTauri || !currentPath || dirty) return;
+      try {
+        const text = await invoke("read_text_file", { path: currentPath });
+        if (text !== diskText) { diskText = text; mountEditor(text); refreshDiff(); }
+      } catch {}
+    });
+    window.addEventListener("blur", flushSave);
+
+    // ---------- launch ----------
+    document.body.classList.add("no-file");
+    if (hasTauri) {
+      const myLabel = window.__TAURI__.window.getCurrentWindow().label;
+      listen("mde:open-file", (e) => {
+        if (e.payload?.label === myLabel && e.payload.file) loadPath(e.payload.file);
+      });
+      invoke("take_pending_open", { label: myLabel }).then((p) => {
+        if (p) return loadPath(p);
+        const last = localStorage.getItem(sessionKey);
+        if (last) loadPath(last);
+      });
+    } else {
+      // Browser preview: sample document, no disk.
+      currentPath = "";
+      document.body.classList.remove("no-file");
+      mountEditor("# Markdown Editor\n\nType **bold**, *italic*, `code` — they render as you close the syntax.\n\n- Lists\n- Work\n\n> So do blockquotes.\n\n| Feature | Status |\n| --- | --- |\n| Tables | **yes** |\n| Tab between cells | yes |\n");
+    }
+  </script>
+</body>
+</html>
