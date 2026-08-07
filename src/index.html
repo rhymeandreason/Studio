@@ -166,25 +166,13 @@
                             <div class="notedrop" id="note-titlefont-drop" title="Title font"></div>
                             <div class="notedrop" id="note-bodyfont-drop" title="Body font"></div>
                         </div>
-                        <div class="notes-font-wrap" id="notes-font-wrap">
-                            <button class="btn-round" id="notes-font-btn" type="button" title="Font">
-                                <span class="mi mi-sm">text_fields</span>
-                            </button>
-                            <div class="menu notes-font-menu" id="notes-font-menu" hidden>
-                                <button class="menu__item" data-font="'Futura', sans-serif"                      data-size="14">Futura</button>
-                                <button class="menu__item" data-font="system-ui"                                 data-size="14">System</button>
-                                <button class="menu__item" data-font="Verdana, sans-serif"                       data-size="13">Verdana</button>
-                                <button class="menu__item" data-font="'New York', 'New York Medium', serif"      data-size="15">New York</button>
-                                <button class="menu__item" data-font="Georgia, serif"                            data-size="15">Georgia</button>
-                                <button class="menu__item" data-font="'Palatino Linotype', Palatino, serif"      data-size="15">Palatino</button>
-                                <button class="menu__item" data-font="Menlo, monospace"                          data-size="13">Menlo</button>
-                            </div>
-                        </div>
                         <button class="btn-round" id="notes-md-btn" type="button" title="Export note as Markdown file" hidden>
                             <span class="mi mi-sm">markdown</span>
                         </button>
+                        <!-- Inside the toolbar so it sticks (and keeps its
+                             background) along with it on scroll. -->
+                        <div class="notes-filter-bar" id="notes-filter-bar"></div>
                     </div>
-                    <div class="notes-filter-bar" id="notes-filter-bar"></div>
                     <div class="notes-list" id="notes-list"></div>
                 </section>
 

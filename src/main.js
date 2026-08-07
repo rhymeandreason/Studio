@@ -1080,25 +1080,6 @@ function setNotesStatus(text) {
   document.getElementById("notes-status").textContent = text;
 }
 
-function applyNotesFont() {
-  const font = state.notesData.font || "system-ui";
-  const listEl = document.getElementById("notes-list");
-  const menu = document.getElementById("notes-font-menu");
-
-  const btn = menu
-    ? [...menu.querySelectorAll(".menu__item")].find((b) => b.dataset.font === font)
-    : null;
-  const size = state.notesData.fontSize || (btn?.dataset.size ? Number(btn.dataset.size) : 14);
-
-  listEl.style.setProperty("--notes-font", font);
-  listEl.style.setProperty("--notes-font-size", size + "px");
-
-  // Mark active item.
-  menu?.querySelectorAll(".menu__item").forEach((b) => {
-    b.classList.toggle("is-active", b.dataset.font === font);
-  });
-}
-
 async function loadNotes(path) {
   state.notesProjectPath = path;
   const data = await invoke("read_notes", { path });
@@ -1106,7 +1087,6 @@ async function loadNotes(path) {
     data && Array.isArray(data.notes) ? data : { version: 1, notes: [] };
   setNotesStatus("");
   notesFilter.clear(); // tags are per-project; never carry a filter across
-  applyNotesFont();
   renderNotes();
 }
 
@@ -2442,28 +2422,6 @@ function initNotes() {
       else notesFilter.add(tag);
     }
     renderNotes();
-  });
-
-  const fontBtn = document.getElementById("notes-font-btn");
-  const fontMenu = document.getElementById("notes-font-menu");
-
-  fontBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    fontMenu.hidden = !fontMenu.hidden;
-  });
-
-  fontMenu.addEventListener("click", (e) => {
-    const item = e.target.closest(".menu__item");
-    if (!item) return;
-    state.notesData.font = item.dataset.font;
-    state.notesData.fontSize = item.dataset.size ? Number(item.dataset.size) : 14;
-    fontMenu.hidden = true;
-    applyNotesFont();
-    scheduleNotesSave();
-  });
-
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest("#notes-font-wrap")) fontMenu.hidden = true;
   });
 
   document

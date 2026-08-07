@@ -903,27 +903,19 @@ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     margin-left: auto;
 }
 
-.notes-font-wrap {
-    position: relative;
-    flex: 0 0 auto;
-}
 
-
-.notes-font-menu {
-    top: calc(100% + 6px);
-    right: 0;
-    left: auto;
-}
-
-/* Tag filter: a wrapping row of chips in the normal flow under the toolbar. A
-   dropdown would be clipped at the window edge in a narrow window, and the tag
-   list is short enough to just print. */
+/* Tag filter: a wrapping row of chips on its own line inside the notes
+   toolbar — so it inherits the toolbar's sticky + background treatment and
+   stays reachable while the list scrolls under it. Not a dropdown: a popup
+   would be clipped at the window edge in a narrow window, and the tag list is
+   short enough to just print. */
 .notes-filter-bar {
+    flex: 1 0 100%;
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     align-items: center;
-    margin: 0 0 12px;
+    margin: 0;
 }
 
 .notes-filter-bar[hidden] {
@@ -966,29 +958,6 @@ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 .tagfilter--clear {
     border-style: dashed;
 }
-
-.notes-font-menu .menu__item {
-    justify-content: space-between;
-}
-
-.notes-font-menu .menu__item::after {
-    font-family: "Material Symbols Rounded";
-    font-size: 16px;
-    content: "";
-    color: var(--accent);
-    opacity: 0;
-    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
-}
-
-.notes-font-menu .menu__item.is-active {
-    color: var(--accent);
-}
-
-.notes-font-menu .menu__item.is-active::after {
-    content: "check";
-    opacity: 1;
-}
-
 
 .notes-list {
     display: grid;
