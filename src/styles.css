@@ -955,10 +955,6 @@ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     border-color: var(--accent);
 }
 
-.tagfilter--clear {
-    border-style: dashed;
-}
-
 .notes-list {
     display: grid;
     grid-template-columns: 1fr;

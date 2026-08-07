@@ -1086,7 +1086,7 @@ async function loadNotes(path) {
   state.notesData =
     data && Array.isArray(data.notes) ? data : { version: 1, notes: [] };
   setNotesStatus("");
-  notesFilter.clear(); // tags are per-project; never carry a filter across
+  notesFilter = null; // tags are per-project; never carry a filter across
   renderNotes();
 }
 
@@ -1269,15 +1269,14 @@ function addTagTo(notes, raw) {
   return true;
 }
 
-// Active tag filter (lowercased tags, AND-ed — narrowing is more predictable
-// than OR when you're hunting). Deliberately module-local and NOT persisted: a
-// filter that survived a restart would read as data loss.
-const notesFilter = new Set();
+// Active tag filter: one tag at a time (lowercased), or null for "everything".
+// Module-local and NOT persisted — a filter that survived a restart would read
+// as data loss.
+let notesFilter = null;
 
 function noteMatchesFilter(n) {
-  if (!notesFilter.size) return true;
-  const tags = (n.tags || []).map((t) => t.toLowerCase());
-  return [...notesFilter].every((t) => tags.includes(t));
+  if (!notesFilter) return true;
+  return (n.tags || []).some((t) => t.toLowerCase() === notesFilter);
 }
 
 // Rebuild the filter bar from the tags currently in use, dropping any active
@@ -1291,7 +1290,7 @@ function renderNotesFilterBar() {
 
   const tags = allTags();
   const live = new Set(tags.map((t) => t.toLowerCase()));
-  for (const t of notesFilter) if (!live.has(t)) notesFilter.delete(t);
+  if (notesFilter && !live.has(notesFilter)) notesFilter = null;
 
   const counts = new Map();
   for (const n of state.notesData.notes)
@@ -1311,16 +1310,8 @@ function renderNotesFilterBar() {
         el("span", "tagfilter__n", { textContent: counts.get(key) || 0 }),
       );
       chip.dataset.tag = key;
-      if (notesFilter.has(key)) chip.classList.add("is-active");
+      if (notesFilter === key) chip.classList.add("is-active");
       bar.append(chip);
-    }
-    if (notesFilter.size) {
-      const clear = el("button", "tagfilter tagfilter--clear", {
-        type: "button",
-        textContent: "Clear",
-      });
-      clear.dataset.clear = "1";
-      bar.append(clear);
     }
   }
 }
@@ -1930,8 +1921,8 @@ export function renderNotes() {
   if (!notes.length) {
     listEl.append(
       el("p", "placeholder", {
-        textContent: notesFilter.size
-          ? `No notes tagged ${[...notesFilter].join(" + ")}.`
+        textContent: notesFilter
+          ? `No notes tagged ${notesFilter}.`
           : "No notes yet. Add a text note, checklist, or table above.",
       }),
     );
@@ -2023,7 +2014,7 @@ export function renderNotes() {
     // Reorder only when what's on screen *is* the notes array in order: in tag
     // view a note can appear under several headings, and under a filter the
     // rendered-card index no longer maps to an index in the array.
-    if (!isTagView && !notesFilter.size)
+    if (!isTagView && !notesFilter)
       card.addEventListener("pointerdown", (e) =>
         onNotePointerDown(e, note, card),
       );
@@ -2410,17 +2401,12 @@ function initNotes() {
     scheduleNotesSave();
   });
 
-  // Chips toggle (AND-ed), so several can be stacked.
+  // One tag at a time: a chip replaces whatever was filtered, and clicking the
+  // active one clears back to everything.
   document.getElementById("notes-filter-bar").addEventListener("click", (e) => {
     const chip = e.target.closest(".tagfilter");
     if (!chip) return;
-    if (chip.dataset.clear) {
-      notesFilter.clear();
-    } else {
-      const tag = chip.dataset.tag;
-      if (notesFilter.has(tag)) notesFilter.delete(tag);
-      else notesFilter.add(tag);
-    }
+    notesFilter = notesFilter === chip.dataset.tag ? null : chip.dataset.tag;
     renderNotes();
   });
 
