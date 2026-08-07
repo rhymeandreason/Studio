@@ -104,6 +104,11 @@
     flex-direction: column;
     gap: 10px;
     min-height: 0;
+    /* A flex item's default min-width:auto is its *content* width, and the
+       section/link rows are nowrap — so one long heading would widen the whole
+       column past its 250px basis. Pin it shut at both ends. */
+    min-width: 0;
+    max-width: 250px;
   }
 
   /* ---- compact layout: narrow window hides the left column and collapses
