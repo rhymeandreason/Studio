@@ -915,6 +915,58 @@ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     left: auto;
 }
 
+/* Tag filter: a wrapping row of chips in the normal flow under the toolbar. A
+   dropdown would be clipped at the window edge in a narrow window, and the tag
+   list is short enough to just print. */
+.notes-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin: 0 0 12px;
+}
+
+.notes-filter-bar[hidden] {
+    display: none;
+}
+
+.tagfilter {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-soft);
+    font-family: inherit;
+    font-size: 11px;
+    line-height: 1.6;
+    cursor: pointer;
+    transition:
+        border-color 0.15s,
+        color 0.15s;
+}
+
+.tagfilter:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+}
+
+.tagfilter__n {
+    opacity: 0.5;
+    font-size: 10px;
+}
+
+.tagfilter.is-active {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.tagfilter--clear {
+    border-style: dashed;
+}
+
 .notes-font-menu .menu__item {
     justify-content: space-between;
 }
@@ -1242,11 +1294,118 @@ textarea.notecard__title::placeholder {
 
 .notecard__footer {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     margin-top: 2px;
     min-height: 16px;
     position: relative;
+}
+
+/* Tags wrap onto their own line below the date/width row. The row collapses to
+   nothing when the note has no tags — the `+` only appears on card hover. */
+/* Chips get the full width of their own line — the `+` and the tag input sit
+   on the row above (positioned against the footer, not this row). */
+.notecard__tags {
+    flex: 1 0 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 0;
+}
+
+.notetag {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    max-width: 100%;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--hairline);
+    color: var(--note-body-color, var(--text-soft));
+    font-size: 10px;
+    line-height: 1.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+}
+
+.notetag__x {
+    display: none;
+    background: none;
+    border: none;
+    padding: 0;
+    margin-right: -2px;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.6;
+}
+
+.notecard:hover .notetag__x,
+.notecard:focus-within .notetag__x {
+    display: inline-flex;
+}
+
+.notetag__x:hover {
+    opacity: 1;
+    color: var(--accent);
+}
+
+.notetag__x .mi,
+.notetag-add .mi {
+    font-size: 12px;
+}
+
+/* Pinned to the card's right edge, mirroring the date at the left. Positioned
+   against the footer (not the tag row) so it shares the width-dots line: 13px
+   is that row's height (5px dot + the button's 4px padding), so `top: 0` lines
+   the two up on the same centre. Absolute also keeps it out of the chip flow
+   and adds no height to an untagged card. */
+.notetag-add {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 13px;
+    display: inline-flex;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 0 2px;
+    cursor: pointer;
+    color: var(--text-soft);
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.notecard:hover .notetag-add,
+.notecard:focus-within .notetag-add {
+    opacity: 1;
+}
+
+.notetag-add:hover {
+    color: var(--accent);
+}
+
+/* Opens in the `+`'s place: same right edge, centred on the same 6.5px line
+   (17px tall, so -2px top). */
+.notetag-input {
+    position: absolute;
+    right: 0;
+    top: -2px;
+    height: 17px;
+    width: 80px;
+    padding: 0 6px;
+    border: none;
+    border-radius: 999px;
+    background: var(--hairline);
+    color: var(--note-body-color, var(--text));
+    font-family: inherit;
+    font-size: 10px;
+    line-height: 1.5;
+    outline: none;
 }
 
 .notecard__date {

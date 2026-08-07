@@ -894,6 +894,9 @@ function noteToMarkdown(n) {
     if (n.body) parts.push(n.body);
   }
 
+  if (n.tags?.length)
+    parts.push(n.tags.map((t) => `#${t.replace(/\s+/g, "-")}`).join(" "));
+
   return parts.filter(Boolean).join("\n\n") + "\n";
 }
 
@@ -1102,6 +1105,7 @@ async function loadNotes(path) {
   state.notesData =
     data && Array.isArray(data.notes) ? data : { version: 1, notes: [] };
   setNotesStatus("");
+  notesFilter.clear(); // tags are per-project; never carry a filter across
   applyNotesFont();
   renderNotes();
 }
@@ -1253,8 +1257,183 @@ function relativeDate(ms) {
   });
 }
 
+// --- Tags -----------------------------------------------------------------
+// `note.tags` is an optional string array on any note kind. There's no tag
+// registry: the project's vocabulary is derived from the notes themselves, so
+// the last note to drop a tag retires it.
+
+// Normalize a typed tag. Empty string = not a usable tag.
+function normalizeTag(raw) {
+  return (raw || "").trim().replace(/\s+/g, " ").slice(0, 24);
+}
+
+// Every tag in use across the project, sorted, de-duplicated case-insensitively
+// (first spelling wins, so autocomplete pulls new entries toward existing ones).
+function allTags() {
+  const seen = new Map();
+  for (const n of state.notesData.notes)
+    for (const t of n.tags || [])
+      if (!seen.has(t.toLowerCase())) seen.set(t.toLowerCase(), t);
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
+// Add a tag to every note in `notes` (case-insensitive dedupe per note).
+function addTagTo(notes, raw) {
+  const tag = normalizeTag(raw);
+  if (!tag) return false;
+  for (const n of notes) {
+    if (!Array.isArray(n.tags)) n.tags = [];
+    if (!n.tags.some((t) => t.toLowerCase() === tag.toLowerCase()))
+      n.tags.push(tag);
+  }
+  return true;
+}
+
+// Active tag filter (lowercased tags, AND-ed — narrowing is more predictable
+// than OR when you're hunting). Deliberately module-local and NOT persisted: a
+// filter that survived a restart would read as data loss.
+const notesFilter = new Set();
+
+function noteMatchesFilter(n) {
+  if (!notesFilter.size) return true;
+  const tags = (n.tags || []).map((t) => t.toLowerCase());
+  return [...notesFilter].every((t) => tags.includes(t));
+}
+
+// Rebuild the filter bar from the tags currently in use, dropping any active
+// filter whose tag has since disappeared. It's a wrapping row of chips always
+// on show under the toolbar — no toggle, and no dropdown (a popup menu gets
+// clipped at the window's left edge in a narrow window). The bar collapses to
+// nothing when the project has no tags yet.
+function renderNotesFilterBar() {
+  const bar = document.getElementById("notes-filter-bar");
+  if (!bar) return;
+
+  const tags = allTags();
+  const live = new Set(tags.map((t) => t.toLowerCase()));
+  for (const t of notesFilter) if (!live.has(t)) notesFilter.delete(t);
+
+  const counts = new Map();
+  for (const n of state.notesData.notes)
+    for (const t of n.tags || [])
+      counts.set(t.toLowerCase(), (counts.get(t.toLowerCase()) || 0) + 1);
+
+  bar.innerHTML = "";
+  bar.hidden = !tags.length;
+  if (tags.length) {
+    for (const tag of tags) {
+      const key = tag.toLowerCase();
+      const chip = el("button", "tagfilter", {
+        type: "button",
+        textContent: tag,
+      });
+      chip.append(
+        el("span", "tagfilter__n", { textContent: counts.get(key) || 0 }),
+      );
+      chip.dataset.tag = key;
+      if (notesFilter.has(key)) chip.classList.add("is-active");
+      bar.append(chip);
+    }
+    if (notesFilter.size) {
+      const clear = el("button", "tagfilter tagfilter--clear", {
+        type: "button",
+        textContent: "Clear",
+      });
+      clear.dataset.clear = "1";
+      bar.append(clear);
+    }
+  }
+}
+
+// The tag row inside a card's footer: chips (× on card hover) plus a `+` that
+// swaps itself for an input with a datalist of the project's existing tags.
+// `targets` is which notes a commit applies to — the card's own note normally,
+// the whole card selection when opened via the `t` key.
+function noteTagRow(note) {
+  const row = el("div", "notecard__tags");
+
+  const rerender = () => {
+    row.innerHTML = "";
+    for (const tag of note.tags || []) {
+      const chip = el("span", "notetag", { textContent: tag });
+      const rm = el("button", "notetag__x", { type: "button", title: "Remove tag" });
+      rm.innerHTML = mi("close");
+      rm.addEventListener("click", () => {
+        note.tags = (note.tags || []).filter((t) => t !== tag);
+        rerender();
+        scheduleBentoLayout();
+        scheduleNotesSave();
+      });
+      chip.append(rm);
+      row.append(chip);
+    }
+    const add = el("button", "notetag-add", { type: "button", title: "Add tag" });
+    add.innerHTML = mi("add");
+    add.addEventListener("click", () => openInput([note]));
+    row.append(add);
+  };
+
+  function openInput(targets) {
+    if (row.querySelector(".notetag-input")) return;
+    const listId = "notetag-options";
+    let datalist = document.getElementById(listId);
+    if (!datalist) {
+      datalist = el("datalist", "", { id: listId });
+      document.body.append(datalist);
+    }
+    datalist.innerHTML = "";
+    for (const t of allTags()) datalist.append(el("option", "", { value: t }));
+
+    const input = el("input", "notetag-input", {
+      type: "text",
+      placeholder: "tag",
+      spellcheck: false,
+    });
+    input.setAttribute("list", listId);
+    row.querySelector(".notetag-add")?.remove();
+    row.append(input);
+    input.focus();
+    scheduleBentoLayout();
+
+    const close = () => {
+      rerender();
+      scheduleBentoLayout();
+    };
+    input.addEventListener("keydown", (e) => {
+      e.stopPropagation(); // don't let the panel keymap see it
+      if (e.key === "Enter") {
+        // Comma-separated entry so several tags land in one go.
+        const added = input.value
+          .split(",")
+          .map((p) => addTagTo(targets, p))
+          .some(Boolean);
+        if (added) scheduleNotesSave();
+        close();
+      } else if (e.key === "Escape") {
+        close();
+      }
+    });
+    input.addEventListener("blur", close);
+  }
+
+  rerender();
+  row._openTagInput = openInput;
+  return row;
+}
+
+// `t` on a card selection: open the tag input on the first selected card and
+// apply whatever's committed to the whole selection.
+function tagNotesSelection() {
+  const ids = notesSelection.get();
+  if (!ids.length) return;
+  const targets = state.notesData.notes.filter((n) => ids.includes(n.id));
+  const card = document.querySelector(`.notecard[data-note-id="${ids[0]}"]`);
+  card?.querySelector(".notecard__tags")?._openTagInput?.(targets);
+}
+
 // Width toggle, shown centered at the bottom of every note card. 1–3 dots =
 // how many grid columns the card spans; clicking cycles 1 → 2 → 3 → 1.
+// The tag row wraps onto its own line below it.
 function noteFooter(note) {
   const footer = el("div", "notecard__footer");
 
@@ -1293,6 +1472,7 @@ function noteFooter(note) {
     scheduleNotesSave();
   });
   footer.append(width);
+  footer.append(noteTagRow(note));
   return footer;
 }
 
@@ -1764,23 +1944,58 @@ export function renderNotes() {
   const listEl = document.getElementById("notes-list");
   listEl.innerHTML = "";
 
-  if (!state.notesData.notes.length) {
+  renderNotesFilterBar(); // prunes filters for tags that no longer exist
+  const notes = state.notesData.notes.filter(noteMatchesFilter);
+
+  if (!notes.length) {
     listEl.append(
       el("p", "placeholder", {
-        textContent:
-          "No notes yet. Add a text note, checklist, or table above.",
+        textContent: notesFilter.size
+          ? `No notes tagged ${[...notesFilter].join(" + ")}.`
+          : "No notes yet. Add a text note, checklist, or table above.",
       }),
     );
+    updateNotesChrome();
     return;
   }
 
-  const isDaysView = (state.notesData.viewMode || "bento") === "days";
-  listEl.classList.toggle("notes-list--days", isDaysView);
+  const view = state.notesData.viewMode || "bento";
+  const isDaysView = view === "days";
+  const isTagView = view === "tags";
+  // Tag view reuses the days-view single-file layout wholesale.
+  listEl.classList.toggle("notes-list--days", isDaysView || isTagView);
   updateNotesViewToggle();
 
+  // Tag view groups by tag (a note with two tags shows under both, which is
+  // what you want when browsing); every other view walks the notes in order.
+  let entries;
+  if (isTagView) {
+    const byTag = new Map();
+    const untagged = [];
+    for (const note of notes) {
+      const tags = (note.tags || []).filter(Boolean);
+      if (!tags.length) untagged.push(note);
+      for (const t of tags) {
+        if (!byTag.has(t)) byTag.set(t, []);
+        byTag.get(t).push(note);
+      }
+    }
+    entries = [];
+    for (const tag of [...byTag.keys()].sort((a, b) => a.localeCompare(b)))
+      for (const note of byTag.get(tag)) entries.push({ note, group: tag });
+    for (const note of untagged) entries.push({ note, group: "Untagged" });
+  } else {
+    entries = notes.map((note) => ({ note, group: null }));
+  }
+
   let lastDateKey = null;
-  for (const note of state.notesData.notes) {
-    if (isDaysView) {
+  for (const { note, group } of entries) {
+    if (isTagView) {
+      if (group !== lastDateKey) {
+        lastDateKey = group;
+        listEl.append(el("div", "notes-day-header", { textContent: group }));
+      }
+    } else if (isDaysView) {
       const d = note.createdAt ? new Date(note.createdAt) : null;
       const dateKey = d ? d.toDateString() : "Undated";
       if (dateKey !== lastDateKey) {
@@ -1817,7 +2032,7 @@ export function renderNotes() {
     }
     card.append(noteFooter(note));
     card.dataset.noteId = note.id;
-    card.style.gridColumn = isDaysView ? "" : `span ${note.span || 1}`;
+    card.style.gridColumn = isDaysView || isTagView ? "" : `span ${note.span || 1}`;
     card.style.gridRowEnd = "";
     applyNoteStyle(card, note);
     if (notesSelection.has(note.id)) card.classList.add("is-selected");
@@ -1825,9 +2040,13 @@ export function renderNotes() {
     // Drag-to-reorder via pointer events (Tauri's native file-drop swallows
     // HTML5 dragover/drop in the webview). Only starts from a non-interactive
     // part of the card so text editing still works.
-    card.addEventListener("pointerdown", (e) =>
-      onNotePointerDown(e, note, card),
-    );
+    // Reorder only when what's on screen *is* the notes array in order: in tag
+    // view a note can appear under several headings, and under a filter the
+    // rendered-card index no longer maps to an index in the array.
+    if (!isTagView && !notesFilter.size)
+      card.addEventListener("pointerdown", (e) =>
+        onNotePointerDown(e, note, card),
+      );
 
     card.addEventListener("click", (e) => {
       if (Date.now() - lastNoteDragEnd < 300) return; // ignore click after drag
@@ -1835,8 +2054,10 @@ export function renderNotes() {
       const rect = card.getBoundingClientRect();
       if (e.clientY - rect.top <= 8) {
         if (e.shiftKey) {
+          // Range over what's actually on screen, so a filter or tag view
+          // doesn't silently sweep in hidden notes.
           notesSelection.range(
-            state.notesData.notes.map((n) => n.id),
+            notes.map((n) => n.id),
             note.id,
           );
         } else {
@@ -1854,7 +2075,7 @@ export function renderNotes() {
 
   updateNotesChrome();
 
-  if (isDaysView) return;
+  if (isDaysView || isTagView) return;
 
   // Bento packing: card heights aren't known until textareas auto-size, so
   // measure on the next frames and translate each card's height into a
@@ -2209,6 +2430,20 @@ function initNotes() {
     scheduleNotesSave();
   });
 
+  // Chips toggle (AND-ed), so several can be stacked.
+  document.getElementById("notes-filter-bar").addEventListener("click", (e) => {
+    const chip = e.target.closest(".tagfilter");
+    if (!chip) return;
+    if (chip.dataset.clear) {
+      notesFilter.clear();
+    } else {
+      const tag = chip.dataset.tag;
+      if (notesFilter.has(tag)) notesFilter.delete(tag);
+      else notesFilter.add(tag);
+    }
+    renderNotes();
+  });
+
   const fontBtn = document.getElementById("notes-font-btn");
   const fontMenu = document.getElementById("notes-font-menu");
 
@@ -2268,6 +2503,7 @@ function initNotes() {
     ArrowRight: () => moveSelectedNote(1),
     "Mod+c": copyNotes,
     "Mod+v": pasteIntoNotes,
+    t: tagNotesSelection,
     Escape: clearNotesSelection,
   };
   panelKeymaps.artifacts = {
