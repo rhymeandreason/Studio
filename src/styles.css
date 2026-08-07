@@ -1432,6 +1432,160 @@ textarea.notecard__title::placeholder {
     color: var(--text-muted);
 }
 
+/* --- Linked Markdown notes: the card is a read-only view of a .md file --- */
+
+.notecard__mdbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.notecard__mdfile {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--note-body-color, var(--text-soft));
+    opacity: var(--note-meta-opacity, 0.6);
+    font-family: inherit;
+    font-size: 11px;
+}
+
+.notecard__mdfile span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notecard__mdfile:hover {
+    opacity: 1;
+    color: var(--accent);
+}
+
+.notecard__mdunlink {
+    display: none;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: var(--text-soft);
+}
+
+.notecard:hover .notecard__mdunlink {
+    display: inline-flex;
+}
+
+.notecard__mdunlink:hover {
+    color: var(--accent);
+}
+
+.notecard__mdfile .mi,
+.notecard__mdunlink .mi {
+    font-size: 13px;
+}
+
+/* Rendered Markdown. Sized off the note's own body font so a linked card sits
+   in the grid like any other, just not editable. */
+.notecard__md {
+    color: var(--note-body-color, var(--text));
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.notecard__md > :first-child {
+    margin-top: 0;
+}
+
+.notecard__md > :last-child {
+    margin-bottom: 0;
+}
+
+.notecard__md h1,
+.notecard__md h2,
+.notecard__md h3 {
+    font-family: var(--note-title-font, inherit);
+    font-size: 15px;
+    margin: 12px 0 6px;
+}
+
+.notecard__md p,
+.notecard__md ul,
+.notecard__md ol,
+.notecard__md blockquote {
+    margin: 0 0 8px;
+}
+
+.notecard__md ul,
+.notecard__md ol {
+    padding-left: 18px;
+}
+
+.notecard__md img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+}
+
+.notecard__md pre {
+    overflow-x: auto;
+    padding: 8px;
+    border-radius: 4px;
+    background: var(--hairline);
+    font-size: 11px;
+}
+
+.notecard__md code {
+    font-family: Menlo, monospace;
+    font-size: 11px;
+}
+
+/* Wide tables scroll sideways in their own box (wrapped in JS) instead of
+   collapsing to one character per column. */
+.notecard__md-scroll {
+    overflow-x: auto;
+    margin: 0 0 8px;
+    /* Fences the scroll to this box: without it a max-content table stretches
+       the card, and the whole grid column with it. */
+    max-width: 100%;
+}
+
+.notecard__md table {
+    /* Columns size to their content, but a short table still fills the card. */
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+    line-height: 1.45;
+}
+
+.notecard__md th,
+.notecard__md td {
+    border: 1px solid var(--hairline);
+    padding: 3px 5px;
+    text-align: left;
+    vertical-align: top;
+    /* Headers and short cells stay on one line; prose cells wrap at a readable
+       measure rather than running off to the right forever. */
+    max-width: 220px;
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+.notecard__md th {
+    white-space: nowrap;
+}
+
+.notecard__md-missing {
+    color: var(--text-dim);
+    font-style: italic;
+}
+
 .notecard__attached-image-wrap {
     position: relative;
     margin-bottom: 8px;

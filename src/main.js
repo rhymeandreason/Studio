@@ -736,6 +736,9 @@ function deleteNotesSelection() {
   const ids = new Set(notesSelection.get());
   if (!ids.size) return;
   // Delete note-owned image assets (under notes/); shared media/ files are left.
+  // A linked note's `mdFile` is deliberately NOT deleted: the .md is a document
+  // in the project, not an asset the card owns — deleting the card is unlinking,
+  // not discarding the file.
   for (const n of state.notesData.notes) {
     if (!ids.has(n.id) || !state.notesProjectPath) continue;
     if (n.kind === "image" && n.src)
@@ -815,7 +818,9 @@ function openSelectedNoteModal() {
 // --- Note copy / paste (interaction-spec §7) -------------------------------
 
 function stripNoteForCopy(n) {
-  const { id, createdAt, ...rest } = n;
+  // `mdFile` is project-relative, so a copy would point at a file that isn't
+  // there. A pasted copy is a plain editable note carrying the cached text.
+  const { id, createdAt, mdFile, ...rest } = n;
   // Image notes carry an absolute source path so cross-project paste can copy
   // the file (the project-relative `src` is meaningless elsewhere).
   if (n.kind === "image" && state.notesProjectPath && n.src) {
@@ -918,11 +923,30 @@ function noteFileStem(n) {
 async function exportNoteMarkdown() {
   const note = selectedNote();
   if (!note || !state.notesProjectPath) return;
+  // Already linked: the file is the source of truth, so re-exporting would
+  // overwrite the Code Editor's edits with a stale copy (and duplicate the
+  // title heading). Just open it.
+  if (note.mdFile) {
+    invoke("open_file_in_code_editor", { file: mdAbsPath(note.mdFile) }).catch(
+      () => {},
+    );
+    return;
+  }
   const file = `${noteFileStem(note)}.md`;
   const path = `${state.notesProjectPath}/${file}`;
   try {
     await invoke("write_text_file", { path, content: noteToMarkdown(note) });
     setNotesStatus(`Exported ${file}`);
+    // Text notes become a live view of the file they just produced: the file is
+    // the source of truth from here on, edited in the Code Editor, and the card
+    // renders it. Other kinds (checklist/table/image) can't round-trip through
+    // Markdown without losing their structure, so they stay a one-shot dump.
+    if (note.kind === "text") {
+      note.mdFile = file;
+      mdCache.set(file, noteToMarkdown(note));
+      renderNotes();
+      scheduleNotesSave();
+    }
     // The file is the deliverable, so put it straight in front of you: the
     // Code Editor opens (or focuses) this project's window on it.
     invoke("open_file_in_code_editor", { file: path }).catch(() => {});
@@ -1628,7 +1652,146 @@ function buildNoteLinks(note, field, { getText, setText }) {
   return links;
 }
 
+// --- Linked Markdown notes -------------------------------------------------
+// A text note that's been exported carries `note.mdFile` (project-relative) and
+// stops being editable in Studio: the file is the source of truth, edited in the
+// Code Editor, and the card renders it. `note.body` is kept as a cache of the
+// file's text so copy/export/plain-text keep working offline; unlinking hands
+// that text back and makes the note editable again.
+
+const mdCache = new Map(); // project-relative path -> file text
+
+function mdAbsPath(file) {
+  return `${state.notesProjectPath}/${file}`;
+}
+
+// Read a linked note's file into the cache and the body cache. Returns true if
+// anything changed (so callers can re-render only when it matters).
+async function readLinkedNote(note) {
+  if (!note.mdFile || !state.notesProjectPath) return false;
+  let text;
+  try {
+    text = await invoke("read_text_file", { path: mdAbsPath(note.mdFile) });
+  } catch (_) {
+    // File deleted or renamed under us — leave the last known text in place and
+    // let the card show the missing state.
+    if (mdCache.get(note.mdFile) === null) return false;
+    mdCache.set(note.mdFile, null);
+    return true;
+  }
+  const changed = mdCache.get(note.mdFile) !== text;
+  mdCache.set(note.mdFile, text);
+  if (note.body !== text) {
+    note.body = text;
+    scheduleNotesSave();
+  }
+  return changed;
+}
+
+// Re-read every linked file; re-render if any of them moved. Called when the
+// window regains focus, since the edits happen in another window.
+async function refreshLinkedNotes() {
+  const linked = state.notesData.notes.filter((n) => n.mdFile);
+  if (!linked.length) return;
+  const results = await Promise.all(linked.map(readLinkedNote));
+  if (results.some(Boolean)) renderNotes();
+}
+
+// Render Markdown text into `host`. Links open in the system browser rather
+// than navigating the app's own webview.
+function renderMarkdownInto(host, text) {
+  host.innerHTML = window.marked
+    ? window.marked.parse(text, { gfm: true, breaks: true })
+    : "";
+  host.querySelectorAll("a[href]").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      openExternalUrl(a.getAttribute("href"));
+    });
+  });
+  // Wide tables scroll inside their own box rather than squeezing every column
+  // down to one character per line. marked emits a bare <table>, so the
+  // scroller has to be added here.
+  host.querySelectorAll("table").forEach((t) => {
+    const scroller = el("div", "notecard__md-scroll");
+    t.replaceWith(scroller);
+    scroller.append(t);
+  });
+}
+
+// Drop the link: the note keeps the file's text and becomes editable again.
+// The file itself is left on disk.
+function unlinkNote(note) {
+  const text = mdCache.get(note.mdFile);
+  if (typeof text === "string") note.body = text;
+  note.mdFile = null;
+  renderNotes();
+  scheduleNotesSave();
+}
+
+// A text note backed by a file: a filename chip (click → Code Editor) over the
+// rendered Markdown. No title field or textarea — everything is the file's.
+function buildLinkedNote(note) {
+  const card = el("div", "notecard notecard--linked");
+
+  const bar = el("div", "notecard__mdbar");
+  const open = el("button", "notecard__mdfile", {
+    type: "button",
+    title: "Open in the Code Editor",
+  });
+  open.innerHTML = mi("markdown");
+  open.append(el("span", "", { textContent: note.mdFile }));
+  open.addEventListener("click", () =>
+    invoke("open_file_in_code_editor", { file: mdAbsPath(note.mdFile) }).catch(
+      () => {},
+    ),
+  );
+  const unlink = el("button", "notecard__mdunlink", {
+    type: "button",
+    title: "Unlink — edit in Studio again",
+    innerHTML: mi("link_off"),
+  });
+  unlink.addEventListener("click", () => unlinkNote(note));
+  bar.append(open, unlink);
+  card.append(bar);
+
+  const body = el("div", "notecard__md");
+  const cached = mdCache.get(note.mdFile);
+  if (cached === null) {
+    body.append(
+      el("p", "notecard__md-missing", {
+        textContent: `${note.mdFile} is missing. Unlink to keep the text.`,
+      }),
+    );
+  } else {
+    renderMarkdownInto(body, cached ?? note.body ?? "");
+  }
+  card.append(body);
+
+  // Always re-read: the file may have changed in the Code Editor since the
+  // cache was filled. Only touch the DOM if this card is still on screen.
+  readLinkedNote(note).then((changed) => {
+    if (!changed || !body.isConnected) return;
+    const text = mdCache.get(note.mdFile);
+    if (text === null) {
+      body.innerHTML = "";
+      body.append(
+        el("p", "notecard__md-missing", {
+          textContent: `${note.mdFile} is missing. Unlink to keep the text.`,
+        }),
+      );
+    } else {
+      renderMarkdownInto(body, text);
+    }
+    scheduleBentoLayout();
+  });
+
+  return card;
+}
+
 function buildTextNote(note) {
+  if (note.mdFile) return buildLinkedNote(note);
+
   const card = el("div", "notecard");
   card.append(noteHeader(note));
 
@@ -2508,6 +2671,9 @@ function initNotes() {
 // showing (cheap; mirrors the standalone Git window's focus refresh).
 window.addEventListener("focus", () => {
   if (state.activePanel === "git") renderGitPanel();
+  // Linked notes are edited in the Code Editor, so coming back here is the
+  // moment their files may have moved on.
+  if (state.activePanel === "notes") refreshLinkedNotes();
 });
 
 // --- Boot ------------------------------------------------------------------
