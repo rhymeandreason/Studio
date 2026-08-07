@@ -46,7 +46,14 @@
     .ProseMirror hr { border: none; border-top: 1px solid color-mix(in srgb, var(--text) 18%, transparent); margin: 1.6em 0; }
     .ProseMirror a { color: var(--accent, inherit); text-decoration: underline; text-underline-offset: 2px; }
     .ProseMirror img { max-width: 100%; border-radius: 4px; }
-    .ProseMirror table { border-collapse: collapse; margin: 0 0 0.9em; width: 100%; table-layout: fixed; }
+    /* Tables may break out of the text column: sized to their content (at
+       least column width), capped near the window edge, centered on the
+       column via the 50%/-50% trick. */
+    .ProseMirror table {
+      border-collapse: collapse; margin: 0 0 0.9em;
+      width: max-content; min-width: 100%; max-width: calc(100vw - 64px);
+      margin-left: 50%; transform: translateX(-50%);
+    }
     .ProseMirror th, .ProseMirror td { border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); padding: 5px 10px; text-align: left; vertical-align: top; }
     .ProseMirror th { font-weight: 600; background: color-mix(in srgb, var(--text) 4%, transparent); }
     .ProseMirror .selectedCell { background: color-mix(in srgb, var(--accent, #888) 14%, transparent); }
