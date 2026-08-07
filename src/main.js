@@ -967,6 +967,8 @@ async function tryPasteStudioNotes(text) {
       created.push(note);
     }
     state.notesData.notes.unshift(...created);
+    // Pasted notes keep their tags, but they needn't match the active filter.
+    clearFilterForNewNote();
     renderNotes();
     scheduleNotesSave();
     return true;
@@ -976,6 +978,7 @@ async function tryPasteStudioNotes(text) {
 }
 
 async function pasteIntoNotes() {
+  clearFilterForNewNote();
   let text = "";
   try {
     text = await invoke("read_clipboard_text");
@@ -1104,6 +1107,7 @@ export function scheduleNotesSave() {
 }
 
 export async function pasteFromClipboard() {
+  clearFilterForNewNote();
   let text = "";
   try {
     text = await invoke("read_clipboard_text");
@@ -1157,6 +1161,7 @@ export async function pasteFromClipboard() {
 }
 
 function newNote(kind) {
+  clearFilterForNewNote();
   const note = {
     id: genId(),
     kind,
@@ -1273,6 +1278,12 @@ function addTagTo(notes, raw) {
 // Module-local and NOT persisted — a filter that survived a restart would read
 // as data loss.
 let notesFilter = null;
+
+// A note that's just been made has no tags yet, so any active filter would
+// swallow it the instant it's created. Every creation path drops the filter.
+function clearFilterForNewNote() {
+  notesFilter = null;
+}
 
 function noteMatchesFilter(n) {
   if (!notesFilter) return true;
