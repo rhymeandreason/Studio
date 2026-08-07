@@ -111,19 +111,26 @@ Markdown files also swap the UI (toggled by a `body.is-markdown` class set in
   source line range (newline counting, trailing blank lines ignored), so a block
   containing a changed line gets `.md-block.chg` — the same `--add-bg` /
   `--add-bar` tint as the code view, so the teal/blue mode toggle applies here
-  too — and a deletion point gets a red `.md-block.del` bar. `refreshDiff()`
-  re-renders the preview so the tint follows mode switches and reloads. The
-  blocks stay unpositioned; heading `offsetTop` scroll-sync depends on it.
-- **Edit in the preview (WYSIWYG-ish).** Clicking a rendered block swaps it for a
-  textarea holding *only that block's raw Markdown lines* (`openBlockEditor`),
-  auto-sized, caret placed near the click (`caretOffsetInRaw` matches the
-  rendered text before the click against the raw source, falling back to the
-  end). Blur / Escape / Cmd+Enter commits: `commitBlockEditor()` splices those
-  lines back into `code.value` — the rendered HTML is **never** converted back to
-  Markdown, so nothing outside the edited block can be rewritten. It's one undo
-  step, and it's idempotent, so `saveFile`, `setView`, and `reloadFromDisk` call
-  it to settle the source first. `render()` skips rebuilding `#md-view` while a
-  block is open (it would destroy the textarea) and preserves scroll otherwise.
+  too — and a deletion gets the gutter's small red triangle on the edge the diff
+  points at (`.del` above the block, `.del-end` at its end). `refreshDiff()`
+  re-renders the preview so the tint follows mode switches and reloads. Those
+  markers need a positioned block, so in-preview scroll math goes through the
+  rect-based `previewTop()` rather than `offsetTop`.
+- **Edit table cells in the preview.** Tables are the one thing you edit from the
+  rendered view: clicking a cell (`openCellEditor`) swaps it for an input holding
+  that cell's raw Markdown, **Tab / Shift+Tab** step through cells in reading
+  order, and Enter / Escape / blur commit. A cell lives in exactly one source
+  line, so `tableCellSpans()` finds its character range there (skipping
+  backslash-escaped pipes, honouring optional leading/trailing pipes) and
+  `commitCellEditor` splices the new text into just that span — the rest of the
+  line, the rest of the table, and the rest of the file are untouched; the
+  rendered HTML is never converted back to Markdown. It's one undo step, and
+  it's idempotent, so `saveFile`, `setView`, and `reloadFromDisk` call it to
+  settle the source first. `render()` skips rebuilding `#md-view` while a cell is
+  open (it would destroy the input) and preserves scroll otherwise. Column widths
+  are pinned while editing so the auto table layout can't resize as you type.
+  Clicking anywhere else in the preview does nothing — non-table prose is edited
+  in the Code view.
 - **Diff minimap.** The preview has its own rail (`#md-minimap`, sibling of
   `#md-view` inside `#md-pane`, sharing the code minimap's CSS). `paintMdMinimap`
   positions marks from the rendered blocks' `offsetTop`/`offsetHeight` — not line
