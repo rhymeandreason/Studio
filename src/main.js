@@ -913,8 +913,8 @@ function noteFileStem(n) {
 }
 
 // Export the selected note as a Markdown file in the project root, named after
-// its title. Reveals it in Finder so the file (the deliverable) is front and
-// centre.
+// its title, then open it in this project's Code Editor window so the file (the
+// deliverable) is front and centre and immediately editable.
 async function exportNoteMarkdown() {
   const note = selectedNote();
   if (!note || !state.notesProjectPath) return;
@@ -923,7 +923,9 @@ async function exportNoteMarkdown() {
   try {
     await invoke("write_text_file", { path, content: noteToMarkdown(note) });
     setNotesStatus(`Exported ${file}`);
-    invoke("reveal_in_finder", { path }).catch(() => {});
+    // The file is the deliverable, so put it straight in front of you: the
+    // Code Editor opens (or focuses) this project's window on it.
+    invoke("open_file_in_code_editor", { file: path }).catch(() => {});
   } catch (e) {
     console.error(e);
     setNotesStatus("Export failed");
@@ -2019,16 +2021,17 @@ export function renderNotes() {
     applyNoteStyle(card, note);
     if (notesSelection.has(note.id)) card.classList.add("is-selected");
 
-    // Drag-to-reorder via pointer events (Tauri's native file-drop swallows
-    // HTML5 dragover/drop in the webview). Only starts from a non-interactive
-    // part of the card so text editing still works.
-    // Reorder only when what's on screen *is* the notes array in order: in tag
-    // view a note can appear under several headings, and under a filter the
-    // rendered-card index no longer maps to an index in the array.
-    if (!isTagView && !notesFilter)
-      card.addEventListener("pointerdown", (e) =>
-        onNotePointerDown(e, note, card),
-      );
+    // Drag via pointer events (Tauri's native file-drop swallows HTML5
+    // dragover/drop in the webview). Reorder only starts from a
+    // non-interactive part of the card so text editing still works, and only
+    // when what's on screen *is* the notes array in order: in tag view a note
+    // can appear under several headings, and under a filter the rendered-card
+    // index no longer maps to an index in the array. Option-drag-out is
+    // unaffected and works in every view.
+    const canReorder = !isTagView && !notesFilter;
+    card.addEventListener("pointerdown", (e) =>
+      onNotePointerDown(e, note, card, canReorder),
+    );
 
     card.addEventListener("click", (e) => {
       if (Date.now() - lastNoteDragEnd < 300) return; // ignore click after drag
@@ -2237,7 +2240,11 @@ async function startNoteFileDrag(note, card) {
   }
 }
 
-function onNotePointerDown(e, note, card) {
+// `canReorder` is false in the views where a drop index into the notes array
+// would be meaningless (tags view, or an active filter). Only drag-to-reorder
+// is gated by it — dragging a note OUT as a file has nothing to do with drop
+// positions and stays available everywhere.
+function onNotePointerDown(e, note, card, canReorder) {
   if (e.button !== 0) return;
   // Option-drag drags the note OUT as a file: an image note drags its asset;
   // any other note drags an on-the-fly `.md`. Checked before the field
@@ -2247,6 +2254,7 @@ function onNotePointerDown(e, note, card) {
     startNoteFileDrag(note, card);
     return;
   }
+  if (!canReorder) return;
   if (e.target.closest("textarea, input, select, button, a, [contenteditable]"))
     return;
   noteDrag = { note, card, startX: e.clientX, startY: e.clientY, active: false };
