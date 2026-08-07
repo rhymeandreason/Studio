@@ -439,7 +439,7 @@
   .md-body .md-block.del::before { top: -4px; }
   .md-body .md-block.del-end::after { bottom: -4px; }
   .md-body .md-block > :last-child { margin-bottom: 0; }
-  .md-body .md-block.md-table td, .md-body .md-block.md-table th { cursor: text; }
+  .md-body .md-block { cursor: text; }
   /* Tables get the full pane width instead of the prose measure, and scroll
      inside their own block if they're still wider — a wide table must never
      widen the document itself, or the centred column ends up parked to the
@@ -456,6 +456,23 @@
     border: 0; outline: none; border-radius: 2px;
     background: var(--accent-ring); box-shadow: inset 0 0 0 1px var(--accent);
     font: inherit; color: var(--text);
+  }
+  /* Edit-in-preview: the clicked block is swapped for a textarea holding just
+     that block's raw Markdown lines. Auto-sized in JS (no inner scrolling). */
+  .md-edit {
+    /* Same measure as the block it replaces — 740px of text plus the block's
+       12px tint bleed each side. A textarea is a replaced element, so `width:
+       auto` would fall back to its `cols` intrinsic width (~20 chars) instead
+       of filling; it needs an explicit width. JS overrides max-width with the
+       replaced block's own, so editing a full-width table stays full width. */
+    display: block; box-sizing: border-box; width: 100%; max-width: 764px;
+    margin: 0 auto; padding: 4px 12px;
+    border: 0; border-left: 3px solid var(--accent); outline: none; resize: none;
+    overflow: hidden; background: var(--accent-ring);
+    /* Same typography as the rendered view, so a block doesn't change size or
+       face when you click into it (JS copies the block's own font on open). */
+    font: 16px/1.65 -apple-system, system-ui, "Segoe UI", sans-serif;
+    color: var(--text); white-space: pre-wrap;
   }
   .md-body .md-block + .md-block { margin-top: 1em; }
 </style>
@@ -715,7 +732,7 @@ function loadText(text) {
 }
 
 async function saveFile() {
-  commitCellEditor();           // fold an open cell edit into the source first
+  commitPreviewEdit();          // fold an open in-preview edit into the source first
   if (!currentPath) return;
   if (hasTauri) {
     await invoke("write_text_file", { path: currentPath, content: code.value });
@@ -735,7 +752,7 @@ async function saveFile() {
 
 // Re-read the current file from disk (picks up external edits) and refresh diff.
 async function reloadFromDisk() {
-  commitCellEditor();
+  commitPreviewEdit();
   if (!hasTauri || !currentPath) return;
   const text = await invoke("read_text_file", { path: currentPath });
   diskText = text;
@@ -1147,7 +1164,7 @@ function mdBlocksHTML(src) {
     const cls = "md-block" + (chg ? " chg" : "")
       + (delAt ? (delAt === start ? " del" : " del-end") : "")
       + (t.type === "table" ? " md-table" : "");   // wide tables scroll in place
-    out += `<div class="${cls}" data-line="${start}">${html}</div>`;
+    out += `<div class="${cls}" data-line="${start}" data-end="${end}">${html}</div>`;
   }
   return out;
 }
@@ -1158,7 +1175,7 @@ let lastRendered = "";
 async function render() {
   // Keep the inline preview current — but never while a block is being edited
   // in place (rebuilding the HTML would blow the open textarea away).
-  if (isMarkdown() && window.marked && !mdCell) {
+  if (isMarkdown() && window.marked && !mdEdit && !mdCell) {
     const keep = mdView.scrollTop;
     mdView.innerHTML = `<div class="md-body">${mdBlocksHTML(code.value)}</div>`;
     mdView.scrollTop = keep;                       // innerHTML resets scroll
@@ -1206,6 +1223,116 @@ mdMinimap.addEventListener("click", (e) => {
   mdView.scrollTop = frac * mdView.scrollHeight - mdView.clientHeight / 2;
 });
 
+// ---------- edit-in-preview (Markdown) ----------
+// Click a rendered block to edit *its* source lines in place. We never convert
+// the rendered HTML back to Markdown — each block knows its line range
+// (data-line/data-end from mdBlocksHTML), so committing just splices those
+// lines back into the source. Everything else in the file is untouched.
+let mdEdit = null;   // { block, ta, start, end } while a block is open
+
+function openBlockEditor(block, ev) {
+  if (mdEdit) { if (mdEdit.block === block) return; commitBlockEditor(); return; }
+  commitCellEditor();       // only one in-preview edit open at a time
+  if (!block.isConnected) return;   // that commit re-rendered; this node is stale
+  const start = parseInt(block.dataset.line, 10);
+  const end = parseInt(block.dataset.end, 10);
+  if (!start || !end) return;
+  const lines = code.value.split("\n");
+  const raw = lines.slice(start - 1, end).join("\n");
+
+  // Measure the space the rendered block occupies, so the textarea can take up
+  // the same room and nothing shifts. The block's vertical margins come from its
+  // children collapsing through it (computed margin is 0), so we measure the
+  // *gaps* to the neighbours instead — a gap is the already-collapsed margin, and
+  // re-applying it to the textarea survives collapsing (max(gap, gap) === gap).
+  const r = block.getBoundingClientRect();
+  const minH = block.offsetHeight;
+  const prev = block.previousElementSibling;
+  const after = block.nextElementSibling;
+  const body = block.parentNode.getBoundingClientRect();
+  const padTop = parseFloat(getComputedStyle(block.parentNode).paddingTop) || 0;
+  const gapAbove = prev ? r.top - prev.getBoundingClientRect().bottom : r.top - (body.top + padTop);
+  const gapBelow = after ? after.getBoundingClientRect().top - r.bottom : 0;
+
+  const ta = document.createElement("textarea");
+  ta.className = "md-edit";
+  ta.value = raw;
+  block.style.display = "none";
+  block.parentNode.insertBefore(ta, block);
+  mdEdit = { block, ta, start, end };
+
+  // Never shorter than the block it replaces, so nothing below jumps up.
+  const autosize = () => {
+    ta.style.height = "auto";
+    ta.style.height = Math.max(ta.scrollHeight, minH) + "px";
+  };
+  // Edit in the block's own typography — a heading stays big and bold, a fenced
+  // code block stays mono — so clicking in doesn't resize or reface the text.
+  // Match the block's actual outer width (the block is content-box, the
+  // textarea border-box, so its computed max-width can't be copied directly).
+  // This is what lets a full-width table block edit at full width.
+  ta.style.maxWidth = r.width + "px";
+  const first = block.firstElementChild;
+  if (first) {
+    const fs = getComputedStyle(first);
+    ta.style.font = `${fs.fontStyle} ${fs.fontWeight} ${fs.fontSize}/${fs.lineHeight} ${fs.fontFamily}`;
+  }
+  ta.style.marginTop = gapAbove + "px";
+  ta.style.marginBottom = gapBelow + "px";
+  autosize();
+  ta.addEventListener("input", autosize);
+  ta.addEventListener("blur", () => commitBlockEditor());
+  ta.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); commitBlockEditor(); }
+    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commitBlockEditor(); }
+    // Typing and undo stay inside the textarea (its own native undo covers the
+    // block); Cmd+S falls through to the window handler, which commits first.
+    if (!(e.metaKey || e.ctrlKey) || e.key === "z" || e.key === "Z" || e.key === "y") e.stopPropagation();
+  });
+  ta.focus();
+  const caret = caretOffsetInRaw(block, raw, ev);
+  ta.setSelectionRange(caret, caret);
+}
+
+// Put the caret roughly where the click landed: take the rendered text before
+// the click point and look for its tail in the raw source. Markdown syntax
+// around the click makes this miss sometimes — then we fall back to the end.
+function caretOffsetInRaw(block, raw, ev) {
+  try {
+    const pos = document.caretRangeFromPoint(ev.clientX, ev.clientY);
+    if (!pos) return raw.length;
+    const before = document.createRange();
+    before.selectNodeContents(block);
+    before.setEnd(pos.startContainer, pos.startOffset);
+    const tail = before.toString().slice(-16);
+    if (!tail.trim()) return raw.length;
+    const at = raw.indexOf(tail);
+    if (at >= 0) return at + tail.length;
+  } catch {}
+  return raw.length;
+}
+
+// Splice the edited lines back into the source and re-render. Idempotent, so
+// anything that needs the source settled first (save, view switch, reload) can
+// just call it.
+function commitBlockEditor() {
+  if (!mdEdit) return;
+  const { block, ta, start, end } = mdEdit;
+  mdEdit = null;                       // before render(), which rebuilds mdView
+  const next = ta.value;
+  ta.remove();
+  block.style.display = "";
+  const lines = code.value.split("\n");
+  const wasnt = lines.slice(start - 1, end).join("\n");
+  if (next === wasnt) return;          // nothing typed — leave undo/dirty alone
+  commitUndo();                        // the edit is one undo step
+  lines.splice(start - 1, end - start + 1, ...next.split("\n"));
+  code.value = lines.join("\n");
+  setDirty(true);
+  paint(); persist(); commitUndo();
+  render();
+}
+
 // ---------- edit a single table cell ----------
 // Clicking a cell edits just that cell rather than the whole table block. The
 // cell's raw Markdown lives in one source line, so we only have to find its
@@ -1240,7 +1367,8 @@ function rowOffsetOf(block, tr) {
 }
 
 function openCellEditor(cell, block, ev) {
-  commitCellEditor();
+  commitPreviewEdit();      // only one in-preview edit open at a time
+  if (!cell.isConnected) return;    // that commit re-rendered; this node is stale
   const start = parseInt(block.dataset.line, 10);
   const tr = cell.closest("tr");
   const rowOffset = tr ? rowOffsetOf(block, tr) : -1;
@@ -1337,6 +1465,10 @@ function focusCell(blockStart, rowOffset, col, dir) {
   if (target) openCellEditor(target, block);
 }
 
+// Settle whichever in-preview edit is open, so callers that need the source up
+// to date (save, view switch, reload) don't have to know which it was.
+function commitPreviewEdit() { commitBlockEditor(); commitCellEditor(); }
+
 // ---------- Markdown section browser + inline preview ----------
 // Toggle the left column between DOM/Styles (HTML) and the heading list (md).
 function applyMode() {
@@ -1354,7 +1486,7 @@ function setViewToggle(showingPreview) {
 // Switch views (Markdown only), keeping scroll position by syncing to the
 // nearest preceding heading between the two views.
 function setView(toPreview) {
-  commitCellEditor();
+  commitPreviewEdit();
   if (toPreview === inPreview()) return;
   const idx = toPreview ? currentCodeSectionIdx() : currentPreviewSectionIdx();
   document.body.classList.toggle("md-preview", toPreview);
@@ -1383,9 +1515,11 @@ mdView.addEventListener("click", (e) => {
   if (!hit || !mdView.contains(hit)) return;
   const a = hit.closest("a");
   if (!a) {
-    const cell = hit.closest("td, th");             // tables edit cell by cell
-    const block = cell && cell.closest(".md-block");
-    if (block) openCellEditor(cell, block, e);
+    const block = hit.closest(".md-block");
+    if (!block) return;
+    const cell = hit.closest("td, th");             // a table edits cell by cell
+    if (cell) openCellEditor(cell, block, e);
+    else openBlockEditor(block, e);
     return;
   }
   const href = a.getAttribute("href") || "";

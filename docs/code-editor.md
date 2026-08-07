@@ -116,21 +116,29 @@ Markdown files also swap the UI (toggled by a `body.is-markdown` class set in
   re-renders the preview so the tint follows mode switches and reloads. Those
   markers need a positioned block, so in-preview scroll math goes through the
   rect-based `previewTop()` rather than `offsetTop`.
-- **Edit table cells in the preview.** Tables are the one thing you edit from the
-  rendered view: clicking a cell (`openCellEditor`) swaps it for an input holding
-  that cell's raw Markdown, **Tab / Shift+Tab** step through cells in reading
-  order, and Enter / Escape / blur commit. A cell lives in exactly one source
-  line, so `tableCellSpans()` finds its character range there (skipping
-  backslash-escaped pipes, honouring optional leading/trailing pipes) and
-  `commitCellEditor` splices the new text into just that span — the rest of the
-  line, the rest of the table, and the rest of the file are untouched; the
-  rendered HTML is never converted back to Markdown. It's one undo step, and
-  it's idempotent, so `saveFile`, `setView`, and `reloadFromDisk` call it to
-  settle the source first. `render()` skips rebuilding `#md-view` while a cell is
-  open (it would destroy the input) and preserves scroll otherwise. Column widths
-  are pinned while editing so the auto table layout can't resize as you type.
-  Clicking anywhere else in the preview does nothing — non-table prose is edited
-  in the Code view.
+- **Edit in the preview.** Clicking a rendered block swaps it for a textarea
+  holding *only that block's raw Markdown lines* (`openBlockEditor`), auto-sized
+  into the space the block occupied, caret placed near the click
+  (`caretOffsetInRaw`). Blur / Escape / Cmd+Enter commits: `commitBlockEditor()`
+  splices those lines back into `code.value`.
+- **…except tables, which edit cell by cell.** Inside a table, a click opens just
+  the clicked cell (`openCellEditor`) — its raw Markdown in an input, **Tab /
+  Shift+Tab** stepping through cells in reading order, Enter / Escape / blur to
+  commit. A cell lives in exactly one source line, so `tableCellSpans()` finds its
+  character range there (skipping backslash-escaped pipes, honouring optional
+  leading/trailing pipes) and `commitCellEditor` splices into just that span.
+  Column widths are pinned while editing so the auto table layout can't resize as
+  you type.
+- **Both editors share the same guarantees.** The rendered HTML is *never*
+  converted back to Markdown — only the edited block's or cell's source range is
+  rewritten, so nothing else in the file can change. Each edit is one undo step.
+  Both commits are idempotent and `commitPreviewEdit()` settles whichever is
+  open, so `saveFile`, `setView`, and `reloadFromDisk` just call that. `render()`
+  skips rebuilding `#md-view` while either is open (it would destroy the
+  textarea/input) and preserves scroll otherwise. Because a commit re-renders,
+  the click handler re-resolves its target from the pointer and the open
+  functions bail on a stale node — otherwise clicking straight from one editor
+  into another silently opened nothing.
 - **Diff minimap.** The preview has its own rail (`#md-minimap`, sibling of
   `#md-view` inside `#md-pane`, sharing the code minimap's CSS). `paintMdMinimap`
   positions marks from the rendered blocks' `offsetTop`/`offsetHeight` — not line
