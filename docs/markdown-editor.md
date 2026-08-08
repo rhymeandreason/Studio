@@ -31,6 +31,14 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   read — a file that exists but can't be read must not be treated as empty,
   or autosave would overwrite it. With no active project there's nowhere to
   put one, so the empty state shows instead.
+- **Sans / serif toggle:** the `Aa` button swaps the *document* between
+  system UI (SF) and **New York** (`ui-serif`) — Apple's system serif, drawn
+  for reading and metrically matched to SF, so nothing is downloaded and no
+  woff2 joins `src/vendor/`. Only the prose changes: the title bar stays SF
+  and code stays mono. Serif gets a point more size (`--doc-size`) since New
+  York runs optically smaller. It's a reading preference rather than a
+  property of a file, so it's stored per tool (`localStorage` `mde-font`) and
+  applied before the first paint.
 - **Saving:** debounced 600 ms after each doc change (plus blur / Cmd+S /
   before switching files) via `write_text_file`. On window focus the file is
   re-read and swapped in only when there are no unsaved edits.

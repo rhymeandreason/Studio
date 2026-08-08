@@ -14,6 +14,22 @@
     :root {
       --sans: system-ui, -apple-system, "SF Pro Text", sans-serif;
       --serif: var(--sans);
+      /* New York — Apple's system serif, drawn for reading and metrically
+         matched to SF, so the toggle swaps voice without reflowing much. It
+         ships with macOS, so nothing is downloaded (never a CDN, per the
+         vendored-and-offline rule) and there's no new woff2 in src/vendor/.
+         The rest is a fallback ladder for non-Apple engines. */
+      --doc-serif: ui-serif, "New York", "Iowan Old Style", Charter, Georgia, serif;
+      /* What the document (not the chrome) is set in. The bar stays SF either
+         way — the toolbar shouldn't change voice with the prose. */
+      --doc-font: var(--sans);
+      --doc-size: 15px;
+    }
+    body.font-serif {
+      --doc-font: var(--doc-serif);
+      /* New York runs a little smaller than SF at the same size; a point back
+         keeps the two modes optically level. */
+      --doc-size: 16px;
     }
 
     /* Transparent shell; the opaque fill lives on #main (window-chrome quirk:
@@ -37,7 +53,7 @@
     #scroller { flex: 1; overflow-y: auto; min-height: 0; }
     #editor { max-width: 680px; margin: 0 auto; padding: 28px 40px 45vh; }
 
-    .ProseMirror { outline: none; white-space: pre-wrap; word-wrap: break-word; font-size: 15px; line-height: 1.65; color: var(--text); }
+    .ProseMirror { outline: none; white-space: pre-wrap; word-wrap: break-word; font-family: var(--doc-font); font-size: var(--doc-size); line-height: 1.65; color: var(--text); }
     .ProseMirror p { margin: 0 0 0.9em; }
     .ProseMirror h1, .ProseMirror h2, .ProseMirror h3,
     .ProseMirror h4, .ProseMirror h5, .ProseMirror h6 { line-height: 1.25; margin: 1.4em 0 0.5em; font-weight: 600; }
@@ -80,7 +96,8 @@
     body.no-file #empty { display: flex; }
     body.no-file #scroller { display: none; }
     /* Nothing to act on until a file is open — only "Open…" stays. */
-    body.no-file #table-btn, body.no-file #diff-mode, body.no-file #code-btn { display: none; }
+    body.no-file #table-btn, body.no-file #diff-mode,
+    body.no-file #code-btn, body.no-file #font-btn { display: none; }
   </style>
 </head>
 <body>
@@ -92,6 +109,7 @@
     <span class="spacer"></span>
     <div class="tb-group">
       <button class="btn btn-icon-only" id="new-btn" title="New document"><span class="mi">add</span></button>
+      <button class="btn btn-icon-only" id="font-btn" title="Serif"><span class="mi">text_format</span></button>
       <button class="btn btn-icon-only" id="table-btn" title="Insert table"><span class="mi">table</span></button>
       <button class="btn btn-icon-only" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
       <button class="btn btn-icon-only" id="code-btn" title="Open in Code Editor"><span class="mi">code</span></button>
@@ -431,6 +449,26 @@
       b.title = diffMode === "committed" ? "Diff: last commit" : "Diff: uncommitted changes";
       refreshDiff();
     });
+
+    // Sans <-> serif for the document only. A reading preference, not a
+    // property of any one file, so it's remembered per tool rather than per
+    // project and applied before the first paint below.
+    function setFont(serif) {
+      document.body.classList.toggle("font-serif", serif);
+      const b = $("font-btn");
+      if (b) {
+        b.classList.toggle("active", serif);
+        b.title = serif ? "Serif — switch to sans" : "Sans — switch to serif";
+      }
+      localStorage.setItem("mde-font", serif ? "serif" : "sans");
+    }
+
+    $("font-btn").addEventListener("click", () => {
+      setFont(!document.body.classList.contains("font-serif"));
+      view?.focus();
+    });
+
+    setFont(localStorage.getItem("mde-font") === "serif");
 
     // Clicking the empty space below the document puts the caret at the end
     // (Typora behavior) — the editor column has tall bottom padding, so most
