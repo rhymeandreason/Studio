@@ -504,7 +504,10 @@ max-width:350px;
     async function moveInto(paths, destDir) {
       // Dropping a folder onto one of its own children is caught in Rust, but
       // dropping onto itself is common enough (fat-finger) to swallow here.
-      const targets = paths.filter((p) => p !== destDir);
+      // De-duped because the same file can appear under two roots (a project
+      // and a Repo/Folder entry inside it), and moving it twice would fail the
+      // second time with the source already gone.
+      const targets = [...new Set(paths)].filter((p) => p !== destDir);
       if (!targets.length) return;
       try {
         const moved = await invoke('fs_move', { paths: targets, destDir });
@@ -516,6 +519,10 @@ max-width:350px;
         await refresh();
       } catch (err) {
         toast(String(err));
+        // Rebuild on failure too — the likeliest cause of a move failing is a
+        // row pointing at a file that isn't there any more, and leaving that
+        // stale row on screen invites the same failed drag again.
+        await refresh();
       }
     }
 

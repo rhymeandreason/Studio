@@ -28,10 +28,13 @@ guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[Stri
 }
 
 for win in list {
-    let layer = win[kCGWindowLayer as String] as? Int ?? 99
-    // layer 0 = normal app windows, 3 = floating; above 5 is menus/Dock/status
-    // bar, which are never a drop destination.
-    guard layer <= 5 else { continue }
+    let layer = win[kCGWindowLayer as String] as? Int ?? 999
+    // 0 = normal windows, 3 = floating, 25 = status level — Studio's own
+    // always-on-top windows (Spotlight, Mode Switcher) live up there, and
+    // skipping them would make a drop onto one look like a drop on the bare
+    // Desktop, i.e. Finder. Above 25 is menus and the drag image itself, which
+    // are never a drop destination.
+    guard layer <= 25 else { continue }
 
     let app = win[kCGWindowOwnerName as String] as? String ?? ""
     guard !app.isEmpty, app != "Window Server", app != "Dock" else { continue }

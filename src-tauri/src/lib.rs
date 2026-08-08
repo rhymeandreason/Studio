@@ -3165,6 +3165,13 @@ fn handle_dropped_paths(project_path: String, paths: Vec<String>) -> Result<Drop
             .map(|e| IMAGE_EXTS.contains(&e.to_lowercase().as_str()))
             .unwrap_or(false);
         let dir = if is_image { &media_dir } else { &proj };
+        // Already where it would land? Leave it completely alone. Without this,
+        // re-dropping a file that's already in the project "moves" it onto
+        // itself and unique_dest renames it to name-1 — silent damage to a file
+        // the user only meant to drag somewhere else.
+        if src.parent() == Some(dir.as_path()) {
+            continue;
+        }
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         let Some(dest) = unique_dest(dir, &src) else {
             continue;
@@ -5896,3 +5903,33 @@ pub fn run() {
         });
 }
 
+
+#[cfg(test)]
+mod drop_tests {
+    use super::*;
+
+    /// Dropping a file that already lives in the project root must leave it
+    /// completely alone — it used to be "moved" onto itself, which unique_dest
+    /// turned into a silent rename to name-1.
+    #[test]
+    fn dropping_a_file_already_in_the_project_is_a_noop() {
+        let proj = std::env::temp_dir().join("studio-drop-test");
+        let _ = std::fs::remove_dir_all(&proj);
+        std::fs::create_dir_all(&proj).unwrap();
+        let f = proj.join("notes-1-1.md");
+        std::fs::write(&f, "x").unwrap();
+
+        let res = handle_dropped_paths(
+            proj.to_string_lossy().to_string(),
+            vec![f.to_string_lossy().to_string()],
+        )
+        .unwrap();
+
+        assert!(res.files.is_empty(), "should report nothing moved");
+        assert!(f.exists(), "the original was renamed away");
+        assert!(
+            !proj.join("notes-1-1-1.md").exists(),
+            "produced a -1 duplicate"
+        );
+    }
+}

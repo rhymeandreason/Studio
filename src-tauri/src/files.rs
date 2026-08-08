@@ -46,12 +46,22 @@ fn copy_tree(src: &Path, dest: &Path) -> Result<(), String> {
 }
 
 /// Rename, falling back to copy+trash across volumes. Handles files and dirs.
+///
+/// Errors name the file and the step that failed — a bare "No such file or
+/// directory (os error 2)" from somewhere in here is impossible to place.
 fn relocate(src: &Path, dest: &Path) -> Result<(), String> {
     if std::fs::rename(src, dest).is_ok() {
         return Ok(());
     }
-    copy_tree(src, dest)?;
-    trash::delete(src).map_err(|e| e.to_string())
+    let name = src.file_name().unwrap_or_default().to_string_lossy();
+    // The rename can fail for a mundane reason (EXDEV across volumes), so the
+    // fallback runs regardless — but if the source is simply gone, say so
+    // rather than letting the copy report it as an anonymous ENOENT.
+    if !src.exists() {
+        return Err(format!("\"{name}\" no longer exists at {}", src.display()));
+    }
+    copy_tree(src, dest).map_err(|e| format!("Couldn't copy \"{name}\": {e}"))?;
+    trash::delete(src).map_err(|e| format!("Copied \"{name}\" but couldn't remove the original: {e}"))
 }
 
 /// Rejects moving a folder into itself or one of its own descendants — the
@@ -155,4 +165,39 @@ pub fn fs_new_folder(dir: String, name: String) -> Result<String, String> {
     let dest = unique_in(&base, if name.is_empty() { "untitled folder" } else { name });
     std::fs::create_dir(&dest).map_err(|e| e.to_string())?;
     Ok(dest.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmpdir(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("studio-files-test-{name}"));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// Dropping a file onto the folder it already lives in must be a no-op —
+    /// never a rename to `name-1`.
+    #[test]
+    fn move_into_own_folder_is_a_noop() {
+        let d = tmpdir("same");
+        let f = d.join("a.md");
+        std::fs::write(&f, "x").unwrap();
+
+        for dest in [
+            d.to_string_lossy().to_string(),
+            format!("{}/", d.to_string_lossy()),  // trailing slash
+            format!("{}/.", d.to_string_lossy()), // dot component
+        ] {
+            let moved = fs_move(vec![f.to_string_lossy().to_string()], dest.clone()).unwrap();
+            assert!(moved.is_empty(), "dest {dest:?} should have been skipped");
+            assert!(f.exists(), "dest {dest:?} renamed the original away");
+            assert!(
+                !d.join("a-1.md").exists(),
+                "dest {dest:?} produced a -1 duplicate"
+            );
+        }
+    }
 }

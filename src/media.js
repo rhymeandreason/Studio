@@ -1049,28 +1049,48 @@ async function initDragDrop() {
   // The Files tab embeds the File Directory tool, which handles OS drops itself
   // (dropping onto a folder row moves the files there) — so the project-wide
   // "add to this project" routing steps aside while that tab is open.
-  const blocked = () =>
+  // The File Directory tab owns drops that land on its tree — dropping onto a
+  // folder row there means "move it here", not "add it to this project". Tested
+  // against the iframe's actual rect rather than the active tab, so a drop on
+  // the header beside it still routes here. Positions are window-relative CSS
+  // pixels (Tauri types them PhysicalPosition, but macOS passes AppKit points).
+  const overFileDirectory = (position) => {
+    const frame = document.getElementById("files-frame");
+    if (!frame || !position) return false;
+    const b = frame.getBoundingClientRect();
+    if (!b.width || !b.height) return false; // tab not open
+    return (
+      position.x >= b.left &&
+      position.x <= b.right &&
+      position.y >= b.top &&
+      position.y <= b.bottom
+    );
+  };
+
+  const blocked = (e) =>
     state.draggingNoteId ||
     state.mediaDragActive ||
-    state.activePanel === "files" ||
-    !state.activeProject;
+    !state.activeProject ||
+    overFileDirectory(e && e.payload && e.payload.position);
   // Only drag-enter carries paths in Tauri v2 (drag-over is position-only), so
   // set the label on enter and just keep the overlay visible on over.
   await listen("tauri://drag-enter", (e) => {
-    if (blocked()) return;
+    if (blocked(e)) return;
     const preview = dropPreview((e.payload && e.payload.paths) || []);
     document.getElementById("dropzone-icon").textContent = preview.icon;
     document.getElementById("dropzone-label").textContent = preview.label;
     zone.hidden = false;
   });
-  await listen("tauri://drag-over", () => {
-    if (blocked()) return;
+  await listen("tauri://drag-over", (e) => {
+    if (blocked(e)) return;
     zone.hidden = false;
   });
   await listen("tauri://drag-leave", () => (zone.hidden = true));
   await listen("tauri://drag-drop", async (e) => {
     zone.hidden = true;
-    if (!state.activeProject || state.draggingNoteId) return;
+    // The same guard the overlay uses — this used to test only activeProject /
+    // draggingNoteId, so a drop the overlay had declined was still acted on.
+    if (blocked(e)) return;
     const paths = (e.payload && e.payload.paths) || [];
     if (!paths.length) return;
     try {
