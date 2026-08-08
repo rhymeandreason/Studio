@@ -8,6 +8,14 @@
   <link rel="stylesheet" href="../kit/window-chrome.css" />
   <script type="module" src="../kit/components.js"></script>
   <style>
+    /* System UI instead of the Runes Futura: this is a long-form writing
+       surface, and SF is built for running text at small sizes. Scoped to
+       this tool by overriding the tokens, so the rest of Studio keeps Futura. */
+    :root {
+      --sans: system-ui, -apple-system, "SF Pro Text", sans-serif;
+      --serif: var(--sans);
+    }
+
     /* Transparent shell; the opaque fill lives on #main (window-chrome quirk:
        a background on html/body paints the square viewport and defeats the
        rounded corners). */
