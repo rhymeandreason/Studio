@@ -719,6 +719,41 @@ fn markdown_editor_label(project_path: &str) -> String {
     format!("tool-markdown-editor-html-{}", scope)
 }
 
+/// The path a new Markdown document would take in `project_path`: an unused
+/// `Untitled.md` in the project root (where the notes' Markdown export already
+/// writes). `None` when no project is active — there'd be nowhere to put it.
+///
+/// The file is deliberately **not** created here. The editor opens on the path
+/// and only writes it on the first edit, so opening the tool and closing it
+/// again doesn't litter the project with empty Untitled files.
+fn untitled_markdown_path(project_path: &str) -> Option<String> {
+    let dir = PathBuf::from(project_path);
+    if project_path.is_empty() || !dir.is_dir() {
+        return None;
+    }
+    unique_dest(&dir, Path::new("Untitled.md")).map(|p| p.to_string_lossy().to_string())
+}
+
+/// Does this path exist on disk? The Markdown Editor uses it to tell "this file
+/// hasn't been created yet" (open an empty document on it) from "the read
+/// failed" (an error worth surfacing) — inferring that from an error string
+/// would be fragile, and getting it wrong means autosaving an empty document
+/// over a file that was merely unreadable.
+#[tauri::command]
+fn path_exists(path: String) -> bool {
+    Path::new(&path).exists()
+}
+
+/// The Markdown Editor's `+` button asks for the next untitled path (same rule
+/// as a fresh tray launch). Returns null when no project is active.
+#[tauri::command]
+fn new_markdown_path(app: AppHandle, project_path: Option<String>) -> Option<String> {
+    let proj = project_path
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| active_project_path(&app));
+    untitled_markdown_path(&proj)
+}
+
 /// Open (or focus) the Markdown Editor window for `project_path` — the Code
 /// Editor's twin for .md files (see `open_code_editor_window` for the
 /// pending_open / event-delivery contract; this uses the `mde:open-file`
@@ -844,13 +879,26 @@ fn open_tool_window(
         open_code_editor_window(app, &color, &active_project_path(app), None);
         return;
     }
-    // Same per-project scheme for its Markdown twin.
+    // Same per-project scheme for its Markdown twin. Launching it from the tray
+    // menu or Spotlight means "I want to write something", so a *fresh* window
+    // starts on a new untitled document rather than the empty state. An
+    // already-open window is only focused — re-clicking the tray icon must not
+    // throw away what's on screen (the in-window `+` is how you get another).
     if Path::new(path).file_name().and_then(|n| n.to_str()) == Some("markdown-editor.html") {
         let color = color
             .filter(|c| !c.is_empty())
             .or_else(|| active_git_color_hex(app))
             .unwrap_or_default();
-        open_markdown_editor_window(app, &color, &active_project_path(app), None);
+        let proj = active_project_path(app);
+        let already_open = app
+            .get_webview_window(&markdown_editor_label(&proj))
+            .is_some();
+        let new_file = if already_open {
+            None
+        } else {
+            untitled_markdown_path(&proj)
+        };
+        open_markdown_editor_window(app, &color, &proj, new_file);
         return;
     }
     let Some(filename) = Path::new(path).file_name().and_then(|n| n.to_str()) else {
@@ -5757,6 +5805,8 @@ pub fn run() {
             git_open_file,
             open_file_in_code_editor,
             open_md_in_code_editor,
+            new_markdown_path,
+            path_exists,
             git_get_draft,
             git_set_draft,
             take_pending_open,
@@ -5903,6 +5953,39 @@ pub fn run() {
         });
 }
 
+
+#[cfg(test)]
+mod markdown_tests {
+    use super::*;
+
+    #[test]
+    fn untitled_path_is_unique_and_creates_nothing() {
+        let proj = std::env::temp_dir().join("studio-untitled-test");
+        let _ = std::fs::remove_dir_all(&proj);
+        std::fs::create_dir_all(&proj).unwrap();
+
+        let first = untitled_markdown_path(&proj.to_string_lossy()).unwrap();
+        assert_eq!(Path::new(&first).file_name().unwrap(), "Untitled.md");
+        assert!(
+            !Path::new(&first).exists(),
+            "the path must not be created — the editor writes it on first edit"
+        );
+
+        // Asking again with the file now on disk steps to the next free name,
+        // so a second new document can't land on the first one.
+        std::fs::write(&first, "taken").unwrap();
+        let second = untitled_markdown_path(&proj.to_string_lossy()).unwrap();
+        assert_eq!(Path::new(&second).file_name().unwrap(), "Untitled-1.md");
+    }
+
+    /// No active project (or a path that isn't a directory) means there's
+    /// nowhere to put a new document — the editor shows its empty state.
+    #[test]
+    fn untitled_path_needs_a_real_project_dir() {
+        assert!(untitled_markdown_path("").is_none());
+        assert!(untitled_markdown_path("/nope/not/a/dir").is_none());
+    }
+}
 
 #[cfg(test)]
 mod drop_tests {

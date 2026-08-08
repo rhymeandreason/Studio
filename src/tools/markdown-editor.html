@@ -91,6 +91,7 @@
     </div>
     <span class="spacer"></span>
     <div class="tb-group">
+      <button class="btn btn-icon-only" id="new-btn" title="New document"><span class="mi">add</span></button>
       <button class="btn btn-icon-only" id="table-btn" title="Insert table"><span class="mi">table</span></button>
       <button class="btn btn-icon-only" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
       <button class="btn btn-icon-only" id="code-btn" title="Open in Code Editor"><span class="mi">code</span></button>
@@ -173,7 +174,8 @@
 
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
-    const sessionKey = "mde-last:" + (params.get("session") || "none");
+    const sessionProject = params.get("session") || "";  // this window's project
+    const sessionKey = "mde-last:" + (sessionProject || "none");
 
     let currentPath = "";
     let diskText = "";          // last text known to be on disk
@@ -354,11 +356,21 @@
     }
 
     // ---------- open / load ----------
+    // A path that doesn't exist yet opens as an empty document (`vim foo.md`
+    // semantics) — that's how "new file" works, and nothing is written to disk
+    // until the first edit. Existence is checked rather than inferred from a
+    // failed read: a file that exists but can't be read is a real error, and
+    // treating it as empty would autosave the emptiness over it.
     async function loadPath(path) {
       await flushSave(); // don't drop edits in the previous file
       let text = "";
-      try { text = await invoke("read_text_file", { path }); }
-      catch (e) { toast("Couldn't open: " + e); return; }
+      if (hasTauri) {
+        const exists = await invoke("path_exists", { path }).catch(() => true);
+        if (exists) {
+          try { text = await invoke("read_text_file", { path }); }
+          catch (e) { toast("Couldn't open: " + e); return; }
+        }
+      }
       currentPath = path;
       diskText = text;
       setDirty(false);
@@ -381,6 +393,16 @@
       } catch {}
     }
 
+    // New document: an unused Untitled.md in the project root, not created on
+    // disk until it's typed into (loadPath handles the not-yet-existing path).
+    async function newFile() {
+      if (!hasTauri) return;
+      const path = await invoke("new_markdown_path", { projectPath: sessionProject }).catch(() => null);
+      if (!path) { toast("No active project to put a new file in"); return; }
+      await loadPath(path);
+    }
+
+    $("new-btn").addEventListener("click", newFile);
     $("open-btn").addEventListener("click", pickFile);
     $("empty-open").addEventListener("click", pickFile);
     $("code-btn").addEventListener("click", async () => {

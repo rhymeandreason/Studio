@@ -19,6 +19,18 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   notes exports, `open_file_in_editor` with the Studio editor — now opens
   markdown in this tool. The `</>` button (`open_md_in_code_editor`) is the
   escape hatch back to raw source in the Code Editor.
+- **New documents:** launching the tool from the tray menu or Spotlight opens
+  a *fresh* window on a new `Untitled.md` (`untitled_markdown_path`, project
+  root — where the notes' Markdown export already writes; `Untitled-1.md` and
+  so on if taken). An already-open window is only focused, so re-clicking the
+  tray icon can't throw away what's on screen — the `+` button is how you get
+  another. The file is **not** created up front: `loadPath` opens a
+  not-yet-existing path as an empty document (`vim foo.md` semantics) and the
+  first edit writes it, so opening the tool and closing it leaves no litter.
+  Existence is checked with `path_exists` rather than inferred from a failed
+  read — a file that exists but can't be read must not be treated as empty,
+  or autosave would overwrite it. With no active project there's nowhere to
+  put one, so the empty state shows instead.
 - **Saving:** debounced 600 ms after each doc change (plus blur / Cmd+S /
   before switching files) via `write_text_file`. On window focus the file is
   re-read and swapped in only when there are no unsaved edits.
