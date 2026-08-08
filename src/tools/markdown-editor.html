@@ -14,16 +14,16 @@
     html, body { background: transparent; }
     body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
+    /* One row: close dot + filename on the left, actions on the right (the
+       Code Editor's layout). */
     #bar { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 40px; flex: none; }
+    #bar .tb-group { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    #bar .spacer { flex: 1; }
     #main { flex: 1; min-height: 0; background: var(--bg); display: flex; flex-direction: column; }
 
-    /* Toolbar row below the bar (the bar itself is title-only: it gets removed
-       when a tool is embedded, so nothing live may sit inside it). */
-    #toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 14px; flex: none; }
     #filename { font-size: 13px; color: var(--text); opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     #dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #888); opacity: 0; transition: opacity 0.2s; flex: none; }
     #dirty.on { opacity: 0.9; }
-    #toolbar .spacer { flex: 1; }
 
     /* Writing surface: one centered column, Typora-style. */
     #scroller { flex: 1; overflow-y: auto; min-height: 0; }
@@ -70,21 +70,26 @@
     /* Empty state (no file open). */
     #empty { flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text); opacity: 0.6; }
     body.no-file #empty { display: flex; }
-    body.no-file #scroller, body.no-file #toolbar { display: none; }
+    body.no-file #scroller { display: none; }
+    /* Nothing to act on until a file is open — only "Open…" stays. */
+    body.no-file #table-btn, body.no-file #diff-mode, body.no-file #code-btn { display: none; }
   </style>
 </head>
 <body>
-  <div id="bar" data-window-bar><div data-window-close></div></div>
-  <div id="main">
-    <div id="toolbar">
+  <div id="bar" data-window-bar>
+    <div class="tb-group" data-window-close>
       <span id="filename" class="text-mono">No file</span>
       <span id="dirty" title="Unsaved changes"></span>
-      <span class="spacer"></span>
+    </div>
+    <span class="spacer"></span>
+    <div class="tb-group">
       <button class="btn btn-icon-only" id="table-btn" title="Insert table"><span class="mi">table</span></button>
       <button class="btn btn-icon-only" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
       <button class="btn btn-icon-only" id="code-btn" title="Open in Code Editor"><span class="mi">code</span></button>
       <button class="btn btn-icon-only" id="open-btn" title="Open file…"><span class="mi">folder_open</span></button>
     </div>
+  </div>
+  <div id="main">
     <div id="empty">
       <span class="mi" style="font-size:40px">edit_note</span>
       <div class="text-body">Open a Markdown file to start writing</div>
@@ -318,7 +323,9 @@
     function serialize() { return serializer.serialize(view.state.doc); }
     window.__mde = { serialize: () => serialize() }; // console debugging
 
-    function setDirty(on) { dirty = on; $("dirty").classList.toggle("on", on); }
+    // The filename + dot live in the window bar, which window-chrome.js strips
+    // when a tool is embedded in an iframe — hence the optional chaining.
+    function setDirty(on) { dirty = on; $("dirty")?.classList.toggle("on", on); }
 
     function scheduleSave() {
       clearTimeout(saveTimer);
@@ -348,7 +355,7 @@
       diskText = text;
       setDirty(false);
       document.body.classList.remove("no-file");
-      $("filename").textContent = path.split("/").pop();
+      if ($("filename")) $("filename").textContent = path.split("/").pop();
       mountEditor(text);
       localStorage.setItem(sessionKey, path);
       try {
