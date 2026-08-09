@@ -94,6 +94,7 @@
     /* Empty state (no file open). */
     #empty { flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text); opacity: 0.6; }
     body.no-file #empty { display: flex; }
+    #empty .empty-actions { display: flex; gap: 8px; }
     body.no-file #scroller { display: none; }
     /* Nothing to act on until a file is open — only "Open…" stays. */
     body.no-file #table-btn, body.no-file #diff-mode,
@@ -128,8 +129,11 @@
   <div id="main">
     <div id="empty">
       <span class="mi" style="font-size:40px">edit_note</span>
-      <div class="text-body">Open a Markdown file to start writing</div>
-      <button class="btn" id="empty-open">Open…</button>
+      <div class="text-body">Start a new document, or open one</div>
+      <div class="empty-actions">
+        <button class="btn btn-primary" id="empty-new">New</button>
+        <button class="btn" id="empty-open">Open…</button>
+      </div>
     </div>
     <div id="scroller"><div id="editor"></div></div>
   </div>
@@ -424,12 +428,23 @@
     // disk until it's typed into (loadPath handles the not-yet-existing path).
     async function newFile() {
       if (!hasTauri) return;
-      const path = await invoke("new_markdown_path", { projectPath: sessionProject }).catch(() => null);
+      // A rejected invoke and a null result mean different things: the first is
+      // a real failure (an old build without the command, most often — Rust
+      // changes need a Studio restart), the second is "no project to put it
+      // in". Collapsing them reports a missing command as a missing project.
+      let path;
+      try {
+        path = await invoke("new_markdown_path", { projectPath: sessionProject });
+      } catch (e) {
+        toast("Couldn't start a new file: " + e);
+        return;
+      }
       if (!path) { toast("No active project to put a new file in"); return; }
       await loadPath(path);
     }
 
     $("new-btn").addEventListener("click", newFile);
+    $("empty-new").addEventListener("click", newFile);
     $("open-btn").addEventListener("click", pickFile);
     $("empty-open").addEventListener("click", pickFile);
     $("code-btn").addEventListener("click", async () => {

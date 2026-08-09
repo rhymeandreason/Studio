@@ -29,8 +29,11 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   first edit writes it, so opening the tool and closing it leaves no litter.
   Existence is checked with `path_exists` rather than inferred from a failed
   read — a file that exists but can't be read must not be treated as empty,
-  or autosave would overwrite it. With no active project there's nowhere to
-  put one, so the empty state shows instead.
+  or autosave would overwrite it. The empty state offers **New** alongside
+  **Open…**, and `+` stays visible there too. With no active project there's
+  nowhere to put a file, so `new_markdown_path` returns null and the toast
+  says so — kept distinct from a *rejected* invoke, which means a real
+  failure (usually an old build: the Rust commands need a Studio restart).
 - **Sans / serif toggle:** a kit `.seg-toggle` (two `Aa`s, each set in the
   font it selects) swaps the *document* between
   system UI (SF) and **New York** (`ui-serif`) — Apple's system serif, drawn
