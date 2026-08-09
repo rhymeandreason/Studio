@@ -97,7 +97,13 @@
     body.no-file #scroller { display: none; }
     /* Nothing to act on until a file is open — only "Open…" stays. */
     body.no-file #table-btn, body.no-file #diff-mode,
-    body.no-file #code-btn, body.no-file #font-btn { display: none; }
+    body.no-file #code-btn, body.no-file #font-toggle { display: none; }
+
+    /* Each half is set in the font it selects — the letterforms say which is
+       which better than any icon pair could. */
+    #font-sans { font-family: var(--sans); }
+    #font-serif { font-family: var(--doc-serif); }
+    .seg-toggle__btn { font-size: 13px; }
   </style>
 </head>
 <body>
@@ -109,7 +115,10 @@
     <span class="spacer"></span>
     <div class="tb-group">
       <button class="btn btn-icon-only" id="new-btn" title="New document"><span class="mi">add</span></button>
-      <button class="btn btn-icon-only" id="font-btn" title="Serif"><span class="mi">text_format</span></button>
+      <div class="seg-toggle" id="font-toggle">
+        <button class="seg-toggle__btn is-active" id="font-sans" title="Sans">Aa</button>
+        <button class="seg-toggle__btn" id="font-serif" title="Serif">Aa</button>
+      </div>
       <button class="btn btn-icon-only" id="table-btn" title="Insert table"><span class="mi">table</span></button>
       <button class="btn btn-icon-only" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
       <button class="btn btn-icon-only" id="code-btn" title="Open in Code Editor"><span class="mi">code</span></button>
@@ -455,18 +464,15 @@
     // project and applied before the first paint below.
     function setFont(serif) {
       document.body.classList.toggle("font-serif", serif);
-      const b = $("font-btn");
-      if (b) {
-        b.classList.toggle("active", serif);
-        b.title = serif ? "Serif — switch to sans" : "Sans — switch to serif";
-      }
+      $("font-sans")?.classList.toggle("is-active", !serif);
+      $("font-serif")?.classList.toggle("is-active", serif);
       localStorage.setItem("mde-font", serif ? "serif" : "sans");
     }
 
-    $("font-btn").addEventListener("click", () => {
-      setFont(!document.body.classList.contains("font-serif"));
-      view?.focus();
-    });
+    // A segmented control picks a mode rather than flipping one, so each half
+    // sets its own state — clicking the already-active one does nothing.
+    $("font-sans").addEventListener("click", () => { setFont(false); view?.focus(); });
+    $("font-serif").addEventListener("click", () => { setFont(true); view?.focus(); });
 
     setFont(localStorage.getItem("mde-font") === "serif");
 

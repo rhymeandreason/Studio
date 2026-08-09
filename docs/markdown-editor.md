@@ -31,7 +31,8 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   read — a file that exists but can't be read must not be treated as empty,
   or autosave would overwrite it. With no active project there's nowhere to
   put one, so the empty state shows instead.
-- **Sans / serif toggle:** the `Aa` button swaps the *document* between
+- **Sans / serif toggle:** a kit `.seg-toggle` (two `Aa`s, each set in the
+  font it selects) swaps the *document* between
   system UI (SF) and **New York** (`ui-serif`) — Apple's system serif, drawn
   for reading and metrically matched to SF, so nothing is downloaded and no
   woff2 joins `src/vendor/`. Only the prose changes: the title bar stays SF
