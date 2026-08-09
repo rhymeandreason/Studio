@@ -26,7 +26,11 @@ non-destructive image editor), notes, workspace, and artifacts.
 
 ## Run
 `npm install` then `npm run tauri dev`. macOS 14+ (Vision). Menu-bar app, no Dock
-icon. Editing `src/` is live (reload the window); Rust changes need a restart.
+icon. Editing `src/` is live; Rust changes need a restart. `dev` runs
+`tauri dev --no-watch` and Studio watches `src/` itself (dev builds only,
+`start_dev_frontend_watcher` → `dev-file-changed` → `src/kit/dev-reload.js`) so
+a changed file reloads only the windows that actually loaded it. `npm run
+dev:watch` restores Tauri's stock reload-everything watcher.
 
 ## Subsystems (detail in each doc)
 - **Design system** ( — tokens, kit classes, `<studio-*>` components) —

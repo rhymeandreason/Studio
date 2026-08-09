@@ -1323,6 +1323,55 @@ fn start_watching(app: &AppHandle) {
     }
 }
 
+/// Dev-only frontend watcher (debug builds only). `tauri dev`'s own watcher
+/// reloads *every* webview on any change under src/, so we run dev with
+/// `--no-watch` (package.json) and emit `dev-file-changed` with paths relative
+/// to src/ instead; kit/dev-reload.js reloads only the windows that actually
+/// loaded the changed file. Rust changes still need a restart, as before.
+#[cfg(debug_assertions)]
+fn start_dev_frontend_watcher(app: &AppHandle) {
+    use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
+
+    // Source tree at compile time — dev builds run from this checkout.
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src");
+    let Ok(root) = root.canonicalize() else {
+        return;
+    };
+    let handle = app.clone();
+    let base = root.clone();
+
+    let debouncer = new_debouncer(
+        Duration::from_millis(150),
+        move |res: DebounceEventResult| {
+            let Ok(events) = res else {
+                return;
+            };
+            let mut rels: Vec<String> = events
+                .iter()
+                .filter_map(|e| e.path.strip_prefix(&base).ok())
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                // Editors write temp/swap siblings; only real sources matter.
+                .filter(|p| !p.starts_with('.') && !p.ends_with('~'))
+                .collect();
+            rels.sort();
+            rels.dedup();
+            if !rels.is_empty() {
+                let _ = handle.emit("dev-file-changed", rels);
+            }
+        },
+    );
+
+    if let Ok(mut d) = debouncer {
+        if d.watcher()
+            .watch(root.as_path(), RecursiveMode::Recursive)
+            .is_ok()
+        {
+            // Leak: the watcher must outlive this fn for the app's lifetime.
+            std::mem::forget(d);
+        }
+    }
+}
+
 /// Paths watched in addition to `root` (e.g. a project's linked Repo/Folder
 /// entries that live outside ~/Projects) — tracked so `watch_extra_paths` can
 /// diff and unwatch stale ones instead of accumulating forever.
@@ -5922,6 +5971,10 @@ pub fn run() {
 
             // Live-refresh when files change in ~/Projects (Finder, other apps).
             start_watching(&handle);
+
+            // Dev only: reload just the windows that loaded the changed file.
+            #[cfg(debug_assertions)]
+            start_dev_frontend_watcher(&handle);
 
             // Periodically run any due scheduled `claude -p` tasks.
             start_scheduler(&handle);

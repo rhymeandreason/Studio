@@ -16,6 +16,9 @@
 // Tools that retint dynamically (e.g. the Code Editor, per open file) just set
 // --titlebar-tint themselves later; the initial ?color= is the first paint.
 
+// Per-window dev reload (no-op outside `npm run dev`).
+import "./dev-reload.js";
+
 const TAURI = window.__TAURI__;
 
 // Initial tint from the URL (matches the native git-window color the opener
