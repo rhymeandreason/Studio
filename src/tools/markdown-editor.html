@@ -45,7 +45,12 @@
     #bar .spacer { flex: 1; }
     #main { flex: 1; min-height: 0; background: var(--bg); display: flex; flex-direction: column; }
 
-    #filename { font-size: 13px; color: var(--text); opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    #filename { font-size: 13px; color: var(--text); opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; padding: 2px 5px; margin-left: -5px; border-radius: 5px; }
+    /* Only hint that it's editable once there's a file to rename. */
+    body:not(.no-file) #filename { cursor: text; }
+    body:not(.no-file) #filename:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+    /* Sized to the name so the rest of the bar doesn't shift on click. */
+    #filename-edit { font-size: 13px; padding: 2px 5px; margin-left: -5px; border: none; border-radius: 5px; background: var(--surface); color: var(--text); outline: 1px solid var(--accent, #888); min-width: 8ch; }
     #dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #888); opacity: 0; transition: opacity 0.2s; flex: none; }
     #dirty.on { opacity: 0.9; }
 
@@ -111,6 +116,7 @@
   <div id="bar" data-window-bar>
     <div class="tb-group" data-window-close>
       <span id="filename" class="text-mono">No file</span>
+      <input id="filename-edit" class="text-mono" spellcheck="false" hidden />
       <span id="dirty" title="Unsaved changes"></span>
     </div>
     <span class="spacer"></span>
@@ -392,6 +398,15 @@
     // until the first edit. Existence is checked rather than inferred from a
     // failed read: a file that exists but can't be read is a real error, and
     // treating it as empty would autosave the emptiness over it.
+    // Point the window at a path: the one place currentPath, the bar label and
+    // the restored-session key move together, so a rename can't leave one of
+    // them on the old name.
+    function setPath(path) {
+      currentPath = path;
+      if ($("filename")) $("filename").textContent = path.split("/").pop();
+      localStorage.setItem(sessionKey, path);
+    }
+
     async function loadPath(path) {
       await flushSave(); // don't drop edits in the previous file
       let text = "";
@@ -402,13 +417,11 @@
           catch (e) { toast("Couldn't open: " + e); return; }
         }
       }
-      currentPath = path;
       diskText = text;
       setDirty(false);
       document.body.classList.remove("no-file");
-      if ($("filename")) $("filename").textContent = path.split("/").pop();
+      setPath(path);
       mountEditor(text);
-      localStorage.setItem(sessionKey, path);
       try {
         const color = await invoke("git_color_for_path", { path });
         if (color) document.documentElement.style.setProperty("--titlebar-tint", color);
@@ -442,6 +455,73 @@
       if (!path) { toast("No active project to put a new file in"); return; }
       await loadPath(path);
     }
+
+    // ---------- rename by clicking the filename ----------
+    // Safe to click even though the bar is a Tauri drag region: only the bar
+    // element itself carries the attribute, so events on its children are
+    // ordinary clicks.
+    function startRename() {
+      if (!currentPath || !hasTauri) return;
+      const span = $("filename"), input = $("filename-edit");
+      const name = currentPath.split("/").pop();
+      input.value = name;
+      span.hidden = true;
+      input.hidden = false;
+      input.size = Math.max(name.length, 8);
+      input.focus();
+      // Select the stem only — the extension is rarely what's being changed.
+      const dot = name.lastIndexOf(".");
+      input.setSelectionRange(0, dot > 0 ? dot : name.length);
+    }
+
+    function endRename() {
+      $("filename-edit").hidden = true;
+      $("filename").hidden = false;
+    }
+
+    async function commitRename() {
+      const input = $("filename-edit");
+      if (input.hidden) return;           // already settled (Enter, then blur)
+      const current = currentPath.split("/").pop();
+      let name = input.value.trim();
+      endRename();
+      if (!name || name === current) return;
+      // Keep it a Markdown file: a stray "Notes" would otherwise stop routing
+      // to this editor and lose its rendering.
+      if (!/\.(md|markdown)$/i.test(name)) name += ".md";
+      if (name === current) return;
+
+      // Any debounced write must land on the old path before it moves.
+      await flushSave();
+
+      const dir = currentPath.slice(0, currentPath.length - current.length);
+      const next = dir + name;
+      let existed = true;
+      try { existed = await invoke("path_exists", { path: currentPath }); } catch {}
+
+      if (existed) {
+        try { await invoke("fs_rename", { path: currentPath, newName: name }); }
+        catch (e) { toast(String(e)); return; }
+      } else {
+        // A new document that hasn't been typed into yet has nothing on disk to
+        // rename, so this just moves the target — but it still must not land on
+        // an existing file, or the next keystroke would autosave over it.
+        let taken = false;
+        try { taken = await invoke("path_exists", { path: next }); } catch {}
+        if (taken) { toast(`"${name}" already exists here.`); return; }
+      }
+      setPath(next);
+      refreshDiff();   // the new name has its own git history
+      view?.focus();
+    }
+
+    $("filename").addEventListener("click", startRename);
+    $("filename-edit").addEventListener("blur", commitRename);
+    $("filename-edit").addEventListener("keydown", (e) => {
+      e.stopPropagation();               // don't reach the editor's keymap
+      if (e.key === "Enter") commitRename();
+      else if (e.key === "Escape") { endRename(); view?.focus(); }
+    });
 
     $("new-btn").addEventListener("click", newFile);
     $("empty-new").addEventListener("click", newFile);

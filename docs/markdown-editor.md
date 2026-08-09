@@ -34,6 +34,16 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   nowhere to put a file, so `new_markdown_path` returns null and the toast
   says so — kept distinct from a *rejected* invoke, which means a real
   failure (usually an old build: the Rust commands need a Studio restart).
+- **Rename:** click the filename in the window bar (safe despite the bar
+  being a Tauri drag region — only the bar element itself carries the
+  attribute, so clicks on children are ordinary). Enter commits, Escape
+  cancels, blur commits; the stem is preselected. A missing extension gets
+  `.md` appended, so a rename can't quietly stop routing to this editor. The
+  pending debounced save is flushed *before* the move so it lands on the old
+  path, and `setPath` moves `currentPath`, the bar label and the restored
+  session key together. A document that hasn't been typed into yet has
+  nothing on disk to rename, so only the target moves — after checking the
+  destination is free, or the next keystroke would autosave over it.
 - **Sans / serif toggle:** a kit `.seg-toggle` (two `Aa`s, each set in the
   font it selects) swaps the *document* between
   system UI (SF) and **New York** (`ui-serif`) — Apple's system serif, drawn
