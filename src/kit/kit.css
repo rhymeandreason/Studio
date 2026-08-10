@@ -635,6 +635,48 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
     background: var(--hairline);
 }
 
+/* ---- Context menu -------------------------------------------------------- */
+/* Right-click menu built by kit/context-menu.js — a `.menu` panel positioned in
+ * viewport coordinates, with submenus, ticks and swatches. */
+
+.ctxmenu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: auto;
+    z-index: 1000;
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
+}
+.ctxmenu__item.is-open { background: var(--surface); }
+.ctxmenu__label {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ctxmenu__chev,
+.ctxmenu__tick {
+    flex: 0 0 auto;
+    margin-left: 12px;
+}
+.ctxmenu__tick { color: var(--accent); }
+.ctxmenu__swatch {
+    flex: 0 0 auto;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 1px solid var(--hairline-strong);
+    background: var(--elevated);
+}
+.ctxmenu__swatch--none {
+    background-image: linear-gradient(
+        to bottom right,
+        transparent calc(50% - 1px),
+        var(--hairline-strong),
+        transparent calc(50% + 1px)
+    );
+}
+
 /* ---- Compact dropdown (notedrop pattern) --------------------------------- */
 /* A small labelled trigger button that opens a .menu beneath it, with an
  * optional color swatch and checkmark on the active item.

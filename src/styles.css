@@ -1157,15 +1157,9 @@ textarea.notecard__title::placeholder {
     opacity: var(--note-placeholder-opacity, 1);
 }
 
-/* Per-card style controls live in the notes toolbar, shown when a card is selected. */
-.notes-card-style {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-/* Custom dropdown for the per-card theme/font pickers (replaces <select> so
-   the menu and its swatches/font previews can be fully styled). */
+/* Compact labelled dropdown (originally the notes toolbar's theme/font
+   pickers; those now live on the card's right-click menu, and the Claude
+   window's model / cwd / permission pickers use this styling). */
 .notedrop {
     position: relative;
     flex: 0 0 auto;

@@ -8,6 +8,8 @@
 
 Also in the kit: **`src/kit/window-chrome.{js,css}`** — custom window chrome for decorationless tool windows (draggable title bar, close dot, color tint, rounded corners). Opt in by linking the CSS, importing the JS, and marking the top bar `data-window-bar`. See the "Window style" section in [tools.md](tools.md).
 
+Also **`src/kit/context-menu.js`** — `openContextMenu(x, y, items)` builds the app's right-click menu from plain data: `{ label, icon, run, items (submenu), checked, swatch, font, disabled }`, `"-"` for a separator. It renders as a `.menu` panel (`.ctxmenu` positions it in viewport coordinates) and closes itself on outside click, Escape, blur or resize. Used by the Notes card menu; new panels/tools should use it rather than hand-rolling a menu.
+
 **When to add a component vs. a class:** CSS class if it's purely visual; Web Component if it needs encapsulated JS behavior.
 
 Current components: `<studio-color>`, `<studio-swatch>`, `<studio-toggle>`, `<studio-icon-toggle>` (segmented icon toggle; `.value` + `change`). Full attribute/event docs are in [`kit-gallery.html`](../src/tools/kit-gallery.html) (Tools → Design System) next to each component demo.

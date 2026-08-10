@@ -11,6 +11,7 @@ import { loadImage } from "./imageutil.js";
 import { spriteStyle } from "./sprites.js";
 import { state } from "./state.js";
 import { initDevInspect } from "./devinspect.js";
+import { openContextMenu } from "./kit/context-menu.js";
 import {
   loadMedia,
   initMedia,
@@ -705,7 +706,6 @@ function repaintNotesSelection() {
     .forEach((c) =>
       c.classList.toggle("is-selected", notesSelection.has(c.dataset.noteId)),
     );
-  updateNotesChrome();
 }
 
 // --- Notes keymap actions (registered in panelKeymaps.notes) ---------------
@@ -2102,7 +2102,6 @@ export function renderNotes() {
           : "No notes yet. Add a text note, checklist, or table above.",
       }),
     );
-    updateNotesChrome();
     return;
   }
 
@@ -2213,6 +2212,16 @@ export function renderNotes() {
         }
       }
     });
+    // Right-click acts on the selection, retargeting it first if the card
+    // isn't part of it (Finder-style).
+    card.addEventListener("contextmenu", (e) => {
+      // Leave the webview's own menu (paste, spelling) to text fields.
+      if (e.target.closest("input, textarea, [contenteditable]")) return;
+      e.preventDefault();
+      if (!notesSelection.has(note.id)) notesSelection.set(note.id);
+      openNoteMenu(e, note);
+    });
+
     // Double-click a non-editable part of the card opens it in a modal.
     card.addEventListener("dblclick", (e) => {
       if (e.target.closest("select, button, input, textarea, a")) return;
@@ -2220,8 +2229,6 @@ export function renderNotes() {
     });
     listEl.append(card);
   }
-
-  updateNotesChrome();
 
   if (isDaysView || isTagView) return;
 
@@ -2252,82 +2259,84 @@ function selectedNote() {
     : null;
 }
 
-// Show the per-card style controls in the toolbar when a card is selected and
-// sync their values to that card.
-function updateNotesChrome() {
-  const group = document.getElementById("notes-card-style");
-  if (!group) return;
-  const note = selectedNote();
-  group.hidden = !note;
-  const mdBtn = document.getElementById("notes-md-btn");
-  if (mdBtn) mdBtn.hidden = !note;
-  if (!note) return;
-  noteThemeDrop?.setValue(note.theme || "default");
-  noteTitleFontDrop?.setValue(note.titleFont || "");
-  noteBodyFontDrop?.setValue(note.bodyFont || "");
+// --- Card context menu -----------------------------------------------------
+// Everything that acts on a selected card lives here (the toolbar used to carry
+// the theme/font dropdowns and the Markdown button; a right-click menu keeps
+// the toolbar to the view-wide controls and puts the rest on the card itself).
+
+// One submenu of preset choices, ticking whatever the card currently uses.
+function styleMenuItems(items, current, apply) {
+  return items.map((item) => ({
+    label: item.label,
+    font: item.font,
+    // Only the theme list has swatches — the key's mere presence draws a dot.
+    ...("swatch" in item ? { swatch: item.swatch } : {}),
+    checked: item.value === current,
+    run: () => apply(item.value),
+  }));
 }
 
-let noteThemeDrop = null;
-let noteTitleFontDrop = null;
-let noteBodyFontDrop = null;
+function openNoteMenu(e, note) {
+  const count = notesSelection.size();
+  const many = count > 1;
+  const one = !many;
+  const themes = NOTE_THEMES.map((t) => ({
+    value: t.id,
+    label: t.name,
+    swatch: t.bg || "",
+  }));
+  const fonts = NOTE_FONTS.map((f) => ({
+    value: f.value,
+    label: f.name,
+    font: f.value,
+  }));
 
-// A small custom dropdown for the per-card style controls (theme/font
-// pickers): a trigger button showing the current choice, and a menu of
-// options — each rendered with a colour swatch (themes) or in its own font
-// (fonts) so you can preview the choice before picking it.
-function createStyleDropdown(container, items, onSelect) {
-  const hasSwatches = items.some((i) => "swatch" in i);
-  const btn = el("button", "notedrop__btn", { type: "button" });
-  const swatch = hasSwatches ? el("span", "notedrop__swatch") : null;
-  const label = el("span", "notedrop__label");
-  if (swatch) btn.append(swatch);
-  btn.append(label, el("span", "mi mi-sm notedrop__chev", { textContent: "expand_more" }));
-
-  const menu = el("div", "menu notedrop__menu", { hidden: true });
-  items.forEach((item) => {
-    const opt = el("button", "menu__item notedrop__item", {
-      type: "button",
-      textContent: item.label,
-    });
-    if (item.font) opt.style.fontFamily = item.font;
-    if (item.swatch) {
-      opt.prepend(el("span", "notedrop__swatch", { style: `background:${item.swatch}` }));
-    } else if ("swatch" in item) {
-      opt.prepend(el("span", "notedrop__swatch notedrop__swatch--none"));
-    }
-    opt.dataset.value = item.value;
-    opt.addEventListener("click", () => {
-      menu.hidden = true;
-      setValue(item.value);
-      onSelect(item.value);
-    });
-    menu.append(opt);
-  });
-
-  btn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    menu.hidden = !menu.hidden;
-  });
-  document.addEventListener("click", (e) => {
-    if (!container.contains(e.target)) menu.hidden = true;
-  });
-
-  function setValue(value) {
-    const item = items.find((i) => i.value === value) || items[0];
-    label.textContent = item.label;
-    if (swatch) {
-      swatch.style.background = item.swatch || "";
-      swatch.classList.toggle("notedrop__swatch--none", !item.swatch);
-    }
-    label.style.fontFamily = item.font || "";
-    menu.querySelectorAll(".notedrop__item").forEach((opt) => {
-      opt.classList.toggle("is-active", opt.dataset.value === item.value);
-    });
-  }
-
-  container.append(btn, menu);
-  setValue(items[0].value);
-  return { setValue };
+  openContextMenu(e.clientX, e.clientY, [
+    ...(one
+      ? [{ label: "Open", icon: "open_in_full", run: () => openNoteModal(note) }]
+      : []),
+    { label: "Add Tag…", icon: "sell", run: tagNotesSelection },
+    "-",
+    ...(one
+      ? [
+          {
+            label: "Theme",
+            icon: "palette",
+            items: styleMenuItems(themes, note.theme || "default", (v) =>
+              setSelectedNoteStyle("theme", v),
+            ),
+          },
+          {
+            label: "Title Font",
+            icon: "title",
+            items: styleMenuItems(fonts, note.titleFont || "", (v) =>
+              setSelectedNoteStyle("titleFont", v),
+            ),
+          },
+          {
+            label: "Body Font",
+            icon: "text_fields",
+            items: styleMenuItems(fonts, note.bodyFont || "", (v) =>
+              setSelectedNoteStyle("bodyFont", v),
+            ),
+          },
+          "-",
+          {
+            // A linked note's .md already exists — converting again would
+            // clobber the Code Editor's edits, so this just opens it.
+            label: note.mdFile ? "Open Markdown File" : "Convert to Markdown",
+            icon: "markdown",
+            run: exportNoteMarkdown,
+          },
+        ]
+      : []),
+    { label: many ? `Copy ${count} Notes` : "Copy", icon: "content_copy", run: copyNotes },
+    {
+      label: many ? `Delete ${count} Notes` : "Delete",
+      icon: "delete",
+      run: deleteNotesSelection,
+    },
+  ]);
 }
 
 function setSelectedNoteStyle(key, value) {
@@ -2592,30 +2601,9 @@ function initNotes() {
     renderNotes();
   });
 
-  document
-    .getElementById("notes-md-btn")
-    ?.addEventListener("click", exportNoteMarkdown);
-
-  // Per-card style controls (toolbar) target the currently selected card.
-  noteThemeDrop = createStyleDropdown(
-    document.getElementById("note-theme-drop"),
-    NOTE_THEMES.map((t) => ({ value: t.id, label: t.name, swatch: t.bg })),
-    (value) => setSelectedNoteStyle("theme", value),
-  );
-  noteTitleFontDrop = createStyleDropdown(
-    document.getElementById("note-titlefont-drop"),
-    NOTE_FONTS.map((f) => ({ value: f.value, label: f.name, font: f.value })),
-    (value) => setSelectedNoteStyle("titleFont", value),
-  );
-  noteBodyFontDrop = createStyleDropdown(
-    document.getElementById("note-bodyfont-drop"),
-    NOTE_FONTS.map((f) => ({ value: f.value, label: f.name, font: f.value })),
-    (value) => setSelectedNoteStyle("bodyFont", value),
-  );
-
   installOffClickDeselect({
     panel: "notes",
-    keep: [".notecard", "#notes-card-style"],
+    keep: [".notecard", ".ctxmenu"],
     hasSelection: () => notesSelection.size(),
     clear: () => notesSelection.clear(),
   });
