@@ -22,6 +22,7 @@ import {
 import {
   initModes,
   initClaudeButton,
+  initNewMarkdownButton,
   initFileDirectoryButton,
   initSpriteBadge,
   initWorkspaceForm,
@@ -2673,6 +2674,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   initWorkspaceButton();
   initModes();
   initClaudeButton();
+  initNewMarkdownButton();
   initFileDirectoryButton();
   initSpriteBadge();
   initWorkspaceForm();

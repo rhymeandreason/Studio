@@ -441,6 +441,11 @@
     // disk until it's typed into (loadPath handles the not-yet-existing path).
     async function newFile() {
       if (!hasTauri) return;
+      // Flush *before* asking for a name: a pending debounced write creates the
+      // current document on disk, which changes which Untitled name is free.
+      // Asking first would hand back the name this save is about to take, and
+      // the "new" doc would open on the document you were just editing.
+      await flushSave();
       // A rejected invoke and a null result mean different things: the first is
       // a real failure (an old build without the command, most often — Rust
       // changes need a Studio restart), the second is "no project to put it
@@ -599,6 +604,11 @@
       listen("mde:open-file", (e) => {
         if (e.payload?.label === myLabel && e.payload.file) loadPath(e.payload.file);
       });
+      // Sent to this window only (emit_to), so no label check is needed: the
+      // main window's "new Markdown doc" button asks an already-open editor to
+      // make the document itself, so the flush happens before the name is
+      // picked.
+      listen("mde:new-file", () => newFile());
       invoke("take_pending_open", { label: myLabel }).then((p) => {
         if (p) return loadPath(p);
         const last = localStorage.getItem(sessionKey);

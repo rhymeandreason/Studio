@@ -34,6 +34,15 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   nowhere to put a file, so `new_markdown_path` returns null and the toast
   says so — kept distinct from a *rejected* invoke, which means a real
   failure (usually an old build: the Rust commands need a Studio restart).
+- **New from the main window:** the `post_add` button in the project header
+  (right of Studio Claude, `initNewMarkdownButton` in `workspace.js`) calls
+  `new_markdown_doc`. A *closed* editor is opened on a path picked in Rust; an
+  *already-open* one is sent `mde:new-file` and picks the name itself, because
+  it must flush its pending save first — that write creates the current
+  document and so changes which `Untitled` name is free. Getting this
+  backwards hands back the name the save is about to take, and "new" reopens
+  the document you were just editing. The in-window `+` flushes first for the
+  same reason.
 - **Rename:** click the filename in the window bar (safe despite the bar
   being a Tauri drag region — only the bar element itself carries the
   attribute, so clicks on children are ordinary). Enter commits, Escape

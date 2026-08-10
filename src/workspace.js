@@ -9,6 +9,7 @@ import { panelKeymaps } from "./keymap.js";
 import { state } from "./state.js";
 import { selectTab, installOffClickDeselect } from "./main.js";
 import { SPRITES, DEFAULT_SPRITE, spriteStyle } from "./sprites.js";
+import { toast } from "./kit/app.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -40,6 +41,17 @@ export function initClaudeButton() {
     } else {
       invoke("launch_claude_app", { projectPath: state.activeProject.path });
     }
+  });
+}
+
+// "New Markdown doc" — opens the project's Markdown Editor on a fresh untitled
+// file (Rust picks the name and tells an already-open window to make its own,
+// so a pending save can't collide with it).
+export function initNewMarkdownButton() {
+  const btn = document.getElementById("new-md-btn");
+  btn.addEventListener("click", () => {
+    if (!state.activeProject) return;
+    invoke("new_markdown_doc").catch((e) => toast(String(e)));
   });
 }
 

@@ -754,6 +754,32 @@ fn new_markdown_path(app: AppHandle, project_path: Option<String>) -> Option<Str
     untitled_markdown_path(&proj)
 }
 
+/// The main window's "new Markdown doc" button: open (or focus) the active
+/// project's Markdown Editor on a new untitled document.
+///
+/// A window that's *already* open is told to make one itself (`mde:new-file`)
+/// rather than being handed a path computed here — it has to flush its pending
+/// save first, and that write can change which name is still free.
+#[tauri::command]
+fn new_markdown_doc(app: AppHandle) -> Result<(), String> {
+    let proj = active_project_path(&app);
+    let color = active_git_color_hex(&app).unwrap_or_default();
+    if app
+        .get_webview_window(&markdown_editor_label(&proj))
+        .is_some()
+    {
+        open_markdown_editor_window(&app, &color, &proj, None); // show + focus
+        return app
+            .emit_to(&markdown_editor_label(&proj), "mde:new-file", ())
+            .map_err(|e| e.to_string());
+    }
+    let Some(path) = untitled_markdown_path(&proj) else {
+        return Err("No active project to put a new file in.".into());
+    };
+    open_markdown_editor_window(&app, &color, &proj, Some(path));
+    Ok(())
+}
+
 /// Open (or focus) the Markdown Editor window for `project_path` — the Code
 /// Editor's twin for .md files (see `open_code_editor_window` for the
 /// pending_open / event-delivery contract; this uses the `mde:open-file`
@@ -5855,6 +5881,7 @@ pub fn run() {
             open_file_in_code_editor,
             open_md_in_code_editor,
             new_markdown_path,
+            new_markdown_doc,
             path_exists,
             git_get_draft,
             git_set_draft,
