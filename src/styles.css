@@ -110,12 +110,6 @@ body {
     justify-content: center;
 }
 
-.projhead__row #tab-pin {
-    position: absolute;
-    right: 12px;
-    margin-left: 0;
-}
-
 .projhead__name {
     font-family: var(--serif);
     font-size: 16px;

@@ -396,6 +396,8 @@ position: absolute;
         await invoke('open_project', { path: projectPath }).catch(() => {});
       }
       await invoke('apply_window_layout', { layout: item.layout || [] }).catch(() => {});
+      // The recorded main-window tab is the other half of a mode.
+      if (item.panel) await invoke('show_panel', { panel: item.panel }).catch(() => {});
       await win.hide();
     }
 
@@ -406,6 +408,7 @@ position: absolute;
       if (!mode || !workspace || !projectPath) return;
       try {
         mode.layout = await invoke('list_windows');
+        mode.panel = await invoke('get_active_panel').catch(() => '');
         mode.recordedAt = new Date().toISOString();
         workspace.modes = items;
         await invoke('save_workspace', { path: projectPath, workspace });

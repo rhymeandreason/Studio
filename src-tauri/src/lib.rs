@@ -123,8 +123,6 @@ struct Workspace {
     /// status bar (a key into the frontend's sprite registry).
     #[serde(default)]
     sprite: String,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "pinnedTab")]
-    pinned_tab: Option<String>,
     /// Named window-layout snapshots (Code / Design / Default, plus any the
     /// user adds), each recorded via the Workspace tab's record/play buttons.
     #[serde(default = "default_modes")]
@@ -138,6 +136,7 @@ fn default_modes() -> Vec<WorkspaceMode> {
             id: name.to_lowercase(),
             name: name.to_string(),
             layout: Vec::new(),
+            panel: String::new(),
             recorded_at: None,
         })
         .collect()
@@ -153,6 +152,11 @@ struct WorkspaceMode {
     name: String,
     #[serde(default)]
     layout: Vec<WindowSnapshot>,
+    /// Which main-window tab was open at Record time (`media` / `notes` /
+    /// `artifacts` / `git` / `files` / `workspace`). Playing the mode selects
+    /// it again. Empty = don't touch the tab. Supersedes the old `pinnedTab`.
+    #[serde(default)]
+    panel: String,
     /// ISO timestamp of the last successful Record, shown in the UI as
     /// "Saved <when>". Set by the frontend, not Rust — Record's result
     /// already round-trips through JS either way.
@@ -339,6 +343,10 @@ struct AppState {
     /// back to this file. Keyed by label — not a single global slot — so opening
     /// a file for one project can't be grabbed by another project's window.
     pending_open: Mutex<HashMap<String, String>>,
+    /// The main window's current tab, mirrored here by `set_active_panel` so
+    /// tool windows (Modes, the Mode switcher) can record it into a mode
+    /// without having to talk to the main window.
+    active_panel: Mutex<String>,
 }
 
 const TRAY_ID: &str = "studio-tray";
@@ -1555,9 +1563,38 @@ fn activate_project_ex(app: &AppHandle, path: &str, apply_mode: bool) {
         if let Ok(ws) = read_workspace(project.path.clone()) {
             if let Some(mode) = ws.modes.iter().find(|m| !m.layout.is_empty()) {
                 let _ = apply_window_layout(app.clone(), mode.layout.clone());
+                show_main_panel(app, &mode.panel);
             }
         }
     }
+}
+
+/// Main window reports its current tab here on every tab switch, so mode
+/// Record (from any window) can snapshot it alongside the window layout.
+#[tauri::command]
+fn set_active_panel(state: tauri::State<AppState>, panel: String) {
+    *state.active_panel.lock().unwrap() = panel;
+}
+
+/// The tab the main window is on. Used by the Modes tool and the Mode switcher
+/// when recording a mode.
+#[tauri::command]
+fn get_active_panel(state: tauri::State<AppState>) -> String {
+    state.active_panel.lock().unwrap().clone()
+}
+
+/// Ask the main window to switch to `panel` — the tab half of playing a mode.
+/// A no-op for an empty panel (a mode recorded before this existed).
+#[tauri::command]
+fn show_panel(app: AppHandle, panel: String) {
+    show_main_panel(&app, &panel);
+}
+
+fn show_main_panel(app: &AppHandle, panel: &str) {
+    if panel.is_empty() {
+        return;
+    }
+    let _ = app.emit("show-panel", panel.to_string());
 }
 
 /// Frontend calls this on load to render the currently-active project (if any).
@@ -5907,7 +5944,10 @@ pub fn run() {
             open_git_history,
             get_focused_window_bounds,
             list_windows,
-            apply_window_layout
+            apply_window_layout,
+            set_active_panel,
+            get_active_panel,
+            show_panel
         ])
         // Closing the window should NOT quit Studio — it lives in the menu bar.
         // Hide the window instead of destroying it; only "Quit Studio" exits.

@@ -30,8 +30,6 @@ import {
   syncProjectColor,
   scheduleWorkspaceSave,
   addRow,
-  updatePinButton,
-  togglePinnedTab,
 } from "./workspace.js";
 import { renderArtifacts, artifactsSelection, deleteArtifactsSelection, clearArtifactsSelection } from "./artifacts.js";
 import { renderGitPanel } from "./git.js";
@@ -538,6 +536,9 @@ async function showOverview() {
 
 export function selectTab(name) {
   state.activePanel = name;
+  // Mirror to Rust so other windows (the Modes tool, the Mode switcher) can
+  // record which tab was open without talking to this window.
+  invoke("set_active_panel", { panel: name }).catch(() => {});
   document.querySelectorAll(".tab").forEach((t) => {
     t.classList.toggle("is-active", t.dataset.tab === name);
   });
@@ -599,18 +600,13 @@ export function selectTab(name) {
 function initTabs() {
   document.getElementById("tabs").addEventListener("click", (e) => {
     const tab = e.target.closest(".tab");
-    if (e.target.closest("#tab-pin")) {
-      const activeTab = document.querySelector(".tab.is-active")?.dataset.tab;
-      togglePinnedTab(activeTab);
-      updatePinButton();
-      scheduleWorkspaceSave();
-      return;
-    }
+    if (tab) selectTab(tab.dataset.tab);
+  });
 
-    if (tab) {
-      selectTab(tab.dataset.tab);
-      updatePinButton();
-    }
+  // Playing a Mode (from the Modes tool, the Mode switcher, or project
+  // activation) restores the tab it was recorded on.
+  listen("show-panel", (e) => {
+    if (e.payload) selectTab(e.payload);
   });
 }
 

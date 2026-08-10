@@ -153,6 +153,8 @@
         playBtn.addEventListener('click', async () => {
           playBtn.disabled = true;
           await invoke('apply_window_layout', { layout: mode.layout || [] }).catch(() => {});
+          // The recorded main-window tab is the other half of a mode.
+          if (mode.panel) await invoke('show_panel', { panel: mode.panel }).catch(() => {});
           playBtn.disabled = !mode.layout?.length;
         });
 

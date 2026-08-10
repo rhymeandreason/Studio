@@ -76,8 +76,9 @@ export function initFileDirectoryButton() {
 // --- Workspace modes ---------------------------------------------------
 //
 // Each mode is a name + a recorded window layout (app/title/x/y/w/h for every
-// on-screen window at record time). Record snapshots the desktop; Play moves
-// every recorded window back into place and minimizes anything else.
+// on-screen window at record time) + the main window's tab at record time.
+// Record snapshots the desktop; Play moves every recorded window back into
+// place, minimizes anything else, and re-selects the recorded tab.
 
 let wsModes = [];
 
@@ -124,6 +125,22 @@ function flashBtn(btn, icon, ms = 1200) {
   }, ms);
 }
 
+// Human label for a recorded tab; matches the tab titles in index.html.
+const PANEL_LABELS = {
+  media: "Media",
+  notes: "Notes",
+  artifacts: "Artifacts",
+  git: "Git",
+  files: "Files",
+  workspace: "Workspace",
+};
+
+function formatSaved(mode) {
+  const when = formatSavedAt(mode.recordedAt);
+  const panel = PANEL_LABELS[mode.panel];
+  return panel ? `${when} · ${panel}` : when;
+}
+
 function formatSavedAt(iso) {
   if (!iso) return "Not recorded yet";
   const d = new Date(iso);
@@ -143,11 +160,12 @@ async function recordMode(mode, btn, playBtn, savedEl) {
   btn.disabled = true;
   try {
     mode.layout = await invoke("list_windows");
+    mode.panel = state.activePanel || "";
     mode.recordedAt = new Date().toISOString();
     scheduleWorkspaceSave();
     flashBtn(btn, "check");
     playBtn.disabled = !mode.layout.length;
-    savedEl.textContent = formatSavedAt(mode.recordedAt);
+    savedEl.textContent = formatSaved(mode);
   } catch (err) {
     flashBtn(btn, "error");
     console.error(err);
@@ -159,6 +177,7 @@ async function playMode(mode, btn) {
   btn.disabled = true;
   try {
     await invoke("apply_window_layout", { layout: mode.layout || [] });
+    if (mode.panel) selectTab(mode.panel);
     flashBtn(btn, "check");
   } catch (err) {
     flashBtn(btn, "error");
@@ -191,7 +210,7 @@ function renderModes() {
     name.spellcheck = false;
     const saved = document.createElement("span");
     saved.className = "ws-mode__saved";
-    saved.textContent = formatSavedAt(mode.recordedAt);
+    saved.textContent = formatSaved(mode);
     head.append(name, saved);
 
     const actions = document.createElement("div");
@@ -722,9 +741,7 @@ export async function loadWorkspace(path) {
   setList("urls", ws.urls);
   setList("scripts", ws.scripts);
   setStatus("");
-  wsPinnedTab = ws.pinnedTab || null;
-  selectTab(wsPinnedTab || "workspace");
-  updatePinButton();
+  selectTab("workspace");
   renderSpriteBadge();
   wsModes = ws.modes && ws.modes.length
     ? ws.modes
@@ -774,7 +791,6 @@ function setStatus(text) {
 let wsSaveTimer = null;
 let wsEditor = "Studio Code Editor";
 let wsColor = "";
-let wsPinnedTab = null;
 // The repo path + "open in" editor now live in the Git panel (git.js), not a
 // Workspace card, so they're plain module state here rather than DOM-derived.
 let wsRepo = "";
@@ -802,20 +818,9 @@ function readWorkspaceForm() {
     folders: readList("folders"),
     urls: readList("urls"),
     scripts: readList("scripts"),
-    pinnedTab: wsPinnedTab,
     sprite: wsSprite,
     modes: wsModes,
   };
-}
-
-export function updatePinButton() {
-  const pinBtn = document.getElementById("tab-pin");
-  const activeTab = document.querySelector(".tab.is-active")?.dataset.tab;
-  pinBtn.classList.toggle("is-active", !!wsPinnedTab && wsPinnedTab === activeTab);
-}
-
-export function togglePinnedTab(activeTab) {
-  wsPinnedTab = wsPinnedTab === activeTab ? null : activeTab;
 }
 
 async function saveWorkspaceNow() {

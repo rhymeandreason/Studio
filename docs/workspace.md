@@ -24,8 +24,6 @@ struct in `src-tauri/src/lib.rs`):
   (Rust `UrlEntry` deserializes either form) and migrate to objects on next save.
 - `claude.mode` — `"terminal"` opens Terminal cd'd into the repo and runs
   `claude`.
-- `pinnedTab` (serde: `pinned_tab`) — which tab (`workspace`/`media`/`notes`)
-  opens automatically when the project loads.
 - `schedules` — recurring `claude -p` tasks; see "Scheduled tasks" below.
 
 Saves are debounced via `scheduleWorkspaceSave()` (400ms after the last edit).
@@ -91,7 +89,9 @@ never sets it).
 - **Record** → `invoke("list_windows")`, which shells out to the `winlayout`
   Swift helper (`list` mode, `CGWindowListCopyWindowInfo`) and returns every
   on-screen window (any app) as `{app, title, x, y, w, h}`. Stored as
-  `mode.layout`, autosaved like the rest of the form.
+  `mode.layout`, autosaved like the rest of the form. The main window's
+  current tab is recorded alongside it as `mode.panel` (see "The recorded
+  tab" below) and shown after the timestamp: "Saved today at 3:04 PM · Notes".
 - **Play** → `invoke("apply_window_layout", { layout })`. Studio's own
   windows are restored directly through Tauri (`apply_window_layout` in
   `lib.rs`) — matched by window label, not process name; anything not
@@ -176,11 +176,25 @@ This replaced the old single Launch button (`launch_workspace`, a one-shot
 repo+apps+files+URLs+Claude-terminal opener), removed entirely along with
 the command itself.
 
-## Tab pinning
+## The recorded tab
 
-The pin button (`#tab-pin`) toggles `wsPinnedTab` via `togglePinnedTab()` /
-`updatePinButton()` (called from `main.js`'s tab-bar click handler).
-`loadWorkspace()` selects the pinned tab (or `"workspace"`) on project load.
+A mode also stores the **main window's tab** at Record time (`mode.panel`,
+`WorkspaceMode::panel`) — this replaced the old pinned-tab button, which is
+gone. `loadWorkspace()` always opens on `"workspace"`; a mode is what puts you
+back on Notes or Media.
+
+Recording happens in three windows, playback in four, so the panel is brokered
+through Rust rather than read off the DOM:
+
+- `selectTab()` (main.js) mirrors the tab into `AppState::active_panel` via
+  `set_active_panel`. The Mode switcher's Record reads it back with
+  `get_active_panel`; the Workspace card's Record uses `state.activePanel`
+  directly (same window).
+- Play calls `show_panel`, which emits `show-panel`; main.js listens and
+  `selectTab()`s. `activate_project_ex`'s auto-apply emits it too (via
+  `show_main_panel`). The Workspace card, being in the main window, just calls
+  `selectTab()` itself.
+- An empty `panel` (a mode recorded before this existed) leaves the tab alone.
 
 ## Scheduled tasks
 
