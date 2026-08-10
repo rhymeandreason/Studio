@@ -75,6 +75,24 @@
     .ProseMirror hr { border: none; border-top: 1px solid color-mix(in srgb, var(--text) 18%, transparent); margin: 1.6em 0; }
     .ProseMirror a { color: var(--accent, inherit); text-decoration: underline; text-underline-offset: 2px; }
     .ProseMirror img { max-width: 100%; border-radius: 4px; }
+    /* Comments / raw HTML: still in the document and still editable, but set
+       apart so they read as annotations rather than as body text. The `pre`
+       rule above would otherwise give them a code block's slab. */
+    .ProseMirror pre.md-html {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 0.8em; line-height: 1.5;
+      color: color-mix(in srgb, var(--text) 45%, transparent);
+      background: none; border-radius: 0;
+      border-left: 2px solid color-mix(in srgb, var(--text) 15%, transparent);
+      padding: 1px 0 1px 10px; margin: 0 0 0.9em; white-space: pre-wrap;
+    }
+    .ProseMirror .md-html-inline {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 0.8em;
+      color: color-mix(in srgb, var(--text) 45%, transparent);
+      background: color-mix(in srgb, var(--text) 5%, transparent);
+      border-radius: 4px; padding: 0 3px;
+    }
     /* Tables may break out of the text column: sized to their content (at
        least column width), capped near the window edge, centered on the
        column via the 50%/-50% trick. */
@@ -161,18 +179,37 @@
     // Cells hold inline content directly (markdown table cells are single-line),
     // which keeps the parser simple and the serializer lossless.
     const schema = new Schema({
-      nodes: baseSchema.spec.nodes.append(tableNodes({
-        tableGroup: "block",
-        cellContent: "inline*",
-        cellAttributes: {},
-      })),
+      nodes: baseSchema.spec.nodes
+        .append(tableNodes({
+          tableGroup: "block",
+          cellContent: "inline*",
+          cellAttributes: {},
+        }))
+        // HTML comments and raw HTML. Without these markdown-it (html: false)
+        // hands them over as plain *text*, so `<!-- note -->` reads as body
+        // prose sitting in the middle of the document. As their own nodes they
+        // can be set apart visually and still round-trip verbatim.
+        .append({
+          html_block: {
+            content: "text*", group: "block", code: true, defining: true, marks: "",
+            toDOM: () => ["pre", { class: "md-html" }, ["code", 0]],
+            parseDOM: [{ tag: "pre.md-html", preserveWhitespace: "full" }],
+          },
+          html_inline: {
+            group: "inline", inline: true, atom: true,
+            attrs: { content: { default: "" } },
+            toDOM: (n) => ["span", { class: "md-html-inline" }, n.attrs.content],
+          },
+        }),
       marks: baseSchema.spec.marks,
     });
 
     // Remap the default parser/serializer onto the extended schema, plus the
     // table token/node handlers. markdown-it's commonmark preset has tables
-    // off; .enable("table") turns on the GFM pipe-table rule only.
-    const mdit = MarkdownIt("commonmark", { html: false }).enable("table");
+    // off; .enable("table") turns on the GFM pipe-table rule only. `html: true`
+    // is what makes comments arrive as html_block / html_inline tokens instead
+    // of being flattened into ordinary text.
+    const mdit = MarkdownIt("commonmark", { html: true }).enable("table");
     const parser = new MarkdownParser(schema, mdit, {
       ...defaultMarkdownParser.tokens,
       table: { block: "table" },
@@ -181,6 +218,8 @@
       tr: { block: "table_row" },
       th: { block: "table_header" },
       td: { block: "table_cell" },
+      html_block: { block: "html_block", noCloseToken: true },
+      html_inline: { node: "html_inline", getAttrs: (tok) => ({ content: tok.content }) },
     });
     const serializer = new MarkdownSerializer({
       ...defaultMarkdownSerializer.nodes,
@@ -207,6 +246,10 @@
         state.closeBlock(node);
       },
       table_row() {}, table_cell() {}, table_header() {},
+      // Raw, verbatim — the whole point is that a comment survives a save byte
+      // for byte, so nothing here may reformat it.
+      html_block(state, node) { state.write(node.textContent); state.closeBlock(node); },
+      html_inline(state, node) { state.text(node.attrs.content, false); },
     }, defaultMarkdownSerializer.marks);
 
     const $ = (id) => document.getElementById(id);
@@ -382,7 +425,11 @@
     async function flushSave() {
       clearTimeout(saveTimer);
       if (!dirty || !currentPath || !view) return;
-      const text = serialize();
+      // The serializer doesn't end with a newline; without this every save
+      // would strip a well-formed file's final newline and show up in git as
+      // "\ No newline at end of file".
+      let text = serialize();
+      if (text && !text.endsWith("\n")) text += "\n";
       if (hasTauri) {
         try { await invoke("write_text_file", { path: currentPath, content: text }); }
         catch (e) { toast("Save failed: " + e); return; }
@@ -618,7 +665,7 @@
       // Browser preview: sample document, no disk.
       currentPath = "";
       document.body.classList.remove("no-file");
-      mountEditor("# Markdown Editor\n\nType **bold**, *italic*, `code` — they render as you close the syntax.\n\n- Lists\n- Work\n\n> So do blockquotes.\n\n| Feature | Status |\n| --- | --- |\n| Tables | **yes** |\n| Tab between cells | yes |\n");
+      mountEditor("# Markdown Editor\n\nType **bold**, *italic*, `code` — they render as you close the syntax.\n\n<!-- Comments sit apart from the prose, and survive a save verbatim. -->\n\n- Lists\n- Work\n\n> So do blockquotes.\n\nInline ones <!-- like this --> stay put too.\n\n| Feature | Status |\n| --- | --- |\n| Tables | **yes** |\n| Tab between cells | yes |\n");
     }
   </script>
 </body>

@@ -43,6 +43,15 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   backwards hands back the name the save is about to take, and "new" reopens
   the document you were just editing. The in-window `+` flushes first for the
   same reason.
+- **Comments / raw HTML:** markdown-it runs with `html: true`, so
+  `<!-- … -->` arrives as an `html_block` / `html_inline` token and becomes a
+  node of its own. With `html: false` (the original setting) comments were
+  handed over as plain **text** and rendered as body prose in the middle of
+  the document. Block comments now get their own dimmed monospace line with a
+  left rule; inline ones become a dimmed chip. Both stay editable and are
+  serialized **verbatim** — nothing may reformat them, since the point is
+  that a comment survives a save byte for byte. This covers all raw HTML, not
+  just comments.
 - **Rename:** click the filename in the window bar (safe despite the bar
   being a Tauri drag region — only the bar element itself carries the
   attribute, so clicks on children are ordinary). Enter commits, Escape
@@ -79,4 +88,6 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   cells hold inline content, so multi-line cells flatten to one line).
   `~~strikethrough~~` isn't in the schema yet — it stays literal text.
 - Serialization normalizes formatting (bullet char, setext → ATX headings),
-  so the first save of an old file can produce cosmetic diffs.
+  so the first save of an old file can produce cosmetic diffs. A trailing
+  newline is appended on save — the serializer omits one, which otherwise
+  showed up in git as "\ No newline at end of file" on every save.
