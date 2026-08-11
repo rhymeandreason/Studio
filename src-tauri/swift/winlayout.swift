@@ -73,7 +73,7 @@ func listMode() {
     for win in windows {
         items.append([
             "app": win.app,
-            "title": win.title,
+            "title": axTitle(for: win),
             "x": Int(win.x),
             "y": Int(win.y),
             "w": Int(win.w),
@@ -84,17 +84,78 @@ func listMode() {
     FileHandle.standardOutput.write(data)
 }
 
-// Returns the AX windows of a process, paired with their AX title.
-func axWindows(pid: pid_t) -> [(AXUIElement, String)] {
-    let appEl = AXUIElementCreateApplication(pid)
+// One window as the Accessibility API sees it: the element, its real title
+// and its current frame.
+struct AXWin {
+    let el: AXUIElement
+    let title: String
+    let frame: CGRect
+}
+
+func axAttr<T>(_ el: AXUIElement, _ attr: String) -> T? {
     var value: AnyObject?
-    let err = AXUIElementCopyAttributeValue(appEl, kAXWindowsAttribute as CFString, &value)
-    guard err == .success, let windows = value as? [AXUIElement] else { return [] }
-    return windows.map { win in
-        var titleVal: AnyObject?
-        AXUIElementCopyAttributeValue(win, kAXTitleAttribute as CFString, &titleVal)
-        return (win, (titleVal as? String) ?? "")
+    guard AXUIElementCopyAttributeValue(el, attr as CFString, &value) == .success else { return nil }
+    return value as? T
+}
+
+func axFrame(_ win: AXUIElement) -> CGRect {
+    var pos = CGPoint.zero
+    var size = CGSize.zero
+    if let v: AnyObject = axAttr(win, kAXPositionAttribute as String) {
+        AXValueGetValue(v as! AXValue, .cgPoint, &pos)
     }
+    if let v: AnyObject = axAttr(win, kAXSizeAttribute as String) {
+        AXValueGetValue(v as! AXValue, .cgSize, &size)
+    }
+    return CGRect(origin: pos, size: size)
+}
+
+// Returns the AX windows of a process. AX is asked once per pid and cached:
+// every call crosses a process boundary, and both modes hit the same pids
+// repeatedly.
+var axWindowCache: [pid_t: [AXWin]] = [:]
+
+func axWindows(pid: pid_t) -> [AXWin] {
+    if let hit = axWindowCache[pid] { return hit }
+    let appEl = AXUIElementCreateApplication(pid)
+    let windows: [AXUIElement] = axAttr(appEl, kAXWindowsAttribute as String) ?? []
+    let result = windows.map { win in
+        AXWin(el: win, title: axAttr(win, kAXTitleAttribute as String) ?? "", frame: axFrame(win))
+    }
+    // Empty is never cached: `launchAndWaitForWindows` polls this while an
+    // app is starting up, and a cached "no windows" would never clear.
+    if !result.isEmpty { axWindowCache[pid] = result }
+    return result
+}
+
+// How far apart two frames are, as the sum of their edge offsets. Used both
+// to pair a CGWindowList window with its AX twin and to fall back to the
+// nearest-shaped window when titles don't match on apply.
+func frameDistance(_ a: CGRect, _ b: CGRect) -> CGFloat {
+    abs(a.origin.x - b.origin.x) + abs(a.origin.y - b.origin.y)
+        + abs(a.width - b.width) + abs(a.height - b.height)
+}
+
+// The real title of a recorded window, read through AX.
+//
+// CGWindowList's kCGWindowName is blank unless the calling app holds Screen
+// Recording permission, so recording straight from it saved a layout full of
+// empty titles — and two windows of the same app (Safari's browser window and
+// its Web Inspector, say) became indistinguishable on apply. AX only needs
+// the Accessibility permission this helper already requires to move windows
+// at all, so ask it instead, pairing CG windows to AX windows by frame.
+// Falls back to whatever CG gave us if the pairing fails.
+func axTitle(for win: WinInfo) -> String {
+    let cgFrame = CGRect(x: win.x, y: win.y, width: win.w, height: win.h)
+    let best = axWindows(pid: win.pid)
+        .map { ($0, frameDistance($0.frame, cgFrame)) }
+        .min { $0.1 < $1.1 }
+    // A window whose frame is off by more than a couple of points isn't the
+    // same window (AX and CG agree exactly for on-screen windows).
+    if let (axWin, distance) = best, distance <= 4, !axWin.title.isEmpty {
+        return axWin.title
+    }
+    return win.title
 }
 
 func setMinimized(_ win: AXUIElement, _ minimized: Bool) {
@@ -132,7 +193,7 @@ func runningPid(forApp app: String) -> pid_t? {
 // Launches an app the layout references but that isn't running, then blocks
 // (briefly) until both the process and at least one AX window of it exist —
 // app launch and first-window creation are async.
-func launchAndWaitForWindows(app: String, timeout: Double = 6.0) -> [(AXUIElement, String)] {
+func launchAndWaitForWindows(app: String, timeout: Double = 6.0) -> [AXWin] {
     Process.launchedProcess(launchPath: "/usr/bin/open", arguments: ["-a", app])
     let deadline = Date().addingTimeInterval(timeout)
     while Date() < deadline {
@@ -172,15 +233,25 @@ func applyMode() {
         while let idx = remainingTargets.firstIndex(where: { ($0["app"] as? String) == app }) {
             let target = remainingTargets[idx]
             let title = target["title"] as? String ?? ""
-            let matchIdx = windows.firstIndex(where: { $0.1 == title }) ?? (windows.isEmpty ? nil : 0)
-            guard let mi = matchIdx else { break }
-            let (axWin, _) = windows.remove(at: mi)
-            remainingTargets.remove(at: idx)
-
             let x = (target["x"] as? NSNumber)?.doubleValue ?? 0
             let y = (target["y"] as? NSNumber)?.doubleValue ?? 0
             let w = (target["w"] as? NSNumber)?.doubleValue ?? 0
             let h = (target["h"] as? NSNumber)?.doubleValue ?? 0
+            let saved = CGRect(x: x, y: y, width: w, height: h)
+
+            // Exact title first. Failing that, the window closest to where
+            // this one was saved — a document title drifts (Safari retitles
+            // itself on every navigation), but a Web Inspector docked below a
+            // browser window still has roughly the inspector's shape, so
+            // shape-matching beats the old "just take the first window",
+            // which handed the browser's frame to whichever window AX
+            // happened to list first.
+            let matchIdx = windows.firstIndex(where: { $0.title == title })
+                ?? windows.indices.min { frameDistance(windows[$0].frame, saved) < frameDistance(windows[$1].frame, saved) }
+            guard let mi = matchIdx else { break }
+            let axWin = windows.remove(at: mi).el
+            remainingTargets.remove(at: idx)
+
             setMinimized(axWin, false)
             setFrame(axWin, x: CGFloat(x), y: CGFloat(y), w: CGFloat(w), h: CGFloat(h))
             consumedWindows.append(axWin)
@@ -205,14 +276,14 @@ func applyMode() {
     for win in onScreenWindows() where !seenPids.contains(win.pid) {
         seenPids.insert(win.pid)
         let axWins = axWindows(pid: win.pid)
-        let unconsumed = axWins.filter { (axWin, _) in !consumedWindows.contains(where: { CFEqual($0, axWin) }) }
+        let unconsumed = axWins.filter { w in !consumedWindows.contains(where: { CFEqual($0, w.el) }) }
         if unconsumed.isEmpty { continue }
 
         if unconsumed.count == axWins.count, let runningApp = NSRunningApplication(processIdentifier: win.pid) {
             runningApp.hide()
         } else {
-            for (axWin, _) in unconsumed {
-                setMinimized(axWin, true)
+            for w in unconsumed {
+                setMinimized(w.el, true)
             }
         }
     }
