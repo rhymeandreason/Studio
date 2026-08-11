@@ -35,14 +35,21 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   says so — kept distinct from a *rejected* invoke, which means a real
   failure (usually an old build: the Rust commands need a Studio restart).
 - **New from the main window:** the `post_add` button in the project header
-  (right of Studio Claude, `initNewMarkdownButton` in `workspace.js`) calls
-  `new_markdown_doc`. A *closed* editor is opened on a path picked in Rust; an
+  (right of Studio Claude, `initNewMarkdownButton` in `workspace.js`) opens a
+  menu — *In Project Folder* or *In Repo docs/* — and calls `new_markdown_doc`
+  with that `dest`. `markdown_dest_dir` resolves it: `"docs"` is `docs/` inside
+  the workspace's repo (`claude_cwd(.., "repo")`), created if missing, since an
+  editor opened on a path in a folder that isn't there fails its first save;
+  anything else is the project folder. The docs option is disabled when the
+  workspace has no `repo`, where it would silently mean the project folder.
+  A *closed* editor is opened on a path picked in Rust; an
   *already-open* one is sent `mde:new-file` and picks the name itself, because
   it must flush its pending save first — that write creates the current
   document and so changes which `Untitled` name is free. Getting this
   backwards hands back the name the save is about to take, and "new" reopens
-  the document you were just editing. The in-window `+` flushes first for the
-  same reason.
+  the document you were just editing. The `dest` rides along as the event
+  payload so the editor asks for the same folder. The in-window `+` flushes
+  first for the same reason (and always means the project folder).
 - **Comments / raw HTML:** markdown-it runs with `html: true`, so
   `<!-- … -->` arrives as an `html_block` / `html_inline` token and becomes a
   node of its own. With `html: false` (the original setting) comments were

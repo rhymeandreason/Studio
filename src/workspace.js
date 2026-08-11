@@ -10,6 +10,7 @@ import { state } from "./state.js";
 import { selectTab, installOffClickDeselect } from "./main.js";
 import { SPRITES, DEFAULT_SPRITE, spriteStyle } from "./sprites.js";
 import { toast } from "./kit/app.js";
+import { openContextMenu } from "./kit/context-menu.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -46,12 +47,26 @@ export function initClaudeButton() {
 
 // "New Markdown doc" — opens the project's Markdown Editor on a fresh untitled
 // file (Rust picks the name and tells an already-open window to make its own,
-// so a pending save can't collide with it).
+// so a pending save can't collide with it). The button is a menu: a doc can
+// land in the project folder or in the repo's docs/ (created if missing).
 export function initNewMarkdownButton() {
   const btn = document.getElementById("new-md-btn");
+  const newDoc = (dest) =>
+    invoke("new_markdown_doc", { dest }).catch((e) => toast(String(e)));
   btn.addEventListener("click", () => {
     if (!state.activeProject) return;
-    invoke("new_markdown_doc").catch((e) => toast(String(e)));
+    const r = btn.getBoundingClientRect();
+    openContextMenu(r.left, r.bottom + 4, [
+      { label: "In Project Folder", icon: "folder", run: () => newDoc("project") },
+      {
+        label: "In Repo docs/",
+        icon: "menu_book",
+        // No repo set means "repo" would resolve back to the project folder —
+        // a docs/ there isn't what this option promises, so it's off instead.
+        disabled: !wsRepo.trim(),
+        run: () => newDoc("docs"),
+      },
+    ]);
   });
 }
 

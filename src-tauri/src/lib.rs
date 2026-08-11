@@ -739,7 +739,35 @@ fn untitled_markdown_path(project_path: &str) -> Option<String> {
     if project_path.is_empty() || !dir.is_dir() {
         return None;
     }
-    unique_dest(&dir, Path::new("Untitled.md")).map(|p| p.to_string_lossy().to_string())
+    untitled_markdown_in(&dir)
+}
+
+fn untitled_markdown_in(dir: &Path) -> Option<String> {
+    unique_dest(dir, Path::new("Untitled.md")).map(|p| p.to_string_lossy().to_string())
+}
+
+/// Which folder a new Markdown document goes in, by destination:
+/// - `"docs"` → `docs/` inside the workspace's git **repo** (created if it
+///   isn't there yet; the repo falls back to the project folder when the
+///   workspace has no `repo` set, same rule as Claude's Code cwd).
+/// - anything else (`"project"`, the default) → the **project folder**, where
+///   the notes' Markdown export already writes.
+///
+/// `None` when there's no active project — there'd be nowhere to put the file.
+fn markdown_dest_dir(app: &AppHandle, project_path: &str, dest: &str) -> Option<PathBuf> {
+    if project_path.is_empty() {
+        return None;
+    }
+    if dest == "docs" {
+        // The one thing that *is* created eagerly: the file itself still waits
+        // for the first edit, but an editor opened on a path inside a missing
+        // folder would fail its first save.
+        let docs = claude_cwd(app, project_path, "repo").join("docs");
+        std::fs::create_dir_all(&docs).ok()?;
+        return Some(docs);
+    }
+    let dir = PathBuf::from(project_path);
+    dir.is_dir().then_some(dir)
 }
 
 /// Does this path exist on disk? The Markdown Editor uses it to tell "this file
@@ -753,24 +781,33 @@ fn path_exists(path: String) -> bool {
 }
 
 /// The Markdown Editor's `+` button asks for the next untitled path (same rule
-/// as a fresh tray launch). Returns null when no project is active.
+/// as a fresh tray launch). `dest` picks the folder (see `markdown_dest_dir`);
+/// returns null when no project is active.
 #[tauri::command]
-fn new_markdown_path(app: AppHandle, project_path: Option<String>) -> Option<String> {
+fn new_markdown_path(
+    app: AppHandle,
+    project_path: Option<String>,
+    dest: Option<String>,
+) -> Option<String> {
     let proj = project_path
         .filter(|p| !p.is_empty())
         .unwrap_or_else(|| active_project_path(&app));
-    untitled_markdown_path(&proj)
+    let dir = markdown_dest_dir(&app, &proj, dest.as_deref().unwrap_or("project"))?;
+    untitled_markdown_in(&dir)
 }
 
 /// The main window's "new Markdown doc" button: open (or focus) the active
-/// project's Markdown Editor on a new untitled document.
+/// project's Markdown Editor on a new untitled document, in the project folder
+/// or the repo's `docs/` (`dest`, from the button's menu).
 ///
 /// A window that's *already* open is told to make one itself (`mde:new-file`)
 /// rather than being handed a path computed here — it has to flush its pending
-/// save first, and that write can change which name is still free.
+/// save first, and that write can change which name is still free. The
+/// destination rides along in the event so it picks the same folder.
 #[tauri::command]
-fn new_markdown_doc(app: AppHandle) -> Result<(), String> {
+fn new_markdown_doc(app: AppHandle, dest: Option<String>) -> Result<(), String> {
     let proj = active_project_path(&app);
+    let dest = dest.unwrap_or_else(|| "project".into());
     let color = active_git_color_hex(&app).unwrap_or_default();
     if app
         .get_webview_window(&markdown_editor_label(&proj))
@@ -778,12 +815,12 @@ fn new_markdown_doc(app: AppHandle) -> Result<(), String> {
     {
         open_markdown_editor_window(&app, &color, &proj, None); // show + focus
         return app
-            .emit_to(&markdown_editor_label(&proj), "mde:new-file", ())
+            .emit_to(&markdown_editor_label(&proj), "mde:new-file", dest)
             .map_err(|e| e.to_string());
     }
-    let Some(path) = untitled_markdown_path(&proj) else {
-        return Err("No active project to put a new file in.".into());
-    };
+    let path = markdown_dest_dir(&app, &proj, &dest)
+        .and_then(|dir| untitled_markdown_in(&dir))
+        .ok_or("No active project to put a new file in.")?;
     open_markdown_editor_window(&app, &color, &proj, Some(path));
     Ok(())
 }

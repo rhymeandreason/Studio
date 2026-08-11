@@ -484,9 +484,11 @@
       } catch {}
     }
 
-    // New document: an unused Untitled.md in the project root, not created on
-    // disk until it's typed into (loadPath handles the not-yet-existing path).
-    async function newFile() {
+    // New document: an unused Untitled.md, not created on disk until it's typed
+    // into (loadPath handles the not-yet-existing path). `dest` is "project"
+    // (the project root, the default) or "docs" (the repo's docs/ folder) —
+    // the main window's button passes it through the mde:new-file event.
+    async function newFile(dest = "project") {
       if (!hasTauri) return;
       // Flush *before* asking for a name: a pending debounced write creates the
       // current document on disk, which changes which Untitled name is free.
@@ -499,7 +501,7 @@
       // in". Collapsing them reports a missing command as a missing project.
       let path;
       try {
-        path = await invoke("new_markdown_path", { projectPath: sessionProject });
+        path = await invoke("new_markdown_path", { projectPath: sessionProject, dest });
       } catch (e) {
         toast("Couldn't start a new file: " + e);
         return;
@@ -575,8 +577,9 @@
       else if (e.key === "Escape") { endRename(); view?.focus(); }
     });
 
-    $("new-btn").addEventListener("click", newFile);
-    $("empty-new").addEventListener("click", newFile);
+    // (Bare arrows: a click event as newFile's `dest` would be nonsense.)
+    $("new-btn").addEventListener("click", () => newFile());
+    $("empty-new").addEventListener("click", () => newFile());
     $("open-btn").addEventListener("click", pickFile);
     $("empty-open").addEventListener("click", pickFile);
     $("code-btn").addEventListener("click", async () => {
@@ -655,7 +658,7 @@
       // main window's "new Markdown doc" button asks an already-open editor to
       // make the document itself, so the flush happens before the name is
       // picked.
-      listen("mde:new-file", () => newFile());
+      listen("mde:new-file", (e) => newFile(e.payload || "project"));
       invoke("take_pending_open", { label: myLabel }).then((p) => {
         if (p) return loadPath(p);
         const last = localStorage.getItem(sessionKey);
