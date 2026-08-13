@@ -89,7 +89,7 @@ directly with Tauri's own `Channel` instead — all three drag-out surfaces
 ```js
 const onEvent = new window.__TAURI__.core.Channel();
 onEvent.onmessage = (e) => { if (e.result === "Dropped") … };
-await invoke("plugin:drag|start_drag", { item: paths, image: iconDataUrl, options: { mode: "move" }, onEvent });
+await invoke("plugin:drag|start_drag", { item: paths, image: iconDataUrl, options: { mode: "copy" }, onEvent });
 ```
 
 Note the key names differ from the wrapper's: `image`, not `icon`, and `mode`
@@ -99,6 +99,12 @@ nested under `options`.
 that itself. `mode: "move"` only sets the drag session's *source* mask; macOS
 gives the destination the final say and Finder answers cross-app file drags with
 Copy regardless, so the mode flag alone can never move anything.
+
+**Always pass `mode: "copy"`, even for a move.** A Move-only source mask doesn't
+intersect with a receiver that can only accept Copy — the Claude desktop app's
+composer, upload zones — so those drops are refused *after* the receiver has
+already highlighted, which reads as "drag-and-drop is broken". Since the mask
+achieves nothing anyway, copy is strictly better.
 
 So the drag's `onEvent` callback calls `finish_drag_out` (lib.rs) on drop — the
 shared command, also used by `dragFilesOut` in `kit/app.js`:

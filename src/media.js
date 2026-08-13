@@ -222,7 +222,9 @@ async function startNativeFileDrag(item, tile, move = true) {
     await invoke("plugin:drag|start_drag", {
       item: paths,
       image: makeDragIcon(tile, paths.length),
-      options: { mode: move ? "move" : "copy" },
+      // Always "copy" — see dragFilesOut in kit/app.js. A Move-only source mask
+      // is refused outright by receivers that only accept Copy.
+      options: { mode: "copy" },
       onEvent,
     });
   } catch (err) {

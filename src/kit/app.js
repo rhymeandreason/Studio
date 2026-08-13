@@ -116,7 +116,12 @@ export async function dragFilesOut(paths, { icon, move = false } = {}) {
         await invoke("plugin:drag|start_drag", {
             item: paths,
             image: icon || genericFileIcon(paths.length),
-            options: { mode: move ? "move" : "copy" },
+            // Always "copy", even when moving. The mask buys nothing — Finder
+            // ignores it and we do the removal ourselves — but a Move-only mask
+            // doesn't intersect with a receiver that can only accept Copy (the
+            // Claude desktop app's composer, upload zones), so the drop is
+            // silently refused after the receiver has already highlighted.
+            options: { mode: "copy" },
             onEvent,
         });
         // start_drag resolves only once the session ends, so the channel
