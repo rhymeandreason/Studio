@@ -11,6 +11,7 @@ import { loadImage } from "./imageutil.js";
 import { spriteStyle } from "./sprites.js";
 import { state } from "./state.js";
 import { initDevInspect } from "./devinspect.js";
+import { brandIconFor } from "./brand-icons.js";
 import { openContextMenu } from "./kit/context-menu.js";
 import {
   loadMedia,
@@ -1499,16 +1500,31 @@ function extractUrls(text) {
   return urls;
 }
 
-// A compact label for a link block: host (without leading www.) plus the path,
-// truncated so long URLs don't blow out the card width.
-function linkLabel(url) {
+// Split a URL into the two things worth reading on a card: a headline (the
+// last meaningful path segment, tidied up — that's the document/issue/page you
+// saved) and the host under it. A bare domain has no segment, so the host
+// becomes the headline and the second line is dropped.
+function linkParts(url) {
   try {
     const u = new URL(url);
-    let label = u.hostname.replace(/^www\./, "") + u.pathname.replace(/\/$/, "");
-    if (u.search) label += u.search;
-    return label.length > 48 ? label.slice(0, 47) + "…" : label;
+    const host = u.hostname.replace(/^www\./, "");
+    const segs = u.pathname.split("/").filter(Boolean);
+    // Google Docs paths end in /edit (and the id before it is noise), so walk
+    // back to the last segment that reads like a name.
+    let seg = "";
+    for (let i = segs.length - 1; i >= 0; i--) {
+      const s = decodeURIComponent(segs[i]);
+      if (/^(edit|view|d|e|preview|index(\.\w+)?)$/i.test(s)) continue;
+      if (s.length > 24 && !/[-_ ]/.test(s)) continue; // opaque id
+      seg = s;
+      break;
+    }
+    const name = seg
+      ? seg.replace(/\.[a-z0-9]{1,5}$/i, "").replace(/[-_+]/g, " ")
+      : host;
+    return { name: name.length > 44 ? name.slice(0, 43) + "…" : name, host };
   } catch {
-    return url;
+    return { name: url, host: url };
   }
 }
 
@@ -1588,8 +1604,17 @@ function buildNoteLinks(note, field, { getText, setText }) {
     note.links.forEach((url, idx) => {
       const block = el("div", "notelink", { title: url });
       const open = el("button", "notelink__open", { type: "button" });
-      open.innerHTML = mi("link");
-      open.append(el("span", "notelink__label", { textContent: linkLabel(url) }));
+      // The brand mark (Google Docs/Sheets/…) when we have one — it's the
+      // fastest thing to recognise; the generic chain link otherwise.
+      const brand = brandIconFor(url);
+      open.innerHTML = brand
+        ? `<span class="notelink__brand">${brand}</span>`
+        : mi("link");
+      const { name, host } = linkParts(url);
+      const text = el("span", "notelink__text");
+      text.append(el("span", "notelink__name", { textContent: name }));
+      if (host !== name) text.append(el("span", "notelink__host", { textContent: host }));
+      open.append(text);
       open.addEventListener("click", () => openExternalUrl(url));
       const rm = el("button", "btn-remove", {
         type: "button",
