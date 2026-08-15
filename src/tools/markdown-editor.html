@@ -467,10 +467,17 @@
       await flushSave(); // don't drop edits in the previous file
       let text = "";
       if (hasTauri) {
-        const exists = await invoke("path_exists", { path }).catch(() => true);
-        if (exists) {
-          try { text = await invoke("read_text_file", { path }); }
-          catch (e) { toast("Couldn't open: " + e); return; }
+        // One round trip on the common path — read, and only ask whether the
+        // file exists if that *fails*. Checking first cost an extra IPC hop on
+        // every open, which is most of what made this feel slower than the
+        // Code Editor. The distinction still has to be made: a file that
+        // exists but can't be read must not open empty, or autosave would
+        // write the emptiness back over it.
+        try {
+          text = await invoke("read_text_file", { path });
+        } catch (e) {
+          const exists = await invoke("path_exists", { path }).catch(() => true);
+          if (exists) { toast("Couldn't open: " + e); return; }
         }
       }
       if (generation !== loadGeneration) return;   // superseded while reading
@@ -673,7 +680,14 @@
         if (p) await loadPath(p);
         return !!p;
       };
-      await listen("mde:check-pending", collectPending);
+      await listen("mde:check-pending", (e) => {
+        const hint = e?.payload?.file;
+        if (!hint) return collectPending();
+        // Start reading immediately; drain the stash in the background purely
+        // so a later boot doesn't reopen this file as if it were pending.
+        invoke("take_pending_open", { label: myLabel }).catch(() => {});
+        return loadPath(hint);
+      });
       // Sent to this window only (emit_to), so no label check is needed: the
       // main window's "new Markdown doc" button asks an already-open editor to
       // make the document itself, so the flush happens before the name is

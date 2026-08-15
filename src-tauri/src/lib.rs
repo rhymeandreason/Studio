@@ -859,8 +859,12 @@ fn open_markdown_editor_window(
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.show();
         let _ = win.set_focus();
-        if open_file.is_some() {
-            let _ = app.emit_to(&label, "mde:check-pending", ());
+        if let Some(file) = &open_file {
+            // The path rides along as a hint so the page can start reading it
+            // straight away; fetching it back out of the stash cost a round
+            // trip on every open. The stash stays as the fallback for a ping
+            // that lands before the page is listening.
+            let _ = app.emit_to(&label, "mde:check-pending", serde_json::json!({ "file": file }));
         }
         return;
     }

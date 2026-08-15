@@ -21,6 +21,13 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   slower overlapping open finishes last and paints its older file over the
   newer one. The boot-time session restore is skipped when `loadGeneration`
   is non-zero, i.e. a ping already claimed the stash.
+
+  **Keep this to one round trip before painting**, the way the Code Editor's
+  `loadPath` does (`read_text_file`, paint, then diff). Each IPC hop added
+  ahead of the paint is felt directly as open lag. Hence the ping carries the
+  path as a hint rather than making the page fetch it back out of the stash,
+  and `path_exists` is only consulted when the *read* fails. Anything that
+  isn't needed to put text on screen — git tint, diff — belongs after.
 - **Engine:** `src/vendor/prosemirror-md.js` — a one-time esbuild bundle
   (ESM, minified) of prosemirror-{model,state,view,transform,commands,
   keymap,history,inputrules,schema-list,markdown} + markdown-it. Rebuild by
