@@ -572,6 +572,12 @@ export function selectTab(name) {
     if (frame && !frame.src) frame.src = "tools/file-directory.html";
   }
 
+  // Plan tab: same deal — tools/plan.html follows the active project itself.
+  if (name === "plan") {
+    const frame = document.getElementById("plan-frame");
+    if (frame && !frame.src) frame.src = "tools/plan.html";
+  }
+
   if (name === "artifacts") renderArtifacts();
   else clearArtifactsSelection();
 

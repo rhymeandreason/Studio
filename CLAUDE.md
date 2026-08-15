@@ -39,6 +39,9 @@ dev:watch` restores Tauri's stock reload-everything watcher.
   before creating or editing any tool**!,
 - **Media + image editor** — `media.js`. [docs/media.md](docs/media.md)
 - **Notes** — in `main.js`. [docs/notes.md](docs/notes.md)
+- **Plan** (skinny week-by-week planner; `plan.json` per project, drag notes
+  between weeks; main-window tab + pop-out tool) — `src/tools/plan.html`.
+  [docs/plan.md](docs/plan.md)
 - **Workspace** (per-project launchpad) — `workspace.js`. [docs/workspace.md](docs/workspace.md)
 - **Server** (per-project dev-server start/stop tool with a running-state
   oscilloscope) — `src/tools/server.html`. [docs/server.md](docs/server.md)

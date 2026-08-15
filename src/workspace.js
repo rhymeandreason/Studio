@@ -70,18 +70,27 @@ export function initNewMarkdownButton() {
   });
 }
 
-// File Directory is a tab (data-tab="files") that embeds tools/file-directory.html
-// in an iframe — the tool follows the active project on its own via events, so
-// no plumbing is needed. Option-click pops it out as the standalone window
-// (the pre-tab behaviour). Wired here, ahead of the generic #tabs handler.
+// File Directory (data-tab="files") and Plan (data-tab="plan") are tabs that
+// embed their standalone tool in an iframe — each tool follows the active
+// project on its own via events, so no plumbing is needed. Option-click pops
+// one out as its own window. Wired here, ahead of the generic #tabs handler.
 export function initFileDirectoryButton() {
-  const btn = document.getElementById("file-directory-btn");
+  initTabPopOut("file-directory-btn", "file-directory.html");
+  initTabPopOut("plan-btn", "plan.html");
+}
+
+/** A tab that embeds a tool: Option-click pops the tool out as its own window
+ *  instead of switching to the panel. Capture phase, so it runs ahead of the
+ *  generic #tabs click handler. */
+function initTabPopOut(btnId, file) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
   btn.addEventListener(
     "click",
     (e) => {
       if (e.altKey) {
         e.stopPropagation();
-        invoke("open_tool", { file: "file-directory.html", query: null });
+        invoke("open_tool", { file, query: null });
       }
     },
     true,

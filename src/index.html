@@ -50,6 +50,9 @@
                     <button class="tab tab--round" id="file-directory-btn" data-tab="files" title="File Directory (⌥-click to pop out)">
                         <span class="mi">folder_open</span>
                     </button>
+                    <button class="tab tab--round" id="plan-btn" data-tab="plan" title="Plan (⌥-click to pop out)">
+                        <span class="mi">calendar_month</span>
+                    </button>
                     <button class="btn btn-icon-only tab--round" id="workspace-btn" type="button" title="Workspace">
                         <span class="mi">tune</span>
                     </button>
@@ -257,6 +260,9 @@
                 </section>
                 <section class="panel panel--files" data-panel="files" hidden>
                     <iframe class="files-embed" id="files-frame" title="File Directory"></iframe>
+                </section>
+                <section class="panel panel--files" data-panel="plan" hidden>
+                    <iframe class="files-embed" id="plan-frame" title="Plan"></iframe>
                 </section>
             </div>
         </main>

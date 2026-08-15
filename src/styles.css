@@ -1897,8 +1897,9 @@ td.ntable__total-cell {
     padding-bottom: 80px;
 }
 
-/* File Directory panel — embeds the standalone tool full-bleed. No bottom
-   padding: the iframe fills the panel and scrolls internally. */
+/* Tool-embedding panels (File Directory, Plan) — the standalone tool
+   full-bleed. No bottom padding: the iframe fills the panel and scrolls
+   internally. */
 .panel--files {
     padding-bottom: 0;
     height: 100%;

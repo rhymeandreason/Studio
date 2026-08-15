@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../kit/kit.css" />
+  <link rel="stylesheet" href="../kit/window-chrome.css" />
+  <script type="module" src="../kit/components.js"></script>
+  <script type="module" src="../kit/window-chrome.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      /* Transparent so the custom window's rounded corners show; the bar and
+         the content column carry the paper fill. */
+      background: transparent;
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #titlebar {
+      height: 44px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+    }
+
+    .plan-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Range row — below the bar, never in it: window-chrome.js deletes
+       [data-window-bar] when the page is embedded as a panel iframe. */
+    #range {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px 8px;
+      background: var(--bg);
+    }
+
+    #range .field {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+
+    #range .dash { color: var(--text-muted); font-size: 11px; }
+
+    #weeks {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 0 12px 60px;
+      background: var(--bg);
+      border-radius: 0 0 var(--window-radius, 10px) var(--window-radius, 10px);
+    }
+
+    .week {
+      padding: 6px 0 10px;
+      border-top: 1px solid var(--border, rgba(0, 0, 0, .1));
+    }
+
+    .week:first-child { border-top: 0; }
+
+    .week__head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 24px;
+    }
+
+    .week__date {
+      font-size: 11px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .week.is-now .week__date { color: var(--accent); }
+
+    .week__spacer { flex: 1 1 auto; }
+
+    .week__add {
+      opacity: 0;
+      transition: opacity .12s;
+    }
+
+    .week:hover .week__add, .week__add:focus-visible { opacity: 1; }
+
+    /* Today marker — a hairline track under the current week's header, filled
+       up to this moment's position in the Mon→Sun span. */
+    .today-bar {
+      position: relative;
+      height: 2px;
+      margin: 4px 0 16px; /* room for the date label under the marker */
+      border-radius: 2px;
+      background: color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    .today-bar__fill {
+      position: absolute;
+      inset: 0 auto 0 0;
+      border-radius: 2px;
+      background: var(--accent);
+    }
+
+    .today-bar__now {
+      position: absolute;
+      top: -2px;
+      width: 6px;
+      height: 6px;
+      margin-left: -3px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .today-bar__label {
+      position: absolute;
+      top: 6px;
+      font-size: 10px;
+      letter-spacing: .03em;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    .week__notes {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 4px;
+      /* A dropzone even when empty. */
+      min-height: 10px;
+    }
+
+    .week.is-drop { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
+    .pnote {
+      display: flex;
+      align-items: flex-start;
+      gap: 7px;
+      padding: 5px 7px;
+      border-radius: var(--radius, 8px);
+      background: var(--surface);
+      font-size: 12.5px;
+      line-height: 1.35;
+      cursor: default;
+      touch-action: none;
+    }
+
+    .pnote.is-dragging { opacity: .35; }
+
+    .pnote__dot {
+      flex: 0 0 auto;
+      width: 12px;
+      height: 12px;
+      margin-top: 2px;
+      border-radius: 50%;
+      border: 1.5px solid var(--text-muted);
+      cursor: pointer;
+    }
+
+    .pnote.is-done .pnote__dot { background: var(--accent); border-color: var(--accent); }
+    .pnote.is-done .pnote__text { color: var(--text-muted); text-decoration: line-through; }
+
+    .pnote__text {
+      flex: 1 1 auto;
+      min-width: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      outline: none;
+    }
+
+    .pnote__text[contenteditable="true"]:focus { cursor: text; }
+
+    /* Date / time chips — a rendering of a substring of the note's text, so
+       clicking one goes back to the raw text (see renderNoteText). */
+    .pchip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 0 5px 0 3px;
+      border-radius: 5px;
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+      color: var(--accent);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .pchip .mi { font-size: 12px; }
+
+    .pnote.is-done .pchip { filter: grayscale(1); opacity: .7; }
+
+    /* Floating copy that follows the pointer while dragging between weeks. */
+    #ghost {
+      position: fixed;
+      z-index: 50;
+      pointer-events: none;
+      padding: 5px 7px;
+      border-radius: var(--radius, 8px);
+      background: var(--surface);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+      font-size: 12.5px;
+      max-width: 260px;
+    }
+
+    #empty {
+      padding: 16px 2px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    #outside {
+      padding: 10px 2px 0;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Nothing live lives in the bar: window-chrome.js deletes
+       [data-window-bar] outright when the page is embedded as a panel iframe,
+       so anything the script touches there would be a null lookup. -->
+  <div id="titlebar" data-window-bar>
+    <div class="plan-title" data-window-close>
+      <span class="text-xs text-muted">Plan</span>
+    </div>
+  </div>
+
+  <div id="range">
+    <input class="field" id="range-start" type="date" title="First week">
+    <span class="dash">→</span>
+    <input class="field" id="range-end" type="date" title="Last week">
+    <button class="btn btn-icon-only" id="today-btn" type="button" title="Jump to this week">
+      <span class="mi mi-sm">today</span>
+    </button>
+  </div>
+
+  <div id="weeks"></div>
+
+  <script type="module">
+    import { invoke, listen, esc, hasTauri } from "../kit/app.js";
+    import { openContextMenu } from "../kit/context-menu.js";
+
+    // --- Data ------------------------------------------------------------
+    //
+    // plan.json per project:
+    //   { version: 1, start: "2026-08-10", end: "2026-10-12",
+    //     notes: [{ id, week: "2026-08-10", text, done }] }
+    // `week` is always the ISO date of that week's Monday — the only key that
+    // ties a note to a row, so moving a note is a one-field write.
+
+    let projectPath = null;
+    let plan = { version: 1, notes: [] };
+    let saveTimer = 0;
+
+    const weeksEl = document.getElementById("weeks");
+    const startEl = document.getElementById("range-start");
+    const endEl = document.getElementById("range-end");
+
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const parseISO = (s) => {
+      const [y, m, d] = String(s).split("-").map(Number);
+      return new Date(y, (m || 1) - 1, d || 1);
+    };
+    const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+
+    /** The Monday of the week containing `d` (weeks start Monday). */
+    function monday(d) {
+      const day = (d.getDay() + 6) % 7; // Mon = 0 … Sun = 6
+      return addDays(d, -day);
+    }
+
+    const thisMonday = () => monday(new Date());
+
+    /** "Aug 10 – 16" / "Aug 31 – Sep 6" — the week's Mon…Sun span. */
+    function weekLabel(mon) {
+      const sun = addDays(mon, 6);
+      const m = (d) => d.toLocaleDateString(undefined, { month: "short" });
+      const left = `${m(mon)} ${mon.getDate()}`;
+      const right = mon.getMonth() === sun.getMonth() ? `${sun.getDate()}` : `${m(sun)} ${sun.getDate()}`;
+      return `${left} – ${right}`;
+    }
+
+    function defaultRange() {
+      const s = thisMonday();
+      return { start: iso(s), end: iso(addDays(s, 7 * 8)) }; // ~2 months
+    }
+
+    function rangeWeeks() {
+      const start = monday(parseISO(plan.start));
+      const end = monday(parseISO(plan.end));
+      const out = [];
+      for (let d = start; d <= end && out.length < 260; d = addDays(d, 7)) out.push(d);
+      return out.length ? out : [start];
+    }
+
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(save, 400);
+    }
+
+    async function save() {
+      if (!projectPath) return;
+      await invoke("save_plan", { path: projectPath, plan }).catch(() => {});
+    }
+
+    // --- Render ----------------------------------------------------------
+
+    let renderGeneration = 0;
+
+    function render() {
+      weeksEl.innerHTML = "";
+      if (!projectPath) {
+        weeksEl.innerHTML = `<div id="empty">No project active.</div>`;
+        return;
+      }
+      const weeks = rangeWeeks();
+      const inRange = new Set(weeks.map(iso));
+      const nowKey = iso(thisMonday());
+      renderedNow = nowKey;
+
+      for (const mon of weeks) {
+        const key = iso(mon);
+        const sec = document.createElement("section");
+        sec.className = "week" + (key === nowKey ? " is-now" : "");
+        sec.dataset.week = key;
+        sec.innerHTML = `
+          <div class="week__head">
+            <span class="week__date">${esc(weekLabel(mon))}</span>
+            <span class="week__spacer"></span>
+            <button class="btn btn-icon-only week__add" type="button" title="Add note">
+              <span class="mi mi-sm">add</span>
+            </button>
+          </div>
+          ${key === nowKey ? `<div class="today-bar"><div class="today-bar__fill"></div><div class="today-bar__now"></div><span class="today-bar__label"></span></div>` : ""}
+          <div class="week__notes"></div>`;
+        const list = sec.querySelector(".week__notes");
+        // Dated notes head the week in date order; undated ones keep the
+        // order they were added in, below.
+        const inWeek = plan.notes.filter((n) => n.week === key);
+        const dated = inWeek.filter(noteDate).sort((a, b) => noteDate(a) - noteDate(b));
+        for (const n of [...dated, ...inWeek.filter((n) => !noteDate(n))]) list.appendChild(buildNote(n));
+        sec.querySelector(".week__add").addEventListener("click", () => addNote(key));
+        weeksEl.appendChild(sec);
+      }
+
+      updateTodayBar();
+
+      const outside = plan.notes.filter((n) => !inRange.has(n.week)).length;
+      if (outside) {
+        const el = document.createElement("div");
+        el.id = "outside";
+        el.textContent = `${outside} note${outside === 1 ? "" : "s"} outside this range — widen the dates to see ${outside === 1 ? "it" : "them"}.`;
+        weeksEl.appendChild(el);
+      }
+    }
+
+    /** Position the today marker at this moment's fraction of the Mon→Sun
+     *  span. Called on render and once a minute, so the bar creeps across the
+     *  week on its own and lands on the next week's row at midnight Sunday
+     *  (the tick re-renders when the current Monday changes). */
+    function updateTodayBar() {
+      const bar = weeksEl.querySelector(".today-bar");
+      if (!bar) return;
+      const now = new Date();
+      const elapsed = now - monday(now); // monday() is already midnight
+      const pct = Math.max(0, Math.min(100, (elapsed / (7 * 864e5)) * 100));
+      bar.querySelector(".today-bar__fill").style.width = `${pct}%`;
+      bar.querySelector(".today-bar__now").style.left = `${pct}%`;
+      bar.title = now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+
+      // "Aug 14" under the marker, centered on it — except near the ends,
+      // where centering would push it outside the column.
+      const label = bar.querySelector(".today-bar__label");
+      label.textContent = now.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      label.style.left = `${Math.min(88, Math.max(6, pct))}%`;
+      label.style.transform = pct < 6 ? "none" : pct > 88 ? "translateX(-100%)" : "translateX(-50%)";
+    }
+
+    // The rendered week rows are dated, so a plan left open overnight has to
+    // rebuild when the day rolls over — not just slide the marker.
+    let renderedNow = null;
+    setInterval(() => {
+      if (!projectPath) return;
+      const key = iso(thisMonday());
+      if (key !== renderedNow) render();
+      else updateTodayBar();
+    }, 60_000);
+
+    // --- Event parsing ----------------------------------------------------
+    //
+    // A note is an "event" when its text carries a date (and optionally a
+    // time). The raw text stays the source of truth — nothing is stored on the
+    // note — so the chips are just a rendering of substrings the parser found,
+    // and clicking one drops back to the text exactly as typed.
+
+    const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    const MONTH_RE = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec";
+
+    // 10/5 · 10/5/26 · 10/5/2026
+    const SLASH_RE = /\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/;
+    // Oct 5 · Oct. 5th · October 5
+    const MONTH_DAY_RE = new RegExp(`\\b(${MONTH_RE})[a-z]*\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`, "i");
+    // 5 Oct · 5th October
+    const DAY_MONTH_RE = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_RE})[a-z]*\\b`, "i");
+    // 3pm · 10:30am · 15:00 (24h needs the colon, so it can't eat a bare number)
+    const TIME_RE = /\b(\d{1,2})(?::([0-5]\d))?\s*(am|pm)\b|\b([01]?\d|2[0-3]):([0-5]\d)\b/i;
+
+    /** A bare M/D has no year: pick the nearest one, allowing a date to stay
+     *  put for a month after it passes rather than jumping a year ahead. */
+    function inferYear(month, day) {
+      const now = new Date();
+      const y = now.getFullYear();
+      const candidate = new Date(y, month, day);
+      if (candidate < addDays(now, -30)) return y + 1;
+      if (candidate > addDays(now, 335)) return y - 1;
+      return y;
+    }
+
+    /** Parse the first date and the first time out of `text`. Returns
+     *  `{ date, dateAt: [start, end], time, timeAt: [start, end] }`, any of
+     *  which may be null. `time` is "3:00 PM"-ish display text only. */
+    function parseEvent(text) {
+      let date = null, dateAt = null;
+      const slash = SLASH_RE.exec(text);
+      const mDay = MONTH_DAY_RE.exec(text);
+      const dMon = DAY_MONTH_RE.exec(text);
+      // Whichever form appears first in the text wins.
+      const hit = [slash, mDay, dMon].filter(Boolean).sort((a, b) => a.index - b.index)[0];
+      if (hit === slash && slash) {
+        const month = Number(slash[1]) - 1, day = Number(slash[2]);
+        let year = slash[3] ? Number(slash[3]) : inferYear(month, day);
+        if (year < 100) year += 2000;
+        if (month <= 11 && day >= 1 && day <= 31) {
+          date = new Date(year, month, day);
+          dateAt = [slash.index, slash.index + slash[0].length];
+        }
+      } else if (hit && (hit === mDay || hit === dMon)) {
+        const name = (hit === mDay ? hit[1] : hit[2]).toLowerCase().slice(0, 3);
+        const day = Number(hit === mDay ? hit[2] : hit[1]);
+        const month = MONTHS.indexOf(name);
+        if (month >= 0 && day >= 1 && day <= 31) {
+          date = new Date(inferYear(month, day), month, day);
+          dateAt = [hit.index, hit.index + hit[0].length];
+        }
+      }
+
+      let time = null, timeAt = null;
+      const t = TIME_RE.exec(text);
+      // A time only counts inside a dated note — a bare "15:00" in prose is
+      // rare, but "10:30" in an undated note is more likely a score or a ratio.
+      if (t && date) {
+        time = t[0].trim();
+        timeAt = [t.index, t.index + t[0].length];
+        // Don't let the time overlap the date match (e.g. "10/5" vs "10:5x").
+        if (dateAt && timeAt[0] < dateAt[1] && dateAt[0] < timeAt[1]) { time = null; timeAt = null; }
+      }
+      return { date, dateAt, time, timeAt };
+    }
+
+    /** Re-write `original` (a matched date substring) as `next`, keeping the
+     *  shape the user typed — slashes stay slashes, month names stay names. */
+    function formatLike(original, next) {
+      const slash = SLASH_RE.exec(original);
+      if (slash) {
+        const y = slash[3] ? (slash[3].length <= 2 ? String(next.getFullYear()).slice(2) : String(next.getFullYear())) : null;
+        return `${next.getMonth() + 1}/${next.getDate()}${y ? `/${y}` : ""}`;
+      }
+      const month = next.toLocaleDateString(undefined, { month: "short" });
+      return DAY_MONTH_RE.test(original) ? `${next.getDate()} ${month}` : `${month} ${next.getDate()}`;
+    }
+
+    /** The date a note is filed under, or null if its text has none. */
+    const noteDate = (note) => parseEvent(note.text).date;
+
+    function buildNote(note) {
+      const el = document.createElement("div");
+      el.className = "pnote" + (note.done ? " is-done" : "");
+      el.dataset.id = note.id;
+      el.innerHTML = `<span class="pnote__dot"></span><div class="pnote__text"></div>`;
+      const text = el.querySelector(".pnote__text");
+      renderNoteText(note, text);
+
+      el.querySelector(".pnote__dot").addEventListener("click", (e) => {
+        e.stopPropagation();
+        note.done = !note.done;
+        el.classList.toggle("is-done", !!note.done);
+        scheduleSave();
+      });
+
+      text.addEventListener("dblclick", () => startEdit(note, text));
+      el.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        openContextMenu(e.clientX, e.clientY, [
+          { label: "Edit", icon: "edit", run: () => startEdit(note, text) },
+          { label: note.done ? "Mark not done" : "Mark done", icon: "check", run: () => el.querySelector(".pnote__dot").click() },
+          "-",
+          { label: "Delete", icon: "delete", run: () => deleteNote(note.id) },
+        ]);
+      });
+
+      el.addEventListener("pointerdown", (e) => onNotePointerDown(e, el, note));
+      return el;
+    }
+
+    /** Paint the note's text with its date/time substrings wrapped as chips.
+     *  Everything else is plain text nodes, so the rendered string is still
+     *  character-for-character what was typed. */
+    function renderNoteText(note, el) {
+      el.textContent = "";
+      const ev = parseEvent(note.text);
+      const spans = [
+        ev.dateAt && { at: ev.dateAt, kind: "date", label: ev.date.toLocaleDateString(undefined, { month: "short", day: "numeric" }) },
+        ev.timeAt && { at: ev.timeAt, kind: "time", label: ev.time },
+      ].filter(Boolean).sort((a, b) => a.at[0] - b.at[0]);
+
+      let cursor = 0;
+      for (const s of spans) {
+        if (s.at[0] > cursor) el.appendChild(document.createTextNode(note.text.slice(cursor, s.at[0])));
+        const chip = document.createElement("span");
+        chip.className = `pchip pchip--${s.kind}`;
+        chip.title = `${note.text.slice(...s.at)} — click to edit`;
+        chip.innerHTML = `<span class="mi mi-sm">${s.kind === "date" ? "event" : "schedule"}</span>`;
+        chip.appendChild(document.createTextNode(s.label));
+        // Click drops back to the raw text with the caret in the match.
+        chip.addEventListener("click", (e) => {
+          e.stopPropagation();
+          startEdit(note, el, s.at[1]);
+        });
+        el.appendChild(chip);
+        cursor = s.at[1];
+      }
+      if (cursor < note.text.length) el.appendChild(document.createTextNode(note.text.slice(cursor)));
+    }
+
+    /** Edit the note as raw text. `caretAt` is an offset into note.text (a
+     *  chip click puts the caret at the end of the thing you clicked). */
+    function startEdit(note, textEl, caretAt = null) {
+      textEl.textContent = note.text; // chips out, raw text in
+      textEl.contentEditable = "true";
+      textEl.focus();
+      const range = document.createRange();
+      const node = textEl.firstChild;
+      if (caretAt != null && node) range.setStart(node, Math.min(caretAt, node.length));
+      else range.selectNodeContents(textEl);
+      range.collapse(caretAt == null ? false : true);
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      const commit = () => {
+        textEl.contentEditable = "false";
+        const next = textEl.textContent.trim();
+        if (!next) return deleteNote(note.id);
+        note.text = next;
+        // A date in the text files the note: it's the plan's only anchor, so
+        // "Demo Day 10/5" typed in any week lands under Oct 5 – 11.
+        const date = noteDate(note);
+        if (date) note.week = iso(monday(date));
+        render();
+        scheduleSave();
+      };
+      textEl.addEventListener("blur", commit, { once: true });
+      textEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); textEl.blur(); }
+        if (e.key === "Escape") { e.preventDefault(); textEl.textContent = note.text; textEl.blur(); }
+      });
+    }
+
+    function addNote(week) {
+      const note = { id: `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, week, text: "", done: false };
+      plan.notes.push(note);
+      render();
+      const el = weeksEl.querySelector(`.pnote[data-id="${note.id}"] .pnote__text`);
+      if (el) startEdit(note, el);
+    }
+
+    function deleteNote(id) {
+      plan.notes = plan.notes.filter((n) => n.id !== id);
+      render();
+      scheduleSave();
+    }
+
+    // --- Drag between weeks ----------------------------------------------
+    //
+    // Pointer events, not HTML5 drag: Tauri's file-drop swallows dragstart.
+
+    let drag = null;
+
+    function onNotePointerDown(e, el, note) {
+      if (e.button !== 0) return;
+      if (e.target.closest(".pnote__dot")) return;
+      if (el.querySelector('[contenteditable="true"]')) return;
+      drag = { el, note, startX: e.clientX, startY: e.clientY, ghost: null, over: null };
+      window.addEventListener("pointermove", onDragMove);
+      window.addEventListener("pointerup", onDragEnd, { once: true });
+    }
+
+    function onDragMove(e) {
+      if (!drag) return;
+      if (!drag.ghost) {
+        if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 4) return;
+        drag.ghost = document.createElement("div");
+        drag.ghost.id = "ghost";
+        drag.ghost.textContent = drag.note.text;
+        document.body.appendChild(drag.ghost);
+        drag.el.classList.add("is-dragging");
+      }
+      drag.ghost.style.left = `${e.clientX + 10}px`;
+      drag.ghost.style.top = `${e.clientY - 8}px`;
+
+      const week = document.elementFromPoint(e.clientX, e.clientY)?.closest(".week");
+      if (week !== drag.over) {
+        drag.over?.classList.remove("is-drop");
+        week?.classList.add("is-drop");
+        drag.over = week;
+      }
+      // Auto-scroll near the column's edges so a note can reach an off-screen week.
+      const r = weeksEl.getBoundingClientRect();
+      if (e.clientY < r.top + 40) weeksEl.scrollTop -= 8;
+      else if (e.clientY > r.bottom - 40) weeksEl.scrollTop += 8;
+    }
+
+    function onDragEnd() {
+      window.removeEventListener("pointermove", onDragMove);
+      if (!drag) return;
+      const { ghost, over, note } = drag;
+      ghost?.remove();
+      over?.classList.remove("is-drop");
+      drag.el.classList.remove("is-dragging");
+      const target = over?.dataset.week;
+      drag = null;
+      if (ghost && target && target !== note.week) {
+        // A dated note is anchored by its text, so moving it has to rewrite
+        // the date — same weekday, shifted by however many weeks it travelled,
+        // in the format it was typed in.
+        const date = noteDate(note);
+        if (date) {
+          const weeksMoved = Math.round((parseISO(target) - monday(date)) / (7 * 864e5));
+          const next = addDays(date, weeksMoved * 7);
+          const { dateAt } = parseEvent(note.text);
+          note.text = note.text.slice(0, dateAt[0]) + formatLike(note.text.slice(...dateAt), next) + note.text.slice(dateAt[1]);
+        }
+        note.week = target;
+        render();
+        scheduleSave();
+      }
+    }
+
+    // --- Range controls ---------------------------------------------------
+
+    function syncRangeInputs() {
+      startEl.value = plan.start || "";
+      endEl.value = plan.end || "";
+    }
+
+    for (const [el, key] of [[startEl, "start"], [endEl, "end"]]) {
+      el.addEventListener("change", () => {
+        if (!el.value) return syncRangeInputs();
+        plan[key] = iso(monday(parseISO(el.value)));
+        // Keep the range non-empty whichever end moved.
+        if (parseISO(plan.end) < parseISO(plan.start)) {
+          if (key === "start") plan.end = iso(addDays(parseISO(plan.start), 7 * 8));
+          else plan.start = iso(addDays(parseISO(plan.end), -7 * 8));
+        }
+        syncRangeInputs();
+        render();
+        scheduleSave();
+      });
+    }
+
+    document.getElementById("today-btn").addEventListener("click", () => {
+      const el = weeksEl.querySelector(".week.is-now");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    // --- Load -------------------------------------------------------------
+
+    async function main() {
+      const generation = ++renderGeneration;
+      const project = hasTauri ? await invoke("get_active_project").catch(() => null) : null;
+      if (generation !== renderGeneration) return;
+
+      projectPath = project?.path || null;
+      if (!projectPath) { plan = { version: 1, notes: [] }; render(); return; }
+
+      const data = await invoke("read_plan", { path: projectPath }).catch(() => null);
+      if (generation !== renderGeneration) return;
+
+      plan = data && typeof data === "object" ? data : { version: 1, notes: [] };
+      if (!Array.isArray(plan.notes)) plan.notes = [];
+      if (!plan.start || !plan.end) Object.assign(plan, defaultRange());
+      // Weeks are Mondays by definition; normalize whatever was stored.
+      plan.start = iso(monday(parseISO(plan.start)));
+      plan.end = iso(monday(parseISO(plan.end)));
+      // A note's own text outranks its stored week, so a hand-edited plan.json
+      // (or Claude writing one) doesn't need to compute Mondays to file notes.
+      plan.notes.forEach((n) => {
+        const date = noteDate(n);
+        n.week = iso(monday(date || parseISO(n.week)));
+      });
+
+      syncRangeInputs();
+      render();
+    }
+
+    listen("project-activated", () => main());
+    main();
+  </script>
+</body>
+
+</html>

@@ -606,6 +606,8 @@ fn tool_style(filename: &str) -> ToolStyle {
         "daily-notes.html" => s(300.0, 600.0, Tint::Paper),
         "ram-overview.html" => s(380.0, 440.0, Tint::Paper),
         "file-directory.html" => s(350.0, 640.0, Tint::Paper),
+        // A vertical run of weeks: same skinny column as File Directory.
+        "plan.html" => s(350.0, 760.0, Tint::Project),
         // Both opened from the Studio Dock strip: narrow, list-shaped.
         "projects.html" => s(260.0, 460.0, Tint::Paper),
         "system-controls.html" => s(260.0, 400.0, Tint::Paper),
@@ -4053,6 +4055,25 @@ fn save_notes(path: String, notes: serde_json::Value) -> Result<(), String> {
     std::fs::write(&file, text).map_err(|e| e.to_string())
 }
 
+/// Read a project's plan.json (the week-by-week planner). Absent → an empty
+/// plan; the range is chosen by the tool, not stored here.
+#[tauri::command]
+fn read_plan(path: String) -> Result<serde_json::Value, String> {
+    let file = PathBuf::from(&path).join("plan.json");
+    match std::fs::read_to_string(&file) {
+        Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
+        Err(_) => Ok(serde_json::json!({ "version": 1, "notes": [] })),
+    }
+}
+
+/// Write a project's plan.json (pretty-printed).
+#[tauri::command]
+fn save_plan(path: String, plan: serde_json::Value) -> Result<(), String> {
+    let file = PathBuf::from(&path).join("plan.json");
+    let text = serde_json::to_string_pretty(&plan).map_err(|e| e.to_string())?;
+    std::fs::write(&file, text).map_err(|e| e.to_string())
+}
+
 /// RSS (in MB) for a single pid via `ps`.
 fn rss_mb_for_pid(pid: &str) -> Option<f64> {
     let out = Command::new("ps").args(["-o", "rss=", "-p", pid]).output().ok()?;
@@ -5900,6 +5921,8 @@ pub fn run() {
             get_top_processes,
             read_notes,
             save_notes,
+            read_plan,
+            save_plan,
             list_media,
             quicklook_thumb,
             edited_thumb,
