@@ -54,6 +54,23 @@
     #dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #888); opacity: 0; transition: opacity 0.2s; flex: none; }
     #dirty.on { opacity: 0.9; }
 
+    /* Stale indicator on Refresh — same treatment as the Code Editor's, so the
+       two editors signal "the file moved under you" identically. */
+    #refresh-btn { position: relative; }
+    #refresh-btn .stale-dot {
+      position: absolute; top: 2px; right: 2px;
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--rose);
+      opacity: 0; transition: opacity var(--dur-fast);
+    }
+    #refresh-btn.stale .stale-dot { opacity: 1; }
+    #refresh-btn.stale .mi { animation: mde-refresh-wiggle 1.8s var(--ease-standard) infinite; }
+    @keyframes mde-refresh-wiggle {
+      0%, 70%, 100% { transform: rotate(0); }
+      80% { transform: rotate(-16deg); }
+      90% { transform: rotate(10deg); }
+    }
+
     /* Writing surface: one centered column, Typora-style. */
     #scroller { flex: 1; overflow-y: auto; min-height: 0; }
     #editor { max-width: 680px; margin: 0 auto; padding: 28px 40px 45vh; }
@@ -120,7 +137,7 @@
     #empty .empty-actions { display: flex; gap: 8px; }
     body.no-file #scroller { display: none; }
     /* Nothing to act on until a file is open — only "Open…" stays. */
-    body.no-file #table-btn, body.no-file #diff-mode,
+    body.no-file #table-btn, body.no-file #diff-mode, body.no-file #refresh-btn,
     body.no-file #code-btn, body.no-file #font-toggle { display: none; }
 
     /* Each half is set in the font it selects — the letterforms say which is
@@ -144,6 +161,7 @@
         <button class="seg-toggle__btn is-active" id="font-sans" title="Sans">Aa</button>
         <button class="seg-toggle__btn" id="font-serif" title="Serif">Aa</button>
       </div>
+      <button class="btn btn-icon-only" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span><span class="stale-dot"></span></button>
       <button class="btn btn-icon-only" id="table-btn" title="Insert table"><span class="mi">table</span></button>
       <button class="btn btn-icon-only" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
       <button class="btn btn-icon-only" id="code-btn" title="Open in Code Editor"><span class="mi">code</span></button>
@@ -416,6 +434,16 @@
     // The filename + dot live in the window bar, which window-chrome.js strips
     // when a tool is embedded in an iframe — hence the optional chaining.
     function setDirty(on) { dirty = on; $("dirty")?.classList.toggle("on", on); }
+    function setStale(on) { $("refresh-btn")?.classList.toggle("stale", on); }
+
+    // Take the disk version, discarding anything unsaved. Only reachable from
+    // the Refresh button, so it's a deliberate act.
+    async function reloadFromDisk() {
+      if (!hasTauri || !currentPath) return;
+      setDirty(false);          // don't let a queued save race the reload
+      await loadPath(currentPath);
+      setStale(false);
+    }
 
     function scheduleSave() {
       clearTimeout(saveTimer);
@@ -436,6 +464,7 @@
       }
       diskText = text;
       setDirty(false);
+      setStale(false);          // our own write — not an external change
       refreshDiff();
     }
 
@@ -483,6 +512,7 @@
       if (generation !== loadGeneration) return;   // superseded while reading
       diskText = text;
       setDirty(false);
+      setStale(false);          // just synced with disk by definition
       document.body.classList.remove("no-file");
       setPath(path);
       mountEditor(text);
@@ -596,6 +626,7 @@
     });
 
     // (Bare arrows: a click event as newFile's `dest` would be nonsense.)
+    $("refresh-btn").addEventListener("click", reloadFromDisk);
     $("new-btn").addEventListener("click", () => newFile());
     $("empty-new").addEventListener("click", () => newFile());
     $("open-btn").addEventListener("click", pickFile);
@@ -656,14 +687,21 @@
 
     // Pick up external edits when the window regains focus — only when clean,
     // so a re-read never clobbers in-flight typing.
-    window.addEventListener("focus", async () => {
-      if (!hasTauri || !currentPath || dirty) return;
+    // Flag the file as changed-on-disk rather than swapping it in underneath
+    // the cursor: this editor autosaves, so a silent reload could land while
+    // you're mid-sentence. Checked on focus and on a slow poll, same as the
+    // Code Editor.
+    async function checkStale() {
+      if (!hasTauri || !currentPath || document.hidden) return;
       try {
         const text = await invoke("read_text_file", { path: currentPath });
-        if (text !== diskText) { diskText = text; mountEditor(text); refreshDiff(); }
-      } catch {}
-    });
+        setStale(text !== diskText);
+      } catch { /* deleted or unreadable — leave the flag as it was */ }
+    }
+
+    window.addEventListener("focus", checkStale);
     window.addEventListener("blur", flushSave);
+    setInterval(checkStale, 2000);
 
     // ---------- launch ----------
     document.body.classList.add("no-file");

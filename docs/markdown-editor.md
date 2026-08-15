@@ -78,6 +78,14 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   serialized **verbatim** — nothing may reformat them, since the point is
   that a comment survives a save byte for byte. This covers all raw HTML, not
   just comments.
+- **Refresh + stale dot:** the same control the Code Editor has — a rose dot
+  on the Refresh button, plus a periodic wiggle, when the file on disk no
+  longer matches what's loaded. Checked on window focus and on a 2s poll
+  (both skipped while the window is hidden). Clicking Refresh takes the disk
+  version, discarding anything unsaved, so it's deliberate rather than
+  automatic. This *replaced* a silent reload-on-focus: with autosave running,
+  swapping the document underneath a cursor mid-sentence is worse than
+  flagging it. Our own writes clear the flag, so a save never looks external.
 - **Rename:** click the filename in the window bar (safe despite the bar
   being a Tauri drag region — only the bar element itself carries the
   attribute, so clicks on children are ordinary). Enter commits, Escape
