@@ -825,10 +825,19 @@ fn new_markdown_doc(app: AppHandle, dest: Option<String>) -> Result<(), String> 
     Ok(())
 }
 
-/// Open (or focus) the Markdown Editor window for `project_path` — the Code
-/// Editor's twin for .md files (see `open_code_editor_window` for the
-/// pending_open / event-delivery contract; this uses the `mde:open-file`
-/// event instead of `ce:open-file`).
+/// Open (or focus) the Markdown Editor window for `project_path`  — the Code
+/// Editor's twin for .md files.
+///
+/// The file to open is **always** stashed in `pending_open` under this
+/// window's label, whether the window is new or already up; an existing window
+/// additionally gets an `mde:check-pending` ping telling it to go collect it.
+/// The page consumes the stash on boot *and* on the ping, so whichever happens
+/// first wins and the other finds nothing.
+///
+/// Emitting the path directly (the old `mde:open-file`) lost it whenever the
+/// page wasn't listening yet — a window still booting, or reloading under the
+/// dev watcher. The open vanished and the editor sat there showing the file it
+/// had before, which is exactly the symptom.
 fn open_markdown_editor_window(
     app: &AppHandle,
     color: &str,
@@ -838,25 +847,22 @@ fn open_markdown_editor_window(
     let filename = "markdown-editor.html";
     let label = markdown_editor_label(project_path);
     track_tool_window(&label, filename, Some(project_path.to_string()), "markdown-editor");
-    if let Some(win) = app.get_webview_window(&label) {
-        let _ = win.show();
-        let _ = win.set_focus();
-        if let Some(file) = open_file {
-            let _ = app.emit_to(
-                &label,
-                "mde:open-file",
-                serde_json::json!({ "label": label, "file": file }),
-            );
-        }
-        return;
-    }
-    if let Some(file) = open_file {
+    if let Some(file) = &open_file {
         app.state::<AppState>()
             .pending_open
             .lock()
             .unwrap()
-            .insert(label.clone(), file);
+            .insert(label.clone(), file.clone());
     }
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        if open_file.is_some() {
+            let _ = app.emit_to(&label, "mde:check-pending", ());
+        }
+        return;
+    }
+    // A fresh window needs no ping — the page collects the stash on boot.
     let mut params: Vec<String> = Vec::new();
     if !color.is_empty() {
         params.push(format!("color={}", url_encode(color)));

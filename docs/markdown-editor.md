@@ -9,6 +9,18 @@ view, and markdown syntax collapses as you close it (`**bold**` → **bold**,
   `open_markdown_editor_window` in `src-tauri/src/lib.rs`, `mde:open-file`
   event + `pending_open` for first launch, tracked for Workspace Modes as
   kind `"markdown-editor"`).
+- **Delivering an open (why it isn't an event):** the path is always stashed
+  in `pending_open` under the window's label; an already-open window also gets
+  an `mde:check-pending` ping telling it to collect. The page collects on the
+  ping *and* on boot, and `take_pending_open` removes the entry, so whichever
+  runs first wins and the other finds nothing. Emitting the path directly (the
+  old `mde:open-file`) dropped it whenever the page wasn't listening yet — a
+  booting window, or one reloading under the dev watcher — leaving the editor
+  showing its previous file. `loadPath` also carries a generation counter
+  (docs/tools.md): it awaits three times before painting, so without it a
+  slower overlapping open finishes last and paints its older file over the
+  newer one. The boot-time session restore is skipped when `loadGeneration`
+  is non-zero, i.e. a ping already claimed the stash.
 - **Engine:** `src/vendor/prosemirror-md.js` — a one-time esbuild bundle
   (ESM, minified) of prosemirror-{model,state,view,transform,commands,
   keymap,history,inputrules,schema-list,markdown} + markdown-it. Rebuild by

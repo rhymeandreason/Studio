@@ -454,7 +454,16 @@
       localStorage.setItem(sessionKey, path);
     }
 
+    // Opens can overlap — a boot-time collect racing a ping, or two files
+    // opened in quick succession — and each await below is a chance for a
+    // newer one to start. Without this guard the *slower* call finishes last
+    // and paints its (older) file over the newer one, which is how the editor
+    // ends up showing a previous file. Same generation-counter pattern as the
+    // File Directory (docs/tools.md).
+    let loadGeneration = 0;
+
     async function loadPath(path) {
+      const generation = ++loadGeneration;
       await flushSave(); // don't drop edits in the previous file
       let text = "";
       if (hasTauri) {
@@ -464,6 +473,7 @@
           catch (e) { toast("Couldn't open: " + e); return; }
         }
       }
+      if (generation !== loadGeneration) return;   // superseded while reading
       diskText = text;
       setDirty(false);
       document.body.classList.remove("no-file");
@@ -471,6 +481,7 @@
       mountEditor(text);
       try {
         const color = await invoke("git_color_for_path", { path });
+        if (generation !== loadGeneration) return;  // a newer file owns the bar now
         if (color) document.documentElement.style.setProperty("--titlebar-tint", color);
       } catch {}
       refreshDiff();
@@ -651,19 +662,33 @@
     document.body.classList.add("no-file");
     if (hasTauri) {
       const myLabel = window.__TAURI__.window.getCurrentWindow().label;
-      listen("mde:open-file", (e) => {
-        if (e.payload?.label === myLabel && e.payload.file) loadPath(e.payload.file);
-      });
+
+      // The file to open is stashed in Rust under this window's label; taking
+      // it is what opens it. Rust pings us when it stashes one for a window
+      // that's already up, and we also collect on boot — so an open can't be
+      // dropped just because the ping arrived before this listener existed
+      // (a booting window, or one reloading under the dev watcher).
+      const collectPending = async () => {
+        const p = await invoke("take_pending_open", { label: myLabel }).catch(() => null);
+        if (p) await loadPath(p);
+        return !!p;
+      };
+      await listen("mde:check-pending", collectPending);
       // Sent to this window only (emit_to), so no label check is needed: the
       // main window's "new Markdown doc" button asks an already-open editor to
       // make the document itself, so the flush happens before the name is
       // picked.
       listen("mde:new-file", (e) => newFile(e.payload || "project"));
-      invoke("take_pending_open", { label: myLabel }).then((p) => {
-        if (p) return loadPath(p);
+      // Nothing waiting for us → restore the file this window had last time.
+      // `loadGeneration` guards the case where a ping landed in the gap
+      // between the listener registering and this line, and already claimed
+      // the stash: the restore would otherwise load the *older* session file
+      // on top of the file we were just asked to open.
+      const collected = await collectPending();
+      if (!collected && loadGeneration === 0) {
         const last = localStorage.getItem(sessionKey);
         if (last) loadPath(last);
-      });
+      }
     } else {
       // Browser preview: sample document, no disk.
       currentPath = "";
