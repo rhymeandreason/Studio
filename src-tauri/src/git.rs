@@ -195,8 +195,7 @@ pub fn git_diff_file_committed(path: String) -> Result<String, String> {
 }
 
 /// Stage one path (`git add -- <path>`), for the per-file checkboxes.
-#[tauri::command]
-pub fn git_stage(repo: String, path: String) -> Result<(), String> {
+fn git_stage_blocking(repo: String, path: String) -> Result<(), String> {
     let out = Command::new("git")
         .args(["-C", &repo, "add", "--", &path])
         .output()
@@ -209,8 +208,7 @@ pub fn git_stage(repo: String, path: String) -> Result<(), String> {
 
 /// Unstage one path, keeping the working-tree change. `restore --staged` handles
 /// both tracked files and ones only just `git add`ed (no HEAD entry).
-#[tauri::command]
-pub fn git_unstage(repo: String, path: String) -> Result<(), String> {
+fn git_unstage_blocking(repo: String, path: String) -> Result<(), String> {
     let out = Command::new("git")
         .args(["-C", &repo, "restore", "--staged", "--", &path])
         .output()
@@ -237,8 +235,7 @@ fn has_staged(repo: &str) -> bool {
 /// exactly that; when nothing is staged, fall back to staging everything (the
 /// old "Commit all changes" behaviour). Returns an error string on failure (e.g.
 /// nothing to commit), which the window surfaces.
-#[tauri::command]
-pub fn git_commit(app: AppHandle, repo: String, message: String) -> Result<(), String> {
+fn git_commit_blocking(app: AppHandle, repo: String, message: String) -> Result<(), String> {
     if message.trim().is_empty() {
         return Err("Empty commit message".to_string());
     }
@@ -269,6 +266,40 @@ pub fn git_commit(app: AppHandle, repo: String, message: String) -> Result<(), S
     Ok(())
 }
 
+// The four commands above shell out to git and can take a beat (staging a big
+// tree, a network push). Tauri runs *sync* commands on the main thread, which
+// would freeze the UI into a spinner — so each is exposed as an async command
+// that does the work on a blocking thread.
+#[tauri::command]
+pub async fn git_stage(repo: String, path: String) -> Result<(), String> {
+    off_thread(move || git_stage_blocking(repo, path)).await
+}
+
+#[tauri::command]
+pub async fn git_unstage(repo: String, path: String) -> Result<(), String> {
+    off_thread(move || git_unstage_blocking(repo, path)).await
+}
+
+#[tauri::command]
+pub async fn git_commit(app: AppHandle, repo: String, message: String) -> Result<(), String> {
+    off_thread(move || git_commit_blocking(app, repo, message)).await
+}
+
+#[tauri::command]
+pub async fn git_push(repo: String) -> Result<(), String> {
+    off_thread(move || git_push_blocking(repo)).await
+}
+
+async fn off_thread<T, F>(f: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Un-commit the last commit, keeping its changes staged (soft reset).
 #[tauri::command]
 pub fn git_undo(repo: String) -> Result<(), String> {
@@ -291,8 +322,7 @@ pub fn git_undo(repo: String) -> Result<(), String> {
 /// token from a prior CLI push (or GitHub Desktop) lives, so HTTPS remotes push
 /// silently. SSH remotes use the agent/key and ignore this. When neither is set
 /// up, the raw git error is returned for the frontend to explain.
-#[tauri::command]
-pub fn git_push(repo: String) -> Result<(), String> {
+fn git_push_blocking(repo: String) -> Result<(), String> {
     // Current branch name (empty on a detached HEAD → error out clearly).
     let head = Command::new("git")
         .args(["-C", &repo, "symbolic-ref", "--short", "HEAD"])
