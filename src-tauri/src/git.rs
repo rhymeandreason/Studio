@@ -87,6 +87,10 @@ pub fn git_status(repo: String) -> Result<GitStatus, String> {
             files.push(GitFile { status, path });
         }
     }
+    // git lists tracked changes first and untracked ("??") in a block at the
+    // end, so staging a new file would make its row jump. Sort by path so the
+    // list order never depends on the status code.
+    files.sort_by(|a, b| a.path.cmp(&b.path));
 
     let log = Command::new("git")
         .args(["-C", &repo, "log", "-1", "--format=%h%x1f%s%x1f%cr"])
