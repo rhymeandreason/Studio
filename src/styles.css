@@ -3086,6 +3086,15 @@ td.ntable__total-cell {
     white-space: nowrap;
 }
 .git-file:hover { background: var(--elevated); }
+/* Stage/unstage checkbox, first thing in the row. */
+.git-file__check {
+    flex: 0 0 auto;
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    accent-color: var(--accent, currentColor);
+    cursor: pointer;
+}
 .git-file__code {
     flex: 0 0 22px;
     font: 600 11px var(--mono);

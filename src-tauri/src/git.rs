@@ -190,19 +190,62 @@ pub fn git_diff_file_committed(path: String) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
-/// Stage everything and commit. Returns an error string on failure (e.g.
+/// Stage one path (`git add -- <path>`), for the per-file checkboxes.
+#[tauri::command]
+pub fn git_stage(repo: String, path: String) -> Result<(), String> {
+    let out = Command::new("git")
+        .args(["-C", &repo, "add", "--", &path])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+/// Unstage one path, keeping the working-tree change. `restore --staged` handles
+/// both tracked files and ones only just `git add`ed (no HEAD entry).
+#[tauri::command]
+pub fn git_unstage(repo: String, path: String) -> Result<(), String> {
+    let out = Command::new("git")
+        .args(["-C", &repo, "restore", "--staged", "--", &path])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+/// True when the index has anything staged relative to HEAD (or, before the
+/// first commit, any entry at all).
+fn has_staged(repo: &str) -> bool {
+    let out = Command::new("git")
+        .args(["-C", repo, "diff", "--cached", "--name-only"])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => !String::from_utf8_lossy(&o.stdout).trim().is_empty(),
+        _ => false,
+    }
+}
+
+/// Commit. When the user has staged a subset with the row checkboxes, commit
+/// exactly that; when nothing is staged, fall back to staging everything (the
+/// old "Commit all changes" behaviour). Returns an error string on failure (e.g.
 /// nothing to commit), which the window surfaces.
 #[tauri::command]
 pub fn git_commit(app: AppHandle, repo: String, message: String) -> Result<(), String> {
     if message.trim().is_empty() {
         return Err("Empty commit message".to_string());
     }
-    let add = Command::new("git")
-        .args(["-C", &repo, "add", "-A"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !add.status.success() {
-        return Err(String::from_utf8_lossy(&add.stderr).trim().to_string());
+    if !has_staged(&repo) {
+        let add = Command::new("git")
+            .args(["-C", &repo, "add", "-A"])
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !add.status.success() {
+            return Err(String::from_utf8_lossy(&add.stderr).trim().to_string());
+        }
     }
     let out = Command::new("git")
         .args(["-C", &repo, "commit", "-m", &message])

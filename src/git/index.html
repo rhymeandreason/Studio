@@ -85,6 +85,15 @@
         white-space: nowrap;
       }
       .file:hover { background: var(--card-strong); }
+      /* Stage/unstage checkbox, first thing in the row. */
+      .file .check {
+        flex: 0 0 auto;
+        width: 13px;
+        height: 13px;
+        margin: 0;
+        accent-color: currentColor;
+        cursor: pointer;
+      }
       .file .code {
         flex: 0 0 22px;
         font-weight: 700;
@@ -291,8 +300,15 @@
           e.textContent = "Working tree clean";
           $files.append(e);
         } else {
-          for (const f of st.files) $files.append(buildFileRow(f));
+          for (const f of st.files) $files.append(buildFileRow(f, refresh));
         }
+        // Checked a subset? Commit exactly that (git_commit only stages
+        // everything when nothing is staged).
+        const staged = st.files.filter(isStaged).length;
+        $commit.textContent =
+          staged > 0 && staged < st.files.length
+            ? `Commit ${staged} file${staged === 1 ? "" : "s"}`
+            : "Commit all changes";
         syncCommitEnabled();
 
         $prev.innerHTML = "";
@@ -358,13 +374,44 @@
         }
       }
 
+      // A working-tree file is staged when the index column (X of the XY code)
+      // is something other than a space or "?".
+      function isStaged(f) {
+        const x = f.status[0];
+        return !!x && x !== " " && x !== "?";
+      }
+
       // One row in a file list: status glyph + path, click to open in editor.
       // New/untracked files ("??") get a sticker star; otherwise the status
-      // letter (M/A/D/R…).
-      function buildFileRow(f) {
+      // letter (M/A/D/R…). `onStage` (working-tree rows only) adds the leading
+      // stage/unstage checkbox.
+      function buildFileRow(f, onStage) {
         const row = document.createElement("div");
         row.className = "file";
         row.title = "Open in editor";
+        if (onStage) {
+          const box = document.createElement("input");
+          box.type = "checkbox";
+          box.className = "check";
+          box.checked = isStaged(f);
+          box.title = box.checked ? "Staged — click to unstage" : "Stage this file";
+          box.addEventListener("click", (e) => e.stopPropagation());
+          box.addEventListener("change", async () => {
+            box.disabled = true;
+            try {
+              await invoke(box.checked ? "git_stage" : "git_unstage", {
+                repo,
+                path: f.path,
+              });
+            } catch (e) {
+              box.checked = !box.checked;
+              toast(String(e));
+            }
+            box.disabled = false;
+            refresh();
+          });
+          row.append(box);
+        }
         const code = document.createElement("span");
         code.className = "code";
         const isNew = f.status.includes("?");

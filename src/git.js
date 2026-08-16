@@ -38,10 +38,40 @@ function statusSignature(st) {
   ].join("|");
 }
 
+// A working-tree file is staged when the index column (X of the XY code) is
+// something other than a space or "?".
+function isStaged(f) {
+  const x = f.status[0];
+  return !!x && x !== " " && x !== "?";
+}
+
 // One row in a file list: status glyph + path, click to open in editor. New
 // files ("??") get a sticker star; otherwise the status letter (M/A/D/R…).
-function buildFileRow(repo, f, editor) {
+// `onStage` (working-tree rows only) adds a leading stage/unstage checkbox.
+function buildFileRow(repo, f, editor, onStage) {
   const row = el("div", "git-file", { title: "Open in editor" });
+  if (onStage) {
+    const box = el("input", "git-file__check", {
+      type: "checkbox",
+      checked: isStaged(f),
+      title: isStaged(f) ? "Staged — click to unstage" : "Stage this file",
+    });
+    // Don't let the checkbox open the file in the editor.
+    box.addEventListener("click", (e) => e.stopPropagation());
+    box.addEventListener("change", async () => {
+      const cmd = box.checked ? "git_stage" : "git_unstage";
+      box.disabled = true;
+      try {
+        await invoke(cmd, { repo, path: f.path });
+      } catch (e) {
+        box.checked = !box.checked;
+        toast(String(e));
+      }
+      box.disabled = false;
+      onStage();
+    });
+    row.append(box);
+  }
   const code = el("span", "git-file__code");
   const isNew = f.status.includes("?");
   code.textContent = isNew ? "⭐" : f.status.trim().replace(/\?/g, "")[0] || "•";
@@ -149,8 +179,15 @@ function buildCommitCard(repo, color, editor, pushUI, onChange, onExternal) {
     if (st.files.length === 0) {
       files.append(el("div", "git-empty", { textContent: "Working tree clean" }));
     } else {
-      for (const f of st.files) files.append(buildFileRow(repo, f, editor));
+      for (const f of st.files) files.append(buildFileRow(repo, f, editor, refresh));
     }
+    // Checked a subset? Commit exactly that (git_commit only stages everything
+    // when nothing is staged).
+    const staged = st.files.filter(isStaged).length;
+    commit.textContent =
+      staged > 0 && staged < st.files.length
+        ? `Commit ${staged} file${staged === 1 ? "" : "s"}`
+        : "Commit all changes";
     syncEnabled();
     syncPush(st);
 

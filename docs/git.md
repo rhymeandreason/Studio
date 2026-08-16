@@ -12,7 +12,12 @@ column of cards:
   edited — it's no longer a Workspace card.
 - **Commit** (inline) — ports the standalone Git window's logic (below), reusing
   the same `git_*` commands: branch, changed files (click → open in editor),
-  commit box (⌘↵), last-commit footer with expand + Undo. A pop-out button opens
+  commit box (⌘↵), last-commit footer with expand + Undo. Each changed-file row
+  starts with a **stage checkbox** (`git_stage` / `git_unstage`, i.e.
+  `git add -- <path>` / `git restore --staged -- <path>`); it's checked when the
+  status code's index column is set. Staging a subset switches the button to
+  "Commit N files" — `git_commit` only runs `git add -A` when *nothing* is
+  staged, so a partial selection commits exactly itself. A pop-out button opens
   the floating window. A **Push** button lives in the panel's top toolbar (full-
   width row above the card grid), driven by the commit card's status fetch:
   `git_status` now returns `ahead`/`hasUpstream`, so it shows "Push N" when the
@@ -56,7 +61,8 @@ The window uses the **minimal window style** (empty native title + transparent
 - **Project name + branch** (`ProjectName ⎇ branch`) in the in-page title strip
   at the top.
 - **Changed files** — `git status --porcelain=v1 -b`. Click a file to open it in
-  the project's configured editor (`open -a <editor>`, blank = Zed).
+  the project's configured editor (`open -a <editor>`, blank = Zed). Each row
+  leads with the same stage checkbox as the panel (`git_stage`/`git_unstage`).
 - **Commit message** box + **Commit all changes** button — stages everything
   (`git add -A`) then `git commit -m`. ⌘↵ commits too. Errors (e.g. "nothing to
   commit") surface as a toast.
