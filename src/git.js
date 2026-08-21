@@ -22,6 +22,16 @@ import {
 } from "./workspace.js";
 
 let currentRepo = "";
+// Which worktree the panel is pointed at, when it isn't the project's own repo
+// path. Session-only (agent worktrees come and go — nothing to persist), and
+// keyed by `base` so switching project drops the selection.
+let worktreeView = { base: "", path: "" };
+
+// Point every card at `path` ("" = back to the project's repo) and rebuild.
+function selectWorktree(path) {
+  worktreeView = { base: activeRepoInfo().repo, path };
+  renderGitPanel();
+}
 // The Commit card's poll for outside-Studio changes. Module-level so a panel
 // rebuild can't leave a second timer running against a stale card.
 let statusTimer = 0;
@@ -344,10 +354,84 @@ function buildToolCard(label, icon, src, popoutFn) {
   return card;
 }
 
+// The Worktrees card: `git worktree list`, with the panel pointed at whichever
+// row you click — the rest of the panel (Commit, History, Pulse) is keyed off
+// that path, so switching worktree switches every card with it, GitHub-Desktop
+// style. Agents create these; the card is hidden when the repo has only its
+// main worktree (the common case).
+function buildWorktreeCard(repo) {
+  const card = el("section", "git-card git-card--worktrees", { hidden: true });
+  const head = el("div", "git-card__head");
+  head.innerHTML = mi("account_tree") + '<span class="git-card__name">Worktrees</span>';
+  const list = el("div", "git-worktrees");
+  card.append(head, list);
+
+  const home = (p) => p.replace(/^\/Users\/[^/]+/, "~");
+
+  async function refresh() {
+    let trees;
+    try {
+      trees = await invoke("git_worktrees", { repo });
+    } catch {
+      return; // not a repo / git too old — just stay hidden
+    }
+    card.hidden = trees.length < 2;
+    list.innerHTML = "";
+    for (const w of trees) {
+      // Each worktree is its own tile: branch + flags on top, path below, and
+      // the one the panel is showing is filled in with a "Showing" marker.
+      const current = w.path.replace(/\/$/, "") === repo.replace(/\/$/, "");
+      const row = el("div", "git-worktree", {
+        title: w.path + (current ? "\nShowing in this panel" : "\nShow this worktree"),
+      });
+      if (current) row.classList.add("is-current");
+
+      const top = el("div", "git-worktree__top");
+      const label = w.branch || "detached " + w.head;
+      top.append(el("span", "git-worktree__branch", { textContent: label }));
+      if (w.isMain) top.append(el("span", "git-worktree__tag is-main", { textContent: "main" }));
+      // Flags worth seeing at a glance: uncommitted work, a lock, a gone dir.
+      const tags = [];
+      if (w.dirty) tags.push(["dirty", "uncommitted changes"]);
+      if (w.locked) tags.push(["locked", "worktree is locked"]);
+      if (w.prunable) tags.push(["prunable", "directory is gone — `git worktree prune` clears it"]);
+      for (const [t, tip] of tags)
+        top.append(el("span", "git-worktree__tag is-" + t, { textContent: t, title: tip }));
+      top.append(el("span", "git-worktree__spacer"));
+      if (current)
+        top.append(
+          el("span", "git-worktree__showing", {
+            innerHTML: mi("visibility") + "<span>Showing</span>",
+          }),
+        );
+
+      // Reveal is the secondary action; the tile itself switches the panel.
+      const reveal = el("button", "git-iconbtn git-worktree__reveal", {
+        type: "button",
+        title: "Reveal in Finder",
+        innerHTML: mi("folder_open"),
+      });
+      reveal.addEventListener("click", (e) => {
+        e.stopPropagation();
+        invoke("reveal_in_finder", { path: w.path }).catch((err) => toast(String(err)));
+      });
+      top.append(reveal);
+
+      row.append(top, el("div", "git-worktree__path", { textContent: "⁦" + home(w.path) + "⁩" }));
+      row.addEventListener("click", () => selectWorktree(w.isMain ? "" : w.path));
+      list.append(row);
+    }
+  }
+  refresh();
+  card._refresh = refresh;
+  return card;
+}
+
 // The Repo card: the project's single repo path (+ Browse) and the editor it
 // opens in. Moved here from the Workspace tab — this panel is the repo's home.
 // Persists through workspace.js; changing the path re-keys the panel's cards.
 function buildRepoCard(repo, editor) {
+  const original = repo;
   const card = el("section", "git-card git-card--repo");
   const head = el("div", "git-card__head");
   head.innerHTML = mi("folder_open") + '<span class="git-card__name">Repo</span>';
@@ -361,7 +445,9 @@ function buildRepoCard(repo, editor) {
   });
   const commit = (val) => {
     const v = (val ?? input.value).trim();
-    if (v === currentRepo) return;
+    if (v === original) return;
+    // A new repo invalidates any worktree selection.
+    worktreeView = { base: "", path: "" };
     setActiveRepo(v);
     renderGitPanel();
   };
@@ -399,7 +485,12 @@ function buildRepoCard(repo, editor) {
 export async function renderGitPanel() {
   const panel = document.getElementById("git-panel");
   if (!panel) return;
-  const { repo, color, editor } = activeRepoInfo();
+  const { repo: base, color, editor } = activeRepoInfo();
+  // A selected worktree stands in for the repo everywhere below, so Commit,
+  // History and Pulse all show *that* checkout. The Repo card still edits the
+  // project's own path (`base`).
+  if (worktreeView.path && worktreeView.base !== base) worktreeView = { base: "", path: "" };
+  const repo = worktreeView.path || base;
 
   // Tint the whole panel with the project's accent (cards read var(--git-accent),
   // falling back to the app accent when the project has no color).
@@ -409,6 +500,7 @@ export async function renderGitPanel() {
   // avoids reloading the embedded tools on every tab switch.
   if (repo && repo === currentRepo && panel.firstElementChild) {
     panel.querySelector(".git-card--commit")?._refresh?.();
+    panel.querySelector(".git-card--worktrees")?._refresh?.();
     return;
   }
   currentRepo = repo;
@@ -417,7 +509,7 @@ export async function renderGitPanel() {
   clearInterval(statusTimer);
 
   if (!repo) {
-    panel.append(buildRepoCard(repo, editor));
+    panel.append(buildRepoCard(base, editor));
     const empty = el("div", "git-panel__empty");
     empty.innerHTML =
       mi("commit", false) +
@@ -435,7 +527,7 @@ export async function renderGitPanel() {
   toolbar.append(status, push);
   panel.append(toolbar);
 
-  // Order: Server (top), Commit, Pulse, Repo (last). Server is prepended below
+  // Order: Server (top), Worktrees, Commit, Pulse, Repo (last). Server is prepended below
   // once its async details resolve.
   const pulseCard = buildToolCard("Pulse", "bar_chart", "tools/git-pulse.html?repo=" + encodeURIComponent(repo) +
     (color ? "&color=" + encodeURIComponent(color) : ""), () =>
@@ -453,10 +545,12 @@ export async function renderGitPanel() {
   // A change made outside Studio only reloads Pulse — History polls for itself,
   // and reloading its iframe would throw away its scroll + expanded row.
   const onExternal = () => reload(pulseCard);
+  // Worktrees sits above Commit, so it lands second once Server prepends.
+  panel.append(buildWorktreeCard(repo));
   panel.append(buildCommitCard(repo, color, editor, { push, status }, onChange, onExternal));
   panel.append(historyCard);
   panel.append(pulseCard);
-  panel.append(buildRepoCard(repo, editor));
+  panel.append(buildRepoCard(base, editor));
 
   // Server card only when the repo has dev-open/dev-stop scripts. Titled with
   // the dev host:port (from repo_dev_url) rather than the word "Server", and

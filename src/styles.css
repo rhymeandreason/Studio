@@ -3067,6 +3067,88 @@ td.ntable__total-cell {
 }
 .git-iconbtn:hover { background: var(--surface); color: var(--text); }
 
+/* Worktrees card — one tile per `git worktree list` entry. Clicking a tile
+   points the whole panel at that checkout, so the active one is filled in. */
+.git-worktrees {
+    margin: 0 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.git-worktree {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--surface);
+    cursor: pointer;
+}
+.git-worktree:hover { border-color: var(--hairline-strong); background: var(--elevated); }
+.git-worktree.is-current {
+    background: color-mix(in srgb, var(--git-accent, var(--accent)), transparent 82%);
+    border-color: var(--git-accent, var(--accent));
+    cursor: default;
+}
+.git-worktree__top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.git-worktree__spacer { flex: 1 1 auto; }
+.git-worktree__branch {
+    flex: 0 1 auto;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.git-worktree__branch::before { content: "⎇ "; opacity: 0.6; font-weight: 400; }
+.git-worktree__path {
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    text-align: left;
+}
+.git-worktree__tag {
+    flex: 0 0 auto;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: var(--elevated);
+    color: var(--text-muted);
+}
+.git-worktree.is-current .git-worktree__tag { background: rgba(255, 255, 255, 0.5); }
+.git-worktree__tag.is-dirty { color: var(--git-accent, var(--accent)); }
+/* "Showing" marker on the active tile — the panel's Commit/History/Pulse are
+   all keyed to this worktree. */
+.git-worktree__showing {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--git-accent, var(--accent));
+}
+.git-worktree__showing .mi { font-size: 14px; }
+/* Reveal-in-Finder, revealed on hover — the tile itself switches the panel. */
+.git-worktree__reveal {
+    flex: 0 0 auto;
+    opacity: 0;
+    padding: 2px;
+}
+.git-worktree:hover .git-worktree__reveal { opacity: 1; }
+.git-worktree__reveal .mi { font-size: 15px; }
+
 /* Commit card */
 .git-files {
     margin: 0 12px;

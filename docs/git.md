@@ -33,6 +33,15 @@ column of cards:
   cleared on every panel rebuild so a stale card can't keep a timer alive. An
   externally-detected change reloads the Pulse iframe but *not* History (which
   polls itself, and would lose its scroll + expanded row on a reload).
+- **Worktrees** (inline) — `git worktree list --porcelain` (`git_worktrees`):
+  branch, path, and `dirty`/`locked`/`prunable` tags. Clicking a row **points
+  the whole panel at that worktree** — Commit, History and Pulse are all keyed
+  off the repo path, so they follow (the hover-revealed folder button reveals it
+  in Finder instead). The selection is session-only module state
+  (`worktreeView`, dropped when the project or the Repo card's path changes);
+  the Repo card keeps editing the *project's* path, not the worktree's. Agents
+  (Claude Code's worktree isolation) create these, so the card is hidden unless
+  the repo has more than one worktree.
 - **History** (inline) — embeds `tools/git-history.html?repo=…` (below).
 - **Pulse** (inline) — embeds `tools/git-pulse.html?repo=…`.
 - **Server** (inline) — embeds `tools/server.html`, shown only when the repo has

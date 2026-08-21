@@ -194,6 +194,77 @@ pub fn git_diff_file_committed(path: String) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
+/// One entry from `git worktree list` — agents (Claude Code's `EnterWorktree`,
+/// say) create these, so the panel shows them read-only.
+#[derive(Serialize)]
+pub struct Worktree {
+    path: String,
+    /// Branch short name, or "" on a detached HEAD.
+    branch: String,
+    head: String,
+    /// The repo's original checkout (the first entry `git worktree list` prints).
+    #[serde(rename = "isMain")]
+    is_main: bool,
+    locked: bool,
+    prunable: bool,
+    /// Working tree has uncommitted changes (staged, unstaged, or untracked).
+    dirty: bool,
+}
+
+/// List the repo's worktrees. `--porcelain` gives one blank-line-separated
+/// record per worktree: `worktree <path>`, `HEAD <sha>`, then `branch <ref>` or
+/// `detached`, plus optional `locked` / `prunable` lines.
+#[tauri::command]
+pub async fn git_worktrees(repo: String) -> Result<Vec<Worktree>, String> {
+    off_thread(move || {
+        let out = Command::new("git")
+            .args(["-C", &repo, "worktree", "list", "--porcelain"])
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !out.status.success() {
+            return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+        }
+        let text = String::from_utf8_lossy(&out.stdout);
+        let mut trees: Vec<Worktree> = Vec::new();
+        for record in text.split("\n\n") {
+            let mut wt = Worktree {
+                path: String::new(),
+                branch: String::new(),
+                head: String::new(),
+                is_main: trees.is_empty(),
+                locked: false,
+                prunable: false,
+                dirty: false,
+            };
+            for line in record.lines() {
+                let (key, val) = line.split_once(' ').unwrap_or((line, ""));
+                match key {
+                    "worktree" => wt.path = val.to_string(),
+                    "HEAD" => wt.head = val.chars().take(7).collect(),
+                    "branch" => {
+                        wt.branch = val.strip_prefix("refs/heads/").unwrap_or(val).to_string()
+                    }
+                    "locked" => wt.locked = true,
+                    "prunable" => wt.prunable = true,
+                    _ => {}
+                }
+            }
+            if wt.path.is_empty() {
+                continue;
+            }
+            // Cheap enough — a repo has a handful of worktrees, not hundreds.
+            wt.dirty = Command::new("git")
+                .args(["-C", &wt.path, "status", "--porcelain"])
+                .output()
+                .map(|o| o.status.success() && !o.stdout.is_empty())
+                .unwrap_or(false);
+            trees.push(wt);
+        }
+        Ok(trees)
+    })
+    .await
+}
+
 /// Stage one path (`git add -- <path>`), for the per-file checkboxes.
 fn git_stage_blocking(repo: String, path: String) -> Result<(), String> {
     let out = Command::new("git")

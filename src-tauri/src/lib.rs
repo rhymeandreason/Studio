@@ -14,7 +14,7 @@ use git::{
     git_bookmarks, git_commit, git_commit_file_diff, git_commit_files, git_diff_file,
     git_diff_file_committed, git_head_state, git_history, git_log_week, git_push, git_stage,
     git_status,
-    git_time_return, git_time_travel, git_toggle_bookmark, git_undo, git_unstage,
+    git_time_return, git_time_travel, git_toggle_bookmark, git_undo, git_unstage, git_worktrees,
 };
 
 use std::collections::HashMap;
@@ -5985,6 +5985,7 @@ pub fn run() {
             git_commit,
             git_stage,
             git_unstage,
+            git_worktrees,
             git_undo,
             git_push,
             git_open_file,
