@@ -54,6 +54,13 @@ fn main() {
     println!("cargo:rustc-env=WINBOUNDS_BIN={}", wb_bin.display());
     println!("cargo:rerun-if-changed={wb_src}");
 
+    // Global color sampler (NSColorSampler magnifier → #rrggbb).
+    let cp_src = "swift/colorpick.swift";
+    let cp_bin = Path::new(&out_dir).join("colorpick");
+    swiftc(cp_src, &cp_bin, "macosx11.0");
+    println!("cargo:rustc-env=COLORPICK_BIN={}", cp_bin.display());
+    println!("cargo:rerun-if-changed={cp_src}");
+
     // Window owner helper (which app is under the cursor) — used to tell a
     // drag-out that landed in Finder from one that landed anywhere else.
     let wo_src = "swift/winowner.swift";

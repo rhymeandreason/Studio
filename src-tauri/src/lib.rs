@@ -597,6 +597,32 @@ struct ToolStyle {
 /// bar `data-window-bar`). Rows below only override size/tint. Spotlight /
 /// Mode switcher / Task cards have their own bespoke invisible windows and
 /// never come through here.
+/// Tools with no UI of their own: their window is built invisible and the page
+/// closes it when its work is done (the Color Picker *is* the macOS sampler
+/// loupe, so a Studio window next to it would be noise).
+fn tool_is_headless(filename: &str) -> bool {
+    HEADLESS_TOOLS.contains(&filename)
+}
+
+const HEADLESS_TOOLS: &[&str] = &["color-picker.html"];
+
+/// True for the window label of a headless tool (`tool-color-picker`). Those
+/// windows are throwaway — one per run — so `CloseRequested` must let them
+/// actually close instead of hiding them like every other menu-bar window; a
+/// hidden leftover would make the next launch a no-op.
+fn is_headless_tool_label(label: &str) -> bool {
+    HEADLESS_TOOLS.iter().any(|f| {
+        let stem: String = Path::new(f)
+            .file_stem()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default()
+            .chars()
+            .map(|c| if c.is_alphanumeric() { c } else { '-' })
+            .collect();
+        label == format!("tool-{stem}")
+    })
+}
+
 fn tool_style(filename: &str) -> ToolStyle {
     let s = |w, h, tint| ToolStyle { w, h, tint };
     match filename {
@@ -644,6 +670,9 @@ fn apply_tool_chrome<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
         .decorations(false)
         .transparent(true)
         .shadow(false)
+        // Headless tools (Color Picker) never paint: keep the window off-screen
+        // for its lifetime rather than flashing an empty frame.
+        .visible(!tool_is_headless(filename))
         // Finder-style: a click into an inactive tool window both focuses it and
         // acts (e.g. starts a file drag) in one motion, instead of the first
         // click being swallowed just to focus.
@@ -1003,6 +1032,11 @@ fn open_tool_window(
     track_tool_window(&label, filename, q.clone(), "plain");
 
     if let Some(win) = app.get_webview_window(&label) {
+        // A headless tool's window only exists while it's running, and showing
+        // it would put an empty frame on screen — leave the run alone.
+        if tool_is_headless(filename) {
+            return;
+        }
         if let Some(rect) = near {
             // Tray-icon click: toggle visibility instead of always showing.
             if win.is_visible().unwrap_or(false) {
@@ -2767,6 +2801,7 @@ fn dev_pid_alive(repo: String) -> bool {
 
 const WINBOUNDS_BIN: &str = env!("WINBOUNDS_BIN");
 const WINOWNER_BIN: &str = env!("WINOWNER_BIN");
+const COLORPICK_BIN: &str = env!("COLORPICK_BIN");
 const DAYAGENDA_BIN: &str = env!("DAYAGENDA_BIN");
 const CALREAD_BIN: &str = env!("CALREAD_BIN");
 const TRANSIT_BIN: &str = env!("TRANSIT_BIN");
@@ -3692,6 +3727,36 @@ fn trash_media(paths: Vec<String>) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Global screen eyedropper: shows macOS's native color sampler (the magnifier
+/// loupe) and returns the picked color as `#rrggbb`, also placing it on the
+/// clipboard. Returns an empty string if the pick was cancelled (Esc). Used by
+/// the Color Picker tool.
+#[tauri::command]
+async fn pick_screen_color() -> Result<String, String> {
+    use std::io::Write;
+    let out = Command::new(COLORPICK_BIN)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Ok(String::new()); // cancelled
+    }
+    let hex = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    // Copy from Rust rather than the webview: the sampler takes focus, and an
+    // unfocused WKWebView can't write to the clipboard.
+    if !hex.is_empty() {
+        if let Ok(mut child) = Command::new("pbcopy")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+        {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(hex.as_bytes());
+            }
+            let _ = child.wait();
+        }
+    }
+    Ok(hex)
 }
 
 /// The app owning the topmost window under the cursor right now, or "Finder"
@@ -5868,6 +5933,7 @@ pub fn run() {
             run_schedule_now,
             run_claude_prompt,
             day_agenda,
+            pick_screen_color,
             cal_read,
             list_tasks,
             save_task,
@@ -6056,6 +6122,11 @@ pub fn run() {
                     if let Some(w) = list.iter().find(|w| git_label(&w.repo) == window.label()) {
                         remove_git_window(app, &w.repo.clone());
                     }
+                    return;
+                }
+                // A headless tool window exists only for the length of one run
+                // and closes itself at the end: let it go for real.
+                if is_headless_tool_label(window.label()) {
                     return;
                 }
                 // Other windows live in the menu bar — hide, don't quit Studio.

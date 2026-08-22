@@ -54,6 +54,14 @@ folder, previews, and launches the editor.
   in `src/deck/`. A deck embeds its `theme` inline; themes can also be saved as
   their own reusable `theme` artifacts. Full detail — layouts, per-slide options,
   color schemes, presets-as-files, editing UX, export — in **[slides.md](slides.md)**.
+- **swatch kind** — one screen-sampled color per file (`{ kind, version, name,
+  value, source, savedAt }`), written by the **Color Picker** tool
+  (`src/tools/color-picker.html`): it shows macOS's native `NSColorSampler`
+  loupe (Swift helper `colorpick`, Rust command `pick_screen_color`), copies the
+  hex to the clipboard, and saves `artifacts/swatch/<hex>.json` in the active
+  project. The tool is **headless** — no Studio window, just the loupe: it keeps
+  sampling click after click until Esc cancels it. Read-only in the panel
+  (colored preview card, no editor tool).
 - **diagram kind** — the Diagram tool + shared SVG renderer (`src/diagram/`):
   six templated concept diagrams, deck-theme styling, drag nudges, SVG export,
   live slide embeds. Detail in **[diagrams.md](diagrams.md)**.

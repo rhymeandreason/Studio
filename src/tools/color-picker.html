@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Color Picker</title>
+</head>
+<!--
+  Headless tool: this page never shows a window (see `tool_is_headless` in
+  src-tauri/src/lib.rs — the window is built with visible(false)). Launching it
+  raises macOS's native color-sampler loupe; every click copies the hex and
+  saves a `swatch` artifact, Esc cancels the loupe, which ends the run and
+  closes this window. All the UI is the loupe itself.
+-->
+<body>
+<script type="module">
+  import { hasTauri, invoke } from "../kit/app.js";
+
+  const closeWin = () => window.__TAURI__?.window.getCurrentWindow().close();
+
+  // One sample, then the clipboard + artifact for it.
+  // Returns false when the loupe was cancelled (Esc), which ends the loop.
+  async function sampleOnce() {
+    let hex = "";
+    try {
+      // Native macOS sampler: magnifier loupe over any screen pixel, Esc
+      // cancels (returns ""). Rust also puts the hex on the clipboard.
+      hex = await invoke("pick_screen_color");
+    } catch {
+      return false;
+    }
+    if (!hex) return false;
+
+    // One artifact per pick: artifacts/swatch/<hex>.json in the active project.
+    const name = hex.slice(1).toLowerCase();
+    const content = JSON.stringify(
+      {
+        kind: "swatch",
+        version: 1,
+        name,
+        value: hex,
+        source: "screen",
+        savedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    );
+    // No active project (or the write failed): the hex is still on the
+    // clipboard, and with no window there's nowhere to report it.
+    try {
+      await invoke("save_artifact", { kind: "swatch", name, content });
+    } catch {}
+    return true;
+  }
+
+  // Keep the loupe up: every click samples another color, and Esc is what ends
+  // the run — and with it this window.
+  if (hasTauri) {
+    while (await sampleOnce()) {
+      // The loupe closes after each pick; reopen it for the next one.
+    }
+  }
+  closeWin();
+</script>
+</body>
+</html>

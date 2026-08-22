@@ -18,5 +18,6 @@
   { "file": "modes.html", "name": "Modes" },
   { "file": "tasks.html", "name": "Tasks" },
   { "file": "mycelium.html", "name": "Mycelium" },
-  { "file": "trees.html", "name": "Trees" }
+  { "file": "trees.html", "name": "Trees" },
+  { "file": "color-picker.html", "name": "Color Picker" }
 ]

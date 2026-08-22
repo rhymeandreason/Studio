@@ -57,6 +57,25 @@ refined-luxury…), the type personality, and the color temperature. Avoid defau
 SaaS/AI looks. Briefly note the intent behind each.
 
 
+### swatch — one color, sampled from the screen
+- **Path:** `artifacts/swatch/<hex-without-#>.json`
+
+```json
+{
+  "kind": "swatch",
+  "version": 1,
+  "name": "a85a4a",
+  "value": "#a85a4a",
+  "source": "screen",
+  "savedAt": "2026-08-22T18:00:00Z"
+}
+```
+
+Rules: `value` is `#rrggbb` lowercase; `name` is the hex without `#` (matching
+the filename); `source` is `"screen"` for eyedropper picks, or a short note on
+where the color came from. Written by the **Color Picker** tool — a set of these
+is a good starting pool for a brand-kit palette.
+
 ### presentation — a slide deck
 - **Path:** `artifacts/presentation/<slug>.json`
 

@@ -304,7 +304,9 @@ function artifactCard(item) {
           ? themePreview(data)
           : item.kind === "diagram"
             ? diagramPreview(data)
-            : el("div", "artifact__preview"),
+            : item.kind === "swatch"
+              ? swatchPreview(data)
+              : el("div", "artifact__preview"),
   );
 
   const open = () => {
@@ -391,6 +393,29 @@ export function brandKitPreview(data) {
   }
   wrap.appendChild(sw);
   return wrap;
+}
+
+// --- Swatch preview: the color, edge to edge, with its hex ----------------
+export function swatchPreview(data) {
+  const wrap = el("div", "artifact__preview");
+  wrap.style.background = data.value || "#ccc";
+  wrap.style.display = "flex";
+  wrap.style.alignItems = "center";
+  wrap.style.justifyContent = "center";
+  const hex = el("div", "artifact__type-b", { textContent: data.value || "" });
+  hex.style.color = readableOn(data.value || "#ccc");
+  hex.style.fontFamily = "var(--font-mono, monospace)";
+  wrap.appendChild(hex);
+  return wrap;
+}
+
+// Black or white, whichever reads on the given hex (sRGB luminance).
+function readableOn(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return "#000";
+  const n = parseInt(m[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#000" : "#fff";
 }
 
 // Derive a slide's {bg, text, muted} from the theme palette + color scheme.

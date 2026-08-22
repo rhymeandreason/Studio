@@ -56,6 +56,11 @@ the icon name renders as plain text. For the "on" state of a toggle icon, add
 
 [`kit-gallery.html`](../src/tools/kit-gallery.html) (Tools → Design System) is the living reference. 
 
+**Headless tools.** A tool that has no UI of its own (the Color Picker — it *is*
+macOS's sampler loupe) is listed in `tool_is_headless()` in `lib.rs`: its window
+is built with `visible(false)`, so the page skips the window chrome entirely,
+does its work, and closes itself. Re-launching while one is running is a no-op.
+
 ## How it works
 
 - Drop a self-contained `.html` file into [`src/tools/`](../src/tools)
