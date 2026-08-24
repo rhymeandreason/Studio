@@ -278,12 +278,17 @@
 
     let phase = 0;
     let amp = 0;          // eased 0..1 so the trace grows in / flattens out
+    let frameSkip = false; // throttle to ~30fps — a sine wave doesn't need 60
+    let rafId = null;
     function draw() {
+      rafId = requestAnimationFrame(draw);
+      frameSkip = !frameSkip;
+      if (frameSkip) return;
       const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
       const target = running ? 1 : 0;
-      amp += (target - amp) * 0.08;
-      phase += 0.04;
+      amp += (target - amp) * 0.16;
+      phase += 0.08;
 
       const dpr = window.devicePixelRatio || 1;
       const mid = h / 2;
@@ -300,15 +305,26 @@
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
       ctx.stroke();
-      requestAnimationFrame(draw);
     }
-    draw();
 
     // ---- Wiring ----
-    if (hasTauri) {
-      listen("project-activated", loadProject);
-      setInterval(poll, 2000);
+    let pollId = null;
+    function startLoops() {
+      if (rafId == null) draw();
+      if (pollId == null) pollId = setInterval(poll, 2000);
     }
+    function stopLoops() {
+      if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; }
+      if (pollId != null) { clearInterval(pollId); pollId = null; }
+    }
+    // Pause both loops while the window is hidden/occluded — no point polling
+    // the port or animating a scope no one can see.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) stopLoops();
+      else { poll(); startLoops(); }
+    });
+    if (hasTauri) listen("project-activated", loadProject);
+    startLoops();
     loadProject();
   </script>
 </body>
