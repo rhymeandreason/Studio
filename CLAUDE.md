@@ -70,6 +70,10 @@ dev:watch` restores Tauri's stock reload-everything watcher.
 - **Video editor** (multi-clip edits as `videos/*.json`, text-animation +
   shader-background registries in `src/video/`, native export) —
   [docs/video.md](docs/video.md)
+- **Instagram Saved** (pulls the signed-in account's saved posts + collections
+  via a native login webview's cookies; cached thumbnail grid, save-to-project) —
+  `src-tauri/src/instagram.rs` + `src/tools/instagram-saved.html`.
+  [docs/instagram.md](docs/instagram.md)
 - **Interaction model** (shared selection + keyboard) — `selection.js` /
   `keymap.js`. [docs/interaction-spec.md](docs/interaction-spec.md)
 
@@ -105,6 +109,12 @@ dev:watch` restores Tauri's stock reload-everything watcher.
 - The human tests each step in the running app before committing. `cargo check`
   in `src-tauri/` after Rust edits.
 - **Read docs/tools.md before making any tools.**
+- **Which layer:** Rust only for what needs the OS — windows, tray, dock,
+  filesystem, Swift helpers, subprocesses, cookies. Network calls, parsing,
+  paging, data shaping go in the tool's page (or a sidecar). Studio is the
+  author's all-day tool; a Rust change means a restart that takes notes and
+  calendar down, a page change is a reload. When Rust must be involved, make
+  it a dumb generic proxy (`instagram_fetch` is the model), not the logic.
 - When building new features, consider how the code can be modular and reusuable.
 - Prefer native macOS frameworks. Project structure is convention, not enforced —
   tolerate missing subfolders.

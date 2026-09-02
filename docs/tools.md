@@ -491,3 +491,13 @@ const [x, y, w, h] = parts.slice(-4).map(Number);
 ```
 
 
+
+## WKWebView gotcha: CSS grid rows collapse under aspect-ratio tiles
+
+Studio's WKWebView sized `grid-template-rows: auto` rows to ~18px for cards
+whose height came from `aspect-ratio`, a percentage `padding-top`, or an
+in-flow image with `aspect-ratio` — every card overlapped the next as a
+"stacked sliver". Safari on the same machine laid the identical page out
+fine, so don't trust a browser check for this. Instagram Saved's grid uses
+flex-wrap with pixel-sized tiles (`--tile` set by a ResizeObserver) instead;
+copy that pattern for any thumbnail grid.

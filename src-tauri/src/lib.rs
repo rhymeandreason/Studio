@@ -1,6 +1,7 @@
 mod dock;
 mod files;
 mod git;
+mod instagram;
 mod patchmatch;
 
 use dock::{
@@ -646,6 +647,7 @@ fn tool_style(filename: &str) -> ToolStyle {
         "server.html" => s(240.0, 440.0, Tint::Project),
         "daily-briefing.html" => s(1080.0, 760.0, Tint::Paper),
         "mycelium.html" => s(1100.0, 760.0, Tint::Paper),
+        "instagram-saved.html" => s(1000.0, 720.0, Tint::Paper),
         _ => s(900.0, 640.0, Tint::Paper),
     }
 }
@@ -3475,6 +3477,12 @@ fn store_spec(name: &str) -> Option<(StoreDir, &'static str, &'static str)> {
             "mycelium.json",
             r#"{ "version": 1, "trees": [], "people": [] }"#,
         ),
+        // Instagram Saved — the pulled saved-posts library (see instagram.rs).
+        "instagram-saved" => (
+            StoreDir::Config,
+            "instagram-saved.json",
+            r#"{ "version": 1, "pulled_at": null, "username": "", "items": [], "collections": [] }"#,
+        ),
         // Tasks settings (origin address, travel mode, buffer).
         "tasks-config" => (StoreDir::Config, "tasks-config.json", "{}"),
         // Studio-native note clipboard sidecar (interaction-spec §7.3):
@@ -6021,6 +6029,12 @@ pub fn run() {
             save_media_meta,
             contacts_dump,
             read_store,
+            instagram::instagram_open_login,
+            instagram::instagram_close_login,
+            instagram::instagram_session,
+            instagram::instagram_fetch,
+            instagram::instagram_download,
+            instagram::instagram_cache_dir,
             save_store,
             read_schedules,
             save_schedules,
