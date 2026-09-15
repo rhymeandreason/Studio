@@ -42,7 +42,7 @@ pub struct GitStatus {
 }
 
 /// Read branch, changed files, and the last commit for a repo.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_status(repo: String) -> Result<GitStatus, String> {
     let out = Command::new("git")
         .args(["-C", &repo, "status", "--porcelain=v1", "-b"])
@@ -122,7 +122,7 @@ pub fn git_status(repo: String) -> Result<GitStatus, String> {
 
 /// List the files changed in a single commit (status + path), for expanding the
 /// previous-commit row in the Git window.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_commit_files(repo: String, hash: String) -> Result<Vec<GitFile>, String> {
     let out = Command::new("git")
         .args(["-C", &repo, "show", "--name-status", "--format=", &hash])
@@ -156,7 +156,7 @@ pub fn git_commit_files(repo: String, hash: String) -> Result<Vec<GitFile>, Stri
 /// file's own directory (the file may live outside any Studio project). Returns
 /// the raw diff text; errors (not a repo, etc.) are surfaced so the editor can
 /// fall back to showing no diff. Used by the Code Editor tool.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_diff_file(path: String) -> Result<String, String> {
     let p = PathBuf::from(&path);
     let dir = p.parent().ok_or("file has no parent directory")?;
@@ -177,7 +177,7 @@ pub fn git_diff_file(path: String) -> Result<String, String> {
 /// (`HEAD~1..HEAD`), as opposed to uncommitted working-tree changes. Repo is
 /// derived from the file's own directory. Used by the Code Editor's "Last
 /// commit" diff mode.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_diff_file_committed(path: String) -> Result<String, String> {
     let p = PathBuf::from(&path);
     let dir = p.parent().ok_or("file has no parent directory")?;
@@ -372,7 +372,7 @@ where
 }
 
 /// Un-commit the last commit, keeping its changes staged (soft reset).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_undo(repo: String) -> Result<(), String> {
     let out = Command::new("git")
         .args(["-C", &repo, "reset", "--soft", "HEAD~1"])
@@ -435,7 +435,7 @@ fn git_push_blocking(repo: String) -> Result<(), String> {
 
 /// Last 7 days of commits across all branches, one US-separated record per
 /// line, for the Git Pulse tool.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_log_week(repo: String) -> Result<String, String> {
     let out = Command::new("git")
         .args([
@@ -503,7 +503,7 @@ pub struct HistCommit {
 /// A page of commit history. `rev` is what to log (a branch name, or empty for
 /// `HEAD`) — while time travelling, HEAD is detached in the past, so the tool
 /// passes the original branch to keep showing the full timeline.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_history(
     repo: String,
     rev: Option<String>,
@@ -546,7 +546,7 @@ pub fn git_history(
 }
 
 /// Unified diff of one file as changed by one commit, for the expanded row.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_commit_file_diff(repo: String, hash: String, path: String) -> Result<String, String> {
     git(
         &repo,
@@ -611,7 +611,7 @@ fn write_store(app: &AppHandle, store: &HistStore) {
 }
 
 /// Bookmarked commits for a repo (most recently added last).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_bookmarks(app: AppHandle, repo: String) -> Vec<Bookmark> {
     read_store(&app)
         .repos
@@ -621,7 +621,7 @@ pub fn git_bookmarks(app: AppHandle, repo: String) -> Vec<Bookmark> {
 }
 
 /// Star / unstar a commit. Returns the repo's new bookmark list.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_toggle_bookmark(
     app: AppHandle,
     repo: String,
@@ -660,7 +660,7 @@ pub struct HeadState {
     dirty: bool,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_head_state(app: AppHandle, repo: String) -> Result<HeadState, String> {
     let hash = git(&repo, &["rev-parse", "HEAD"])?.trim().to_string();
     let short = hash.chars().take(7).collect();
@@ -712,7 +712,7 @@ fn assert_no_op_in_progress(repo: &str) -> Result<(), String> {
 /// Temporarily check out an older commit (detached HEAD), stashing any dirty
 /// work first so the checkout can't fail or lose changes. Remembers the branch
 /// (and whether it stashed) so `git_time_return` can put everything back.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_time_travel(app: AppHandle, repo: String, hash: String) -> Result<(), String> {
     assert_no_op_in_progress(&repo)?;
 
@@ -755,7 +755,7 @@ pub fn git_time_travel(app: AppHandle, repo: String, hash: String) -> Result<(),
 
 /// Come back to the present: check the remembered branch out again and pop the
 /// stash we took on the way out.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_time_return(app: AppHandle, repo: String) -> Result<(), String> {
     assert_no_op_in_progress(&repo)?;
     let mut store = read_store(&app);
