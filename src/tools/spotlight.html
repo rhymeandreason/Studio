@@ -29,8 +29,8 @@
     position: fixed;
     top: 50%;
     left: 50%;
-    width: 620px;
-    height: 540px;
+    width: min(620px, 96vw);
+    height: min(540px, 117vh);
     transform: translate(-50%, -50%);
     background: #0047ab;
     clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
@@ -46,7 +46,7 @@
     align-items: center;
     gap: 6px;
     -webkit-app-region: no-drag;
-    max-height: 460px;
+    max-height: min(460px, 86vh);
     overflow-y: auto;
   }
 

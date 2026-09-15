@@ -29,8 +29,8 @@
     position: fixed;
     top: 50%;
     left: 50%;
-    width: 500px;
-    height: 500px;
+    width: min(500px, 72vh, 72vw);
+    height: min(500px, 72vh, 72vw);
     transform: translate(-50%, -50%);
     border-radius: 50%;
     background: black;
@@ -148,9 +148,8 @@ position: absolute;
 
     const listEl = document.getElementById('list');
 
-    // Drive window size from JS so it can be tuned with a reload (no restart).
-    const { LogicalSize } = window.__TAURI__.dpi;
-    win.setSize(new LogicalSize(960, 690)).then(() => win.center()).catch(() => {});
+    // Window size + centering are owned by Rust (`place_overlay`), which clamps
+    // the card to the work area of whichever display the cursor is on.
 
     // mode === 'mode' picks a Mode for the active project; mode === 'project'
     // picks a project to activate first (shown when none is active).

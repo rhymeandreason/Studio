@@ -507,6 +507,38 @@ fn list_tools(app: AppHandle) -> Vec<SpotlightTool> {
         .collect()
 }
 
+/// Nominal logical sizes of the two overlay launchers, clamped per-display by
+/// `place_overlay`.
+const SPOTLIGHT_SIZE: (f64, f64) = (640.0, 460.0);
+const MODE_SWITCHER_SIZE: (f64, f64) = (960.0, 690.0);
+
+/// Size + center one of the transparent overlay launchers (Spotlight, Mode
+/// switcher) on the display the cursor is on, clamping the card to that
+/// display's work area so it still fits on a small laptop screen. Called on
+/// every show, not just at build, so moving between displays re-places it.
+fn place_overlay(app: &AppHandle, win: &tauri::WebviewWindow, w: f64, h: f64) {
+    let monitor = app
+        .cursor_position()
+        .ok()
+        .and_then(|p| app.monitor_from_point(p.x, p.y).ok().flatten())
+        .or_else(|| win.current_monitor().ok().flatten())
+        .or_else(|| app.primary_monitor().ok().flatten());
+    let Some(monitor) = monitor else { return };
+
+    let scale = monitor.scale_factor();
+    let area = monitor.work_area();
+    // Logical work area, minus a small breathing margin at the edges.
+    let avail_w = (area.size.width as f64 / scale) - 48.0;
+    let avail_h = (area.size.height as f64 / scale) - 48.0;
+    let w = w.min(avail_w.max(320.0));
+    let h = h.min(avail_h.max(240.0));
+
+    let _ = win.set_size(tauri::LogicalSize::new(w, h));
+    let x = area.position.x as f64 + (area.size.width as f64 - w * scale) / 2.0;
+    let y = area.position.y as f64 + (area.size.height as f64 - h * scale) / 2.0;
+    let _ = win.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
+}
+
 /// Show/hide the Spotlight-style quick launcher (Option+Space). Built once,
 /// then just shown/hidden/focused — transparent + undecorated + always-on-top,
 /// centered on screen, with a fixed size; the page itself stays visually
@@ -516,6 +548,7 @@ fn toggle_spotlight_window(app: &AppHandle) {
         if win.is_visible().unwrap_or(false) {
             let _ = win.hide();
         } else {
+            place_overlay(app, &win, SPOTLIGHT_SIZE.0, SPOTLIGHT_SIZE.1);
             let _ = win.show();
             let _ = win.set_focus();
             let _ = win.emit("spotlight-shown", ());
@@ -525,7 +558,7 @@ fn toggle_spotlight_window(app: &AppHandle) {
 
     let url = WebviewUrl::App("tools/spotlight.html".into());
     if let Ok(win) = WebviewWindowBuilder::new(app, "spotlight", url)
-        .inner_size(640.0, 460.0)
+        .inner_size(SPOTLIGHT_SIZE.0, SPOTLIGHT_SIZE.1)
         .resizable(false)
         .decorations(false)
         .transparent(true)
@@ -536,6 +569,7 @@ fn toggle_spotlight_window(app: &AppHandle) {
         .visible(false)
         .build()
     {
+        place_overlay(app, &win, SPOTLIGHT_SIZE.0, SPOTLIGHT_SIZE.1);
         let _ = win.show();
         let _ = win.set_focus();
     }
@@ -549,6 +583,7 @@ fn toggle_mode_switcher_window(app: &AppHandle) {
         if win.is_visible().unwrap_or(false) {
             let _ = win.hide();
         } else {
+            place_overlay(app, &win, MODE_SWITCHER_SIZE.0, MODE_SWITCHER_SIZE.1);
             let _ = win.show();
             let _ = win.set_focus();
             let _ = win.emit("mode-switcher-shown", ());
@@ -558,7 +593,7 @@ fn toggle_mode_switcher_window(app: &AppHandle) {
 
     let url = WebviewUrl::App("tools/mode-switcher.html".into());
     if let Ok(win) = WebviewWindowBuilder::new(app, "mode-switcher", url)
-        .inner_size(960.0, 690.0)
+        .inner_size(MODE_SWITCHER_SIZE.0, MODE_SWITCHER_SIZE.1)
         .resizable(false)
         .decorations(false)
         .transparent(true)
@@ -569,6 +604,7 @@ fn toggle_mode_switcher_window(app: &AppHandle) {
         .visible(false)
         .build()
     {
+        place_overlay(app, &win, MODE_SWITCHER_SIZE.0, MODE_SWITCHER_SIZE.1);
         let _ = win.show();
         let _ = win.set_focus();
     }
@@ -2614,7 +2650,7 @@ struct RepoScripts {
 /// `dev-stop.sh` exist at the repo root, the card surfaces matching buttons
 /// without any per-project Studio config — drop the script in, the button
 /// appears.
-#[tauri::command]
+#[tauri::command(async)]
 fn repo_scripts(repo: String) -> RepoScripts {
     let root = Path::new(repo.trim());
     let check = |name: &str| -> Option<String> {
@@ -2661,7 +2697,7 @@ fn extract_port(script: &str) -> Option<u16> {
 /// The dev URL inferred from the repo's `dev-open.sh` — the port it launches on,
 /// as `http://localhost:<port>`. Returns None if there's no script or no port
 /// can be found (the Server tool then falls back to a saved/default URL).
-#[tauri::command]
+#[tauri::command(async)]
 fn repo_dev_url(repo: String) -> Option<String> {
     let script = std::fs::read_to_string(Path::new(repo.trim()).join("dev-open.sh")).ok()?;
     extract_port(&script).map(|port| format!("http://localhost:{port}"))
@@ -2765,7 +2801,7 @@ fn parse_host_port(url: &str) -> Option<(String, u16)> {
 /// TCP connect (short timeout) — cheap, and true regardless of whether the
 /// server speaks HTTP yet, or who started it (so it stays accurate across
 /// Studio restarts and project switches). Drives the Server tool's waveform.
-#[tauri::command]
+#[tauri::command(async)]
 fn server_status(url: String) -> bool {
     use std::net::ToSocketAddrs;
     let Some((host, port)) = parse_host_port(&url) else {
@@ -2784,7 +2820,7 @@ fn server_status(url: String) -> bool {
 /// that `dev-open.sh` wrote to `<repo>/.dev.pid` (removed by `dev-stop.sh`) and
 /// tests it with `kill -0`. Per-project and unambiguous — unlike a `pgrep`
 /// pattern, which can't tell two `tauri dev` sessions apart.
-#[tauri::command]
+#[tauri::command(async)]
 fn dev_pid_alive(repo: String) -> bool {
     let pidfile = Path::new(repo.trim()).join(".dev.pid");
     let Ok(txt) = std::fs::read_to_string(&pidfile) else {
