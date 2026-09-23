@@ -681,6 +681,80 @@ async function qlSrc(item) {
   }
 }
 
+// Load a tile's thumbnail: edited images get their baked thumb (falling back
+// to QuickLook), everything else QuickLook.
+async function loadThumb(item, img) {
+  if (item.kind === "image" && item.has_edits) {
+    try {
+      img.src = await ensureEditedThumb(item);
+      return;
+    } catch (err) {
+      console.error("Thumbnail render failed:", err);
+    }
+  }
+  const src = await qlSrc(item);
+  if (src) img.src = src;
+}
+
+// Thumbnails load only as tiles come near the viewport, a few at a time, in
+// the order they appear. An uncached QuickLook thumb costs ~0.5–1.5s, so a
+// project with hundreds of files used to fire them all at once on every
+// load; now scrolling (or opening the tab) pulls in just what's on screen.
+// A hidden panel reports nothing as visible, so nothing loads in the
+// background either.
+const THUMB_CONCURRENCY = 4;
+const thumbQueue = [];
+let thumbActive = 0;
+let thumbObserver = null;
+
+function pumpThumbs() {
+  while (thumbActive < THUMB_CONCURRENCY && thumbQueue.length) {
+    const { tile, load } = thumbQueue.shift();
+    if (!tile.isConnected) continue; // removed before its turn came
+    thumbActive++;
+    load()
+      .catch((err) => console.error("thumb:", err))
+      .finally(() => {
+        thumbActive--;
+        pumpThumbs();
+      });
+  }
+}
+
+// The nearest scrolling ancestor, so the observer's margin preloads a screen
+// ahead inside it (a margin on the implicit viewport root wouldn't reach
+// through the scroller's clip).
+function scrollParent(node) {
+  for (let p = node.parentElement; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if (o === "auto" || o === "scroll") return p;
+  }
+  return null;
+}
+
+// Queue `load` for when `tile` is (nearly) on screen. Calling again replaces
+// a load that hasn't started yet.
+function thumbWhenVisible(tile, load) {
+  if (!thumbObserver) {
+    const grid = document.getElementById("media-grid");
+    thumbObserver = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          thumbObserver.unobserve(e.target);
+          const load = e.target._loadThumb;
+          e.target._loadThumb = null;
+          if (load) thumbQueue.push({ tile: e.target, load });
+        }
+        pumpThumbs();
+      },
+      { root: scrollParent(grid), rootMargin: "600px 0px" },
+    );
+  }
+  tile._loadThumb = load;
+  thumbObserver.observe(tile);
+}
+
 const KIND_ICONS = {
   video: "play_circle",
   audio: "music_note",
@@ -740,9 +814,8 @@ function startRename(tile, nameEl, item) {
   input.addEventListener("click", (e) => e.stopPropagation());
 }
 
-// Build a media tile (queues its thumbnail load). `edited` collects edited
-// images to bake after the grid is laid out.
-function buildMediaTile(item, edited) {
+// Build a media tile (queues its thumbnail load for when it's on screen).
+function buildMediaTile(item) {
   const isImage = item.kind === "image";
   const tile = el("button", "mediatile", { type: "button", title: item.name });
   tile.dataset.path = item.path;
@@ -816,14 +889,9 @@ function buildMediaTile(item, edited) {
     else invoke("open_path", { path: item.path });
   });
 
-  if (isImage && item.has_edits) {
-    if (thumbCache.has(item.path)) img.src = thumbCache.get(item.path);
-    else edited.push({ item, img });
-  } else {
-    qlSrc(item).then((src) => {
-      if (src) img.src = src;
-    });
-  }
+  if (isImage && item.has_edits && thumbCache.has(item.path))
+    img.src = thumbCache.get(item.path);
+  else thumbWhenVisible(tile, () => loadThumb(item, img));
   return tile;
 }
 
@@ -867,8 +935,19 @@ async function ensureEditedThumb(item) {
   }
 }
 
+// Set when a reload was skipped because the Media tab wasn't showing.
+let mediaStale = false;
+
 async function loadMedia(path) {
   mediaProjectPath = path;
+  // Only list while the tab is on screen. fs-changed fires for any write under
+  // ~/Projects (a notes save, an editor's autosave), and each reload walks the
+  // whole project; a hidden tab just remembers to reload when it's shown.
+  if (document.querySelector('.panel[data-panel="media"]')?.hidden) {
+    mediaStale = true;
+    return;
+  }
+  mediaStale = false;
   const grid = document.getElementById("media-grid");
   await loadMediaMeta(path);
   const [items] = await Promise.all([
@@ -910,7 +989,6 @@ async function loadMedia(path) {
     .querySelectorAll(".mediatile")
     .forEach((t) => existing.set(t.dataset.path, t));
 
-  const edited = [];
   const desired = [];
   for (const item of items) {
     const sig = `${item.modified}|${item.edits_mtime}`;
@@ -927,21 +1005,16 @@ async function loadMedia(path) {
       reuse.dataset.sig = sig;
       reuse.classList.toggle("is-selected", mediaSelection.has(item.path));
       const img = reuse.querySelector(".mediatile__img");
-      if (item.has_edits) {
-        if (thumbCache.has(item.path)) img.src = thumbCache.get(item.path);
-        else edited.push({ item, img }); // keeps current src until baked
-      } else {
-        qlSrc(item).then((src) => {
-          if (src) img.src = src;
-        });
-      }
+      // The old (or optimistic) image stays up until the new one is ready.
+      if (item.has_edits && thumbCache.has(item.path)) img.src = thumbCache.get(item.path);
+      else thumbWhenVisible(reuse, () => loadThumb(item, img));
       desired.push(reuse);
     } else {
       if (reuse) {
         existing.delete(item.path);
         reuse.remove(); // signature changed — drop the stale tile (don't leave a duplicate)
       }
-      desired.push(buildMediaTile(item, edited));
+      desired.push(buildMediaTile(item));
     }
   }
 
@@ -952,17 +1025,11 @@ async function loadMedia(path) {
     if (grid.children[i] !== tile)
       grid.insertBefore(tile, grid.children[i] || null);
   });
+}
 
-  for (const { item, img } of edited) {
-    try {
-      img.src = await ensureEditedThumb(item);
-    } catch (err) {
-      console.error("Thumbnail render failed:", err);
-      qlSrc(item).then((src) => {
-        if (src) img.src = src;
-      });
-    }
-  }
+// Called when the Media tab is shown: catch up on a reload skipped while hidden.
+function loadMediaIfStale() {
+  if (mediaStale && mediaProjectPath) loadMedia(mediaProjectPath);
 }
 
 // The inline-selected image (its edit controls live in the right side column).
@@ -1430,6 +1497,7 @@ function initMedia() {
 
 export {
   loadMedia,
+  loadMediaIfStale,
   initMedia,
   initDragDrop,
   mediaSelection,

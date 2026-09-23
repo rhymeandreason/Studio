@@ -55,6 +55,14 @@ shader**; thumbnails for edited images are baked + disk-cached
 FSEvents (`notify`) emits `fs-changed`; the grid **reconciles** on this event
 — don't rebuild it from scratch, that previously caused duplicated tiles.
 
+**Big projects (hundreds of files):** `list_media` walks the whole project
+folder, not just `media/`, and an uncached QuickLook thumb costs ~0.5–1.5s. So:
+the media commands are `#[tauri::command(async)]` (sync = main thread = every
+window freezes); `loadMedia` skips while the Media tab is hidden and
+`loadMediaIfStale()` catches up when `selectTab("media")` shows it; and tile
+thumbnails load via `thumbWhenVisible` — an IntersectionObserver on the
+scrolling ancestor (600px lookahead) feeding a 4-wide queue — never all at once.
+
 ## Editor sidebar
 
 Toolbar toggle (tune icon), off by default. `editorSidebarEnabled` is mirrored

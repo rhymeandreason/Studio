@@ -15,6 +15,7 @@ import { brandIconFor } from "./brand-icons.js";
 import { openContextMenu } from "./kit/context-menu.js";
 import {
   loadMedia,
+  loadMediaIfStale,
   initMedia,
   initDragDrop,
   mediaSelection,
@@ -576,6 +577,8 @@ export function selectTab(name) {
     const frame = document.getElementById("plan-frame");
     if (frame && !frame.src) frame.src = "tools/plan.html";
   }
+
+  if (name === "media") loadMediaIfStale();
 
   if (name === "artifacts") renderArtifacts();
   else clearArtifactsSelection();

@@ -2144,7 +2144,7 @@ struct VideoEdit {
 }
 
 /// List a project's video edits (newest first).
-#[tauri::command]
+#[tauri::command(async)]
 fn list_videos(path: String) -> Vec<VideoEdit> {
     let dir = videos_dir(&path);
     let mut out = Vec::new();
@@ -2182,7 +2182,7 @@ fn list_videos(path: String) -> Vec<VideoEdit> {
 
 /// Read one edit's JSON (`file` is a basename under `videos/`). Errors if
 /// missing — callers list/create first.
-#[tauri::command]
+#[tauri::command(async)]
 fn read_video(path: String, file: String) -> Result<serde_json::Value, String> {
     let p = videos_dir(&path).join(&file);
     let text = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
@@ -2416,7 +2416,7 @@ fn walk_media(dir: &Path, out: &mut Vec<MediaItem>) {
 }
 
 /// List every image in a project, newest first.
-#[tauri::command]
+#[tauri::command(async)]
 fn list_media(path: String) -> Vec<MediaItem> {
     let mut out = Vec::new();
     walk_media(Path::new(&path), &mut out);
@@ -2426,7 +2426,9 @@ fn list_media(path: String) -> Vec<MediaItem> {
 
 /// Generate a QuickLook thumbnail (any file type) into the app cache, returning
 /// the cached PNG path (asset-resolved by the frontend). Cached by path+mtime+size.
-#[tauri::command]
+/// Async, like the other media commands: a cache miss runs `qlthumb` for
+/// ~0.5–1.5s, and on the main thread that froze every window per thumbnail.
+#[tauri::command(async)]
 fn quicklook_thumb(app: AppHandle, path: String, size: u32) -> Result<String, String> {
     quicklook_thumb_impl(&app, &path, size)
 }
@@ -2537,7 +2539,7 @@ fn edited_thumb_file(app: &AppHandle, path: &str, edits_mtime: u64) -> Result<Pa
 }
 
 /// Return the cached baked-thumbnail path for an edited image, if present.
-#[tauri::command]
+#[tauri::command(async)]
 fn edited_thumb(app: AppHandle, path: String, edits_mtime: u64) -> Option<String> {
     edited_thumb_file(&app, &path, edits_mtime)
         .ok()
@@ -2546,7 +2548,7 @@ fn edited_thumb(app: AppHandle, path: String, edits_mtime: u64) -> Option<String
 }
 
 /// Persist a baked thumbnail (base64 PNG) for an edited image; return its path.
-#[tauri::command]
+#[tauri::command(async)]
 fn save_edited_thumb(
     app: AppHandle,
     path: String,
@@ -3298,7 +3300,7 @@ fn open_in_photos(path: String) -> Result<(), String> {
 
 /// Convert a HEIC to a cached JPEG (in the app cache dir) so the webview can
 /// display it. Returns the cached file path; the frontend asset-resolves it.
-#[tauri::command]
+#[tauri::command(async)]
 fn heic_preview(app: AppHandle, path: String) -> Result<String, String> {
 
     let src = PathBuf::from(&path);
@@ -3681,7 +3683,7 @@ fn save_schedules(app: AppHandle, data: String) -> Result<(), String> {
 
 /// Per-project media view metadata (sort mode + manual order). Stored hidden so
 /// it's skipped by walk_media and doesn't show in the Media grid.
-#[tauri::command]
+#[tauri::command(async)]
 fn read_media_meta(path: String) -> Result<String, String> {
     let f = PathBuf::from(&path).join(".studio-media.json");
     Ok(std::fs::read_to_string(f).unwrap_or_default())
@@ -3710,7 +3712,7 @@ fn mime_for(ext: &str) -> &'static str {
 /// Read an image as a `data:` URL for the editor canvas. HEIC is converted to
 /// JPEG first. Loading via data URL (rather than the asset protocol) keeps the
 /// canvas untainted so it can be exported with toBlob.
-#[tauri::command]
+#[tauri::command(async)]
 fn read_image_data(app: AppHandle, path: String) -> Result<String, String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
 
@@ -3748,7 +3750,7 @@ fn sidecar_path(image_path: &str) -> String {
 }
 
 /// Read an image's edit sidecar (`.<image>.studio.json`); empty object if none.
-#[tauri::command]
+#[tauri::command(async)]
 fn read_edits(path: String) -> Result<serde_json::Value, String> {
     let sidecar = sidecar_path(&path);
     match std::fs::read_to_string(&sidecar) {
