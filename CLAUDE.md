@@ -100,6 +100,10 @@ dev:watch` restores Tauri's stock reload-everything watcher.
 - **Dev inspector:** Cmd+Option+Click any element → its CSS rule in Zed.
   [docs/devinspect.md](docs/devinspect.md)
 - Saves are debounced (`scheduleNotesSave()` / `scheduleWorkspaceSave()` / …).
+- **`fs-changed`** (recursive `~/Projects` watcher, lib.rs `start_watching`)
+  fans out to many windows. Studio's own frequent saves write via `write_own()`
+  so the watcher drops their echo — use it for any new autosave; the tray only
+  rebuilds for top-level or `workspace.json` changes.
 - **`TrayItems.json`** (repo root) overrides the tray icon order/icons defined
   in `tool_style`/`tray_item_order` in `lib.rs` — if it exists it *replaces*
   the code default wholesale, so adding a new tray icon in Rust also requires

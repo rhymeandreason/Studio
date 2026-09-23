@@ -1434,6 +1434,33 @@ fn refresh_tray(app: &AppHandle, active: Option<&str>) {
     }
 }
 
+/// Files Studio itself just wrote, with when. The ~/Projects watcher drops
+/// events for these so an autosave doesn't echo back as `fs-changed` — typing
+/// in Notes saved notes.json every pause, and each save rebuilt the tray and
+/// sent every window (media grid, File Directory, Claude, Modes…) off to
+/// re-read. Only Studio's own high-frequency saves go through here; an
+/// outside edit to the same file (Claude, an editor) still gets through.
+static OWN_WRITES: OnceLock<Mutex<HashMap<PathBuf, std::time::Instant>>> = OnceLock::new();
+/// Longer than the watcher's 400ms debounce plus FSEvents latency.
+const OWN_WRITE_WINDOW: Duration = Duration::from_secs(2);
+
+fn write_own(file: &Path, contents: impl AsRef<[u8]>) -> Result<(), String> {
+    OWN_WRITES
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .insert(file.to_path_buf(), std::time::Instant::now());
+    std::fs::write(file, contents).map_err(|e| e.to_string())
+}
+
+/// True when `path` was written by `write_own` within the window.
+fn is_own_write(path: &Path) -> bool {
+    let Some(map) = OWN_WRITES.get() else { return false };
+    let mut map = map.lock().unwrap();
+    map.retain(|_, t| t.elapsed() < OWN_WRITE_WINDOW);
+    map.contains_key(path)
+}
+
 // Kept alive for the app's lifetime so file watching keeps running.
 type Watcher = notify_debouncer_mini::Debouncer<notify_debouncer_mini::notify::RecommendedWatcher>;
 static WATCHER: OnceLock<Mutex<Option<Watcher>>> = OnceLock::new();
@@ -1448,6 +1475,7 @@ fn start_watching(app: &AppHandle) {
     };
     let _ = std::fs::create_dir_all(&root);
     let handle = app.clone();
+    let root_for_events = root.clone();
 
     let debouncer = new_debouncer(
         Duration::from_millis(400),
@@ -1455,16 +1483,29 @@ fn start_watching(app: &AppHandle) {
             let Ok(events) = res else {
                 return;
             };
-            let relevant = events.iter().any(|e| {
-                let p = e.path.to_string_lossy();
-                !p.contains("/node_modules/") && !p.contains("/.git/")
-            });
-            if !relevant {
+            let relevant: Vec<&Path> = events
+                .iter()
+                .map(|e| e.path.as_path())
+                .filter(|p| {
+                    let s = p.to_string_lossy();
+                    !s.contains("/node_modules/") && !s.contains("/.git/") && !is_own_write(p)
+                })
+                .collect();
+            if relevant.is_empty() {
                 return;
             }
-            // Project list may have changed — rebuild the tray, keep active.
-            let active = handle.state::<AppState>().active.lock().unwrap().clone();
-            refresh_tray(&handle, active.as_ref().map(|p| p.path.as_str()));
+            // The tray lists projects (top-level folders) with each one's
+            // workspace.json name/color/sprite — rebuild it only when one of
+            // those could have changed, not for every file inside a project.
+            let affects_tray = relevant.iter().any(|p| {
+                p.parent() == Some(root_for_events.as_path())
+                    || p == &root_for_events.as_path()
+                    || p.file_name().is_some_and(|n| n == "workspace.json")
+            });
+            if affects_tray {
+                let active = handle.state::<AppState>().active.lock().unwrap().clone();
+                refresh_tray(&handle, active.as_ref().map(|p| p.path.as_str()));
+            }
             let _ = handle.emit("fs-changed", ());
         },
     );
@@ -3692,7 +3733,7 @@ fn read_media_meta(path: String) -> Result<String, String> {
 #[tauri::command]
 fn save_media_meta(path: String, data: String) -> Result<(), String> {
     let f = PathBuf::from(&path).join(".studio-media.json");
-    std::fs::write(f, data).map_err(|e| e.to_string())
+    write_own(&f, data)
 }
 
 /// MIME type for an image extension (used for data URLs).
@@ -3876,7 +3917,7 @@ async fn finish_drag_out(paths: Vec<String>) -> Result<DragOutResult, String> {
 fn save_edits(path: String, edits: serde_json::Value) -> Result<(), String> {
     let sidecar = sidecar_path(&path);
     let text = serde_json::to_string_pretty(&edits).map_err(|e| e.to_string())?;
-    std::fs::write(&sidecar, text).map_err(|e| e.to_string())
+    write_own(Path::new(&sidecar), text)
 }
 
 /// Write exported image bytes (base64) to a path. Used by the editor's
@@ -4168,7 +4209,7 @@ fn read_notes(path: String) -> Result<serde_json::Value, String> {
 fn save_notes(path: String, notes: serde_json::Value) -> Result<(), String> {
     let file = PathBuf::from(&path).join("notes.json");
     let text = serde_json::to_string_pretty(&notes).map_err(|e| e.to_string())?;
-    std::fs::write(&file, text).map_err(|e| e.to_string())
+    write_own(&file, text)
 }
 
 /// Read a project's plan.json (the week-by-week planner). Absent → an empty
@@ -4187,7 +4228,7 @@ fn read_plan(path: String) -> Result<serde_json::Value, String> {
 fn save_plan(path: String, plan: serde_json::Value) -> Result<(), String> {
     let file = PathBuf::from(&path).join("plan.json");
     let text = serde_json::to_string_pretty(&plan).map_err(|e| e.to_string())?;
-    std::fs::write(&file, text).map_err(|e| e.to_string())
+    write_own(&file, text)
 }
 
 /// RSS (in MB) for a single pid via `ps`.
