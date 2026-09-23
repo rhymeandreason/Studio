@@ -35,7 +35,6 @@ import {
   render,
   pasteFromClipboard,
   installOffClickDeselect,
-  scheduleBentoLayout,
 } from "./main.js";
 import { scheduleWorkspaceSave, addRow } from "./workspace.js";
 
@@ -1259,11 +1258,6 @@ function initMediaSort() {
     if (mediaProjectPath) loadMedia(mediaProjectPath);
   });
 }
-
-// Re-pack the notes bento grid when the window (and thus column count) changes.
-window.addEventListener("resize", () => {
-  if (document.getElementById("notes-list")) scheduleBentoLayout();
-});
 
 function setEditorSidebar(enabled) {
   editorSidebarEnabled = enabled;

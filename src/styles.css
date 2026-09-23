@@ -952,8 +952,6 @@ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 .notes-list {
     display: grid;
     grid-template-columns: 1fr;
-    grid-auto-rows: var(--bento-row, 8px);
-    grid-auto-flow: row dense;
     align-items: start;
     gap: 14px;
     position: relative;
@@ -970,9 +968,8 @@ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
 }
 
-/* Below 450px the bento mosaic (variable spans, packed rows) isn't worth
- * it — just stack cards full-width in document order. layoutBento() skips
- * its span/height math entirely while this class is set. */
+/* Below 450px a multi-column grid isn't worth it — just stack cards
+ * full-width in document order. */
 .notes-list.is-stacked{
   display: flex;
   flex-direction: column;
@@ -1115,16 +1112,13 @@ grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
     align-items: center;
 }
 
-/* Width toggle + delete reveal only on card hover (or keyboard focus) */
-.notecard__width,
+/* Delete reveals only on card hover (or keyboard focus) */
 .notecard__head .btn-remove {
     opacity: 0;
     transition: opacity 0.15s;
 }
 
-.notecard:hover .notecard__width,
 .notecard:hover .notecard__head .btn-remove,
-.notecard:focus-within .notecard__width,
 .notecard:focus-within .notecard__head .btn-remove {
     opacity: 1;
 }
@@ -1370,31 +1364,6 @@ textarea.notecard__title::placeholder {
     user-select: none;
     padding: 0 4px;
 }
-
-.notecard__width {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    background: transparent;
-    border: none;
-    padding: 4px 8px;
-    cursor: pointer;
-    outline: none;
-}
-
-.notecard__width .dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--text-soft);
-    transition: background 0.15s;
-}
-
-.notecard__width:hover .dot {
-    background: var(--accent);
-}
-
 
 .notecard__textarea {
     background: transparent;

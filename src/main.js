@@ -548,17 +548,16 @@ export function selectTab(name) {
     p.hidden = p.dataset.panel !== name;
   });
 
-  // The notes bento layout measures card heights; if it ran while the panel
-  // was hidden every card collapsed to one row. Re-pack now that it's visible.
-  // Also re-size textareas: their scrollHeight is 0 while hidden, so the
-  // initial resize in buildTextNote leaves them at height 0px.
+  // Re-size textareas on reveal: their scrollHeight is 0 while the panel is
+  // hidden, so the initial resize in buildTextNote leaves them at height 0px.
+  // Batched into reset → measure → write so the whole panel costs two layouts
+  // rather than one forced layout per textarea.
   if (name === "notes") {
     requestAnimationFrame(() => {
-      document.querySelectorAll("#notes-list textarea").forEach((ta) => {
-        ta.style.height = "auto";
-        ta.style.height = ta.scrollHeight + "px";
-      });
-      requestAnimationFrame(layoutBento);
+      const areas = [...document.querySelectorAll("#notes-list textarea")];
+      areas.forEach((ta) => (ta.style.height = "auto"));
+      const heights = areas.map((ta) => ta.scrollHeight);
+      areas.forEach((ta, i) => (ta.style.height = heights[i] + "px"));
     });
   }
 
@@ -1118,6 +1117,11 @@ async function loadNotes(path) {
   const data = await invoke("read_notes", { path });
   state.notesData =
     data && Array.isArray(data.notes) ? data : { version: 1, notes: [] };
+  // The bento mosaic (packed rows + per-card width spans) is gone; cards now
+  // size to their content in a plain grid. Drop both on read so the next save
+  // writes the current shape.
+  if (state.notesData.viewMode === "bento") state.notesData.viewMode = "grid";
+  for (const n of state.notesData.notes) delete n.span;
   setNotesStatus("");
   notesFilter = null; // tags are per-project; never carry a filter across
   renderNotes();
@@ -1247,7 +1251,6 @@ function noteHeader(note) {
   title.addEventListener("input", () => {
     note.title = title.value;
     resizeTitle();
-    scheduleBentoLayout();
     scheduleNotesSave();
   });
   // Plain Enter inserts a newline (textarea default); nothing to special-case.
@@ -1373,7 +1376,6 @@ function noteTagRow(note) {
       rm.addEventListener("click", () => {
         note.tags = (note.tags || []).filter((t) => t !== tag);
         rerender();
-        scheduleBentoLayout();
         scheduleNotesSave();
       });
       chip.append(rm);
@@ -1405,11 +1407,9 @@ function noteTagRow(note) {
     row.querySelector(".notetag-add")?.remove();
     row.append(input);
     input.focus();
-    scheduleBentoLayout();
 
     const close = () => {
       rerender();
-      scheduleBentoLayout();
     };
     input.addEventListener("keydown", (e) => {
       e.stopPropagation(); // don't let the panel keymap see it
@@ -1459,31 +1459,6 @@ function noteFooter(note) {
     footer.append(el("span", "notecard__date", { textContent: dateStr }));
   }
 
-  const width = el("button", "notecard__width", {
-    type: "button",
-    title: "Width",
-  });
-  const renderDots = () => {
-    width.innerHTML = '<span class="dot"></span>'.repeat(note.span || 1);
-  };
-  renderDots();
-  width.addEventListener("click", () => {
-    note.span = ((note.span || 1) % 3) + 1;
-    renderDots();
-    const card = width.closest(".notecard");
-    if (card) {
-      card.style.gridColumn = `span ${note.span}`;
-      requestAnimationFrame(() => {
-        card.querySelectorAll("textarea").forEach((ta) => {
-          ta.style.height = "auto";
-          ta.style.height = ta.scrollHeight + "px";
-        });
-        layoutBento();
-      });
-    }
-    scheduleNotesSave();
-  });
-  footer.append(width);
   footer.append(noteTagRow(note));
   return footer;
 }
@@ -1547,7 +1522,7 @@ function noteImageUrl(src) {
   return window.__TAURI__.core.convertFileSrc(`${state.notesProjectPath}/${src}`);
 }
 
-// Natural pixel size of an image at an absolute path (for bento sizing).
+// Natural pixel size of an image at an absolute path (for card sizing).
 async function imageDims(absPath) {
   try {
     const img = await loadImage(window.__TAURI__.core.convertFileSrc(absPath));
@@ -1563,9 +1538,8 @@ function buildImageNote(note) {
 
   const img = el("img", "notecard__image", { alt: note.caption || "" });
   if (note.src) img.src = noteImageUrl(note.src);
-  // Reserve height from known dimensions so bento sizing is right before load.
+  // Reserve height from known dimensions so the card doesn't jump on load.
   if (note.w && note.h) img.style.aspectRatio = `${note.w} / ${note.h}`;
-  img.addEventListener("load", () => scheduleBentoLayout());
   card.append(img);
 
   const cap = el("textarea", "notecard__caption", {
@@ -1580,7 +1554,6 @@ function buildImageNote(note) {
   cap.addEventListener("input", () => {
     note.caption = cap.value;
     resizeCap();
-    scheduleBentoLayout();
     scheduleNotesSave();
   });
   requestAnimationFrame(resizeCap);
@@ -1656,7 +1629,6 @@ function buildNoteLinks(note, field, { getText, setText }) {
   field.addEventListener("blur", () => {
     if (harvestLinks()) {
       renderLinks();
-      scheduleBentoLayout();
       scheduleNotesSave();
     }
   });
@@ -1668,7 +1640,6 @@ function buildNoteLinks(note, field, { getText, setText }) {
     requestAnimationFrame(() => {
       if (harvestLinks()) {
         renderLinks();
-        scheduleBentoLayout();
         scheduleNotesSave();
       }
     });
@@ -1811,7 +1782,6 @@ function buildLinkedNote(note) {
     } else {
       renderMarkdownInto(body, text);
     }
-    scheduleBentoLayout();
   });
 
   return card;
@@ -1835,7 +1805,6 @@ function buildTextNote(note) {
     img.src = noteImageUrl(note.image);
     if (note.imageW && note.imageH)
       img.style.aspectRatio = `${note.imageW} / ${note.imageH}`;
-    img.addEventListener("load", () => scheduleBentoLayout());
     const removeBtn = el("button", "notecard__image-remove", { title: "Remove image" });
     removeBtn.textContent = "×";
     removeBtn.addEventListener("click", (e) => {
@@ -1846,7 +1815,6 @@ function buildTextNote(note) {
       note.imageW = null;
       note.imageH = null;
       renderAttachedImage();
-      scheduleBentoLayout();
       scheduleNotesSave();
     });
     wrap.append(img, removeBtn);
@@ -1866,7 +1834,6 @@ function buildTextNote(note) {
   textarea.addEventListener("input", () => {
     note.body = textarea.value;
     resizeTextarea();
-    scheduleBentoLayout();
     scheduleNotesSave();
   });
 
@@ -1883,7 +1850,6 @@ function buildTextNote(note) {
       note.imageW = w;
       note.imageH = h;
       renderAttachedImage();
-      scheduleBentoLayout();
       scheduleNotesSave();
     } catch (_) {
       // No image in clipboard — let default text paste proceed.
@@ -1944,7 +1910,6 @@ function buildChecklist(note) {
     txt.addEventListener("input", () => {
       item.text = txt.value;
       resizeTxt();
-      scheduleBentoLayout();
       scheduleNotesSave();
     });
     txt.addEventListener("keydown", (e) => {
@@ -2133,7 +2098,7 @@ export function renderNotes() {
     return;
   }
 
-  const view = state.notesData.viewMode || "bento";
+  const view = state.notesData.viewMode || "grid";
   const isDaysView = view === "days";
   const isTagView = view === "tags";
   // Tag view reuses the days-view single-file layout wholesale.
@@ -2206,8 +2171,6 @@ export function renderNotes() {
     }
     card.append(noteFooter(note));
     card.dataset.noteId = note.id;
-    card.style.gridColumn = isDaysView || isTagView ? "" : `span ${note.span || 1}`;
-    card.style.gridRowEnd = "";
     applyNoteStyle(card, note);
     if (notesSelection.has(note.id)) card.classList.add("is-selected");
 
@@ -2257,17 +2220,10 @@ export function renderNotes() {
     });
     listEl.append(card);
   }
-
-  if (isDaysView || isTagView) return;
-
-  // Bento packing: card heights aren't known until textareas auto-size, so
-  // measure on the next frames and translate each card's height into a
-  // grid-row span. `grid-auto-flow: dense` then tiles them into the gaps.
-  requestAnimationFrame(() => requestAnimationFrame(layoutBento));
 }
 
 function updateNotesViewToggle() {
-  const view = state.notesData.viewMode || "bento";
+  const view = state.notesData.viewMode || "grid";
   document.querySelectorAll("#notes-view-toggle .seg-toggle__btn").forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.view === view);
   });
@@ -2569,39 +2525,6 @@ function hideDropIndicator() {
   if (bar) bar.style.display = "none";
 }
 
-// Translate each card's natural height into a grid-row span so dense auto-flow
-// can pack the cards into a bento mosaic.
-function layoutBento() {
-  const listEl = document.getElementById("notes-list");
-  if (!listEl || listEl.classList.contains("notes-list--days")) return;
-  // Below 450px the grid is replaced with a plain full-width stack — no
-  // spans/rows to compute.
-  if (listEl.classList.contains("is-stacked")) return;
-
-  const style = getComputedStyle(listEl);
-  // Clamp card spans to the actual column count so wide cards don't overflow.
-  const cols = style.gridTemplateColumns.split(" ").length;
-  const row = parseFloat(style.gridAutoRows) || 8;
-  const gap = parseFloat(style.rowGap) || 0;
-  listEl.querySelectorAll(".notecard").forEach((card) => {
-    const noteId = card.dataset.noteId;
-    const note = noteId ? state.notesData.notes.find((n) => n.id === noteId) : null;
-    card.style.gridColumn = `span ${Math.min(note?.span || 1, cols)}`;
-
-    // Reset so we measure the card's natural (content) height.
-    card.style.gridRowEnd = "";
-    const h = card.getBoundingClientRect().height;
-    const span = Math.max(1, Math.round((h + gap) / (row + gap)));
-    card.style.gridRowEnd = `span ${span}`;
-  });
-}
-
-let bentoLayoutTimer = null;
-export function scheduleBentoLayout() {
-  clearTimeout(bentoLayoutTimer);
-  bentoLayoutTimer = setTimeout(layoutBento, 60);
-}
-
 function initNotes() {
   document.querySelectorAll("[data-new-note]").forEach((btn) => {
     btn.addEventListener("click", () => newNote(btn.dataset.newNote));
@@ -2613,7 +2536,7 @@ function initNotes() {
     const btn = e.target.closest(".seg-toggle__btn");
     if (!btn) return;
     const view = btn.dataset.view;
-    if (view === (state.notesData.viewMode || "bento")) return;
+    if (view === (state.notesData.viewMode || "grid")) return;
     state.notesData.viewMode = view;
     updateNotesViewToggle();
     renderNotes();
@@ -2674,10 +2597,6 @@ function initNotes() {
     notesList.classList.toggle("is-stacked", width <= 450);
     notesList.classList.toggle("is-medium", width > 600);
     notesList.classList.toggle("is-wide", width > 1140);
-    // Column count may have just changed — re-clamp each card's
-    // grid-column span (layoutBento) so it doesn't overflow into implicit
-    // tracks, which is what breaks the mosaic when narrowing.
-    scheduleBentoLayout();
   }
   updateNotesGridTier();
   window.addEventListener("resize", updateNotesGridTier);
