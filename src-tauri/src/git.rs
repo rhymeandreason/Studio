@@ -45,7 +45,9 @@ pub struct GitStatus {
 #[tauri::command(async)]
 pub fn git_status(repo: String) -> Result<GitStatus, String> {
     let out = Command::new("git")
-        .args(["-C", &repo, "status", "--porcelain=v1", "-b"])
+        // Read-only: skip the opportunistic index refresh, which takes
+        // .git/index.lock and makes a concurrent `git add` fail (see index_write).
+        .args(["--no-optional-locks", "-C", &repo, "status", "--porcelain=v1", "-b"])
         .output()
         .map_err(|e| e.to_string())?;
     if !out.status.success() {
@@ -254,7 +256,7 @@ pub async fn git_worktrees(repo: String) -> Result<Vec<Worktree>, String> {
             }
             // Cheap enough — a repo has a handful of worktrees, not hundreds.
             wt.dirty = Command::new("git")
-                .args(["-C", &wt.path, "status", "--porcelain"])
+                .args(["--no-optional-locks", "-C", &wt.path, "status", "--porcelain"])
                 .output()
                 .map(|o| o.status.success() && !o.stdout.is_empty())
                 .unwrap_or(false);
@@ -267,27 +269,35 @@ pub async fn git_worktrees(repo: String) -> Result<Vec<Worktree>, String> {
 
 /// Stage one path (`git add -- <path>`), for the per-file checkboxes.
 fn git_stage_blocking(repo: String, path: String) -> Result<(), String> {
-    let out = Command::new("git")
-        .args(["-C", &repo, "add", "--", &path])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
-    }
-    Ok(())
+    index_write(&repo, &["add", "--", &path])
 }
 
 /// Unstage one path, keeping the working-tree change. `restore --staged` handles
 /// both tracked files and ones only just `git add`ed (no HEAD entry).
 fn git_unstage_blocking(repo: String, path: String) -> Result<(), String> {
-    let out = Command::new("git")
-        .args(["-C", &repo, "restore", "--staged", "--", &path])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    index_write(&repo, &["restore", "--staged", "--", &path])
+}
+
+/// Run a git command that writes the index (add / restore --staged / commit /
+/// reset). Git allows one index writer at a time via `.git/index.lock`; a second
+/// one fails outright with "Unable to create … index.lock: File exists". That
+/// happened when checkboxes were clicked in quick succession (parallel `git
+/// add`s) or while something else — Claude Code, the editor's git integration —
+/// briefly held the lock. So: our own writers queue on a mutex, and a lock held
+/// by another process is retried for up to ~2s before giving up.
+fn index_write(repo: &str, args: &[&str]) -> Result<(), String> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut tries = 0;
+    loop {
+        match git(repo, args) {
+            Err(e) if e.contains("index.lock") && tries < 20 => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            r => return r.map(|_| ()),
+        }
     }
-    Ok(())
 }
 
 /// True when the index has anything staged relative to HEAD (or, before the
@@ -311,27 +321,10 @@ fn git_commit_blocking(app: AppHandle, repo: String, message: String) -> Result<
         return Err("Empty commit message".to_string());
     }
     if !has_staged(&repo) {
-        let add = Command::new("git")
-            .args(["-C", &repo, "add", "-A"])
-            .output()
-            .map_err(|e| e.to_string())?;
-        if !add.status.success() {
-            return Err(String::from_utf8_lossy(&add.stderr).trim().to_string());
-        }
+        index_write(&repo, &["add", "-A"])?;
     }
-    let out = Command::new("git")
-        .args(["-C", &repo, "commit", "-m", &message])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        let msg = if err.trim().is_empty() {
-            String::from_utf8_lossy(&out.stdout).trim().to_string()
-        } else {
-            err.trim().to_string()
-        };
-        return Err(msg);
-    }
+    // `git()` falls back to stdout for the error, e.g. "nothing to commit".
+    index_write(&repo, &["commit", "-m", &message])?;
     // Committed — clear the saved draft (owned by the Git-window store in lib.rs).
     crate::set_git_draft(&app, &repo, String::new());
     Ok(())
@@ -374,14 +367,7 @@ where
 /// Un-commit the last commit, keeping its changes staged (soft reset).
 #[tauri::command(async)]
 pub fn git_undo(repo: String) -> Result<(), String> {
-    let out = Command::new("git")
-        .args(["-C", &repo, "reset", "--soft", "HEAD~1"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
-    }
-    Ok(())
+    index_write(&repo, &["reset", "--soft", "HEAD~1"])
 }
 
 /// Push the current branch to its remote. If the branch has no upstream yet,
@@ -668,7 +654,7 @@ pub fn git_head_state(app: AppHandle, repo: String) -> Result<HeadState, String>
         .unwrap_or_default()
         .trim()
         .to_string();
-    let dirty = !git(&repo, &["status", "--porcelain"])?.trim().is_empty();
+    let dirty = !git(&repo, &["--no-optional-locks", "status", "--porcelain"])?.trim().is_empty();
     let travel = read_store(&app).repos.remove(&repo).and_then(|r| r.travel);
     // A stale entry (the user returned by hand in a terminal) shouldn't show a
     // banner — only trust it while HEAD really is detached.
@@ -730,7 +716,7 @@ pub fn git_time_travel(app: AppHandle, repo: String, hash: String) -> Result<(),
         (_, None) => return Err("Detached HEAD with no branch to return to".to_string()),
     };
 
-    let dirty = !git(&repo, &["status", "--porcelain"])?.trim().is_empty();
+    let dirty = !git(&repo, &["--no-optional-locks", "status", "--porcelain"])?.trim().is_empty();
     if dirty {
         git(
             &repo,

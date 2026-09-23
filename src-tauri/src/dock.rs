@@ -154,7 +154,13 @@ fn osascript(script: &str) -> String {
 /// (Thunderbolt/Ethernet adapters shuffle the numbering), so ask rather than
 /// hardcode. Parses `networksetup -listallhardwareports`, which prints
 /// "Hardware Port: Wi-Fi" followed by "Device: enN".
+/// Cached after the first lookup — the port list doesn't change while we run.
 fn wifi_device() -> Option<String> {
+    static DEV: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    DEV.get_or_init(lookup_wifi_device).clone()
+}
+
+fn lookup_wifi_device() -> Option<String> {
     let out = sh("networksetup", &["-listallhardwareports"]);
     let mut lines = out.lines();
     while let Some(line) = lines.next() {
@@ -183,8 +189,10 @@ pub struct DockStatus {
 }
 
 /// One round-trip for everything the strip displays — the page polls this on a
-/// timer, so it should stay a single call rather than four.
-#[tauri::command]
+/// timer, so it should stay a single call rather than four. Async: the
+/// subprocesses below take ~1–3s together (osascript alone is ~1s), and a sync
+/// command would run on the main thread and freeze every Studio window.
+#[tauri::command(async)]
 pub fn dock_status() -> DockStatus {
     let mut s = DockStatus { battery: -1, ..Default::default() };
 
@@ -198,9 +206,11 @@ pub fn dock_status() -> DockStatus {
         }
     }
 
-    let vol = osascript("output volume of (get volume settings)");
-    s.volume = vol.parse().unwrap_or(0);
-    s.muted = osascript("output muted of (get volume settings)") == "true";
+    // One osascript for both (each launch costs ~1s): prints e.g. "42,false".
+    let vol = osascript("set v to get volume settings\nreturn ((output volume of v) as text) & \",\" & ((output muted of v) as text)");
+    let (level, muted) = vol.split_once(',').unwrap_or((&vol, ""));
+    s.volume = level.trim().parse().unwrap_or(0);
+    s.muted = muted.trim() == "true";
 
     // `pmset -g batt` prints e.g. " -InternalBattery-0 (id=...)  87%; discharging; 4:12 remaining".
     let batt = sh("pmset", &["-g", "batt"]);
@@ -217,7 +227,7 @@ pub fn dock_status() -> DockStatus {
     s
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dock_set_volume(level: i32) {
     let level = level.clamp(0, 100);
     osascript(&format!("set volume output volume {level}"));
@@ -228,7 +238,7 @@ pub fn dock_set_volume(level: i32) {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dock_toggle_mute() {
     let muted = osascript("output muted of (get volume settings)") == "true";
     osascript(if muted {
@@ -238,7 +248,7 @@ pub fn dock_toggle_mute() {
     });
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dock_toggle_wifi(on: bool) {
     if let Some(dev) = wifi_device() {
         sh(
@@ -250,7 +260,7 @@ pub fn dock_toggle_wifi(on: bool) {
 
 /// Open a System Settings pane by its extension id — the escape hatch for
 /// anything the strip's own controls don't cover.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dock_open_settings(pane: String) {
     sh("open", &[&format!("x-apple.systempreferences:{pane}")]);
 }

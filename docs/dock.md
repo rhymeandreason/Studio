@@ -138,7 +138,10 @@ its own (the `system-controls` tool) — better anyway, since it matches Runes.
 
 `dock_status` bundles all of it into one call because both the strip (for its
 icons) and the controls tool poll it every 10s — each field shells out, so it's
-deliberately lazy.
+deliberately lazy. All `dock_*` commands are `#[tauri::command(async)]`: the
+subprocesses take ~1–3s together (each `osascript` launch is ~1s, so volume +
+mute share one script), and a sync command runs on the main thread — it froze
+every Studio window for seconds on each poll.
 
 ## Styling
 

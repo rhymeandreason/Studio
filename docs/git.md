@@ -15,7 +15,13 @@ column of cards:
   commit box (⌘↵), last-commit footer with expand + Undo. Each changed-file row
   starts with a **stage checkbox** (`git_stage` / `git_unstage`, i.e.
   `git add -- <path>` / `git restore --staged -- <path>`); it's checked when the
-  status code's index column is set. Staging a subset switches the button to
+  status code's index column is set. Clicks queue (one `git_stage` at a
+  time, in order) and the list isn't redrawn until the queue drains; on the
+  Rust side index writers (`index_write`: add/restore/commit/reset) share a
+  mutex and retry while another process holds `.git/index.lock`, and read-only
+  `git status` calls pass `--no-optional-locks` so the 3s polls never take that
+  lock. Without this, fast clicks lost stages to "index.lock: File exists".
+  Staging a subset switches the button to
   "Commit N files" — `git_commit` only runs `git add -A` when *nothing* is
   staged, so a partial selection commits exactly itself. A pop-out button opens
   the floating window. A **Push** button lives in the panel's top toolbar (full-

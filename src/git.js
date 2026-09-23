@@ -57,7 +57,8 @@ function isStaged(f) {
 
 // One row in a file list: status glyph + path, click to open in editor. New
 // files ("??") get a sticker star; otherwise the status letter (M/A/D/R…).
-// `onStage` (working-tree rows only) adds a leading stage/unstage checkbox.
+// `onStage(box, f)` (working-tree rows only) adds a leading stage/unstage
+// checkbox; it's called with the box already toggled to the wanted state.
 function buildFileRow(repo, f, editor, onStage) {
   const row = el("div", "git-file", { title: "Open in editor" });
   if (onStage) {
@@ -68,18 +69,7 @@ function buildFileRow(repo, f, editor, onStage) {
     });
     // Don't let the checkbox open the file in the editor.
     box.addEventListener("click", (e) => e.stopPropagation());
-    box.addEventListener("change", async () => {
-      const cmd = box.checked ? "git_stage" : "git_unstage";
-      box.disabled = true;
-      try {
-        await invoke(cmd, { repo, path: f.path });
-      } catch (e) {
-        box.checked = !box.checked;
-        toast(String(e));
-      }
-      box.disabled = false;
-      onStage();
-    });
+    box.addEventListener("change", () => onStage(box, f));
     row.append(box);
   }
   const code = el("span", "git-file__code");
@@ -144,6 +134,31 @@ function buildCommitCard(repo, color, editor, pushUI, onChange, onExternal) {
 
   let changedCount = 0;
   let lastStatus = "";
+  // Rows by path, so a status change patches just the rows that changed
+  // instead of rebuilding the list under the cursor.
+  let rowByPath = new Map();
+  // Checkbox clicks run one at a time, in click order; the list isn't redrawn
+  // until the queue drains. `refreshSeq` drops a status that arrives after a
+  // newer one was requested — together these stop a quick run of clicks from
+  // racing (a stale status un-ticking a box, or a click landing on a row that
+  // was just replaced).
+  let stageQueue = Promise.resolve();
+  let staging = 0;
+  let refreshSeq = 0;
+
+  function stage(box, f) {
+    const want = box.checked;
+    staging++;
+    stageQueue = stageQueue
+      .then(() => invoke(want ? "git_stage" : "git_unstage", { repo, path: f.path }))
+      .catch((e) => {
+        box.checked = !want;
+        toast(String(e));
+      })
+      .finally(() => {
+        if (--staging === 0) refresh();
+      });
+  }
   const syncEnabled = () => {
     commit.disabled = !msg.value.trim() || changedCount === 0;
   };
@@ -167,15 +182,19 @@ function buildCommitCard(repo, color, editor, pushUI, onChange, onExternal) {
   };
 
   async function refresh() {
+    const seq = ++refreshSeq;
     let st;
     try {
       st = await invoke("git_status", { repo });
     } catch (e) {
+      if (seq !== refreshSeq || staging) return;
+      rowByPath = new Map();
       branch.textContent = "not a git repo";
       files.innerHTML = "";
       files.append(el("div", "git-empty", { textContent: String(e) }));
       return;
     }
+    if (seq !== refreshSeq || staging) return;
     apply(st);
   }
 
@@ -185,11 +204,31 @@ function buildCommitCard(repo, color, editor, pushUI, onChange, onExternal) {
     lastStatus = statusSignature(st);
     branch.textContent = st.branch || "(detached)";
     changedCount = st.files.length;
-    files.innerHTML = "";
-    if (st.files.length === 0) {
-      files.append(el("div", "git-empty", { textContent: "Working tree clean" }));
+    const row = (f) => {
+      const r = buildFileRow(repo, f, editor, stage);
+      r._status = f.status;
+      rowByPath.set(f.path, r);
+      return r;
+    };
+    // Same files (git_status sorts by path, so same set = same order): swap
+    // only the rows whose status changed. Otherwise rebuild.
+    const samePaths =
+      st.files.length > 0 &&
+      st.files.length === rowByPath.size &&
+      st.files.every((f) => rowByPath.has(f.path));
+    if (samePaths) {
+      for (const f of st.files) {
+        const old = rowByPath.get(f.path);
+        if (old._status !== f.status) old.replaceWith(row(f));
+      }
     } else {
-      for (const f of st.files) files.append(buildFileRow(repo, f, editor, refresh));
+      rowByPath = new Map();
+      files.innerHTML = "";
+      if (st.files.length === 0) {
+        files.append(el("div", "git-empty", { textContent: "Working tree clean" }));
+      } else {
+        for (const f of st.files) files.append(row(f));
+      }
     }
     // Checked a subset? Commit exactly that (git_commit only stages everything
     // when nothing is staged).
@@ -318,9 +357,11 @@ function buildCommitCard(repo, color, editor, pushUI, onChange, onExternal) {
   // when it rebuilds.
   clearInterval(statusTimer);
   statusTimer = setInterval(async () => {
-    if (document.hidden || state.activePanel !== "git") return;
+    if (document.hidden || state.activePanel !== "git" || staging) return;
+    const seq = ++refreshSeq;
     try {
       const st = await invoke("git_status", { repo });
+      if (seq !== refreshSeq || staging) return;
       if (statusSignature(st) !== lastStatus) {
         apply(st);
         onExternal?.();

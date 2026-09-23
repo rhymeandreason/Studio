@@ -281,15 +281,38 @@
         $commit.disabled = !$msg.value.trim() || changedCount === 0;
       }
 
+      // Checkbox clicks run one at a time and the list isn't redrawn until the
+      // queue drains; `refreshSeq` drops a status overtaken by a newer request.
+      // (Same race fix as the panel's Commit card in src/git.js.)
+      let stageQueue = Promise.resolve();
+      let staging = 0;
+      let refreshSeq = 0;
+      function stage(box, f) {
+        const want = box.checked;
+        staging++;
+        stageQueue = stageQueue
+          .then(() => invoke(want ? "git_stage" : "git_unstage", { repo, path: f.path }))
+          .catch((e) => {
+            box.checked = !want;
+            toast(String(e));
+          })
+          .finally(() => {
+            if (--staging === 0) refresh();
+          });
+      }
+
       async function refresh() {
+        const seq = ++refreshSeq;
         let st;
         try {
           st = await invoke("git_status", { repo });
         } catch (e) {
+          if (seq !== refreshSeq || staging) return;
           $branch.textContent = "not a git repo";
           $files.innerHTML = `<div class="empty">${String(e)}</div>`;
           return;
         }
+        if (seq !== refreshSeq || staging) return;
         $branch.textContent = st.branch || "(detached)";
 
         changedCount = st.files.length;
@@ -300,7 +323,7 @@
           e.textContent = "Working tree clean";
           $files.append(e);
         } else {
-          for (const f of st.files) $files.append(buildFileRow(f, refresh));
+          for (const f of st.files) $files.append(buildFileRow(f, stage));
         }
         // Checked a subset? Commit exactly that (git_commit only stages
         // everything when nothing is staged).
@@ -396,20 +419,7 @@
           box.checked = isStaged(f);
           box.title = box.checked ? "Staged — click to unstage" : "Stage this file";
           box.addEventListener("click", (e) => e.stopPropagation());
-          box.addEventListener("change", async () => {
-            box.disabled = true;
-            try {
-              await invoke(box.checked ? "git_stage" : "git_unstage", {
-                repo,
-                path: f.path,
-              });
-            } catch (e) {
-              box.checked = !box.checked;
-              toast(String(e));
-            }
-            box.disabled = false;
-            refresh();
-          });
+          box.addEventListener("change", () => onStage(box, f));
           row.append(box);
         }
         const code = document.createElement("span");
