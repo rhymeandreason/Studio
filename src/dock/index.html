@@ -255,11 +255,11 @@ body {
 <div class="notes" id="notes"></div>
 
 <button class="item" id="wifi" data-tool="system-controls.html">
-    <span class="mi">wifi</span>Wi-Fi
+    <span class="mi ph ph-wifi-high"></span>Wi-Fi
     <span class="meta" id="ssid"></span>
 </button>
 <button class="item batt" id="batt" data-tool="system-controls.html">
-    <span class="mi">battery_android_frame_full</span>Battery
+    <span class="mi ph ph-battery-full"></span>Battery
     <span class="meta" id="pct"></span>
 </button>
 
@@ -334,7 +334,7 @@ function noteLabel(note) {
     return { text: `Untitled ${note.kind}`, untitled: true };
 }
 
-const KIND_ICON = { checklist: "checklist", table: "table" };
+const KIND_ICON = { checklist: "list-checks", table: "table" };
 
 function assetUrl(projectPath, rel) {
     if (!convertFileSrc || !rel) return "";
@@ -379,7 +379,7 @@ function renderNotes(notes, projectPath) {
         const lead = n.kind === "image"
             ? `<img class="note-thumb" src="${esc(assetUrl(projectPath, n.src))}" alt="" />`
             : KIND_ICON[n.kind]
-                ? `<span class="mi note-kind">${KIND_ICON[n.kind]}</span>`
+                ? `<span class="mi note-kind ph ph-${KIND_ICON[n.kind]}"></span>`
                 : "";
         const open = n.id === openNoteId;
         return `
@@ -571,27 +571,25 @@ const battBtn = document.getElementById("batt");
 const ssidEl = document.getElementById("ssid");
 const pctEl = document.getElementById("pct");
 
-// The `battery_android_frame_*` set is the horizontal outline battery: levels
-// 1–6 plus `full`, `bolt` and `alert`. (The plain `battery_*` names are the
-// vertical ones, and `battery_horiz_*` only has three levels.) All confirmed
-// present in the vendored Material Symbols subset — a name the font lacks
-// renders as literal text.
+// Phosphor's horizontal battery set: empty/low/medium/high/full plus
+// charging and warning.
 function batteryIcon() {
     if (status.battery < 0) return "power";
-    if (status.charging) return "battery_android_frame_bolt";
-    if (status.battery < 10) return "battery_android_frame_alert";
-    if (status.battery >= 95) return "battery_android_frame_full";
-    const bars = Math.min(6, Math.max(1, Math.ceil((status.battery / 100) * 6)));
-    return `battery_android_frame_${bars}`;
+    if (status.charging) return "battery-charging";
+    if (status.battery < 10) return "battery-warning";
+    if (status.battery >= 90) return "battery-full";
+    if (status.battery >= 65) return "battery-high";
+    if (status.battery >= 35) return "battery-medium";
+    return "battery-low";
 }
 
 function render() {
-    wifiBtn.querySelector(".mi").textContent = status.wifi_on ? "wifi" : "wifi_off";
+    wifiBtn.querySelector(".mi").className = `mi ph ph-${status.wifi_on ? "wifi-high" : "wifi-slash"}`;
     wifiBtn.classList.toggle("off", !status.wifi_on);
     // The row has room for the network name, which the icon alone never carried.
     ssidEl.textContent = status.wifi_on ? (status.ssid || "Not connected") : "Off";
 
-    battBtn.querySelector(".mi").textContent = batteryIcon();
+    battBtn.querySelector(".mi").className = `mi ph ph-${batteryIcon()}`;
     pctEl.textContent = status.battery >= 0 ? `${status.battery}%` : "";
     battBtn.classList.toggle("low", status.battery >= 0 && status.battery < 20 && !status.charging);
 }

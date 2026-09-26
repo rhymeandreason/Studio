@@ -256,11 +256,11 @@ customElements.define("studio-toggle", StudioToggle);
 /**
  * <studio-icon-toggle value="..."> — a segmented icon toggle (two or more
  * options). Each child with a `value` attribute is a segment; `data-icon` sets
- * its Material Symbol, `title` its tooltip.
+ * its Phosphor icon name, `title` its tooltip.
  *
  *   <studio-icon-toggle value="code">
  *     <button value="code" data-icon="code" title="Show source"></button>
- *     <button value="preview" data-icon="visibility" title="Show preview"></button>
+ *     <button value="preview" data-icon="eye" title="Show preview"></button>
  *   </studio-icon-toggle>
  *
  * Attrs: value. Props: .value (get/set). Events: input, change (on user choice;
@@ -281,8 +281,7 @@ class StudioIconToggle extends HTMLElement {
             const icon = seg.getAttribute("data-icon");
             if (icon && !seg.querySelector(".mi")) {
                 const m = document.createElement("span");
-                m.className = "mi";
-                m.textContent = icon;
+                m.className = `mi ph ph-${icon}`;
                 seg.append(m);
             }
             seg.addEventListener("click", () => this._choose(seg.getAttribute("value")));

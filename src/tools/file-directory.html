@@ -478,8 +478,8 @@ max-width:350px;
     };
     const ARTIFACT_ICON = {
       'brand-kit': 'palette',
-      'presentation': 'slideshow',
-      'theme': 'styles',
+      'presentation': 'presentation',
+      'theme': 'swatches',
     };
 
     // artifacts/<kind>/<name>.json → kind, else null.
@@ -504,15 +504,15 @@ max-width:350px;
     }
 
     function iconFor(entry, open) {
-      if (entry.is_dir) return open ? 'folder_open' : 'folder';
+      if (entry.is_dir) return open ? 'folder-open' : 'folder';
       const kind = artifactKind(entry.path);
       if (kind && ARTIFACT_ICON[kind]) return ARTIFACT_ICON[kind];
       const ext = entry.name.split('.').pop().toLowerCase();
       if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic'].includes(ext)) return 'image';
-      if (['mp4', 'mov', 'webm'].includes(ext)) return 'movie';
-      if (['json'].includes(ext)) return 'data_object';
-      if (['md', 'txt'].includes(ext)) return 'description';
-      return 'draft';
+      if (['mp4', 'mov', 'webm'].includes(ext)) return 'film-strip';
+      if (['json'].includes(ext)) return 'brackets-curly';
+      if (['md', 'txt'].includes(ext)) return 'file-text';
+      return 'file';
     }
 
     // Per-project path lists in localStorage: { [projectPath]: [path, …] }.
@@ -831,13 +831,13 @@ max-width:350px;
       const twirl = document.createElement('span');
       twirl.className = 'twirl';
       if (entry.is_dir) {
-        twirl.innerHTML = '<span class="mi">chevron_right</span>';
+        twirl.innerHTML = '<span class="mi ph ph-caret-right"></span>';
       }
       node.appendChild(twirl);
 
       const icon = document.createElement('span');
       icon.className = 'icon';
-      icon.innerHTML = `<span class="mi">${iconFor(entry, false)}</span>`;
+      icon.innerHTML = `<span class="mi ph ph-${iconFor(entry, false)}"></span>`;
       node.appendChild(icon);
 
       const name = document.createElement('span');
@@ -983,7 +983,7 @@ max-width:350px;
         const browserBtn = document.createElement('button');
         browserBtn.className = 'open-browser';
         browserBtn.title = 'Open in browser';
-        browserBtn.innerHTML = '<span class="mi">open_in_new</span>';
+        browserBtn.innerHTML = '<span class="mi ph ph-arrow-square-out"></span>';
         browserBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           // Prefers the repo's running dev server over a file:// path — see
@@ -1006,7 +1006,7 @@ max-width:350px;
         const isOpen = node.classList.contains('open');
         if (isOpen) {
           node.classList.remove('open');
-          icon.innerHTML = `<span class="mi">${iconFor(entry, false)}</span>`;
+          icon.innerHTML = `<span class="mi ph ph-${iconFor(entry, false)}"></span>`;
           // Keep childrenEl cached (just detach) so reopening doesn't refetch
           // and doesn't trip over a stale `loaded` flag with no element to show.
           if (childrenEl) childrenEl.remove();
@@ -1017,7 +1017,7 @@ max-width:350px;
           return;
         }
         node.classList.add('open');
-        icon.innerHTML = `<span class="mi">${iconFor(entry, true)}</span>`;
+        icon.innerHTML = `<span class="mi ph ph-${iconFor(entry, true)}"></span>`;
         if (!isRoot) {
           expandedSet.add(entry.path);
           saveExpanded();
@@ -1360,7 +1360,7 @@ max-width:350px;
       for (const p of projects) {
         const item = document.createElement('div');
         item.className = 'proj-item';
-        item.innerHTML = `<span class="mi">folder</span><span class="name">${p.name}</span>`;
+        item.innerHTML = `<span class="mi ph ph-folder"></span><span class="name">${p.name}</span>`;
         item.addEventListener('click', async () => {
           await invoke('open_project', { path: p.path }).catch(() => {});
           main();

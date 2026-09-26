@@ -354,7 +354,7 @@ border-color: var(--elevated);
   </div>
 
   <div id="travel">
-    <span class="mi mi-sm">history_toggle_off</span>
+    <span class="mi mi-sm ph ph-clock-countdown"></span>
     <div id="travel-text"></div>
     <button class="btn" id="travel-back" type="button">Return</button>
   </div>
@@ -363,7 +363,7 @@ border-color: var(--elevated);
     <span id="branch" class="text-xs text-muted"></span>
     <input id="search" class="field" type="search" placeholder="Search commits…" />
     <button id="star-filter" class="btn btn-icon-only" type="button" title="Show bookmarked only">
-      <span class="mi mi-sm">star</span>
+      <span class="mi mi-sm ph ph-star"></span>
     </button>
   </div>
 
@@ -569,8 +569,8 @@ border-color: var(--elevated);
         `<div><div class="subject">${esc(c.subject)}</div>` +
         `<div class="meta"><span>${esc(c.short)}</span><span>${esc(c.rel)}</span>${refChips(c.refs)}</div></div>` +
         `<div class="acts">` +
-        `<button class="btn btn-icon-only star${marked ? " is-on" : ""}" type="button" title="${marked ? "Remove bookmark" : "Bookmark this commit"}"><span class="mi mi-sm${marked ? " mi-fill" : ""}">star</span></button>` +
-        `<button class="btn btn-icon-only travel" type="button" title="Step back in time to this commit"><span class="mi mi-sm">history</span></button>` +
+        `<button class="btn btn-icon-only star${marked ? " is-on" : ""}" type="button" title="${marked ? "Remove bookmark" : "Bookmark this commit"}"><span class="mi mi-sm ${marked ? "ph-fill" : "ph"} ph-star"></span></button>` +
+        `<button class="btn btn-icon-only travel" type="button" title="Step back in time to this commit"><span class="mi mi-sm ph ph-clock-counter-clockwise"></span></button>` +
         `</div>`;
 
       row.querySelector(".star").addEventListener("click", async (e) => {
@@ -708,7 +708,9 @@ border-color: var(--elevated);
     starFilter.addEventListener("click", () => {
       onlyMarked = !onlyMarked;
       starFilter.classList.toggle("is-on", onlyMarked);
-      starFilter.querySelector(".mi").classList.toggle("mi-fill", onlyMarked);
+      const star = starFilter.querySelector(".mi");
+      star.classList.toggle("ph", !onlyMarked);
+      star.classList.toggle("ph-fill", onlyMarked);
       render();
     });
 

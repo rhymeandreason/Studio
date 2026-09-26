@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Claude</title>
-        <!-- Material Symbols is vendored via tokens.css (@import in ../styles.css). -->
+        <!-- Phosphor icons are vendored via tokens.css (@import in ../styles.css). -->
         <link rel="stylesheet" href="../styles.css" />
         <link rel="stylesheet" href="../kit/kit.css" />
         <link rel="stylesheet" href="../kit/window-chrome.css" />
@@ -33,11 +33,11 @@
                 <div class="claude-topbar" data-window-bar>
                     <span class="claude-project-name" id="project-name"></span>
                     <button class="btn btn-icon-only" id="sessions-toggle" title="Sessions">
-                        <span class="mi mi-sm">side_navigation</span>
+                        <span class="mi mi-sm ph ph-sidebar"></span>
                     </button>
 
                     <button class="btn btn-icon-only claude-newtab" id="new-session" title="New session">
-                        <span class="mi mi-sm">add</span>
+                        <span class="mi mi-sm ph ph-plus"></span>
                     </button>
                 </div>
 
@@ -49,7 +49,7 @@
                 <div class="claude-usage" id="usage-bars">
                     <div class="claude-meter">
                         <div class="claude-meter__label">
-                            <span class="mi mi-sm">data_usage</span>
+                            <span class="mi mi-sm ph ph-chart-donut"></span>
                             <span class="claude-meter__label-text">Context</span>
                             <span id="context-pct">0%</span>
                         </div>
@@ -59,7 +59,7 @@
                     </div>
                     <div class="claude-meter" id="five-hour">
                         <div class="claude-meter__label">
-                            <span class="mi mi-sm">schedule</span>
+                            <span class="mi mi-sm ph ph-clock"></span>
                             <span class="claude-meter__label-text">5-hour usage</span>
                             <span id="plan-status">—</span>
                         </div>
@@ -80,7 +80,7 @@
                         <div class="claude-status__text">
                             <span class="claude-status__label">Working</span>
                             <span class="claude-status__tool" hidden>
-                                <span class="mi claude-status__tool-icon">build</span>
+                                <span class="mi claude-status__tool-icon ph ph-wrench"></span>
                                 <span class="claude-status__tool-name"></span>
                             </span>
                         </div>
@@ -95,10 +95,10 @@
                         placeholder="What shall we do next?"
                     ></textarea>
                     <button class="btn-round btn-round-filled" id="send-btn" type="submit" title="Send">
-                        <span class="mi mi-sm">arrow_upward</span>
+                        <span class="mi mi-sm ph ph-arrow-up"></span>
                     </button>
                     <button class="btn-round claude-stop" id="stop-btn" type="button" title="Stop" hidden>
-                        <span class="mi mi-sm">stop</span>
+                        <span class="mi mi-sm ph ph-stop"></span>
                     </button>
                 </form>
                 <div class="claude-controls">

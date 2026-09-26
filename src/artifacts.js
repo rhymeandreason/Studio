@@ -97,7 +97,7 @@ export async function renderArtifacts() {
     type: "button",
     title: "New artifact",
   });
-  addBtn.innerHTML = mi("add");
+  addBtn.innerHTML = mi("plus");
   const addMenu = el("div", "menu", { hidden: true });
   addBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -107,11 +107,11 @@ export async function renderArtifacts() {
 
   const NEW_ITEMS = [
     { icon: "palette", label: "Brand kit", action: () => invoke("open_tool", { file: EDITOR["brand-kit"], query: null }) },
-    { icon: "slideshow", label: "Presentation", action: () => invoke("open_tool", { file: EDITOR["presentation"], query: null }) },
-    { icon: "styles", label: "Theme", action: () => invoke("open_tool", { file: EDITOR["theme"], query: null }) },
-    { icon: "schema", label: "Diagram", action: () => invoke("open_tool", { file: EDITOR["diagram"], query: null }) },
+    { icon: "presentation", label: "Presentation", action: () => invoke("open_tool", { file: EDITOR["presentation"], query: null }) },
+    { icon: "swatches", label: "Theme", action: () => invoke("open_tool", { file: EDITOR["theme"], query: null }) },
+    { icon: "flow-arrow", label: "Diagram", action: () => invoke("open_tool", { file: EDITOR["diagram"], query: null }) },
     {
-      icon: "movie",
+      icon: "film-strip",
       label: "Video",
       action: async () => {
         const file = await invoke("create_video", { path: project.path, name: "Untitled" });
@@ -194,7 +194,7 @@ function videoCard(project, v) {
     artifactsSelection.toggle(id, e.metaKey || e.ctrlKey);
   });
   const prev = el("div", "artifact__preview artifact__preview--video");
-  prev.innerHTML = mi("movie"); // placeholder until the thumb loads
+  prev.innerHTML = mi("film-strip"); // placeholder until the thumb loads
   card.appendChild(prev);
 
   const open = () =>
@@ -206,7 +206,7 @@ function videoCard(project, v) {
   const meta = el("span", "artifact-card__meta");
   info.appendChild(meta);
   foot.appendChild(info);
-  foot.appendChild(actionBtn("open_in_new", "Open", open, true));
+  foot.appendChild(actionBtn("arrow-square-out", "Open", open, true));
   card.appendChild(foot);
   card.addEventListener("dblclick", open);
 
@@ -328,7 +328,7 @@ function artifactCard(item) {
     );
   }
   foot.appendChild(info);
-  foot.appendChild(actionBtn("open_in_new", "Open", open, true));
+  foot.appendChild(actionBtn("arrow-square-out", "Open", open, true));
   card.appendChild(foot);
 
   card.addEventListener("dblclick", open);

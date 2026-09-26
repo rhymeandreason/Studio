@@ -22,7 +22,7 @@ design rationale in [video-plan.md](video-plan.md).
 ## Files
 
 - `src/video/index.html` — window markup + tool-specific styles (kit-styled:
-  tokens.css + kit.css + Material `.mi` icons).
+  tokens.css + kit.css + Phosphor `.mi` icons).
 - `src/video/video.js` — playback engine, timeline, inspector, persistence,
   export orchestration.
 - `src/video/effects.js` — **text-animation registry** (single source of truth

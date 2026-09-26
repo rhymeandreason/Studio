@@ -485,25 +485,25 @@
 <body>
   <div id="toolbar" data-window-bar>
     <div class="tb-group" data-window-close>
-        <button class="btn btn-icon-only" id="back-btn" title="Back" disabled><span class="mi">arrow_back</span></button>
-        <button class="btn btn-icon-only" id="forward-btn" title="Forward" disabled><span class="mi">arrow_forward</span></button>
-        <button class="btn btn-icon-only" id="open" title="Open file"><span class="mi">folder_open</span></button>
-        <button class="btn btn-icon-only" id="save" title="Save (Cmd+S)"><span class="mi">save</span></button>
+        <button class="btn btn-icon-only" id="back-btn" title="Back" disabled><span class="mi ph ph-arrow-left"></span></button>
+        <button class="btn btn-icon-only" id="forward-btn" title="Forward" disabled><span class="mi ph ph-arrow-right"></span></button>
+        <button class="btn btn-icon-only" id="open" title="Open file"><span class="mi ph ph-folder-open"></span></button>
+        <button class="btn btn-icon-only" id="floppy-disk" title="Save (Cmd+S)"><span class="mi ph ph-floppy-disk"></span></button>
         <span id="filename">No file</span>
         <span id="dirty" title="Unsaved changes"></span>
     </div>
     <div class="tb-group">
-        <button class="btn btn-ghost" id="prettify" title="Prettify"><span class="mi">format_align_left</span><span class="btn-label">Prettify</span></button>
-        <button class="btn btn-ghost" id="wrap-btn" title="Wrap"><span class="mi">wrap_text</span><span class="btn-label">Wrap</span></button>
+        <button class="btn btn-ghost" id="prettify" title="Prettify"><span class="mi ph ph-text-align-left"></span><span class="btn-label">Prettify</span></button>
+        <button class="btn btn-ghost" id="wrap-btn" title="Wrap"><span class="mi ph ph-text-indent"></span><span class="btn-label">Wrap</span></button>
     </div>
     <div class="tb-group">
-        <button class="btn btn-icon-only" id="refresh-btn" title="Reload file from disk"><span class="mi">refresh</span><span class="stale-dot"></span></button>
-        <button class="btn btn-icon-only" id="diff-mode" title="Diff: uncommitted changes"><span class="mi">difference</span></button>
+        <button class="btn btn-icon-only" id="refresh-btn" title="Reload file from disk"><span class="mi ph ph-arrow-clockwise"></span><span class="stale-dot"></span></button>
+        <button class="btn btn-icon-only" id="diff-mode" title="Diff: uncommitted changes"><span class="mi ph ph-git-diff"></span></button>
         <studio-icon-toggle id="view-toggle" value="code">
             <button value="code" data-icon="code" title="Show source"></button>
-            <button value="preview" data-icon="visibility" title="Show rendered preview"></button>
+            <button value="preview" data-icon="eye" title="Show rendered preview"></button>
         </studio-icon-toggle>
-        <button class="btn-round btn-round-filled" id="preview-btn" title="Preview"><span class="mi mi-sm">play_arrow</span></button>
+        <button class="btn-round btn-round-filled" id="preview-btn" title="Preview"><span class="mi mi-sm ph ph-play"></span></button>
     </div>
   </div>
 
@@ -549,9 +549,9 @@
       <div id="find-bar" hidden>
         <input id="find-input" type="text" placeholder="Find" spellcheck="false" />
         <span id="find-count"></span>
-        <button class="btn btn-icon" id="find-prev" title="Previous (Shift+Enter)"><span class="mi">keyboard_arrow_up</span></button>
-        <button class="btn btn-icon" id="find-next" title="Next (Enter)"><span class="mi">keyboard_arrow_down</span></button>
-        <button class="btn btn-icon" id="find-close" title="Close (Esc)"><span class="mi">close</span></button>
+        <button class="btn btn-icon" id="find-prev" title="Previous (Shift+Enter)"><span class="mi ph ph-caret-up"></span></button>
+        <button class="btn btn-icon" id="find-next" title="Next (Enter)"><span class="mi ph ph-caret-down"></span></button>
+        <button class="btn btn-icon" id="find-close" title="Close (Esc)"><span class="mi ph ph-x"></span></button>
       </div>
     </div>
   </div>
@@ -1673,7 +1673,7 @@ function buildLinks() {
     const b = document.createElement("button");
     b.className = "lnk";
     b.title = t;
-    b.innerHTML = `<span class="mi">${isMd(t) ? "description" : "draft"}</span>${t.split("/").pop()}`;
+    b.innerHTML = `<span class="mi ph ph-${isMd(t) ? "file-text" : "file"}"></span>${t.split("/").pop()}`;
     b.addEventListener("click", () => {
       if (currentPath) loadPath(resolveRelative(currentPath, t)).catch(() => { console.warn("can't open " + t); });
     });

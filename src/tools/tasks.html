@@ -458,9 +458,9 @@ border: 1 px solid var(--hairline);
     <div class="tb-title" data-window-close>
       
     </div>
-    <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Transit settings"><span class="mi">tune</span></button>
-    <button class="btn btn-ghost btn-icon" id="refreshBtn" title="Sync calendar"><span class="mi">refresh</span></button>
-    <button class="btn btn-primary" id="addBtn" title="Add task"><span class="mi">add</span></button>
+    <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Transit settings"><span class="mi ph ph-sliders-horizontal"></span></button>
+    <button class="btn btn-ghost btn-icon" id="refreshBtn" title="Sync calendar"><span class="mi ph ph-arrow-clockwise"></span></button>
+    <button class="btn btn-primary" id="addBtn" title="Add task"><span class="mi ph ph-plus"></span></button>
   </header>
 
   <div id="main">
@@ -801,7 +801,7 @@ border: 1 px solid var(--hairline);
       // Mark calendar-sourced tasks so it's clear edits need care.
       if (t.source === "calendar") {
         const cal = el("span", "cal-mark");
-        cal.innerHTML = '<span class="mi mi-sm">event</span>';
+        cal.innerHTML = '<span class="mi mi-sm ph ph-calendar-blank"></span>';
         cal.title = t.userEdited ?
           "From your calendar · edited — sync won't overwrite it" :
           "From your calendar · editing takes manual control";
@@ -931,7 +931,7 @@ border: 1 px solid var(--hairline);
         textContent: "Cancel"
       });
       const del = el("button", "btn btn-icon edit-delete");
-      del.innerHTML = '<span class="mi">delete</span>';
+      del.innerHTML = '<span class="mi ph ph-trash"></span>';
       del.title = "Delete task";
       del.addEventListener("click", async () => {
         await invoke("delete_task", {

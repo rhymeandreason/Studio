@@ -172,7 +172,7 @@ position: absolute;
     function domIndex(i) { return headerPresent() ? i + 1 : i; } // i>=0 → child index
 
     function mi(name) {
-      return `<span class="material-symbols-rounded">${name}</span>`;
+      return `<span class="mi ph ph-${name}"></span>`;
     }
 
     async function loadModes() {

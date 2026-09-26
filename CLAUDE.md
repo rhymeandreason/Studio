@@ -16,11 +16,11 @@ non-destructive image editor), notes, workspace, and artifacts.
   Claude subprocess/session logic shared with the companion app lives in
   `crates/studio-claude-core/` (edit it there, not in either lib.rs).
 - Frontend `src/`: ES modules off `main.js`, `index.html`, `styles.css`. Design =
-  "Runes" theme (Futura + Material Symbols); tokens in `src/tokens.css`
+  "Runes" theme (Futura + Phosphor icons); tokens in `src/tokens.css`
   (`@import`ed by styles.css, linked by tools); shared component CSS + `<studio-*>`
   web components in `src/kit/`.
 - Vendored & offline (never CDN): `src/vendor/` — `marked`, `coloris`,
-  `motion-one`, Material Symbols woff2.
+  `motion-one`, Phosphor icons (`vendor/phosphor/`, stock regular + fill CSS/woff2).
 - Native Swift helpers via `build.rs`, run as subprocesses: `bgremove` (Vision),
   `qlthumb`, `pbimage`, `winbounds` / `winowner` (CGWindowListCopyWindowInfo). WebP via the `webp` crate; HEIC via `sips`.
 

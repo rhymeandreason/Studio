@@ -90,7 +90,7 @@ function buildFileRow(repo, f, editor, onStage) {
     const open = el("button", "git-file__browser", {
       type: "button",
       title: "Open in browser",
-      innerHTML: mi("open_in_new"),
+      innerHTML: mi("arrow-square-out"),
     });
     open.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -116,7 +116,7 @@ function buildCommitCard(repo, color, editor, pushUI, onChange, onExternal) {
   const popout = el("button", "git-iconbtn", {
     type: "button",
     title: "Open in a floating window",
-    innerHTML: mi("open_in_new"),
+    innerHTML: mi("arrow-square-out"),
   });
   popout.addEventListener("click", () =>
     invoke("open_git_window", { repo, color }),
@@ -384,7 +384,7 @@ function buildToolCard(label, icon, src, popoutFn) {
     const popout = el("button", "git-iconbtn", {
       type: "button",
       title: "Open in a floating window",
-      innerHTML: mi("open_in_new"),
+      innerHTML: mi("arrow-square-out"),
     });
     popout.addEventListener("click", popoutFn);
     head.append(popout);
@@ -403,7 +403,7 @@ function buildToolCard(label, icon, src, popoutFn) {
 function buildWorktreeCard(repo) {
   const card = el("section", "git-card git-card--worktrees", { hidden: true });
   const head = el("div", "git-card__head");
-  head.innerHTML = mi("account_tree") + '<span class="git-card__name">Worktrees</span>';
+  head.innerHTML = mi("tree-structure") + '<span class="git-card__name">Worktrees</span>';
   const list = el("div", "git-worktrees");
   card.append(head, list);
 
@@ -442,7 +442,7 @@ function buildWorktreeCard(repo) {
       if (current)
         top.append(
           el("span", "git-worktree__showing", {
-            innerHTML: mi("visibility") + "<span>Showing</span>",
+            innerHTML: mi("eye") + "<span>Showing</span>",
           }),
         );
 
@@ -450,7 +450,7 @@ function buildWorktreeCard(repo) {
       const reveal = el("button", "git-iconbtn git-worktree__reveal", {
         type: "button",
         title: "Reveal in Finder",
-        innerHTML: mi("folder_open"),
+        innerHTML: mi("folder-open"),
       });
       reveal.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -475,7 +475,7 @@ function buildRepoCard(repo, editor) {
   const original = repo;
   const card = el("section", "git-card git-card--repo");
   const head = el("div", "git-card__head");
-  head.innerHTML = mi("folder_open") + '<span class="git-card__name">Repo</span>';
+  head.innerHTML = mi("folder-open") + '<span class="git-card__name">Repo</span>';
   card.append(head);
 
   const pathRow = el("div", "git-repo__path");
@@ -499,7 +499,7 @@ function buildRepoCard(repo, editor) {
   const browse = el("button", "git-repo__browse", {
     type: "button",
     title: "Choose repo folder",
-    innerHTML: mi("folder_open") + "Browse",
+    innerHTML: mi("folder-open") + "Browse",
   });
   browse.addEventListener("click", async () => {
     const picked = await pickPath({ directory: true });
@@ -553,7 +553,7 @@ export async function renderGitPanel() {
     panel.append(buildRepoCard(base, editor));
     const empty = el("div", "git-panel__empty");
     empty.innerHTML =
-      mi("commit", false) +
+      mi("git-commit", false) +
       "<p class=\"git-panel__hint\">Add a repo above to see commits, pulse, and the dev server.</p>";
     panel.append(empty);
     return;
@@ -570,11 +570,11 @@ export async function renderGitPanel() {
 
   // Order: Server (top), Worktrees, Commit, Pulse, Repo (last). Server is prepended below
   // once its async details resolve.
-  const pulseCard = buildToolCard("Pulse", "bar_chart", "tools/git-pulse.html?repo=" + encodeURIComponent(repo) +
+  const pulseCard = buildToolCard("Pulse", "chart-bar", "tools/git-pulse.html?repo=" + encodeURIComponent(repo) +
     (color ? "&color=" + encodeURIComponent(color) : ""), () =>
     invoke("open_git_pulse", { repo }),
   );
-  const historyCard = buildToolCard("History", "history", "tools/git-history.html?repo=" + encodeURIComponent(repo) +
+  const historyCard = buildToolCard("History", "clock-counter-clockwise", "tools/git-history.html?repo=" + encodeURIComponent(repo) +
     (color ? "&color=" + encodeURIComponent(color) : ""), () =>
     invoke("open_git_history", { repo }),
   );
@@ -605,7 +605,7 @@ export async function renderGitPanel() {
         if (url) label = url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
       } catch {}
       if (repo !== currentRepo) return;
-      const server = buildToolCard(label, "dns", "tools/server.html", () =>
+      const server = buildToolCard(label, "hard-drives", "tools/server.html", () =>
         invoke("open_tool", { file: "server.html" }),
       );
       server.classList.add("git-card--bare");

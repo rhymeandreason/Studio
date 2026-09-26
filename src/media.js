@@ -756,9 +756,9 @@ function thumbWhenVisible(tile, load) {
 }
 
 const KIND_ICONS = {
-  video: "play_circle",
-  audio: "music_note",
-  doc: "description",
+  video: "play-circle",
+  audio: "music-note",
+  doc: "file-text",
 };
 
 // Any .webp is a web format; also the export naming ("<name>x<longest>.jpg/png"
@@ -838,7 +838,7 @@ function buildMediaTile(item) {
   if (!isImage)
     thumb.append(
       el("span", "mediatile__kind", {
-        innerHTML: mi(KIND_ICONS[item.kind] || "insert_drive_file"),
+        innerHTML: mi(KIND_ICONS[item.kind] || "file"),
       }),
     );
   thumb.append(img);
@@ -1105,13 +1105,13 @@ async function initDragDrop() {
   // Rust is_dir for accuracy). Extensionless paths are treated as folders.
   function dropPreview(paths) {
     if (!paths.length)
-      return { icon: "add_photo_alternate", label: "Drop to add to this project" };
+      return { icon: "image-square", label: "Drop to add to this project" };
     const hasFolder = paths.some((p) => !/\.[^/]+$/.test(p.split("/").pop()));
     if (hasFolder)
-      return { icon: "create_new_folder", label: "Add folder to Workspace" };
+      return { icon: "folder-plus", label: "Add folder to Workspace" };
     if (paths.every((p) => IMG_RE.test(p)))
-      return { icon: "add_photo_alternate", label: "Move images into Project" };
-    return { icon: "note_add", label: "Move files into the project" };
+      return { icon: "image-square", label: "Move images into Project" };
+    return { icon: "file-plus", label: "Move files into the project" };
   }
 
   // The Files tab embeds the File Directory tool, which handles OS drops itself
@@ -1145,7 +1145,7 @@ async function initDragDrop() {
   await listen("tauri://drag-enter", (e) => {
     if (blocked(e)) return;
     const preview = dropPreview((e.payload && e.payload.paths) || []);
-    document.getElementById("dropzone-icon").textContent = preview.icon;
+    document.getElementById("dropzone-icon").className = `mi ph ph-${preview.icon}`;
     document.getElementById("dropzone-label").textContent = preview.label;
     zone.hidden = false;
   });

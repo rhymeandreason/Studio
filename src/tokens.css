@@ -1,12 +1,17 @@
 /* Studio — Runes design tokens (warm paper, Futura, hairline surfaces).
  *
- * The shared FOUNDATION layer: design tokens, the Material Symbols icon font,
+ * The shared FOUNDATION layer: design tokens, the Phosphor icons,
  * and a minimal reset. Single source of truth for both the main app
  * (imported by styles.css) and tool windows (which link this file directly, or
  * have it injected by the host — see docs/tools-dynamic-loading.md).
  *
  * Keep this variables + base only. App-specific component styles stay in
  * styles.css; shared tool component classes go in a separate kit.css. */
+
+/* Phosphor icon font + classes (see .mi below). urls resolve relative to
+   THIS stylesheet, so they work from the main app and from src/tools/. */
+@import url("vendor/phosphor/regular.css");
+@import url("vendor/phosphor/fill.css");
 
 :root {
     --bg: #f7f5f0;
@@ -64,50 +69,34 @@
     --accent-soft: rgba(0, 0, 0, 0.2);
 }
 
-/* Material Symbols — vendored variable font (not the Google Fonts CDN), so
- * icons work offline and any document that links tokens.css gets them. The url
- * resolves relative to THIS stylesheet, so it's correct from any consumer
- * (main app, tools in src/tools/, injected tool:// windows). */
-@font-face {
-    font-family: "Material Symbols Rounded";
-    font-style: normal;
-    font-weight: 100 700;
-    src: url("vendor/material-symbols-rounded.woff2") format("woff2");
-}
-
+/* Icons: Phosphor, vendored unmodified in vendor/phosphor/ (@imported at
+ * the top of this file). Markup is Phosphor's own class API plus `.mi` for
+ * Studio sizing: <span class="mi ph ph-plus"></span>. Filled = swap `ph` for
+ * `ph-fill`. Names: phosphoricons.com. */
 .mi {
-    font-family: "Material Symbols Rounded";
-    font-weight: normal;
-    font-style: normal;
+    display: inline-block;
     font-size: 18px;
     line-height: 1;
-    letter-spacing: normal;
-    text-transform: none;
-    display: inline-block;
-    white-space: nowrap;
-    direction: ltr;
-    -webkit-font-feature-settings: "liga";
-    -webkit-font-smoothing: antialiased;
-    font-variation-settings:
-        "FILL" 0,
-        "wght" 300,
-        "GRAD" 0,
-        "opsz" 24;
+    flex-shrink: 0;
 }
 
 .mi-sm {
     font-size: 16px;
 }
 
-/* Filled variant (Material Symbols' FILL axis) — for the "on" state of a
-   toggle icon: <span class="mi mi-sm mi-fill">star</span>. Same glyph name,
-   solid instead of outline. */
-.mi-fill {
-    font-variation-settings:
-        "FILL" 1,
-        "wght" 300,
-        "GRAD" 0,
-        "opsz" 24;
+/* Icons that aren't in Phosphor ship as SVGs in vendor/icons/ and render
+   through a mask so they take currentColor and the .mi font-size:
+   <span class="mi mi-svg mi-blur-on"></span>. */
+.mi-svg {
+    width: 1em;
+    height: 1em;
+    background: currentColor;
+    -webkit-mask: var(--mi-svg) center / contain no-repeat;
+    mask: var(--mi-svg) center / contain no-repeat;
+}
+
+.mi-blur-on {
+    --mi-svg: url("vendor/icons/blur-on.svg");
 }
 
 * {

@@ -67,31 +67,31 @@
         <div class="lightbox__actions">
           <span class="edit-status" id="edit-status"></span>
           <button class="btn-ghost" id="lb-open">
-            <span class="mi mi-sm">folder_open</span>Open…
+            <span class="mi mi-sm ph ph-folder-open"></span>Open…
           </button>
           <!-- "More" menu holds the file actions (keeps the bar compact, and
                fits narrow windows). The lb-* ids are wired by editor.js /
                this tool regardless of where they live. -->
           <div class="side-more">
             <button class="btn-round" id="ie-more" title="Actions">
-              <span class="mi mi-sm">more_vert</span>
+              <span class="mi mi-sm ph ph-dots-three-vertical"></span>
             </button>
             <div class="menu" id="ie-menu" hidden>
               <button class="menu__item" id="lb-export">
-                <span class="mi mi-sm">file_copy</span>Duplicate
+                <span class="mi mi-sm ph ph-files"></span>Duplicate
               </button>
               <button class="menu__item" id="lb-webexport">
-                <span class="mi mi-sm">photo_size_select_large</span>Export
+                <span class="mi mi-sm ph ph-frame-corners"></span>Export
               </button>
               <button class="menu__item" id="lb-replace">
-                <span class="mi mi-sm">published_with_changes</span>Replace original
+                <span class="mi mi-sm ph ph-arrows-clockwise"></span>Replace original
               </button>
               <div class="menu__sep"></div>
               <button class="menu__item" id="lb-copy">
-                <span class="mi mi-sm">file_export</span>Copy path
+                <span class="mi mi-sm ph ph-export"></span>Copy path
               </button>
               <button class="menu__item" id="lb-reveal">
-                <span class="mi mi-sm">folder_open</span>Show in Finder
+                <span class="mi mi-sm ph ph-folder-open"></span>Show in Finder
               </button>
             </div>
           </div>
@@ -100,7 +100,7 @@
 
       <div class="lightbox__stage" id="lb-stage">
         <div class="ie-empty" id="ie-empty">
-          <span class="mi">add_photo_alternate</span>
+          <span class="mi ph ph-image-square"></span>
           <span>Open an image to edit</span>
         </div>
         <div class="editor" id="editor">
@@ -121,16 +121,16 @@
                 <span class="editgroup__label">Rotate &amp; flip</span>
                 <div class="editbtns">
                   <button class="iconbtn" id="ed-rotl" title="Rotate left">
-                    <span class="mi">rotate_left</span>
+                    <span class="mi ph ph-arrow-counter-clockwise"></span>
                   </button>
                   <button class="iconbtn" id="ed-rotr" title="Rotate right">
-                    <span class="mi">rotate_right</span>
+                    <span class="mi ph ph-arrow-clockwise"></span>
                   </button>
                   <button class="iconbtn" id="ed-fliph" title="Flip horizontal">
-                    <span class="mi">flip</span>
+                    <span class="mi ph ph-flip-horizontal"></span>
                   </button>
                   <button class="iconbtn" id="ed-flipv" title="Flip vertical">
-                    <span class="mi" style="transform: rotate(90deg)">flip</span>
+                    <span class="mi ph ph-flip-horizontal" style="transform: rotate(90deg)"></span>
                   </button>
                 </div>
               </div>
@@ -173,13 +173,13 @@
               <div class="editgroup">
                 <span class="editgroup__label">Background</span>
                 <button class="chip chip--reset" id="ed-removebg">
-                  <span class="mi mi-sm">auto_fix_high</span>Remove background
+                  <span class="mi mi-sm ph ph-magic-wand"></span>Remove background
                 </button>
                 <button class="chip chip--reset" id="ed-extendbg">
-                  <span class="mi mi-sm">aspect_ratio</span>Extend background
+                  <span class="mi mi-sm ph ph-frame-corners"></span>Extend background
                 </button>
                 <button class="chip chip--reset" id="ed-photos">
-                  <span class="mi mi-sm">photo_library</span>Edit in Photos
+                  <span class="mi mi-sm ph ph-images"></span>Edit in Photos
                 </button>
               </div>
             </div>
@@ -187,7 +187,7 @@
             <div class="editsection">
               <div class="editgroup">
                 <button class="chip chip--reset" id="m-reset">
-                  <span class="mi mi-sm">restart_alt</span>Reset adjustments
+                  <span class="mi mi-sm ph ph-arrow-counter-clockwise"></span>Reset adjustments
                 </button>
               </div>
             </div>
@@ -206,7 +206,7 @@
         <div class="modal__actions">
           <button class="btn-ghost" id="cutout-cancel">Cancel</button>
           <button class="btn-main" id="cutout-save">
-            <span class="mi mi-sm">save</span>Save cutout
+            <span class="mi mi-sm ph ph-floppy-disk"></span>Save cutout
           </button>
         </div>
       </div>
@@ -227,10 +227,10 @@
               data-orient="landscape"
               title="Landscape"
             >
-              <span class="mi mi-sm">crop_landscape</span>
+              <span class="mi mi-sm ph ph-rectangle"></span>
             </button>
             <button class="orient-btn" data-orient="portrait" title="Portrait">
-              <span class="mi mi-sm">crop_portrait</span>
+              <span class="mi mi-sm ph ph-device-mobile"></span>
             </button>
           </div>
           <button class="chip is-active" data-ratio="free">Free</button>
@@ -293,7 +293,7 @@
             id="extend-fill-simple"
             title="Edge-stretch + blur + noise (fast)"
           >
-            <span class="mi mi-sm">blur_on</span>Simple Fill
+            <span class="mi mi-sm mi-svg mi-blur-on"></span>Simple Fill
           </button>
           <button
             class="btn-ghost extend__fillbtn"
@@ -307,7 +307,7 @@
             id="extend-fill"
             title="Content-aware fill (best for plain backgrounds)"
           >
-            <span class="mi mi-sm">auto_fix_normal</span>Patch Fill
+            <span class="mi mi-sm ph ph-magic-wand"></span>Patch Fill
           </button>
           <button
             class="btn-ghost extend__fillbtn"
@@ -315,13 +315,13 @@
             title="Generative fill (Stable Diffusion)"
             hidden
           >
-            <span class="mi mi-sm">auto_awesome</span>Generative Fill
+            <span class="mi mi-sm ph ph-sparkle"></span>Generative Fill
           </button>
           <button class="btn-main" id="extend-save" disabled>
-            <span class="mi mi-sm">save</span>Save
+            <span class="mi mi-sm ph ph-floppy-disk"></span>Save
           </button>
           <button class="btn-ghost" id="extend-edit-photos" hidden>
-            <span class="mi mi-sm">photo_library</span>Edit in Photos
+            <span class="mi mi-sm ph ph-images"></span>Edit in Photos
           </button>
         </div>
       </div>
@@ -369,7 +369,7 @@
         <div class="modal__actions">
           <button class="btn-ghost" id="web-cancel">Cancel</button>
           <button class="btn-main" id="web-export">
-            <span class="mi mi-sm">save</span>Export
+            <span class="mi mi-sm ph ph-floppy-disk"></span>Export
           </button>
         </div>
       </div>

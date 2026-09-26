@@ -60,7 +60,7 @@ export function initNewMarkdownButton() {
       { label: "In Project Folder", icon: "folder", run: () => newDoc("project") },
       {
         label: "In Repo docs/",
-        icon: "menu_book",
+        icon: "book-open",
         // No repo set means "repo" would resolve back to the project folder —
         // a docs/ there isn't what this option promises, so it's off instead.
         disabled: !wsRepo.trim(),
@@ -244,7 +244,7 @@ function renderModes() {
     recordBtn.type = "button";
     recordBtn.className = "ws-mode__btn ws-mode__btn--record";
     recordBtn.title = `Record current windows into "${mode.name}"`;
-    recordBtn.innerHTML = mi("fiber_manual_record");
+    recordBtn.innerHTML = mi("circle");
 
     const playBtn = document.createElement("button");
     playBtn.type = "button";
@@ -262,7 +262,7 @@ function renderModes() {
       scheduleWorkspaceSave();
     });
     playBtn.disabled = !mode.layout?.length;
-    playBtn.innerHTML = mi("play_arrow");
+    playBtn.innerHTML = mi("play");
 
     recordBtn.addEventListener("click", () => recordMode(mode, recordBtn, playBtn, saved));
     playBtn.addEventListener("click", () => playMode(mode, playBtn));
@@ -285,27 +285,27 @@ function listContainer() {
 
 const LIST_META = {
   figma: {
-    icon: "pentagon",
+    icon: "polygon",
     label: "Figma",
     placeholder: "https://figma.com/file/…",
     singleton: true,
   },
-  apps: { icon: "apps", label: "App", placeholder: "Finder", browse: "app" },
+  apps: { icon: "dots-nine", label: "App", placeholder: "Finder", browse: "app" },
   files: {
-    icon: "description",
+    icon: "file-text",
     label: "File",
     placeholder: "~/code/file.ts",
     browse: "file",
   },
   folders: {
-    icon: "folder_open",
+    icon: "folder-open",
     label: "Folder",
     placeholder: "~/some/folder",
     browse: "dir",
   },
   urls: { icon: "link", label: "URL", placeholder: "https://…" },
   scripts: {
-    icon: "terminal",
+    icon: "terminal-window",
     label: "Script",
     placeholder: "~/code/run.sh",
     browse: "file",
@@ -670,7 +670,7 @@ export function addRow(list, value = "", autoBrowse = false) {
     const browse = document.createElement("button");
     browse.type = "button";
     browse.className = "ws-item__browse";
-    browse.innerHTML = `${mi("folder_open")}Browse…`;
+    browse.innerHTML = `${mi("folder-open")}Browse…`;
     browse.addEventListener("click", async () => {
       const picked =
         meta.browse === "dir"

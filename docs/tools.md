@@ -47,12 +47,15 @@ the tool's main script to be `<script type="module">`.
 
 **Tokens over hardcoding:** use `var(--bg)`, `var(--surface)`, `var(--text)`, `var(--accent)`, `var(--radius)` etc. for colors and radii — never hardcode them. (There is no `--space-*` scale; follow the kit and use raw px for spacing.)
 
-**Icons:** `<span class="mi">icon_name</span>` (Material Symbols Rounded font +
-the `.mi` class are defined in `tokens.css`; add `.mi-sm` for 16px). Note: the
-class is `.mi`, **not** `material-symbols-rounded` — that class isn't defined, so
-the icon name renders as plain text. For the "on" state of a toggle icon, add
-`.mi-fill` (the Symbols FILL axis) rather than swapping glyph names — the `_border`
-/ `_outline` names are Material *Icons*, not Symbols, and render as plain text.
+**Icons:** [Phosphor](https://phosphoricons.com), vendored unmodified in
+`src/vendor/phosphor/` and loaded by `tokens.css`. Use Phosphor's own class API
+plus `.mi` for Studio sizing: `<span class="mi ph ph-plus"></span>` (add `.mi-sm`
+for 16px). From JS, use `mi("plus")` from `dom.js`, or set
+`el.className = "mi ph ph-" + name` — icons are classes, not text, so never set
+`textContent`. For the "on" state of a toggle, swap `ph` for `ph-fill` (same
+`ph-<name>`). A misspelled name renders nothing. An icon Phosphor doesn't have
+goes in `src/vendor/icons/` as an SVG with a `.mi-<name>` class in `tokens.css`:
+`<span class="mi mi-svg mi-blur-on"></span>`.
 
 [`kit-gallery.html`](../src/tools/kit-gallery.html) (Tools → Design System) is the living reference. 
 

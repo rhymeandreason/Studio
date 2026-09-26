@@ -135,7 +135,7 @@ function buildSlotGroup(slot, tasks) {
   });
 
   const add = el("button", "btn-add", { type: "button" });
-  add.innerHTML = `${mi("add")}Task`;
+  add.innerHTML = `${mi("plus")}Task`;
   add.addEventListener("click", () => addSchedule(slot));
 
   head.append(time, days, add);
@@ -199,21 +199,21 @@ function buildScheduleRow(task) {
   toggle.append(toggleInput, toggleTrack);
 
   const run = el("button", "ws-schedule__run", { type: "button", title: "Open now" });
-  run.innerHTML = mi("play_arrow");
+  run.innerHTML = mi("play");
   run.addEventListener("click", async () => {
     if (!task.tool) return;
     run.disabled = true;
-    run.innerHTML = mi("hourglass_top");
+    run.innerHTML = mi("hourglass");
     try {
       await invoke("open_tool", { file: task.tool, query: null });
     } finally {
       run.disabled = false;
-      run.innerHTML = mi("play_arrow");
+      run.innerHTML = mi("play");
     }
   });
 
   const remove = el("button", "btn-remove", { type: "button", title: "Remove" });
-  remove.innerHTML = mi("close");
+  remove.innerHTML = mi("x");
   remove.addEventListener("click", () => {
     store.tasks = store.tasks.filter((t) => t !== task);
     render();

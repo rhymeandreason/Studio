@@ -292,9 +292,9 @@ select.field {
 /*
  * Usage:
  *   <div class="tabs">
- *     <button class="tab is-active"><span class="mi">image</span>Media</button>
+ *     <button class="tab is-active"><span class="mi ph ph-image"></span>Media</button>
  *     <button class="tab">Notes</button>
- *     <button class="tab-pin" title="Pin"><span class="mi">push_pin</span></button>
+ *     <button class="tab-pin" title="Pin"><span class="mi ph ph-push-pin"></span></button>
  *   </div>
  *
  * .tab-pin — icon button that right-aligns via margin-left:auto.
@@ -378,7 +378,6 @@ select.field {
     background: var(--hairline);
 }
 .tab-pin.is-active .mi {
-    font-variation-settings: "FILL" 1, "wght" 300, "GRAD" 0, "opsz" 24;
     color: var(--accent);
 }
 
@@ -589,7 +588,7 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
  *   <div style="position:relative">
  *     <button class="btn">Open</button>
  *     <div class="menu" hidden>
- *       <button class="menu__item"><span class="mi">edit</span>Edit</button>
+ *       <button class="menu__item"><span class="mi ph ph-pencil-simple"></span>Edit</button>
  *       <div class="menu__sep"></div>
  *       <button class="menu__item">Delete</button>
  *     </div>
@@ -686,7 +685,7 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
  *     <button class="dropdown__btn">
  *       <span class="dropdown__swatch" style="background:#e63"></span>
  *       <span class="dropdown__label">Coral</span>
- *       <span class="mi dropdown__chev">expand_more</span>
+ *       <span class="mi dropdown__chev ph ph-caret-down"></span>
  *     </button>
  *     <div class="menu dropdown__menu" hidden>
  *       <button class="menu__item dropdown__item is-active">Coral</button>
@@ -751,15 +750,14 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
 }
 .dropdown__item { justify-content: space-between; }
 .dropdown__item::after {
-    font-family: "Material Symbols Rounded";
+    font-family: "Phosphor";
     font-size: 16px;
     content: "";
     color: var(--accent);
     opacity: 0;
-    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
 }
 .dropdown__item.is-active { color: var(--text); }
-.dropdown__item.is-active::after { content: "check"; opacity: 1; }
+.dropdown__item.is-active::after { content: "\e182" /* Phosphor check */; opacity: 1; }
 
 /* ---- Pill tabs ----------------------------------------------------------- */
 /* A pill-shaped tab strip with text labels; one tab active at a time.
@@ -871,7 +869,7 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
  * Driven by <studio-icon-toggle> (components.js), which adds .seg + .is-active.
  *   <studio-icon-toggle value="code">
  *     <button value="code" data-icon="code" title="Source"></button>
- *     <button value="preview" data-icon="visibility" title="Preview"></button>
+ *     <button value="preview" data-icon="eye" title="Preview"></button>
  *   </studio-icon-toggle>
  */
 .icon-toggle {
@@ -922,8 +920,8 @@ studio-swatch[picker="below"] .swatch-chip__trigger {
 /* A pill-shaped container holding 2–4 icon buttons; one is active at a time.
  * Usage:
  *   <div class="seg-toggle">
- *     <button class="seg-toggle__btn is-active"><span class="mi">view_module</span></button>
- *     <button class="seg-toggle__btn"><span class="mi">view_list</span></button>
+ *     <button class="seg-toggle__btn is-active"><span class="mi ph ph-squares-four"></span></button>
+ *     <button class="seg-toggle__btn"><span class="mi ph ph-list"></span></button>
  *   </div>
  */
 
@@ -1068,8 +1066,8 @@ font-family:var(--sans);
  *     <div class="editgroup">
  *       <span class="editgroup__label">Rotate &amp; flip</span>
  *       <div class="editbtns">
- *         <button class="iconbtn"><span class="mi">rotate_left</span></button>
- *         <button class="iconbtn"><span class="mi">rotate_right</span></button>
+ *         <button class="iconbtn"><span class="mi ph ph-arrow-counter-clockwise"></span></button>
+ *         <button class="iconbtn"><span class="mi ph ph-arrow-clockwise"></span></button>
  *       </div>
  *     </div>
  *     <div class="editgroup">
@@ -1109,8 +1107,8 @@ font-family:var(--sans);
  *   <div class="editgroup">
  *     <span class="editgroup__label">Rotate <em>45°</em></span>
  *     <div class="editbtns">
- *       <button class="iconbtn"><span class="mi">rotate_left</span></button>
- *       <button class="iconbtn"><span class="mi">rotate_right</span></button>
+ *       <button class="iconbtn"><span class="mi ph ph-arrow-counter-clockwise"></span></button>
+ *       <button class="iconbtn"><span class="mi ph ph-arrow-clockwise"></span></button>
  *     </div>
  *   </div>
  */

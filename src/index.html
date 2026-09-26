@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Studio</title>
-        <!-- Material Symbols is vendored via tokens.css (@import in styles.css). -->
+        <!-- Phosphor icons are vendored via tokens.css (@import in styles.css). -->
         <link rel="stylesheet" href="styles.css" />
         <link rel="stylesheet" href="kit/kit.css" />
         <script type="module" src="kit/components.js"></script>
@@ -20,7 +20,7 @@
                 <div class="projhead__bar-group" >
                     <button class="window-close" id="main-close" title="Close window"></button>
                     <button class="btn btn-icon-only" id="all-projects-btn" type="button" title="All projects">
-                        <span class="mi mi-sm">arrow_back</span>
+                        <span class="mi mi-sm ph ph-arrow-left"></span>
                     </button>
                     <h1 class="projhead__name" id="project-name" data-tauri-drag-region></h1>
                 </div>
@@ -29,32 +29,32 @@
                         <img class="claude-btn__icon" src="claude/claude-icon.svg" alt="">
                     </button>
                     <button class="btn btn-icon-only" id="new-md-btn" type="button" title="New Markdown doc">
-                        <span class="mi mi-sm">post_add</span>
+                        <span class="mi mi-sm ph ph-note-pencil"></span>
                     </button>
                 </div>
             </div>
             <div class="projhead__row">
                 <nav class="tabs tabs--round" id="tabs">
                     <button class="tab tab--round" data-tab="media" title="Media">
-                        <span class="mi">image</span>
+                        <span class="mi ph ph-image"></span>
                     </button>
                     <button class="tab tab--round" data-tab="notes" title="Notes">
-                        <span class="mi">sticky_note_2</span>
+                        <span class="mi ph ph-note"></span>
                     </button>
                     <button class="tab tab--round" data-tab="artifacts" title="Artifacts">
-                        <span class="mi">palette</span>
+                        <span class="mi ph ph-palette"></span>
                     </button>
                     <button class="tab tab--round" data-tab="git" title="Git">
-                        <span class="mi">commit</span>
+                        <span class="mi ph ph-git-commit"></span>
                     </button>
                     <button class="tab tab--round" id="file-directory-btn" data-tab="files" title="File Directory (⌥-click to pop out)">
-                        <span class="mi">folder_open</span>
+                        <span class="mi ph ph-folder-open"></span>
                     </button>
                     <button class="tab tab--round" id="plan-btn" data-tab="plan" title="Plan (⌥-click to pop out)">
-                        <span class="mi">calendar_month</span>
+                        <span class="mi ph ph-calendar"></span>
                     </button>
                     <button class="btn btn-icon-only tab--round" id="workspace-btn" type="button" title="Workspace">
-                        <span class="mi">tune</span>
+                        <span class="mi ph ph-sliders-horizontal"></span>
                     </button>
                 </nav>
             </div>
@@ -66,7 +66,7 @@
                 <div class="overview__header" data-tauri-drag-region>
                     <h1 class="page-title" data-tauri-drag-region>Projects</h1>
                     <button class="btn-main" id="overview-new-btn" type="button">
-                        <span class="mi mi-sm">add</span>New Project
+                        <span class="mi mi-sm ph ph-plus"></span>New Project
                     </button>
                 </div>
                 <div class="overview__grid" id="overview-grid"></div>
@@ -75,7 +75,7 @@
             <!-- No project -->
             <div class="empty" id="empty-state">
                 <div class="empty__mark">
-                    <span class="mi">workspaces</span>
+                    <span class="mi ph ph-squares-four"></span>
                 </div>
                 <p class="empty__headline">No project active</p>
                 <p class="empty__hint">
@@ -90,7 +90,7 @@
                     <div class="media-main" id="media-main">
                         <div class="media-toolbar">
                             <button class="btn-ghost" id="generate-open" hidden>
-                                <span class="mi mi-sm">auto_awesome</span
+                                <span class="mi mi-sm ph ph-sparkle"></span
                                 >Generate
                             </button>
                             <div class="pill-tabs" id="media-sort">
@@ -100,10 +100,10 @@
                                 <button class="pill-tab" data-sort="user" hidden>Custom</button>
                             </div>
                             <button class="btn-icon-s" id="media-rotl" title="Rotate left" disabled>
-                                <span class="mi mi-sm">rotate_left</span>
+                                <span class="mi mi-sm ph ph-arrow-counter-clockwise"></span>
                             </button>
                             <button class="btn-icon-s" id="media-rotr" title="Rotate right" disabled>
-                                <span class="mi mi-sm">rotate_right</span>
+                                <span class="mi mi-sm ph ph-arrow-clockwise"></span>
                             </button>
                             <studio-toggle id="media-editor-toggle" title="Toggle editor"></studio-toggle>
                         </div>
@@ -113,12 +113,12 @@
                             >
                             <div class="selbar__actions">
                                 <button class="btn-ghost" id="sel-paste">
-                                    <span class="mi mi-sm">content_paste</span
+                                    <span class="mi mi-sm ph ph-clipboard"></span
                                     >Paste adjustments
                                 </button>
                                 <button class="btn-ghost" id="sel-webexport">
-                                    <span class="mi mi-sm"
-                                        >photo_size_select_large</span
+                                    <span class="mi mi-sm ph ph-frame-corners"
+                                        ></span
                                     >Export
                                 </button>
                                 <button class="btn-ghost" id="sel-clear">
@@ -137,31 +137,31 @@
                             class="btn-add"
                             data-new-note="text"
                         >
-                            <span class="mi mi-sm">subject</span>Text
+                            <span class="mi mi-sm ph ph-text-align-left"></span>Text
                         </button>
                         <button
                             type="button"
                             class="btn-add"
                             data-new-note="checklist"
                         >
-                            <span class="mi mi-sm">checklist</span>Checklist
+                            <span class="mi mi-sm ph ph-list-checks"></span>Checklist
                         </button>
                         <button
                             type="button"
                             class="btn-add"
                             data-new-note="table"
                         >
-                            <span class="mi mi-sm">table_chart</span>Table
+                            <span class="mi mi-sm ph ph-table"></span>Table
                         </button>
                         <div class="seg-toggle" id="notes-view-toggle">
                             <button type="button" class="seg-toggle__btn" data-view="grid" title="Grid view">
-                                <span class="mi mi-sm">browse</span>
+                                <span class="mi mi-sm ph ph-browser"></span>
                             </button>
                             <button type="button" class="seg-toggle__btn" data-view="days" title="Days view">
-                                <span class="mi mi-sm">calendar_view_day</span>
+                                <span class="mi mi-sm ph ph-rows"></span>
                             </button>
                             <button type="button" class="seg-toggle__btn" data-view="tags" title="Tags view">
-                                <span class="mi mi-sm">label</span>
+                                <span class="mi mi-sm ph ph-tag"></span>
                             </button>
                         </div>
                         <span class="notes-status" id="notes-status"></span>
@@ -188,7 +188,7 @@
                                     id="ws-add-btn"
                                     title="Add to workspace"
                                 >
-                                    <span class="mi mi-sm">add</span>
+                                    <span class="mi mi-sm ph ph-plus"></span>
                                 </button>
                                 <div class="menu" id="ws-add-menu" hidden>
                                     <button
@@ -196,7 +196,7 @@
                                         class="menu__item"
                                         id="ws-add-mode"
                                     >
-                                        <span class="mi mi-sm">grid_view</span>Mode
+                                        <span class="mi mi-sm ph ph-grid-four"></span>Mode
                                     </button>
                                     <button
                                         type="button"
@@ -204,42 +204,42 @@
                                         data-add-list="figma"
                                         data-singleton
                                     >
-                                        <span class="mi mi-sm">pentagon</span>Figma
+                                        <span class="mi mi-sm ph ph-polygon"></span>Figma
                                     </button>
                                     <button
                                         type="button"
                                         class="menu__item"
                                         data-add-list="apps"
                                     >
-                                        <span class="mi mi-sm">apps</span>App
+                                        <span class="mi mi-sm ph ph-dots-nine"></span>App
                                     </button>
                                     <button
                                         type="button"
                                         class="menu__item"
                                         data-add-list="files"
                                     >
-                                        <span class="mi mi-sm">description</span>File
+                                        <span class="mi mi-sm ph ph-file-text"></span>File
                                     </button>
                                     <button
                                         type="button"
                                         class="menu__item"
                                         data-add-list="folders"
                                     >
-                                        <span class="mi mi-sm">folder_open</span>Folder
+                                        <span class="mi mi-sm ph ph-folder-open"></span>Folder
                                     </button>
                                     <button
                                         type="button"
                                         class="menu__item"
                                         data-add-list="urls"
                                     >
-                                        <span class="mi mi-sm">link</span>URL
+                                        <span class="mi mi-sm ph ph-link"></span>URL
                                     </button>
                                     <button
                                         type="button"
                                         class="menu__item"
                                         data-add-list="scripts"
                                     >
-                                        <span class="mi mi-sm">terminal</span>Script
+                                        <span class="mi mi-sm ph ph-terminal-window"></span>Script
                                     </button>
                                 </div>
                             </div>
@@ -273,24 +273,24 @@
                 <div class="media-side__head">
                     <span class="media-side__name" id="side-name"></span>
                     <button class="btn-round" id="side-lightbox" title="Open Lightbox">
-                        <span class="mi mi-sm">open_in_full</span>
+                        <span class="mi mi-sm ph ph-arrows-out"></span>
                     </button>
                     <div class="side-more">
                         <button class="btn-round" id="side-more" title="More">
-                            <span class="mi mi-sm">more_vert</span>
+                            <span class="mi mi-sm ph ph-dots-three-vertical"></span>
                         </button>
                         <div class="menu" id="side-menu" hidden>
-                            <button class="menu__item" id="m-copyadj"><span class="mi mi-sm">content_copy</span>Copy adjustments</button>
-                            <button class="menu__item" id="m-pasteadj"><span class="mi mi-sm">content_paste</span>Paste adjustments</button>
+                            <button class="menu__item" id="m-copyadj"><span class="mi mi-sm ph ph-copy"></span>Copy adjustments</button>
+                            <button class="menu__item" id="m-pasteadj"><span class="mi mi-sm ph ph-clipboard"></span>Paste adjustments</button>
                             <div class="menu__sep"></div>
-                            <button class="menu__item" id="m-export"><span class="mi mi-sm">file_copy</span>Duplicate</button>
-                            <button class="menu__item" id="m-webexport"><span class="mi mi-sm">photo_size_select_large</span>Export</button>
-                            <button class="menu__item" id="m-replace"><span class="mi mi-sm">published_with_changes</span>Replace original</button>
-                            <button class="menu__item" id="m-copy"><span class="mi mi-sm">file_export</span>Copy path</button>
-                            <button class="menu__item" id="m-reveal"><span class="mi mi-sm">folder_open</span>Show in Finder</button>
-                            <button class="menu__item" id="m-photos"><span class="mi mi-sm">photo_library</span>Edit in Photos</button>
+                            <button class="menu__item" id="m-export"><span class="mi mi-sm ph ph-files"></span>Duplicate</button>
+                            <button class="menu__item" id="m-webexport"><span class="mi mi-sm ph ph-frame-corners"></span>Export</button>
+                            <button class="menu__item" id="m-replace"><span class="mi mi-sm ph ph-arrows-clockwise"></span>Replace original</button>
+                            <button class="menu__item" id="m-copy"><span class="mi mi-sm ph ph-export"></span>Copy path</button>
+                            <button class="menu__item" id="m-reveal"><span class="mi mi-sm ph ph-folder-open"></span>Show in Finder</button>
+                            <button class="menu__item" id="m-photos"><span class="mi mi-sm ph ph-images"></span>Edit in Photos</button>
                             <div class="menu__sep"></div>
-                            <button class="menu__item" id="m-reset"><span class="mi mi-sm">restart_alt</span>Reset all</button>
+                            <button class="menu__item" id="m-reset"><span class="mi mi-sm ph ph-arrow-counter-clockwise"></span>Reset all</button>
                         </div>
                     </div>
                 </div>
@@ -301,7 +301,7 @@
         <!-- Drag-and-drop overlay -->
         <div class="dropzone" id="dropzone" hidden>
             <div class="dropzone__inner">
-                <span class="mi" id="dropzone-icon">add_photo_alternate</span>
+                <span class="mi ph ph-image-square" id="dropzone-icon"></span>
                 <span id="dropzone-label">Drop images to add them to this project</span>
             </div>
         </div>
@@ -316,39 +316,39 @@
                          compact (and fit narrow windows). -->
                     <div class="side-more">
                         <button class="btn-round" id="lb-more" title="Actions">
-                            <span class="mi mi-sm">more_vert</span>
+                            <span class="mi mi-sm ph ph-dots-three-vertical"></span>
                         </button>
                         <div class="menu" id="lb-menu" hidden>
                             <button class="menu__item" id="lb-export">
-                                <span class="mi mi-sm">file_copy</span>Duplicate
+                                <span class="mi mi-sm ph ph-files"></span>Duplicate
                             </button>
                             <button class="menu__item" id="lb-webexport">
-                                <span class="mi mi-sm"
-                                    >photo_size_select_large</span
+                                <span class="mi mi-sm ph ph-frame-corners"
+                                    ></span
                                 >Export
                             </button>
                             <button class="menu__item" id="lb-replace">
-                                <span class="mi mi-sm"
-                                    >published_with_changes</span
+                                <span class="mi mi-sm ph ph-arrows-clockwise"
+                                    ></span
                                 >Replace original
                             </button>
                             <div class="menu__sep"></div>
                             <button class="menu__item" id="lb-copy">
-                                <span class="mi mi-sm">file_export</span>Copy path
+                                <span class="mi mi-sm ph ph-export"></span>Copy path
                             </button>
                             <button class="menu__item" id="lb-reveal">
-                                <span class="mi mi-sm">folder_open</span>Show in
+                                <span class="mi mi-sm ph ph-folder-open"></span>Show in
                                 Finder
                             </button>
                             <div class="menu__sep"></div>
                             <button class="menu__item" id="lb-reset">
-                                <span class="mi mi-sm">restart_alt</span>Reset
+                                <span class="mi mi-sm ph ph-arrow-counter-clockwise"></span>Reset
                                 adjustments
                             </button>
                         </div>
                     </div>
                     <button class="btn-ghost" id="lb-close">
-                        <span class="mi mi-sm">close</span>Close
+                        <span class="mi mi-sm ph ph-x"></span>Close
                     </button>
                 </div>
             </div>
@@ -379,21 +379,21 @@
                                         id="ed-rotl"
                                         title="Rotate left"
                                     >
-                                        <span class="mi">rotate_left</span>
+                                        <span class="mi ph ph-arrow-counter-clockwise"></span>
                                     </button>
                                     <button
                                         class="iconbtn"
                                         id="ed-rotr"
                                         title="Rotate right"
                                     >
-                                        <span class="mi">rotate_right</span>
+                                        <span class="mi ph ph-arrow-clockwise"></span>
                                     </button>
                                     <button
                                         class="iconbtn"
                                         id="ed-fliph"
                                         title="Flip horizontal"
                                     >
-                                        <span class="mi">flip</span>
+                                        <span class="mi ph ph-flip-horizontal"></span>
                                     </button>
                                     <button
                                         class="iconbtn"
@@ -401,9 +401,9 @@
                                         title="Flip vertical"
                                     >
                                         <span
-                                            class="mi"
+                                            class="mi ph ph-flip-horizontal"
                                             style="transform: rotate(90deg)"
-                                            >flip</span
+                                            ></span
                                         >
                                     </button>
                                 </div>
@@ -465,18 +465,18 @@
                                     class="chip chip--reset"
                                     id="ed-removebg"
                                 >
-                                    <span class="mi mi-sm">auto_fix_high</span
+                                    <span class="mi mi-sm ph ph-magic-wand"></span
                                     >Remove background
                                 </button>
                                 <button
                                     class="chip chip--reset"
                                     id="ed-extendbg"
                                 >
-                                    <span class="mi mi-sm">aspect_ratio</span
+                                    <span class="mi mi-sm ph ph-frame-corners"></span
                                     >Extend background
                                 </button>
                                 <button class="chip chip--reset" id="ed-photos">
-                                    <span class="mi mi-sm">photo_library</span
+                                    <span class="mi mi-sm ph ph-images"></span
                                     >Edit in Photos
                                 </button>
                             </div>
@@ -497,7 +497,7 @@
                 <div class="modal__actions">
                     <button class="btn-ghost" id="cutout-cancel">Cancel</button>
                     <button class="btn-main" id="cutout-save">
-                        <span class="mi mi-sm">save</span>Save cutout
+                        <span class="mi mi-sm ph ph-floppy-disk"></span>Save cutout
                     </button>
                 </div>
             </div>
@@ -527,7 +527,7 @@
                         Cancel
                     </button>
                     <button class="btn-main" id="generate-run">
-                        <span class="mi mi-sm">auto_awesome</span>Generate
+                        <span class="mi mi-sm ph ph-sparkle"></span>Generate
                     </button>
                 </div>
             </div>
@@ -548,14 +548,14 @@
                             data-orient="landscape"
                             title="Landscape"
                         >
-                            <span class="mi mi-sm">crop_landscape</span>
+                            <span class="mi mi-sm ph ph-rectangle"></span>
                         </button>
                         <button
                             class="orient-btn"
                             data-orient="portrait"
                             title="Portrait"
                         >
-                            <span class="mi mi-sm">crop_portrait</span>
+                            <span class="mi mi-sm ph ph-device-mobile"></span>
                         </button>
                     </div>
                     <button class="chip is-active" data-ratio="free">
@@ -628,7 +628,7 @@
                         id="extend-fill-simple"
                         title="Edge-stretch + blur + noise (fast)"
                     >
-                        <span class="mi mi-sm">blur_on</span>Simple Fill
+                        <span class="mi mi-sm mi-svg mi-blur-on"></span>Simple Fill
                     </button>
                     <button
                         class="btn-ghost extend__fillbtn"
@@ -643,7 +643,7 @@
                         id="extend-fill"
                         title="Content-aware fill (best for plain backgrounds)"
                     >
-                        <span class="mi mi-sm">auto_fix_normal</span>Patch Fill
+                        <span class="mi mi-sm ph ph-magic-wand"></span>Patch Fill
                     </button>
                     <button
                         class="btn-ghost extend__fillbtn"
@@ -651,14 +651,14 @@
                         title="Generative fill (Stable Diffusion)"
                         hidden
                     >
-                        <span class="mi mi-sm">auto_awesome</span>Generative
+                        <span class="mi mi-sm ph ph-sparkle"></span>Generative
                         Fill
                     </button>
                     <button class="btn-main" id="extend-save" disabled>
-                        <span class="mi mi-sm">save</span>Save
+                        <span class="mi mi-sm ph ph-floppy-disk"></span>Save
                     </button>
                     <button class="btn-ghost" id="extend-edit-photos" hidden>
-                        <span class="mi mi-sm">photo_library</span>Edit in
+                        <span class="mi mi-sm ph ph-images"></span>Edit in
                         Photos
                     </button>
                 </div>
@@ -709,7 +709,7 @@
                 <div class="modal__actions">
                     <button class="btn-ghost" id="web-cancel">Cancel</button>
                     <button class="btn-main" id="web-export">
-                        <span class="mi mi-sm">save</span>Export
+                        <span class="mi mi-sm ph ph-floppy-disk"></span>Export
                     </button>
                 </div>
             </div>
@@ -729,7 +729,7 @@
                 <div class="modal__actions">
                     <button class="btn-ghost" id="new-cancel">Cancel</button>
                     <button class="btn-main" id="new-create">
-                        <span class="mi mi-sm">add</span>Create
+                        <span class="mi mi-sm ph ph-plus"></span>Create
                     </button>
                 </div>
             </div>

@@ -4,13 +4,13 @@
 // next click/scroll/blur. Items are plain data so callers stay declarative:
 //
 //   openContextMenu(e.clientX, e.clientY, [
-//     { label: "Open", icon: "open_in_full", run: () => open(note) },
+//     { label: "Open", icon: "arrows-out", run: () => open(note) },
 //     "-",
 //     { label: "Theme", icon: "palette", items: themeItems },   // submenu
 //     { label: "Delete", run: del },
 //   ]);
 //
-// Item fields: label, icon (Material Symbols name), run, items (submenu),
+// Item fields: label, icon (Phosphor name), run, items (submenu),
 // disabled, checked (shows a tick), swatch (colour dot), font (renders the
 // label in that font, for font pickers). `"-"` is a separator.
 
@@ -74,8 +74,7 @@ function buildItem(item, depth) {
 
   if (item.icon) {
     const ic = document.createElement("span");
-    ic.className = "mi mi-sm";
-    ic.textContent = item.icon;
+    ic.className = `mi mi-sm ph ph-${item.icon}`;
     btn.append(ic);
   }
   if ("swatch" in item) {
@@ -92,8 +91,7 @@ function buildItem(item, depth) {
 
   if (item.items) {
     const chev = document.createElement("span");
-    chev.className = "mi mi-sm ctxmenu__chev";
-    chev.textContent = "chevron_right";
+    chev.className = "mi mi-sm ph ph-caret-right ctxmenu__chev";
     btn.append(chev);
     // Hover opens the submenu (and closes a sibling's); clicking does the same,
     // so it works for anyone who taps rather than hovers.
@@ -110,8 +108,7 @@ function buildItem(item, depth) {
   } else {
     if (item.checked) {
       const tick = document.createElement("span");
-      tick.className = "mi mi-sm ctxmenu__tick";
-      tick.textContent = "check";
+      tick.className = "mi mi-sm ph ph-check ctxmenu__tick";
       btn.append(tick);
     }
     btn.addEventListener("pointerenter", () => {

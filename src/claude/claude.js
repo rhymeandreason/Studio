@@ -97,8 +97,7 @@ function createDropdown(container, items, { icon } = {}) {
     const label = document.createElement("span");
     label.className = "notedrop__label";
     const chev = document.createElement("span");
-    chev.className = "mi mi-sm notedrop__chev";
-    chev.textContent = "expand_more";
+    chev.className = "mi mi-sm ph ph-caret-down notedrop__chev";
     btn.append(label, chev);
 
     const menu = document.createElement("div");
@@ -312,9 +311,9 @@ async function persistSessions() {
 }
 
 const ROLE_ICONS = {
-    user: "person",
-    assistant: "smart_toy",
-    tool: "build",
+    user: "user",
+    assistant: "robot",
+    tool: "wrench",
     system: "info",
 };
 
@@ -340,7 +339,7 @@ function renderTabs() {
         const tab = document.createElement("div");
         tab.className = "claude-tab" + (s.key === activeKey ? " is-active" : "");
         tab.title = s.name;
-        tab.innerHTML = `<span class="claude-tab__name"></span><button class="claude-tab__close" title="Close session"><span class="mi">close</span></button>`;
+        tab.innerHTML = `<span class="claude-tab__name"></span><button class="claude-tab__close" title="Close session"><span class="mi ph ph-x"></span></button>`;
         tab.querySelector(".claude-tab__name").textContent = s.name;
         tab.addEventListener("click", () => switchTo(s.key));
         tab.querySelector(".claude-tab__close").addEventListener("click", (e) => {
@@ -366,7 +365,7 @@ function renderSessionsList() {
     for (const s of visible) {
         const item = document.createElement("div");
         item.className = "claude-session-item" + (s.key === activeKey ? " is-active" : "");
-        item.innerHTML = `<span class="claude-session-item__name" title="Click to rename"></span><span class="claude-session-item__project"><span class="mi mi-sm">folder</span><span></span></span><span class="claude-session-item__meta"><span class="claude-session-item__model"></span><span class="claude-session-item__context"></span></span><button class="claude-session-item__delete" title="Delete session"><span class="mi">delete</span></button>`;
+        item.innerHTML = `<span class="claude-session-item__name" title="Click to rename"></span><span class="claude-session-item__project"><span class="mi mi-sm ph ph-folder"></span><span></span></span><span class="claude-session-item__meta"><span class="claude-session-item__model"></span><span class="claude-session-item__context"></span></span><button class="claude-session-item__delete" title="Delete session"><span class="mi ph ph-trash"></span></button>`;
         item.querySelector(".claude-session-item__name").textContent = s.name;
         item.querySelector(".claude-session-item__project span:last-child").textContent =
             s.projectName;
@@ -459,7 +458,7 @@ function renderTranscript(session) {
     if (!session.transcript.length) {
         const empty = document.createElement("div");
         empty.className = "claude-empty";
-        empty.innerHTML = `<span class="mi">forum</span>Start the conversation`;
+        empty.innerHTML = `<span class="mi ph ph-chats"></span>Start the conversation`;
         transcriptEl.appendChild(empty);
         return;
     }
@@ -482,7 +481,7 @@ function appendBubble(role, text) {
         const sp = text.indexOf(" ");
         const name = sp === -1 ? text : text.slice(0, sp);
         const detail = sp === -1 ? "" : text.slice(sp + 1);
-        el.innerHTML = `<button class="claude-tool"><span class="mi claude-tool__chevron">chevron_right</span><span class="mi claude-tool__icon">build</span><span class="claude-tool__name"></span></button><pre class="claude-tool__detail"></pre>`;
+        el.innerHTML = `<button class="claude-tool"><span class="mi claude-tool__chevron ph ph-caret-right"></span><span class="mi claude-tool__icon ph ph-wrench"></span><span class="claude-tool__name"></span></button><pre class="claude-tool__detail"></pre>`;
         el.querySelector(".claude-tool__name").textContent = name;
         el.querySelector(".claude-tool__detail").textContent = detail;
         el.querySelector(".claude-tool").addEventListener("click", () => {
@@ -510,8 +509,7 @@ function appendBubble(role, text) {
         el.appendChild(who);
     } else if (role !== "system" && role !== "user") {
         const icon = document.createElement("span");
-        icon.className = "mi claude-msg__icon";
-        icon.textContent = ROLE_ICONS[role] || "circle";
+        icon.className = `mi ph ph-${ROLE_ICONS[role] || "circle"} claude-msg__icon`;
         el.appendChild(icon);
     }
     const body = document.createElement("div");

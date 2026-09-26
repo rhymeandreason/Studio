@@ -167,14 +167,14 @@
 
 <body>
   <div id="bar" data-window-bar>
-    <div class="brand" data-window-close><span class="mi">bookmark</span> Instagram Saved</div>
+    <div class="brand" data-window-close><span class="mi ph ph-bookmark-simple"></span> Instagram Saved</div>
     <button class="btn" id="btn-instagram" title="Open Instagram (sign in / sign out here)">
-      <span class="mi mi-sm">open_in_new</span> Instagram
+      <span class="mi mi-sm ph ph-arrow-square-out"></span> Instagram
     </button>
     <label class="text-xs text-muted" style="display:flex;align-items:center;gap:6px" title="Run batches back to back until everything is pulled">
       <studio-toggle id="auto-toggle"></studio-toggle> Keep going
     </label>
-    <button class="btn btn-primary" id="btn-pull"><span class="mi mi-sm">sync</span> Pull next 100</button>
+    <button class="btn btn-primary" id="btn-pull"><span class="mi mi-sm ph ph-arrows-clockwise"></span> Pull next 100</button>
     <button class="btn" id="btn-stop" hidden>Stop</button>
     <button class="btn" id="btn-pull-full" title="Start over from the top so removed saves disappear too">Restart pull</button>
   </div>
@@ -188,7 +188,7 @@
     </div>
     <div id="empty" hidden>
       <div class="card">
-        <span class="mi">bookmark</span>
+        <span class="mi ph ph-bookmark-simple"></span>
         <p class="text-body" id="empty-text">Sign in to Instagram to pull your saved posts.</p>
         <p class="text-xs text-muted" id="empty-sub">Your session stays inside Studio's own web view — nothing is sent anywhere else.</p>
         <button class="btn btn-primary" id="btn-empty-action">Sign in</button>
@@ -197,18 +197,18 @@
     <div id="grid" hidden></div>
     <div id="viewer" hidden>
       <div class="frame">
-        <button class="btn btn-icon-s close" id="v-close" title="Close (Esc)"><span class="mi mi-sm">close</span></button>
+        <button class="btn btn-icon-s close" id="v-close" title="Close (Esc)"><span class="mi mi-sm ph ph-x"></span></button>
         <div class="stage">
           <img id="v-img" alt="" />
-          <button class="nav prev" id="v-prev" hidden><span class="mi">chevron_left</span></button>
-          <button class="nav next" id="v-next" hidden><span class="mi">chevron_right</span></button>
+          <button class="nav prev" id="v-prev" hidden><span class="mi ph ph-caret-left"></span></button>
+          <button class="nav next" id="v-next" hidden><span class="mi ph ph-caret-right"></span></button>
           <div class="dots" id="v-dots"></div>
         </div>
         <div class="info">
           <div class="text"><b id="v-user"></b><span id="v-caption"></span></div>
           <div class="btns">
-            <button class="btn" id="v-save" title="Save full-size to the active project's media/instagram"><span class="mi mi-sm">download</span> Save</button>
-            <button class="btn" id="v-open"><span class="mi mi-sm">open_in_new</span> Instagram</button>
+            <button class="btn" id="v-save" title="Save full-size to the active project's media/instagram"><span class="mi mi-sm ph ph-download-simple"></span> Save</button>
+            <button class="btn" id="v-open"><span class="mi mi-sm ph ph-arrow-square-out"></span> Instagram</button>
           </div>
         </div>
       </div>
@@ -246,7 +246,7 @@
       const bp = $('btn-pull');
       if (bp) {
         bp.disabled = pulling || !session.logged_in;
-        bp.innerHTML = `<span class="mi mi-sm">sync</span> ${pulling ? 'Pulling…' : !doc.cursor ? 'Pull saved posts' : done ? 'Pull new' : `Pull next ${BATCH}`}`;
+        bp.innerHTML = `<span class="mi mi-sm ph ph-arrows-clockwise"></span> ${pulling ? 'Pulling…' : !doc.cursor ? 'Pull saved posts' : done ? 'Pull new' : `Pull next ${BATCH}`}`;
       }
       if ($('btn-stop')) $('btn-stop').hidden = !pulling;
       if ($('btn-pull-full')) $('btn-pull-full').disabled = pulling || !session.logged_in;
@@ -293,15 +293,15 @@
     }
 
     function card(it) {
-      const badge = it.media_type === 8 ? 'filter_none' : it.media_type === 2 ? 'play_circle' : '';
+      const badge = it.media_type === 8 ? 'copy-simple' : it.media_type === 2 ? 'play-circle' : '';
       const thumb = it.thumb
         ? `<img loading="lazy" src="${esc(convert(it.thumb))}" alt="" />`
-        : `<div class="no-thumb"><span class="mi">image</span></div>`;
+        : `<div class="no-thumb"><span class="mi ph ph-image"></span></div>`;
       return `<div class="post" data-id="${esc(it.id)}">
         ${thumb}
-        ${badge ? `<span class="mi badge">${badge}</span>` : ''}
+        ${badge ? `<span class="mi badge ph ph-${badge}"></span>` : ''}
         <div class="actions">
-          <button class="btn btn-icon-s" data-act="save" title="${project ? `Save full-size to ${esc(project.name)}/media/instagram` : 'Activate a project to save media into it'}" ${project ? '' : 'disabled'}><span class="mi mi-sm">download</span></button>
+          <button class="btn btn-icon-s" data-act="save" title="${project ? `Save full-size to ${esc(project.name)}/media/instagram` : 'Activate a project to save media into it'}" ${project ? '' : 'disabled'}><span class="mi mi-sm ph ph-download-simple"></span></button>
         </div>
         <div class="meta"><b>@${esc(it.username)}</b><span>${esc(it.caption)}</span></div>
       </div>`;

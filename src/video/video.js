@@ -354,8 +354,7 @@ function renderTimeline() {
     label.className = "label";
     if (isShader(c)) {
       const mi = document.createElement("span");
-      mi.className = "mi";
-      mi.textContent = "blur_on";
+      mi.className = "mi mi-svg mi-blur-on";
       label.append(mi, SHADERS[c.effect]?.label || c.effect);
     } else {
       label.textContent = c.src.split("/").pop();
@@ -467,7 +466,7 @@ let lastTick = 0;
 function setPlaying(v) {
   if (playing === v) return;
   playing = v;
-  $play.innerHTML = `<span class="mi">${v ? "pause" : "play_arrow"}</span>`;
+  $play.innerHTML = `<span class="mi ph ph-${v ? "pause" : "play"}"></span>`;
   const c = clips()[activeIdx];
   if (v) {
     lastTick = performance.now();
@@ -919,14 +918,14 @@ function renderVideoClipInspector(clip) {
     const b = document.createElement("button");
     b.className = "btn btn-icon";
     b.title = title;
-    b.innerHTML = `<span class="mi">${icon}</span>`;
+    b.innerHTML = `<span class="mi ph ph-${icon}"></span>`;
     b.addEventListener("click", () => setRotate((clip.rotate || 0) + delta));
     return b;
   };
   const cur = document.createElement("span");
   cur.className = "text-xs";
   cur.textContent = `${clip.rotate || 0}°`;
-  row.append(mkRot("rotate_left", "Rotate counter-clockwise", -90), mkRot("rotate_right", "Rotate clockwise", 90), cur);
+  row.append(mkRot("arrow-counter-clockwise", "Rotate counter-clockwise", -90), mkRot("arrow-clockwise", "Rotate clockwise", 90), cur);
   inspectorField("Rotate", row);
 }
 

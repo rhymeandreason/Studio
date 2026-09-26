@@ -130,7 +130,7 @@
     let currentWorkspace = null;
 
     function mi(name) {
-      return `<span class="mi material-symbols-rounded">${name}</span>`;
+      return `<span class="mi ph ph-${name}"></span>`;
     }
 
     function renderModes() {
@@ -144,7 +144,7 @@
         playBtn.className = 'mode-btn';
         playBtn.title = `Restore "${mode.name}"'s windows`;
         playBtn.disabled = !mode.layout?.length;
-        playBtn.innerHTML = mi('play_arrow');
+        playBtn.innerHTML = mi('play');
 
         const name = document.createElement('div');
         name.className = 'mode-card__name';

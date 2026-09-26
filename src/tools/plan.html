@@ -249,7 +249,7 @@
     <span class="dash">→</span>
     <input class="field" id="range-end" type="date" title="Last week">
     <button class="btn btn-icon-only" id="today-btn" type="button" title="Jump to this week">
-      <span class="mi mi-sm">today</span>
+      <span class="mi mi-sm ph ph-calendar-dot"></span>
     </button>
   </div>
 
@@ -347,7 +347,7 @@
             <span class="week__date">${esc(weekLabel(mon))}</span>
             <span class="week__spacer"></span>
             <button class="btn btn-icon-only week__add" type="button" title="Add note">
-              <span class="mi mi-sm">add</span>
+              <span class="mi mi-sm ph ph-plus"></span>
             </button>
           </div>
           ${key === nowKey ? `<div class="today-bar"><div class="today-bar__fill"></div><div class="today-bar__now"></div><span class="today-bar__label"></span></div>` : ""}
@@ -510,10 +510,10 @@
       el.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         openContextMenu(e.clientX, e.clientY, [
-          { label: "Edit", icon: "edit", run: () => startEdit(note, text) },
+          { label: "Edit", icon: "pencil-simple", run: () => startEdit(note, text) },
           { label: note.done ? "Mark not done" : "Mark done", icon: "check", run: () => el.querySelector(".pnote__dot").click() },
           "-",
-          { label: "Delete", icon: "delete", run: () => deleteNote(note.id) },
+          { label: "Delete", icon: "trash", run: () => deleteNote(note.id) },
         ]);
       });
 
@@ -538,7 +538,7 @@
         const chip = document.createElement("span");
         chip.className = `pchip pchip--${s.kind}`;
         chip.title = `${note.text.slice(...s.at)} — click to edit`;
-        chip.innerHTML = `<span class="mi mi-sm">${s.kind === "date" ? "event" : "schedule"}</span>`;
+        chip.innerHTML = `<span class="mi mi-sm ph ph-${s.kind === "date" ? "calendar-blank" : "clock"}"></span>`;
         chip.appendChild(document.createTextNode(s.label));
         // Click drops back to the raw text with the caret in the match.
         chip.addEventListener("click", (e) => {

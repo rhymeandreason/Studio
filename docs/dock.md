@@ -148,7 +148,7 @@ every Studio window for seconds on each poll.
 The strip is the **one surface that doesn't use the Runes paper palette**: it needs
 to read as bezel, so `index.html` defines a local near-black scale (`--dock-bg`,
 `--dock-text`, `--dock-dim`…). It still uses `tokens.css` for type (`--sans`),
-Material Symbols (`.mi`), radii and motion easings. It has no window chrome —
+Phosphor icons (`.mi`), radii and motion easings. It has no window chrome —
 `kit/window-chrome.js` is deliberately *not* loaded, since there's no bar, no close
 dot and no dragging.
 

@@ -217,23 +217,23 @@
 
 <body class="outline-window">
   <div id="bar" data-window-bar>
-    <div class="brand" data-window-close><span class="mi">hub</span> Mycelium</div>
+    <div class="brand" data-window-close><span class="mi ph ph-graph"></span> Mycelium</div>
     <div class="tabs tabs--round">
       <button class="tab is-active" id="tab-all">All</button>
       <button class="tab" id="tab-main">Main</button>
       <button class="tab" id="tab-events">Events</button>
     </div>
-    <button class="btn" id="btn-settings"><span class="mi mi-sm">settings</span></button>
-    <button class="btn btn-primary" id="btn-tree"><span class="mi mi-sm">add</span> New tree</button>
+    <button class="btn" id="btn-settings"><span class="mi mi-sm ph ph-gear"></span></button>
+    <button class="btn btn-primary" id="btn-tree"><span class="mi mi-sm ph ph-plus"></span> New tree</button>
   </div>
 
   <div id="split" >
     <div id="stage" class="main">
       <div id="world"><svg id="edges"></svg></div>
       <div id="empty">
-        <span class="mi">hub</span>
+        <span class="mi ph ph-graph"></span>
         <div>No trees yet.<br>Create one for an event, place, company, or group.</div>
-        <button class="btn btn-primary" id="btn-tree-empty"><span class="mi mi-sm">add</span> New tree</button>
+        <button class="btn btn-primary" id="btn-tree-empty"><span class="mi mi-sm ph ph-plus"></span> New tree</button>
       </div>
     </div>
     <aside id="inspector" class="hidden"></aside>
@@ -247,7 +247,7 @@
 
     const CONTACT_TYPES = ["phone","email","linkedin","instagram","x","website","other"];
     const KINDS = ["event","place","company","group"];
-    const KIND_ICON = { event:"event", place:"place", company:"business", group:"groups" };
+    const KIND_ICON = { event:"calendar-blank", place:"map-pin", company:"buildings", group:"users-three" };
     const TREE_COLORS = ["#7a5cff","#e0699a","#3aa6a0","#e08a3c","#5b8def","#8a7cff","#4caf7d"];
 
     let store = { version: 1, serverUrl: "", me: { name: "", contacts: [] }, trees: [], people: [] };
@@ -647,7 +647,7 @@
       el.style.setProperty("--tree-color", t.color || "var(--accent)");
       el.innerHTML =
         `<div class="node-inner">
-           <div class="dot"><span class="mi">${KIND_ICON[t.kind] || "hub"}</span></div>
+           <div class="dot"><span class="mi ph ph-${KIND_ICON[t.kind] || "graph"}"></span></div>
            <div class="label">${esc(t.name || "Untitled")}</div>
            ${t.date ? `<div class="sublabel">${esc(t.date)}</div>` : ""}
          </div>`;
@@ -702,7 +702,7 @@
       const el = addPersonEl;
       el.classList.toggle("open", addPersonOpen);
       if (!addPersonOpen) {
-        el.innerHTML = `<div class="node-inner"><div class="dot"><span class="mi">add</span></div><div class="label">Add person</div></div>`;
+        el.innerHTML = `<div class="node-inner"><div class="dot"><span class="mi ph ph-plus"></span></div><div class="label">Add person</div></div>`;
         el.onclick = () => { addPersonOpen = true; addPersonDrawnOpen = null; updateAddPersonAffordance(); };
         return;
       }
@@ -968,7 +968,7 @@
             `<select class="field">${CONTACT_TYPES.map(t =>
               `<option ${t === c.type ? "selected" : ""}>${t}</option>`).join("")}</select>
              <input class="field" placeholder="value" value="${esc(c.value || "")}">
-             <button class="btn-icon" title="Remove"><span class="mi mi-sm">close</span></button>`;
+             <button class="btn-icon" title="Remove"><span class="mi mi-sm ph ph-x"></span></button>`;
           const [sel, inp, rm] = row.children;
           sel.onchange = () => { c.type = sel.value; onChange(); };
           inp.oninput = () => { c.value = inp.value; onChange(); };
@@ -977,7 +977,7 @@
         });
         const add = document.createElement("button");
         add.className = "btn btn-ghost"; add.style.marginTop = "2px";
-        add.innerHTML = `<span class="mi mi-sm">add</span> Add contact`;
+        add.innerHTML = `<span class="mi mi-sm ph ph-plus"></span> Add contact`;
         add.onclick = () => { list.push({ type: "email", value: "" }); draw(); onChange(); };
         wrap.appendChild(add);
       };
@@ -1001,7 +1001,7 @@
                <span style="width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:${t?.color || 'var(--accent)'}"></span>
                ${esc(t?.name || "Deleted tree")}
              </div>
-             <button class="btn-icon" title="Disconnect"><span class="mi mi-sm">close</span></button>`;
+             <button class="btn-icon" title="Disconnect"><span class="mi mi-sm ph ph-x"></span></button>`;
           row.lastElementChild.onclick = () => {
             pushUndo();
             p.treeIds.splice(i, 1);
@@ -1108,7 +1108,7 @@
       const lb = document.createElement("div"); lb.className = "link-box";
       lb.innerHTML = `<code>${esc(link)}</code>`;
       const copy = document.createElement("button"); copy.className = "btn-icon";
-      copy.innerHTML = `<span class="mi mi-sm">content_copy</span>`;
+      copy.innerHTML = `<span class="mi mi-sm ph ph-copy"></span>`;
       copy.onclick = () => { navigator.clipboard.writeText(link); toast("Intake link copied"); };
       lb.appendChild(copy); frag.appendChild(lb);
 
@@ -1124,14 +1124,14 @@
       const plb = document.createElement("div"); plb.className = "link-box";
       plb.innerHTML = `<code>${esc(presenter)}</code>`;
       const pcopy = document.createElement("button"); pcopy.className = "btn-icon";
-      pcopy.innerHTML = `<span class="mi mi-sm">content_copy</span>`;
+      pcopy.innerHTML = `<span class="mi mi-sm ph ph-copy"></span>`;
       pcopy.onclick = () => { navigator.clipboard.writeText(presenter); toast("Presenter link copied"); };
       plb.appendChild(pcopy); frag.appendChild(plb);
 
       frag.appendChild(divider());
       const sync = document.createElement("button");
       sync.className = "btn"; sync.style.width = "100%";
-      sync.innerHTML = `<span class="mi mi-sm">sync</span> Pull new contacts`;
+      sync.innerHTML = `<span class="mi mi-sm ph ph-arrows-clockwise"></span> Pull new contacts`;
       sync.onclick = () => pullInbox(t, sync);
       frag.appendChild(sync);
       return frag;
@@ -1163,7 +1163,7 @@
     // ---------- pull from Vercel inbox ----------
     async function pullInbox(t, btn) {
       const base = store.serverUrl.replace(/\/$/, "");
-      btn.disabled = true; btn.innerHTML = `<span class="mi mi-sm">sync</span> Pulling…`;
+      btn.disabled = true; btn.innerHTML = `<span class="mi mi-sm ph ph-arrows-clockwise"></span> Pulling…`;
       try {
         const res = await fetch(`${base}/api/pull?tree=${encodeURIComponent(t.id)}`);
         if (!res.ok) throw new Error("HTTP " + res.status);
@@ -1185,7 +1185,7 @@
       } catch (e) {
         toast("Sync failed: " + e.message);
       } finally {
-        btn.disabled = false; btn.innerHTML = `<span class="mi mi-sm">sync</span> Pull new contacts`;
+        btn.disabled = false; btn.innerHTML = `<span class="mi mi-sm ph ph-arrows-clockwise"></span> Pull new contacts`;
       }
     }
 
@@ -1217,7 +1217,7 @@
 
     async function matchMacContacts(btn, container) {
       if (!hasTauri) { toast("Only available in the app"); return; }
-      btn.disabled = true; btn.innerHTML = `<span class="mi mi-sm">contacts</span> Scanning…`;
+      btn.disabled = true; btn.innerHTML = `<span class="mi mi-sm ph ph-address-book"></span> Scanning…`;
       container.innerHTML = "";
       try {
         const raw = await invoke("contacts_dump");
@@ -1261,8 +1261,8 @@
           for (const { person, contact } of fuzzy) {
             const row = document.createElement("div"); row.className = "contact-row";
             row.innerHTML = `<div class="field" style="display:flex; align-items:center; flex:1 1 auto;">${esc(person.name)}</div>
-              <button class="btn-icon" title="Add contact info"><span class="mi mi-sm">check</span></button>
-              <button class="btn-icon" title="Not a match"><span class="mi mi-sm">close</span></button>`;
+              <button class="btn-icon" title="Add contact info"><span class="mi mi-sm ph ph-check"></span></button>
+              <button class="btn-icon" title="Not a match"><span class="mi mi-sm ph ph-x"></span></button>`;
             const [, addBtn, skipBtn] = row.children;
             addBtn.onclick = () => {
               pushUndo();
@@ -1279,7 +1279,7 @@
       } catch (e) {
         container.innerHTML = `<div class="muted-note" style="margin-top:0">Couldn't read Contacts: ${esc(e.message || e)}</div>`;
       } finally {
-        btn.disabled = false; btn.innerHTML = `<span class="mi mi-sm">contacts</span> Match Mac Contacts`;
+        btn.disabled = false; btn.innerHTML = `<span class="mi mi-sm ph ph-address-book"></span> Match Mac Contacts`;
       }
     }
 
@@ -1313,7 +1313,7 @@
       inspector.appendChild(sectionLabel("Contacts"));
       const matchBtn = document.createElement("button");
       matchBtn.className = "btn"; matchBtn.style.width = "100%";
-      matchBtn.innerHTML = `<span class="mi mi-sm">contacts</span> Match Mac Contacts`;
+      matchBtn.innerHTML = `<span class="mi mi-sm ph ph-address-book"></span> Match Mac Contacts`;
       const matchResults = document.createElement("div"); matchResults.style.marginTop = "8px";
       matchBtn.onclick = () => matchMacContacts(matchBtn, matchResults);
       inspector.appendChild(matchBtn);
@@ -1331,7 +1331,7 @@
         const acc = document.createElement("details"); acc.className = "tree-accordion";
         const sum = document.createElement("summary");
         sum.innerHTML = `<span class="swatch" style="background:${t.color || 'var(--accent)'}"></span>
-          ${esc(t.name || "Untitled")}<span class="mi">expand_more</span>`;
+          ${esc(t.name || "Untitled")}<span class="mi ph ph-caret-down"></span>`;
         acc.appendChild(sum);
         const body = document.createElement("div"); body.className = "tree-accordion-body";
         acc.appendChild(body);
@@ -1385,7 +1385,7 @@
     function divider() { const d = document.createElement("div"); d.className = "divider"; return d; }
     function dangerBtn(txt, onClick) {
       const b = document.createElement("button"); b.className = "btn btn-ghost danger"; b.style.width = "100%";
-      b.innerHTML = `<span class="mi mi-sm">delete</span> ${txt}`; b.onclick = onClick; return b;
+      b.innerHTML = `<span class="mi mi-sm ph ph-trash"></span> ${txt}`; b.onclick = onClick; return b;
     }
 
     // ---------- new tree ----------

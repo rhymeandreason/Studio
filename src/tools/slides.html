@@ -201,7 +201,7 @@
   <div id="main">
   <div class="reel">
     <div class="reel-head">
-      <button class="btn btn-primary" id="add-slide"><span class="mi mi-sm">add</span> Slide</button>
+      <button class="btn btn-primary" id="add-slide"><span class="mi mi-sm ph ph-plus"></span> Slide</button>
     </div>
     <div class="reel-list" id="reel-list"></div>
   </div>
@@ -209,7 +209,7 @@
   <div class="stage-wrap">
     <div class="stage-bar">
       <input class="title" id="deck-name" value="Untitled deck" spellcheck="false" />
-      <button class="btn btn-ghost" id="export-web"><span class="mi mi-sm">public</span> Web</button>
+      <button class="btn btn-ghost" id="export-web"><span class="mi mi-sm ph ph-globe"></span> Web</button>
       <button class="btn btn-secondary" id="save-as">Save as…</button>
     </div>
     <div class="stage-controls" id="stage-controls"></div>
@@ -721,13 +721,13 @@
           if (!slide[key]) nameEl.classList.add("img-name--empty");
           const browse = document.createElement("button");
           browse.className = "btn btn-ghost btn-icon"; browse.title = "Choose image";
-          browse.innerHTML = `<span class="mi mi-sm">photo_library</span>`;
+          browse.innerHTML = `<span class="mi mi-sm ph ph-images"></span>`;
           browse.onclick = () => openMediaPicker(rel => { slide[key] = rel; renderAll(); });
           // A set image gets a button to clear it (so a second image is removable).
           if (slide[key]) {
             const clear = document.createElement("button");
             clear.className = "btn btn-ghost btn-icon"; clear.title = "Remove image";
-            clear.innerHTML = `<span class="mi mi-sm">close</span>`;
+            clear.innerHTML = `<span class="mi mi-sm ph ph-x"></span>`;
             clear.onclick = () => { slide[key] = ""; renderAll(); };
             ctl.append(prev, nameEl, browse, clear);
           } else {
@@ -784,7 +784,7 @@
       if (editPath) {
         const edit = document.createElement("button");
         edit.className = "theme-card__edit"; edit.title = "Edit theme";
-        edit.innerHTML = `<span class="mi mi-sm">edit</span>`;
+        edit.innerHTML = `<span class="mi mi-sm ph ph-pencil-simple"></span>`;
         edit.onclick = (e) => { e.stopPropagation(); hasTauri && invoke("open_tool", { file:"theme-editor.html", query:"artifact="+encodeURIComponent(editPath) }); };
         preview.appendChild(edit);
       }
@@ -801,11 +801,11 @@
       const s = sec("Theme");
       // Edit the deck's current theme — opens the theme editor seeded with it.
       const editBtn = document.createElement("button");
-      editBtn.className = "btn btn-secondary"; editBtn.innerHTML = `<span class="mi mi-sm">edit</span> Edit theme`;
+      editBtn.className = "btn btn-secondary"; editBtn.innerHTML = `<span class="mi mi-sm ph ph-pencil-simple"></span> Edit theme`;
       editBtn.onclick = () => hasTauri && invoke("open_tool", { file:"theme-editor.html", query:"theme="+encodeURIComponent(JSON.stringify(state.theme)) });
       s.appendChild(editBtn);
       const newBtn = document.createElement("button");
-      newBtn.className = "btn btn-secondary"; newBtn.innerHTML = `<span class="mi mi-sm">add</span> New theme`;
+      newBtn.className = "btn btn-secondary"; newBtn.innerHTML = `<span class="mi mi-sm ph ph-plus"></span> New theme`;
       newBtn.onclick = () => hasTauri && invoke("open_tool", { file:"theme-editor.html", query:null });
       s.appendChild(newBtn);
 

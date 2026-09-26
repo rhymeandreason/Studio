@@ -114,8 +114,8 @@
   <div class="stage-wrap">
     <div class="stage-bar">
       <input class="title" id="dg-name" value="Untitled diagram" spellcheck="false" />
-      <button class="btn btn-ghost" id="copy-svg"><span class="mi mi-sm">content_copy</span> Copy SVG</button>
-      <button class="btn btn-ghost" id="export-svg"><span class="mi mi-sm">download</span> SVG</button>
+      <button class="btn btn-ghost" id="copy-svg"><span class="mi mi-sm ph ph-copy"></span> Copy SVG</button>
+      <button class="btn btn-ghost" id="export-svg"><span class="mi mi-sm ph ph-download-simple"></span> SVG</button>
       <button class="btn btn-secondary" id="save-as">Save as…</button>
     </div>
     <div class="stage-scroll">
@@ -357,14 +357,14 @@
     function rmBtn(onclick) {
       const b = document.createElement("button");
       b.className = "item-rm"; b.title = "Remove";
-      b.innerHTML = `<span class="mi mi-sm">close</span>`;
+      b.innerHTML = `<span class="mi mi-sm ph ph-x"></span>`;
       b.onclick = onclick;
       return b;
     }
     function addBtn(label, onclick) {
       const b = document.createElement("button");
       b.className = "btn btn-secondary";
-      b.innerHTML = `<span class="mi mi-sm">add</span> ${label}`;
+      b.innerHTML = `<span class="mi mi-sm ph ph-plus"></span> ${label}`;
       b.onclick = onclick;
       return b;
     }
@@ -428,7 +428,7 @@
       if (n) {
         const reset = document.createElement("button");
         reset.className = "btn btn-secondary";
-        reset.innerHTML = `<span class="mi mi-sm">restart_alt</span> Reset layout (${n} nudge${n === 1 ? "" : "s"})`;
+        reset.innerHTML = `<span class="mi mi-sm ph ph-arrow-counter-clockwise"></span> Reset layout (${n} nudge${n === 1 ? "" : "s"})`;
         reset.onclick = () => { state.offsets = {}; renderAll(); };
         layoutSec.appendChild(reset);
       }
@@ -630,7 +630,7 @@
     function themeSection() {
       const s = sec("Theme");
       const editBtn = document.createElement("button");
-      editBtn.className = "btn btn-secondary"; editBtn.innerHTML = `<span class="mi mi-sm">edit</span> Edit theme`;
+      editBtn.className = "btn btn-secondary"; editBtn.innerHTML = `<span class="mi mi-sm ph ph-pencil-simple"></span> Edit theme`;
       editBtn.onclick = () => hasTauri && invoke("open_tool", { file: "theme-editor.html", query: "theme=" + encodeURIComponent(JSON.stringify(state.theme)) });
       s.appendChild(editBtn);
 
@@ -657,7 +657,7 @@
       if (editPath) {
         const edit = document.createElement("button");
         edit.className = "theme-card__edit"; edit.title = "Edit theme";
-        edit.innerHTML = `<span class="mi mi-sm">edit</span>`;
+        edit.innerHTML = `<span class="mi mi-sm ph ph-pencil-simple"></span>`;
         edit.onclick = (e) => { e.stopPropagation(); hasTauri && invoke("open_tool", { file: "theme-editor.html", query: "artifact=" + encodeURIComponent(editPath) }); };
         card.appendChild(edit);
       }

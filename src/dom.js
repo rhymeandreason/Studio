@@ -8,9 +8,9 @@ export function el(tag, className, props = {}) {
   return node;
 }
 
-// Material Symbols icon markup.
+// Phosphor icon markup (`.mi`, see tokens.css). `name` is a Phosphor name.
 export function mi(name, sm = true) {
-  return `<span class="mi${sm ? " mi-sm" : ""}">${name}</span>`;
+  return `<span class="mi${sm ? " mi-sm" : ""} ph ph-${name}"></span>`;
 }
 
 // Generate a short random ID (note IDs, etc.).

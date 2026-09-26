@@ -137,7 +137,7 @@ style assets live and which origins can reach them.**
 ### Layering
 
 - **`tokens.css` (foundation)** — variables only (Runes palette, type stacks),
-  the Material Symbols `.mi` setup, and the minimal reset. Single source of truth.
+  the Phosphor icon `.mi` setup, and the minimal reset. Single source of truth.
   *Done (Phase 0):* extracted from `styles.css`, which now `@import`s it; the
   three existing tools `<link>` it (placed before their own `<style>`, so each
   tool's own `:root` still wins where it differs — appearance unchanged, shared
@@ -314,7 +314,7 @@ forces it. Staged:
 Lowest-risk, highest-value first:
 
 0. **Extract `tokens.css`** — shared foundation for app + tools. ✅ *Done.*
-0b. **Vendor the icon font** — Material Symbols woff2 + `@font-face` in
+0b. **Vendor the icon font** — icon font (now Phosphor, `vendor/phosphor/`) + `@import` in
    `tokens.css`, off the CDN. ✅ *Done.*
 1. **Kit scaffold** — `src/kit/` (`kit.css`, `motion.js`, `components.js`),
    vendor Motion One + Coloris, first component `<studio-color>`, and a

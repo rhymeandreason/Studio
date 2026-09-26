@@ -1222,12 +1222,11 @@ textarea.notecard__title::placeholder {
 }
 
 .notedrop__item::after {
-    font-family: "Material Symbols Rounded";
+    font-family: "Phosphor";
     font-size: 16px;
     content: "";
     color: var(--accent);
     opacity: 0;
-    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
 }
 
 .notedrop__item.is-active {
@@ -1235,7 +1234,7 @@ textarea.notecard__title::placeholder {
 }
 
 .notedrop__item.is-active::after {
-    content: "check";
+    content: "\e182" /* Phosphor check */;
     opacity: 1;
 }
 

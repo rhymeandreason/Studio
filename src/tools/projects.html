@@ -96,7 +96,7 @@
       <span class="eyebrow">Projects</span>
     </div>
     <button class="btn btn-ghost btn-icon" id="all" title="All Projects">
-      <span class="mi mi-sm">workspaces</span>
+      <span class="mi mi-sm ph ph-squares-four"></span>
     </button>
   </div>
 
@@ -123,7 +123,7 @@
         <button class="proj ${p.path === activePath ? "active" : ""}" data-path="${esc(p.path)}">
           <span class="dot" ${p.color ? `style="background:${esc(p.color)}"` : ""}></span>
           <span class="name">${esc(p.name)}</span>
-          ${p.path === activePath ? '<span class="mi check">check</span>' : ""}
+          ${p.path === activePath ? '<span class="mi check ph ph-check"></span>' : ""}
         </button>`).join("");
 
       for (const row of list.querySelectorAll(".proj")) {

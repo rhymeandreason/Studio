@@ -1375,7 +1375,7 @@ function noteTagRow(note) {
     for (const tag of note.tags || []) {
       const chip = el("span", "notetag", { textContent: tag });
       const rm = el("button", "notetag__x", { type: "button", title: "Remove tag" });
-      rm.innerHTML = mi("close");
+      rm.innerHTML = mi("x");
       rm.addEventListener("click", () => {
         note.tags = (note.tags || []).filter((t) => t !== tag);
         rerender();
@@ -1385,7 +1385,7 @@ function noteTagRow(note) {
       row.append(chip);
     }
     const add = el("button", "notetag-add", { type: "button", title: "Add tag" });
-    add.innerHTML = mi("add");
+    add.innerHTML = mi("plus");
     add.addEventListener("click", () => openInput([note]));
     row.append(add);
   };
@@ -1600,7 +1600,7 @@ function buildNoteLinks(note, field, { getText, setText }) {
       open.addEventListener("click", () => openExternalUrl(url));
       const rm = el("button", "btn-remove", {
         type: "button",
-        innerHTML: mi("close"),
+        innerHTML: mi("x"),
         title: "Remove link",
       });
       rm.addEventListener("click", () => {
@@ -1741,7 +1741,7 @@ function buildLinkedNote(note) {
     type: "button",
     title: "Open in the Code Editor",
   });
-  open.innerHTML = mi("markdown");
+  open.innerHTML = mi("markdown-logo");
   open.append(el("span", "", { textContent: note.mdFile }));
   open.addEventListener("click", () =>
     invoke("open_file_in_code_editor", { file: mdAbsPath(note.mdFile) }).catch(
@@ -1751,7 +1751,7 @@ function buildLinkedNote(note) {
   const unlink = el("button", "notecard__mdunlink", {
     type: "button",
     title: "Unlink — edit in Studio again",
-    innerHTML: mi("link_off"),
+    innerHTML: mi("link-break"),
   });
   unlink.addEventListener("click", () => unlinkNote(note));
   bar.append(open, unlink);
@@ -1924,7 +1924,7 @@ function buildChecklist(note) {
     requestAnimationFrame(resizeTxt);
     const rm = el("button", "btn-remove", {
       type: "button",
-      innerHTML: mi("close"),
+      innerHTML: mi("x"),
     });
     rm.addEventListener("click", () => {
       note.items.splice(idx, 1);
@@ -2055,7 +2055,7 @@ function buildTable(note) {
   const actions = el("div", "ntable__actions");
   const addRow = el("button", "btn-add", {
     type: "button",
-    innerHTML: `${mi("add")}Row`,
+    innerHTML: `${mi("plus")}Row`,
   });
   addRow.addEventListener("click", () => {
     note.rows.push(note.columns.map(() => ""));
@@ -2064,7 +2064,7 @@ function buildTable(note) {
   });
   const addCol = el("button", "btn-add", {
     type: "button",
-    innerHTML: `${mi("add")}Column`,
+    innerHTML: `${mi("plus")}Column`,
   });
   addCol.addEventListener("click", () => {
     note.columns.push("Column");
@@ -2280,9 +2280,9 @@ function openNoteMenu(e, note) {
 
   openContextMenu(e.clientX, e.clientY, [
     ...(one
-      ? [{ label: "Open", icon: "open_in_full", run: () => openNoteModal(note) }]
+      ? [{ label: "Open", icon: "arrows-out", run: () => openNoteModal(note) }]
       : []),
-    { label: "Add Tag…", icon: "sell", run: tagNotesSelection },
+    { label: "Add Tag…", icon: "tag", run: tagNotesSelection },
     "-",
     ...(one
       ? [
@@ -2295,14 +2295,14 @@ function openNoteMenu(e, note) {
           },
           {
             label: "Title Font",
-            icon: "title",
+            icon: "text-t",
             items: styleMenuItems(fonts, note.titleFont || "", (v) =>
               setSelectedNoteStyle("titleFont", v),
             ),
           },
           {
             label: "Body Font",
-            icon: "text_fields",
+            icon: "text-aa",
             items: styleMenuItems(fonts, note.bodyFont || "", (v) =>
               setSelectedNoteStyle("bodyFont", v),
             ),
@@ -2312,15 +2312,15 @@ function openNoteMenu(e, note) {
             // A linked note's .md already exists — converting again would
             // clobber the Code Editor's edits, so this just opens it.
             label: note.mdFile ? "Open Markdown File" : "Convert to Markdown",
-            icon: "markdown",
+            icon: "markdown-logo",
             run: exportNoteMarkdown,
           },
         ]
       : []),
-    { label: many ? `Copy ${count} Notes` : "Copy", icon: "content_copy", run: copyNotes },
+    { label: many ? `Copy ${count} Notes` : "Copy", icon: "copy", run: copyNotes },
     {
       label: many ? `Delete ${count} Notes` : "Delete",
-      icon: "delete",
+      icon: "trash",
       run: deleteNotesSelection,
     },
   ]);
