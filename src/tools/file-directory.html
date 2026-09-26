@@ -150,14 +150,6 @@
       background: var(--project-hover, var(--surface));
     }
 
-    body.has-project-color .node:hover,
-    body.has-project-color .node:hover .twirl,
-    body.has-project-color .node:hover .icon .mi,
-    body.has-project-color .node:hover .name,
-    body.has-project-color .node:hover .open-browser {
-      color: #000;
-    }
-
     .node .twirl {
       width: 14px;
       height: 14px;
@@ -218,10 +210,29 @@ max-width:350px;
       color: var(--text-muted);
     }
 
-    /* Files changed in the last 24h — flagged with the same tint used for
-     * hover, so they stand out while browsing the tree. */
-    .node.file.recent .name {
-      color: var(--project-hover, orange);
+    /* Files changed in the last 24h get a dot in the (otherwise empty)
+     * twirl slot, in the project color. A dot rather than tinted text: pale
+     * project colors wash out as thin type, but hold up as a filled shape —
+     * the faint ring keeps even the palest ones visible on the paper. */
+    .node.file.recent .twirl::after {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--project-hover, var(--accent));
+      box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
+    }
+
+    /* On a highlighted row the fill *is* the project color, so the dot
+       takes the row's ink instead (see the highlighted-row rules below). */
+    body.has-project-color .node.file.recent:is(:hover, .selected) .twirl::after {
+      background: #000;
+      box-shadow: none;
+    }
+
+    body:not(.has-project-color) .node.file.recent.selected .twirl::after {
+      background: #fff;
+      box-shadow: none;
     }
 
     .node .open-browser {
@@ -268,11 +279,27 @@ max-width:350px;
       background: var(--project-hover, var(--accent));
     }
 
-    body.has-project-color .node.selected,
-    body.has-project-color .node.selected .twirl,
-    body.has-project-color .node.selected .icon .mi,
-    body.has-project-color .node.selected .name {
+    /* Hovered and selected rows sit on a solid fill: the project color, or
+       the dark accent when a row is selected without one. Every piece of
+       row text switches to an ink that reads on that fill — the muted
+       greys (file names, folder hints, git letters) don't. Plain hover
+       without a project color is a pale surface, so it keeps the greys. */
+    body.has-project-color .node:is(:hover, .selected),
+    body.has-project-color .node:is(:hover, .selected) :is(.twirl, .icon .mi, .name, .name b, .open-browser) {
       color: #000;
+    }
+
+    body.has-project-color .node:is(:hover, .selected) :is(.where, .git-badge) {
+      color: rgb(0 0 0 / 0.55);
+    }
+
+    body:not(.has-project-color) .node.selected,
+    body:not(.has-project-color) .node.selected :is(.twirl, .icon .mi, .name, .name b, .open-browser) {
+      color: #fff;
+    }
+
+    body:not(.has-project-color) .node.selected :is(.where, .git-badge) {
+      color: rgb(255 255 255 / 0.7);
     }
 
     /* The folder a drag is currently hovering — outlined rather than filled so
@@ -295,6 +322,65 @@ max-width:350px;
       padding: 0 3px;
       margin: -1px 0;
       outline: none;
+    }
+
+    /* ── Go-to-file filter + working set ─────────────────────────────── */
+
+    #filter-bar {
+      flex-shrink: 0;
+      padding: 2px 8px 6px;
+      background: var(--bg);
+    }
+
+    #filter-bar[hidden] {
+      display: none;
+    }
+
+    #filter {
+      height: 26px;
+      font-size: 12.5px;
+    }
+
+    /* Flat rows (working set, filter results): the name, then its folder in
+       small muted text, then an optional git status letter. */
+    .node.flat {
+      max-width: none;
+    }
+
+    .node.flat .name {
+      flex: 0 1 auto;
+    }
+
+    .node .where {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-left: 6px;
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .node .git-badge {
+      flex-shrink: 0;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-soft);
+    }
+
+    /* Matched letters in Go-to-file results. Class-level specificity on
+       purpose, so the highlighted-row inks above can recolor them. */
+    .node .name b {
+      font-weight: inherit;
+      color: var(--text);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    #results .empty {
+      padding: 8px 6px;
+      color: var(--text-muted);
+      font-size: 12px;
     }
 
     #fd-menu {
@@ -351,11 +437,18 @@ max-width:350px;
     <studio-toggle id="text-scale-toggle" title="Larger text"></studio-toggle>
   </div>
   <div id="project-picker" hidden></div>
-  <div id="tree"></div>
+  <div id="filter-bar" hidden>
+    <input id="filter" class="field" placeholder="Go to file…" spellcheck="false" autocomplete="off" />
+  </div>
+  <div id="tree">
+    <div id="working-set"></div>
+    <div id="roots"></div>
+    <div id="results" hidden></div>
+  </div>
   <div id="fd-menu" hidden></div>
 
   <script type="module">
-    import { hasTauri, invoke, listen, dragFilesOut, toast } from '../kit/app.js';
+    import { hasTauri, invoke, listen, dragFilesOut, toast, esc } from '../kit/app.js';
 
     const tree = document.getElementById('tree');
 
@@ -422,27 +515,68 @@ max-width:350px;
       return 'draft';
     }
 
-    // Remembers which folders are expanded, per project, across reloads.
-    const EXPANDED_STORE_KEY = 'studio-file-directory-expanded';
+    // Per-project path lists in localStorage: { [projectPath]: [path, …] }.
     let currentProjectPath = null;
-    let expandedSet = new Set();
 
-    function loadExpanded(projectPath) {
+    function loadList(key) {
       try {
-        const store = JSON.parse(localStorage.getItem(EXPANDED_STORE_KEY)) || {};
-        return new Set(store[projectPath] || []);
+        const store = JSON.parse(localStorage.getItem(key)) || {};
+        return store[currentProjectPath] || [];
       } catch {
-        return new Set();
+        return [];
       }
     }
 
-    function saveExpanded() {
+    function saveList(key, list) {
       if (!currentProjectPath) return;
       try {
-        const store = JSON.parse(localStorage.getItem(EXPANDED_STORE_KEY)) || {};
-        store[currentProjectPath] = [...expandedSet];
-        localStorage.setItem(EXPANDED_STORE_KEY, JSON.stringify(store));
+        const store = JSON.parse(localStorage.getItem(key)) || {};
+        store[currentProjectPath] = list;
+        localStorage.setItem(key, JSON.stringify(store));
       } catch {}
+    }
+
+    // Remembers which folders are expanded, per project, across reloads.
+    const EXPANDED_STORE_KEY = 'studio-file-directory-expanded';
+    let expandedSet = new Set();
+
+    function saveExpanded() {
+      saveList(EXPANDED_STORE_KEY, [...expandedSet]);
+    }
+
+    // Pinned files/folders (right-click → Pin) and the files most recently
+    // opened from this tool — together with git's changed files they make up
+    // the "working set" shown above the tree.
+    const PINS_KEY = 'studio-file-directory-pins';
+    const RECENT_KEY = 'studio-file-directory-opened';
+    const RECENT_MAX = 6;
+    const CHANGED_MAX = 8;
+    let pins = [];
+    let recents = [];
+
+    function togglePin(path) {
+      pins = pins.includes(path) ? pins.filter((p) => p !== path) : [...pins, path];
+      saveList(PINS_KEY, pins);
+      renderWorkingSet();
+    }
+
+    function rememberOpened(path) {
+      recents = [path, ...recents.filter((p) => p !== path)].slice(0, 20);
+      saveList(RECENT_KEY, recents);
+      renderWorkingSet();
+    }
+
+    // Keeps pins/recents pointing at the right files after a rename or move
+    // (a folder's move carries everything under it). `to` null = gone (Trash).
+    function remapStored(from, to) {
+      const map = (list) => list.flatMap((p) => {
+        if (p !== from && !p.startsWith(from + '/')) return [p];
+        return to ? [to + p.slice(from.length)] : [];
+      });
+      pins = map(pins);
+      recents = map(recents);
+      saveList(PINS_KEY, pins);
+      saveList(RECENT_KEY, recents);
     }
 
     // Files modified within this window are flagged "recent" in the tree.
@@ -466,10 +600,16 @@ max-width:350px;
       }
     }
 
-    // Every node in DOM order — the range shift-click walks, and the order
-    // arrow keys will follow.
+    // Every on-screen node in DOM order — the range shift-click walks, and the
+    // order arrow keys follow. A path can show twice (working set + tree) and
+    // hidden sections (tree while filtering) still hold nodes, so skip those.
     function visibleNodes() {
-      return [...tree.querySelectorAll('.node[data-path]')];
+      return [...tree.querySelectorAll('.node[data-path]')].filter((n) => n.offsetParent);
+    }
+
+    // The first on-screen node for a path.
+    function nodeFor(path) {
+      return visibleNodes().find((n) => n.dataset.path === path) || null;
     }
 
     function clickSelect(path, e) {
@@ -512,6 +652,7 @@ max-width:350px;
       try {
         const moved = await invoke('fs_move', { paths: targets, destDir });
         if (!moved.length) return;
+        for (const m of moved) remapStored(m.from, m.to);
         undoStack.push(moved);
         selected.clear();
         for (const m of moved) selected.add(m.from);
@@ -541,7 +682,10 @@ max-width:350px;
         for (const [dir, paths] of byDir) {
           await invoke('fs_move', { paths, destDir: dir });
         }
-        for (const m of batch) selected.add(m.to);
+        for (const m of batch) {
+          remapStored(m.from, m.to);
+          selected.add(m.to);
+        }
         toast('Move undone');
         await refresh();
       } catch (err) {
@@ -554,6 +698,7 @@ max-width:350px;
       if (!paths.length) return;
       try {
         await invoke('fs_trash', { paths });
+        for (const p of paths) remapStored(p, null);
         selected.clear();
         toast(paths.length === 1 ? 'Moved to Trash' : `${paths.length} items to Trash`);
         await refresh();
@@ -567,7 +712,7 @@ max-width:350px;
     function newFolderParent() {
       const path = selPaths()[0];
       if (!path) return currentProjectPath;
-      const node = tree.querySelector(`.node[data-path="${CSS.escape(path)}"]`);
+      const node = nodeFor(path);
       if (node && node.classList.contains('dir')) return path;
       return path.slice(0, path.lastIndexOf('/'));
     }
@@ -582,7 +727,7 @@ max-width:350px;
         selected.add(path);
         await refresh();
         // Land straight in rename, the way Finder does.
-        const node = tree.querySelector(`.node[data-path="${CSS.escape(path)}"]`);
+        const node = nodeFor(path);
         if (node) node._beginRename();
       } catch (err) {
         toast(String(err));
@@ -644,7 +789,30 @@ max-width:350px;
     }, true);
     window.addEventListener('blur', closeMenu);
 
-    async function buildNode(entry, isRoot = false) {
+    // Opens a file the way double-click does — its artifact editor, the Code
+    // Editor, or Finder — and remembers it for the working set's Recent list.
+    function openFile(path) {
+      const name = path.split('/').pop();
+      const kind = artifactKind(path);
+      const editor = kind && ARTIFACT_EDITOR[kind];
+      if (editor) {
+        invoke('open_tool', {
+          file: editor,
+          query: 'artifact=' + encodeURIComponent(path),
+        }).catch(() => {});
+      } else if (isCodeFile(name)) {
+        invoke('open_file_in_code_editor', { file: path }).catch(() => {});
+      } else {
+        invoke('reveal_in_finder', { path }).catch(() => {});
+      }
+      rememberOpened(path);
+    }
+
+    // `flat` rows (working set, filter results) sit outside the hierarchy:
+    // they show the file's folder as a muted hint (`where`), take an optional
+    // git status `badge`, and open on a single click — they're shortcuts, so
+    // Cmd/Shift-click is how you select one.
+    async function buildNode(entry, isRoot = false, { flat = false, where = '', badge = '' } = {}) {
       const row = document.createElement('div');
       row.className = 'row';
 
@@ -653,7 +821,7 @@ max-width:350px;
         (Date.now() / 1000 - entry.modified) < RECENT_SECONDS;
       const node = document.createElement('div');
       node.className = 'node ' + (entry.is_dir ? 'dir' : 'file') +
-        (isArtifact ? ' artifact' : '') + (isRecent ? ' recent' : '');
+        (isArtifact ? ' artifact' : '') + (isRecent ? ' recent' : '') + (flat ? ' flat' : '');
       if (isArtifact) {
         node.title = 'Open in ' + ARTIFACT_EDITOR[artifactKind(entry.path)].replace('.html', '');
       } else if (!entry.is_dir && isCodeFile(entry.name)) {
@@ -676,6 +844,20 @@ max-width:350px;
       name.className = 'name';
       name.textContent = entry.name;
       node.appendChild(name);
+
+      if (flat) {
+        const whereEl = document.createElement('span');
+        whereEl.className = 'where';
+        whereEl.textContent = where;
+        node.appendChild(whereEl);
+      }
+      if (badge) {
+        const badgeEl = document.createElement('span');
+        badgeEl.className = 'git-badge';
+        badgeEl.textContent = badge;
+        badgeEl.title = 'Uncommitted change (git status)';
+        node.appendChild(badgeEl);
+      }
 
       node.dataset.path = entry.path;
       node.dataset.dir = entry.is_dir ? '1' : '';
@@ -708,7 +890,10 @@ max-width:350px;
           // after you've already started moving.
           const removed = await dragFilesOut(selPaths(), { move: !ev.altKey });
           if (removed.length) {
-            for (const p of removed) selected.delete(p);
+            for (const p of removed) {
+              selected.delete(p);
+              remapStored(p, null);
+            }
             await refresh();
           }
         };
@@ -748,6 +933,7 @@ max-width:350px;
           input.replaceWith(name);
           try {
             const path = await invoke('fs_rename', { path: entry.path, newName: next });
+            remapStored(entry.path, path);
             selected.delete(entry.path);
             selected.add(path);
             await refresh();
@@ -775,7 +961,10 @@ max-width:350px;
         const many = selected.size > 1;
         const parentDir = entry.path.slice(0, entry.path.lastIndexOf('/'));
         openMenu(e.clientX, e.clientY, [
-          ...(many ? [] : [{ label: entry.is_dir ? 'Open' : 'Open in Editor', run: toggle }]),
+          ...(many ? [] : [
+            { label: entry.is_dir ? 'Open' : 'Open in Editor', run: toggle },
+            { label: pins.includes(pinKey(entry)) ? 'Unpin' : 'Pin to Top', run: () => togglePin(pinKey(entry)) },
+          ]),
           { label: 'Reveal in Finder', run: () => invoke('reveal_in_finder', { path: entry.path }).catch(() => {}) },
           '-',
           ...(many ? [] : [
@@ -811,18 +1000,7 @@ max-width:350px;
 
       async function toggle() {
         if (!entry.is_dir) {
-          const kind = artifactKind(entry.path);
-          const editor = kind && ARTIFACT_EDITOR[kind];
-          if (editor) {
-            invoke('open_tool', {
-              file: editor,
-              query: 'artifact=' + encodeURIComponent(entry.path),
-            }).catch(() => {});
-          } else if (isCodeFile(entry.name)) {
-            invoke('open_file_in_code_editor', { file: entry.path }).catch(() => {});
-          } else {
-            invoke('reveal_in_finder', { path: entry.path }).catch(() => {});
-          }
+          openFile(entry.path);
           return;
         }
         const isOpen = node.classList.contains('open');
@@ -867,8 +1045,17 @@ max-width:350px;
         e.stopPropagation();
         toggle();
       });
-      node.addEventListener('click', (e) => clickSelect(entry.path, e));
-      node.addEventListener('dblclick', () => toggle());
+      node.addEventListener('click', (e) => {
+        if (flat && !e.metaKey && !e.shiftKey) {
+          selected.clear();
+          paintSelection();
+          toggle();
+          if (!entry.is_dir) endFilter();
+          return;
+        }
+        clickSelect(entry.path, e);
+      });
+      node.addEventListener('dblclick', () => { if (!flat) toggle(); });
       // Exposed so buildRoot can force-open the root directly — a synthetic
       // click() on .node wouldn't reach the listeners above, which live on
       // its twirl/name children, not .node itself.
@@ -882,7 +1069,9 @@ max-width:350px;
       return row;
     }
 
-    async function buildRoot(label, path) {
+    // `collapsible` roots remember their open state like any folder instead of
+    // always opening — used for the project folder when a Repo leads.
+    async function buildRoot(label, path, { collapsible = false } = {}) {
       const group = document.createElement('div');
       group.className = 'group';
 
@@ -894,12 +1083,12 @@ max-width:350px;
       }
 
       try {
-        const entries = await invoke('list_dir', { path });
+        await invoke('list_dir', { path });   // throws if unreadable
         const rootEntry = { name: path.split('/').filter(Boolean).pop() || path, path, is_dir: true };
-        const rootRow = await buildNode(rootEntry, true);
+        const rootRow = await buildNode(rootEntry, !collapsible);
         group.appendChild(rootRow);
-        // Auto-expand the root so its contents are visible immediately.
-        await rootRow._toggle();
+        // Fixed roots open immediately; collapsible ones restore themselves.
+        if (!collapsible) await rootRow._toggle();
       } catch {
         const err = document.createElement('div');
         err.className = 'node file';
@@ -910,11 +1099,241 @@ max-width:350px;
       return group;
     }
 
+    // ── Working set ─────────────────────────────────────────────────────────
+    // Flat shortcuts above the tree: Pinned, Recent (opened from here), and
+    // Changed (uncommitted in the Repo). A path shows in the first that has it.
+    const workingSetEl = document.getElementById('working-set');
+    const rootsEl = document.getElementById('roots');
+    let repoPath = null;
+    let roots = [];              // every root path, Repo/Folders first
+    let changed = new Map();     // abs path → git status code
+
+    // A pinned folder is stored with a trailing slash, so it can be told
+    // apart from a file without touching disk (and remapStored's prefix
+    // match still carries it through renames).
+    const pinKey = (entry) => entry.is_dir ? entry.path + '/' : entry.path;
+
+    // A file's folder relative to its root — the muted hint on flat rows.
+    function whereOf(path) {
+      const root = roots.find((r) => path.startsWith(r + '/'));
+      const rel = root ? path.slice(root.length + 1) : path;
+      return rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '';
+    }
+
+    function flatEntry(path) {
+      const is_dir = path.endsWith('/');
+      if (is_dir) path = path.slice(0, -1);
+      return { name: path.split('/').pop(), path, is_dir };
+    }
+
+    let workingSetGeneration = 0;
+
+    async function renderWorkingSet() {
+      const generation = ++workingSetGeneration;
+      const shown = new Set();
+      const take = (paths, max) => {
+        const out = [];
+        for (const p of paths) {
+          const abs = p.endsWith('/') ? p.slice(0, -1) : p;
+          if (shown.has(abs) || out.length >= max) continue;
+          shown.add(abs);
+          out.push(p);
+        }
+        return out;
+      };
+      // A recent file that git no longer lists (deleted, moved outside Studio)
+      // drops out; files outside any git root can't be checked, so they stay.
+      const known = new Set(searchIndex.map((f) => f.path));
+      const inGitRoot = (p) => roots.some((r) => r !== currentProjectPath && p.startsWith(r + '/'));
+      const liveRecents = recents.filter((p) => known.has(p) || !inGitRoot(p));
+      const changedPaths = [...changed.keys()];
+
+      const sections = [
+        ['Pinned', take(pins, Infinity), 0],
+        ['Recent', take(liveRecents, RECENT_MAX), 0],
+        ['Changed', take(changedPaths, CHANGED_MAX), 0],
+      ];
+      sections[2][2] = changedPaths.filter((p) => !shown.has(p)).length;
+
+      const groups = [];
+      for (const [label, paths, more] of sections) {
+        if (!paths.length) continue;
+        const group = document.createElement('div');
+        group.className = 'group';
+        const heading = document.createElement('div');
+        heading.className = 'group-label label eyebrow';
+        heading.textContent = more ? `${label} · ${more} more` : label;
+        group.appendChild(heading);
+        for (const p of paths) {
+          const entry = flatEntry(p);
+          group.appendChild(await buildNode(entry, false, {
+            flat: true,
+            where: whereOf(entry.path),
+            badge: changed.get(entry.path) || '',
+          }));
+        }
+        groups.push(group);
+      }
+      if (generation !== workingSetGeneration) return;
+      workingSetEl.replaceChildren(...groups);
+    }
+
+    // ── Go to file ──────────────────────────────────────────────────────────
+    // Type anywhere (or Cmd+F) to filter every file git knows about in the Repo
+    // and Folders — fuzzy, filename-first. ↑↓ pick, Enter opens, Esc clears.
+    const filterBar = document.getElementById('filter-bar');
+    const filterInput = document.getElementById('filter');
+    const resultsEl = document.getElementById('results');
+    const RESULTS_MAX = 40;
+    let searchIndex = [];        // { path, rel, name, lname, lrel }
+
+    async function buildSearchIndex(gitRoots) {
+      const lists = await Promise.all(gitRoots.map((root) =>
+        invoke('git_ls_files', { repo: root })
+          .then((rels) => rels.map((rel) => {
+            const name = rel.split('/').pop();
+            return { path: root + '/' + rel, rel, name, lname: name.toLowerCase(), lrel: rel.toLowerCase() };
+          }))
+          .catch(() => [])));   // not a git repo — nothing to index
+      return lists.flat();
+    }
+
+    // Greedy subsequence match of q in s, scoring runs and word starts.
+    // Returns { score, idx } (matched positions) or null.
+    function matchIn(q, s) {
+      let score = 0, prev = -2, j = 0;
+      const idx = [];
+      for (let i = 0; i < s.length && j < q.length; i++) {
+        if (s[i] !== q[j]) continue;
+        let pts = 1;
+        if (i === prev + 1) pts += 4;
+        if (i === 0 || '/-_. '.includes(s[i - 1])) pts += 3;
+        score += pts;
+        idx.push(i);
+        prev = i;
+        j++;
+      }
+      return j === q.length ? { score, idx } : null;
+    }
+
+    // Filename matches outrank path-only matches; shorter paths break ties,
+    // and files already in the working set float up.
+    function scoreFile(q, f) {
+      let hit = matchIn(q, f.lname);
+      let score;
+      if (hit) {
+        score = 40 + hit.score + (f.lname.startsWith(q) ? 25 : 0);
+      } else {
+        hit = matchIn(q, f.lrel);
+        if (!hit) return null;
+        score = hit.score;
+        hit.idx = [];   // matched across the path — nothing to mark in the name
+      }
+      const r = recents.indexOf(f.path);
+      if (pins.includes(f.path)) score += 15;
+      if (r >= 0) score += 12 - Math.min(r, 10);
+      if (changed.has(f.path)) score += 5;
+      return { score: score - f.rel.length * 0.02, idx: hit.idx };
+    }
+
+    function markName(name, idx) {
+      const hits = new Set(idx);
+      return [...name].map((ch, i) => hits.has(i) ? `<b>${esc(ch)}</b>` : esc(ch)).join('');
+    }
+
+    function showingResults(on) {
+      workingSetEl.hidden = on;
+      rootsEl.hidden = on;
+      resultsEl.hidden = !on;
+    }
+
+    let resultsGeneration = 0;
+
+    async function renderResults() {
+      const generation = ++resultsGeneration;
+      const q = filterInput.value.toLowerCase().replace(/\s+/g, '');
+      if (!q) {
+        showingResults(false);
+        resultsEl.replaceChildren();
+        return;
+      }
+      const hits = [];
+      for (const f of searchIndex) {
+        const m = scoreFile(q, f);
+        if (m) hits.push({ f, ...m });
+      }
+      hits.sort((a, b) => b.score - a.score);
+
+      const rows = [];
+      for (const { f, idx } of hits.slice(0, RESULTS_MAX)) {
+        const row = await buildNode({ name: f.name, path: f.path, is_dir: false }, false, {
+          flat: true,
+          where: whereOf(f.path),
+          badge: changed.get(f.path) || '',
+        });
+        row.querySelector('.name').innerHTML = markName(f.name, idx);
+        rows.push(row);
+      }
+      if (generation !== resultsGeneration) return;
+      if (!rows.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = searchIndex.length
+          ? 'No matching files'
+          : 'Nothing to search — Go to file covers the project’s Repo and Folders';
+        rows.push(empty);
+      }
+      resultsEl.replaceChildren(...rows);
+      showingResults(true);
+      // The top hit is pre-selected, so Enter opens it straight away.
+      selected.clear();
+      if (hits.length) selected.add(hits[0].f.path);
+      paintSelection();
+      tree.scrollTop = 0;
+    }
+
+    function endFilter() {
+      if (!filterInput.value && document.activeElement !== filterInput) return;
+      filterInput.value = '';
+      filterInput.blur();
+      selected.clear();
+      renderResults();
+    }
+
+    filterInput.addEventListener('input', renderResults);
+    // The document handler below steps aside for this field, so the tree's
+    // own shortcuts (Enter = rename, arrows) don't also fire.
+    filterInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        endFilter();
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const nodes = visibleNodes();
+        if (!nodes.length) return;
+        const i = nodes.findIndex((n) => selected.has(n.dataset.path));
+        const next = nodes[Math.max(0, Math.min(nodes.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+        selected.clear();
+        selected.add(next.dataset.path);
+        paintSelection();
+        next.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const path = selPaths()[0];
+        if (!path || resultsEl.hidden) return;
+        openFile(path);
+        endFilter();
+      }
+    });
+
     const picker = document.getElementById('project-picker');
 
     async function showProjectPicker() {
       tree.hidden = true;
-      tree.innerHTML = '';
+      filterBar.hidden = true;
+      rootsEl.innerHTML = '';
+      workingSetEl.innerHTML = '';
+      searchIndex = [];
       picker.hidden = false;
       picker.innerHTML = '';
       document.body.style.removeProperty('--project-hover');
@@ -971,10 +1390,12 @@ max-width:350px;
       if (pageTitle) pageTitle.textContent = project.name;
       picker.hidden = true;
       tree.hidden = false;
-      tree.innerHTML = '';
+      filterBar.hidden = false;
 
       currentProjectPath = project.path;
-      expandedSet = loadExpanded(project.path);
+      expandedSet = new Set(loadList(EXPANDED_STORE_KEY));
+      pins = loadList(PINS_KEY);
+      recents = loadList(RECENT_KEY);
 
       const workspace = await invoke('read_workspace', { path: project.path }).catch(() => ({}));
       if (generation !== mainGeneration) return;
@@ -990,20 +1411,31 @@ max-width:350px;
         document.body.classList.remove('has-project-color');
       }
 
-      const root = await buildRoot(null, project.path);
+      // Where the code lives is what gets browsed, so a Repo leads and the
+      // project folder (notes, media, artifacts) folds up underneath it.
+      repoPath = workspace.repo || null;
+      const gitRoots = [...(repoPath ? [repoPath] : []), ...(workspace.folders || [])];
+      roots = [...gitRoots, project.path];
+      const [index, status] = await Promise.all([
+        buildSearchIndex(gitRoots),
+        repoPath ? invoke('git_status', { repo: repoPath }).catch(() => null) : null,
+      ]);
       if (generation !== mainGeneration) return;
-      tree.appendChild(root);
+      searchIndex = index;
+      changed = new Map();
+      for (const f of status?.files || []) {
+        if (f.path.endsWith('/') || f.status.includes('D')) continue;   // dirs, deletions
+        changed.set(repoPath + '/' + f.path, f.status.trim());
+      }
 
-      if (workspace.repo) {
-        const repoRoot = await buildRoot('Repo', workspace.repo);
-        if (generation !== mainGeneration) return;
-        tree.appendChild(repoRoot);
-      }
-      for (const folder of workspace.folders || []) {
-        const folderRoot = await buildRoot('Folder', folder);
-        if (generation !== mainGeneration) return;
-        tree.appendChild(folderRoot);
-      }
+      const groups = [];
+      if (repoPath) groups.push(await buildRoot('Repo', repoPath));
+      for (const folder of workspace.folders || []) groups.push(await buildRoot('Folder', folder));
+      groups.push(await buildRoot(repoPath ? 'Project' : null, project.path, { collapsible: !!repoPath }));
+      if (generation !== mainGeneration) return;
+      rootsEl.replaceChildren(...groups);
+      await renderWorkingSet();
+      if (filterInput.value.trim()) await renderResults();
 
       // The global watcher only covers ~/Projects; extend it to the Repo and
       // Folder entries (often elsewhere) so edits there also fire 'fs-changed'.
@@ -1050,9 +1482,7 @@ max-width:350px;
     }
 
     function highlightDrop(dir) {
-      const next = dir
-        ? tree.querySelector(`.node[data-path="${CSS.escape(dir)}"]`)
-        : null;
+      const next = dir ? nodeFor(dir) : null;
       if (next === dropNode) return;
       if (dropNode) dropNode.classList.remove('drop-target');
       dropNode = next;
@@ -1075,8 +1505,27 @@ max-width:350px;
 
     // ── Keyboard ────────────────────────────────────────────────────────────
     document.addEventListener('keydown', (e) => {
+      if (e.target === filterInput) return;      // has its own handler
       if (e.target.closest('.rename')) return;   // rename field owns its keys
       const paths = selPaths();
+
+      if (!filterBar.hidden) {
+        // Type to filter: a plain printable key anywhere starts a search.
+        if (e.key.length === 1 && e.key !== ' ' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          e.preventDefault();
+          closeMenu();
+          filterInput.focus();
+          filterInput.value += e.key;
+          renderResults();
+          return;
+        }
+        if (e.metaKey && ['f', 'p'].includes(e.key.toLowerCase()) && !e.shiftKey) {
+          e.preventDefault();
+          filterInput.focus();
+          filterInput.select();
+          return;
+        }
+      }
 
       if (e.key === 'Escape') {
         selected.clear();
@@ -1105,7 +1554,7 @@ max-width:350px;
         return;
       }
       if (!paths.length) return;
-      const node = tree.querySelector(`.node[data-path="${CSS.escape(paths[paths.length - 1])}"]`);
+      const node = nodeFor(paths[paths.length - 1]);
       if (!node) return;
 
       if (e.key === 'Enter') {

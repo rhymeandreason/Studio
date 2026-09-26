@@ -440,6 +440,23 @@ pub fn git_log_week(repo: String) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
+/// Every file git knows about in a repo — tracked plus untracked-but-not-
+/// ignored — as repo-relative paths. The File Directory's type-to-filter index;
+/// the matching itself happens in the page.
+#[tauri::command(async)]
+pub fn git_ls_files(repo: String) -> Result<Vec<String>, String> {
+    let out = git(&repo, &["ls-files", "-z", "--cached", "--others", "--exclude-standard"])?;
+    let mut files: Vec<String> = out
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .map(str::to_string)
+        .collect();
+    // --cached and --others can both list a path mid-add; keep one.
+    files.sort();
+    files.dedup();
+    Ok(files)
+}
+
 // ---------------------------------------------------------------------------
 // History browser (src/tools/git-history.html + the Git panel's History card)
 //

@@ -13,7 +13,8 @@ use dock::{
 // `generate_handler!` list below (they call back into `git_set_draft` here).
 use git::{
     git_bookmarks, git_commit, git_commit_file_diff, git_commit_files, git_diff_file,
-    git_diff_file_committed, git_head_state, git_history, git_log_week, git_push, git_stage,
+    git_diff_file_committed, git_head_state, git_history, git_log_week, git_ls_files, git_push,
+    git_stage,
     git_status,
     git_time_return, git_time_travel, git_toggle_bookmark, git_undo, git_unstage, git_worktrees,
 };
@@ -6166,6 +6167,7 @@ pub fn run() {
             write_temp_markdown,
             git_diff_file,
             git_log_week,
+            git_ls_files,
             open_git_pulse,
             git_history,
             git_commit_file_diff,

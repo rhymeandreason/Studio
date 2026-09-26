@@ -6,6 +6,29 @@ project in `localStorage`. Mutations live in `src-tauri/src/files.rs`
 (`fs_move` / `fs_rename` / `fs_trash` / `fs_duplicate` / `fs_new_folder`) —
 deliberately path-based and project-unaware, so any tool can reuse them.
 
+## Layout
+
+Top to bottom: a **Go to file** field, the **working set**, then the roots.
+When the project has a Repo it leads, and the project folder (notes, media,
+artifacts) folds up underneath as a collapsible **Project** root.
+
+- **Go to file** — type anywhere in the tree (or Cmd+F / Cmd+P) to fuzzy-filter
+  every file in the Repo and Folders. The index is `git_ls_files` (tracked +
+  untracked-not-ignored, so `node_modules`/`target` never appear); matching and
+  ranking live in the page: filename hits beat path hits, pinned / recently
+  opened / changed files float up. ↑↓ pick, Enter opens, Esc clears. Folders
+  that aren't git repos (usually the project folder) aren't indexed.
+- **Working set** — flat shortcut rows, each path in the first section that has
+  it: **Pinned** (right-click → Pin to Top; files or folders), **Recent** (last
+  files opened *from this tool*, via `openFile`), **Changed** (uncommitted in the
+  Repo, from `git_status`, with the status letter). Flat rows open on a single
+  click; Cmd/Shift-click selects. Pins and recents are per-project
+  `localStorage` lists, kept in step with renames/moves/trash by
+  `remapStored`; a pinned folder is stored with a trailing `/`.
+
+A path can appear twice (working set + tree), so look nodes up with
+`nodeFor(path)` (first *visible* match), never a bare `querySelector`.
+
 ## Interactions
 
 | Gesture | Result |
