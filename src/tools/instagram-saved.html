@@ -126,7 +126,7 @@
       min-height: 200px;
     }
     #viewer .stage img {
-      display: block; max-width: 100%; max-height: calc(100vh - 56px - 120px);
+      display: block; max-width: 100%; max-height: calc(100vh - 56px - 160px);
       object-fit: contain; transition: filter .2s;
     }
     #viewer .stage img.low { filter: blur(0px); }
@@ -146,8 +146,13 @@
     }
     #viewer .info .text { flex: 1; min-width: 0; font-size: 12px; line-height: 1.4; }
     #viewer .info .text b { display: block; }
+    #viewer a.handle { color: var(--accent); cursor: pointer; }
+    #viewer a.handle:hover { text-decoration: underline; }
+    #viewer .info .text b a.handle { color: inherit; }
     #viewer .info .text span {
-      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+      /* Full caption, keeping its line breaks; long ones scroll in place. */
+      display: block; white-space: pre-wrap; overflow-wrap: anywhere;
+      max-height: 7em; overflow-y: auto;
       color: var(--text-muted);
     }
     #viewer .info .btns { display: flex; gap: 6px; flex: 0 0 auto; }
@@ -678,10 +683,14 @@
       } catch (e) { console.warn('full-size fetch failed', e); }
     }
 
+    // @handles → profile links (opened in the default browser on click).
+    const linkHandles = (text) => esc(text).replace(/(^|[^\w.@])@([A-Za-z0-9._]*[A-Za-z0-9_])/g,
+      (_, pre, h) => `${pre}<a class="handle" data-handle="${h}">@${h}</a>`);
+
     async function openViewer(it) {
       vItem = it; vIndex = 0; vFrames = []; const gen = ++vGen;
-      $('v-user').textContent = `@${it.username}`;
-      $('v-caption').textContent = it.caption;
+      $('v-user').innerHTML = linkHandles(`@${it.username}`);
+      $('v-caption').innerHTML = linkHandles(it.caption);
       $('v-save').disabled = !project;
       viewer.hidden = false;
       $('v-img').src = it.thumb ? convert(it.thumb) : '';
@@ -712,6 +721,10 @@
     $('v-next').onclick = () => stepFrame(1);
     // `open` on a URL → default browser; tool-* windows aren't granted opener:allow-open-url.
     $('v-open').onclick = () => vItem && invoke('open_path', { path: vItem.url });
+    $('viewer').addEventListener('click', (e) => {
+      const a = e.target.closest('a.handle');
+      if (a) invoke('open_path', { path: `https://www.instagram.com/${a.dataset.handle}/` });
+    });
     $('v-delete').onclick = () => vItem && deletePost(vItem);
     $('v-save').onclick = () => vItem && saveMedia(vItem.id);
     document.addEventListener('keydown', (e) => {
