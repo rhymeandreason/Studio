@@ -358,6 +358,51 @@ select.field {
     background: var(--accent);
     border-bottom: none;
 }
+/* Sticker variant — the tab is a die-cut washi sticker (<img> from
+ * src/stickers/) instead of a glyph. Each one sits at its own slight tilt;
+ * the active one straightens, grows and lifts off the page. Buttons shrink
+ * below the sticker's 48px on narrow windows so the stickers overlap like a
+ * sticker sheet rather than wrapping. */
+.tabs--sticker {
+    min-width: 0; /* let the row shrink below 8 × 48px of sticker content */
+    margin-top: 0;
+    gap: 4px;
+}
+.tab--sticker {
+    position: relative;
+    flex: 0 1 48px;
+    min-width: 28px;
+    height: 52px;
+    padding: 0;
+    justify-content: center;
+    border-bottom: none;
+    transform: rotate(var(--tilt, 0deg));
+    filter: drop-shadow(0 1px 1px rgba(40, 20, 24, 0.28));
+    transition:
+        transform var(--dur-base) cubic-bezier(0.3, 1.5, 0.5, 1),
+        filter var(--dur-base) var(--ease-standard);
+}
+.tab--sticker:nth-child(4n + 1) { --tilt: -5deg; }
+.tab--sticker:nth-child(4n + 2) { --tilt: 3deg; }
+.tab--sticker:nth-child(4n + 3) { --tilt: -2deg; }
+.tab--sticker:nth-child(4n + 4) { --tilt: 4deg; }
+.tab--sticker img {
+    flex: none;
+    width: 48px;
+    height: 48px;
+    pointer-events: none;
+    -webkit-user-drag: none;
+}
+.tab--sticker:hover {
+    z-index: 1;
+    transform: rotate(var(--tilt, 0deg)) translateY(-1px);
+    filter: drop-shadow(0 2px 2px rgba(40, 20, 24, 0.3));
+}
+.tab--sticker.is-active {
+    z-index: 2;
+    transform: translateY(-2px) scale(1.12);
+    filter: drop-shadow(0 5px 5px rgba(40, 20, 24, 0.32));
+}
 
 .tab-pin {
     margin-left: 4px;

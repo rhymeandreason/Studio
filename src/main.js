@@ -562,7 +562,6 @@ export function selectTab(name) {
   document.querySelectorAll(".tab").forEach((t) => {
     t.classList.toggle("is-active", t.dataset.tab === name);
   });
-  document.getElementById("workspace-btn").classList.toggle("btn-round-filled", name === "workspace");
   document.querySelectorAll(".panel").forEach((p) => {
     p.hidden = p.dataset.panel !== name;
   });
@@ -639,16 +638,21 @@ function initTabs() {
   });
 }
 
+// The Plan sticker is a tear-off calendar; its page shows today's date.
+function initPlanStickerDay() {
+  const day = document.getElementById("plan-sticker-day");
+  const paint = () => (day.textContent = new Date().getDate());
+  paint();
+  window.addEventListener("focus", paint);
+  setInterval(paint, 60 * 60 * 1000);
+}
+
 function initAllProjectsButton() {
   document.getElementById("all-projects-btn").addEventListener("click", showOverview);
   // Close dot stands in for the hidden traffic lights; on_close hides the
   // menu-bar window rather than quitting (see lib.rs).
   document.getElementById("main-close")
     .addEventListener("click", () => window.__TAURI__.window.getCurrentWindow().close());
-}
-
-function initWorkspaceButton() {
-  document.getElementById("workspace-btn").addEventListener("click", () => selectTab("workspace"));
 }
 
 // --- New project modal -----------------------------------------------------
@@ -2640,7 +2644,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   initDevInspect();
   initTabs();
   initAllProjectsButton();
-  initWorkspaceButton();
+  initPlanStickerDay();
   initModes();
   initNewMarkdownButton();
   initFileDirectoryButton();

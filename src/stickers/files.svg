@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- File Directory: a kraft folder, lid open, a sheet peeking out -->
+  <defs>
+    <pattern id="kraft" width="3" height="3" patternUnits="userSpaceOnUse">
+      <rect width="3" height="3" fill="#e2b378"/>
+      <circle cx="1.5" cy="1.5" r=".55" fill="#c99552"/>
+    </pattern>
+    <pattern id="grid" width="3.5" height="3.5" patternUnits="userSpaceOnUse">
+      <rect width="3.5" height="3.5" fill="#fffaf0"/>
+      <path d="M3.5 0V3.5H0" fill="none" stroke="#b9d7ea" stroke-width=".6"/>
+    </pattern>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round">
+    <path d="M6 11H18L21 14H38V38H6Z"/>
+    <path d="M12 21H44L38 38H6Z"/>
+  </g>
+  <path d="M6 11H18L21 14H38V38H6Z" fill="#c68a4f" stroke="#c68a4f" stroke-width="1" stroke-linejoin="round"/>
+  <rect x="12" y="15" width="22" height="16" fill="url(#grid)" transform="rotate(-6 23 23)"/>
+  <path d="M12 21H44L38 38H6Z" fill="url(#kraft)" stroke="#e2b378" stroke-width="1" stroke-linejoin="round"/>
+  <rect x="19" y="27" width="11" height="4.5" rx=".8" fill="#fffaf0" transform="rotate(-2 24 29)"/>
+</svg>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Claude: a wisteria butterfly -->
+  <defs>
+    <pattern id="fuji" width="3.4" height="3.4" patternUnits="userSpaceOnUse">
+      <rect width="3.4" height="3.4" fill="#b39ad6"/>
+      <circle cx="1.7" cy="1.7" r=".7" fill="#fff" opacity=".6"/>
+    </pattern>
+    <pattern id="fuji2" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="3" height="3" fill="#d6c6ec"/>
+      <rect width="1" height="3" fill="#fff" opacity=".6"/>
+    </pattern>
+    <g id="wings">
+      <path d="M23 22C19 12 11 8 7 11 4 14 7 22 14 24Z"/>
+      <path d="M25 22C29 12 37 8 41 11 44 14 41 22 34 24Z"/>
+      <path d="M22 25C15 25 10 30 12 35 14 39 20 37 23 30Z"/>
+      <path d="M26 25C33 25 38 30 36 35 34 39 28 37 25 30Z"/>
+    </g>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round">
+    <use href="#wings"/>
+    <rect x="22" y="16" width="4" height="20" rx="2"/>
+  </g>
+  <path d="M23 22C19 12 11 8 7 11 4 14 7 22 14 24Z" fill="url(#fuji)"/>
+  <path d="M25 22C29 12 37 8 41 11 44 14 41 22 34 24Z" fill="url(#fuji)"/>
+  <path d="M22 25C15 25 10 30 12 35 14 39 20 37 23 30Z" fill="url(#fuji2)"/>
+  <path d="M26 25C33 25 38 30 36 35 34 39 28 37 25 30Z" fill="url(#fuji2)"/>
+  <rect x="22.3" y="16.5" width="3.4" height="19" rx="1.7" fill="#2f2628"/>
+  <path d="M23 17C22 14 20 12.5 18.5 12.5M25 17C26 14 28 12.5 29.5 12.5" fill="none" stroke="#2f2628" stroke-width="1.2" stroke-linecap="round"/>
+</svg>

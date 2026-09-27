@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Artifacts: a wooden paint palette with four dabs -->
+  <defs>
+    <pattern id="wood" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)">
+      <rect width="3" height="3" fill="#ebcd9f"/>
+      <rect width=".9" height="3" fill="#dfbb86"/>
+    </pattern>
+    <path id="pal" d="M24 7C34.5 7 42 14 42 22 42 28 37.5 29.5 33.5 28.5 29.5 27.5 27.5 30 28.5 33.5 29.5 37.5 27.5 41 22 41 13 41 6 34 6 24 6 14 14 7 24 7Z"/>
+  </defs>
+  <use href="#pal" fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round"/>
+  <use href="#pal" fill="url(#wood)"/>
+  <circle cx="21" cy="33" r="3" fill="#fffaf0"/>
+  <circle cx="15" cy="17.5" r="3.8" fill="#e0573f"/>
+  <circle cx="24.5" cy="13.5" r="3.8" fill="#f2b541"/>
+  <circle cx="33.5" cy="18" r="3.8" fill="#3e5d8c"/>
+  <circle cx="12.5" cy="27" r="3.8" fill="#7fa965"/>
+  <g fill="#fff" opacity=".7">
+    <circle cx="13.8" cy="16.3" r="1"/><circle cx="23.3" cy="12.3" r="1"/>
+    <circle cx="32.3" cy="16.8" r="1"/><circle cx="11.3" cy="25.8" r="1"/>
+  </g>
+</svg>

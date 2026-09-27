@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Git: an octo-cat in indigo polka-dot washi -->
+  <defs>
+    <pattern id="dots" width="3.4" height="3.4" patternUnits="userSpaceOnUse">
+      <rect width="3.4" height="3.4" fill="#3e5d8c"/>
+      <circle cx="1.7" cy="1.7" r=".65" fill="#fff" opacity=".55"/>
+    </pattern>
+    <path id="head" d="M11 19C10 14 10.5 10 12.5 6.5L18.5 11C22 10 26 10 29.5 11L35.5 6.5C37.5 10 38 14 37 19 38 26 32 30.5 24 30.5 16 30.5 10 26 11 19Z"/>
+    <path id="legs" d="M15.5 28C13.5 32 10 32.5 8.5 36M19.5 29.5C19 34 17.5 37.5 14.5 40M24 30C24 34.5 25 38 23.5 41.5M28.5 29.5C29 34 30.5 37.5 33.5 40M32.5 28C34.5 32 38 32.5 39.5 36"/>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-linecap="round" stroke-linejoin="round">
+    <use href="#legs" fill="none" stroke-width="9"/>
+    <use href="#head" stroke-width="5"/>
+  </g>
+  <use href="#legs" fill="none" stroke="url(#dots)" stroke-width="4" stroke-linecap="round"/>
+  <use href="#head" fill="url(#dots)"/>
+  <path d="M13.5 10 17 12.7 13.2 14.5ZM34.5 10 31 12.7 34.8 14.5Z" fill="#f4b6c2"/>
+  <ellipse cx="24" cy="21.5" rx="9.5" ry="6.5" fill="#fffaf0"/>
+  <ellipse cx="20" cy="21" rx="1.5" ry="2.1" fill="#2f2628"/>
+  <ellipse cx="28" cy="21" rx="1.5" ry="2.1" fill="#2f2628"/>
+  <circle cx="17" cy="24.3" r="1.5" fill="#f4b6c2"/>
+  <circle cx="31" cy="24.3" r="1.5" fill="#f4b6c2"/>
+  <path d="M22.6 24.3Q24 25.6 25.4 24.3" fill="none" stroke="#2f2628" stroke-width="1" stroke-linecap="round"/>
+</svg>

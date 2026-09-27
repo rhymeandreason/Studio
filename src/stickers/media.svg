@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Media: a snapshot held on by a strip of sakura washi -->
+  <defs>
+    <pattern id="sky" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="4" fill="#b9d7ea"/>
+      <circle cx="1" cy="1" r=".6" fill="#fff" opacity=".75"/>
+      <circle cx="3" cy="3" r=".6" fill="#fff" opacity=".75"/>
+    </pattern>
+    <pattern id="hill" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="3" height="3" fill="#94b973"/>
+      <rect width="1.1" height="3" fill="#86ad66"/>
+    </pattern>
+    <pattern id="tape" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <rect width="3" height="3" fill="#f3b3c3"/>
+      <rect width="1.2" height="3" fill="#fff" opacity=".6"/>
+    </pattern>
+    <clipPath id="photo"><rect x="9" y="13" width="32" height="24" rx="1.5"/></clipPath>
+    <path id="strip" d="M-8-3.2H8L7-1.6 8 0 7 1.6 8 3.2H-8L-7 1.6-8 0-7-1.6Z"/>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round">
+    <rect x="6" y="10" width="38" height="30" rx="2.5"/>
+    <use href="#strip" transform="translate(10 11) rotate(-38)"/>
+  </g>
+  <rect x="6" y="10" width="38" height="30" rx="2.5" fill="#fffaf0"/>
+  <g clip-path="url(#photo)">
+    <rect x="9" y="13" width="32" height="24" fill="url(#sky)"/>
+    <circle cx="33" cy="20" r="3.6" fill="#f2b541"/>
+    <path d="M20 37 31 25l11 11v1Z" fill="#6f9a5c"/>
+    <path d="M8 37V31l9-9 14 15Z" fill="url(#hill)"/>
+  </g>
+  <use href="#strip" transform="translate(10 11) rotate(-38)" fill="url(#tape)" opacity=".92"/>
+</svg>

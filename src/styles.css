@@ -110,6 +110,21 @@ body {
     justify-content: center;
 }
 
+/* Today's date on the Plan sticker's calendar page (stickers/plan.svg; the
+   page spans y 19–40 of its 48 box). */
+.plan-sticker-day {
+    position: absolute;
+    left: 50%;
+    top: calc(50% + 6px);
+    transform: translate(-50%, -50%);
+    font-family: Futura, var(--sans);
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+    color: #2f2628;
+    pointer-events: none;
+}
+
 .projhead__name {
     font-family: var(--serif);
     font-size: 16px;
