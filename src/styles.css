@@ -3341,6 +3341,9 @@ td.ntable__total-cell {
     box-shadow: none;
 }
 .git-card--bare .git-card__head { padding-left: 2px; padding-right: 2px; }
+/* The embedded page is square-cornered (macOS rounds its window), so round
+   the frame itself to match the other cards. */
+.git-card--bare .git-embed { border-radius: var(--radius-lg); }
 
 /* Empty state (no repo) */
 .git-panel__empty {

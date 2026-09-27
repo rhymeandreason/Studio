@@ -32,10 +32,6 @@
       --doc-size: 16px;
     }
 
-    /* Transparent shell; the opaque fill lives on #main (window-chrome quirk:
-       a background on html/body paints the square viewport and defeats the
-       rounded corners). */
-    html, body { background: transparent; }
     body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
     /* One row: close dot + filename on the left, actions on the right (the

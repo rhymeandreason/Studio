@@ -19,11 +19,6 @@
 
   html, body { height: 100%; }
   body {
-    /* Transparent so the window's rounded corners (clipped by window-chrome.css)
-       reveal the desktop — an opaque body/html background propagates to the
-       square viewport and ignores border-radius. The content rows below carry
-       the paper fill instead. */
-    background: transparent;
     color: var(--text);
     font-family: var(--sans);
     display: flex;
@@ -578,7 +573,7 @@ if (TAURI) {
   const { getCurrentWindow } = TAURI.window;
   const { LogicalSize } = TAURI.dpi;
   getCurrentWindow().setSize(new LogicalSize(1060, 760));
-  // Custom window chrome (draggable bar, close dot, Cmd+W, rounded corners) is
+  // Custom window chrome (draggable bar, close dot, Cmd+W) is
   // provided by kit/window-chrome.js, imported below. Re-tint on launch even
   // before a file is opened (it retints per open file via applyTitleColor).
   setTimeout(() => applyTitleColor(), 0);
