@@ -604,7 +604,7 @@ select.field__input {
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
     display: grid;
-    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-columns: 34px minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
     column-gap: 12px;
     row-gap: 2px;
@@ -623,7 +623,7 @@ select.field__input {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent), var(--shadow-sm);
 }
 
-.ws-item > :not(.ws-item__head) {
+.ws-item > :not(.ws-item__head, .ws-item__actions) {
     grid-column: 2;
 }
 
@@ -754,42 +754,56 @@ input.ws-item__name--edit:focus {
     color: var(--text-soft);
 }
 
-.ws-item__browse {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    display: inline-flex;
+/* Right column: Browse (hover-only) + Open. */
+.ws-item__actions {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: center;
+    display: flex;
     align-items: center;
-    gap: 4px;
-    background: var(--elevated);
-    border: 1px solid var(--hairline-strong);
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    cursor: pointer;
-    font-family: var(--sans);
-    font-size: 11px;
-    padding: 3px 8px;
-    opacity: 0;
-    transition:
-        color 0.15s,
-        opacity 0.15s,
-        background 0.15s,
-        border-color 0.15s;
+    gap: 2px;
 }
 
-.ws-item__browse .mi {
-    font-size: 13px;
+.ws-item__btn {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s, opacity 0.15s;
+}
+
+.ws-item__btn:hover {
+    background: var(--surface);
+    color: var(--text);
+}
+
+.ws-item__open {
+    background: var(--surface);
+}
+
+.ws-item__open:hover {
+    background: var(--text);
+    color: var(--bg);
+}
+
+.ws-item__open:disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+.ws-item__browse {
+    opacity: 0;
 }
 
 .ws-item:hover .ws-item__browse,
 .ws-item:focus-within .ws-item__browse {
     opacity: 1;
-}
-
-.ws-item__browse:hover {
-    background: var(--surface);
-    border-color: var(--text);
-    color: var(--text);
 }
 
 /* The repo path + editor now live in the Git panel (.git-repo__*, further
@@ -986,9 +1000,11 @@ input.ws-item__name--edit:focus {
     font-size: 11px;
 }
 
-.ws-mode__empty .mi {
-    color: var(--rose);
-    opacity: 0.7;
+.ws-mode__empty .ws-mode__dot {
+    width: 12px;
+    height: 12px;
+    margin-bottom: 2px;
+    opacity: 0.8;
 }
 
 .ws-mode.is-empty .ws-mode__empty {
@@ -1078,31 +1094,64 @@ input.ws-item__name--edit:focus {
     text-overflow: ellipsis;
 }
 
+/* Record: a dot in a ring, like the button on a tape deck. */
 .ws-mode__record {
     flex: 0 0 auto;
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: transparent;
-    border: 1px solid transparent;
+    padding: 0;
+    background: var(--elevated);
+    border: 1.5px solid var(--hairline-strong);
     border-radius: 50%;
     color: var(--text-muted);
     cursor: pointer;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.ws-mode__record:hover,
-.ws-mode.is-empty .ws-mode__record {
-    color: var(--rose);
-    border-color: color-mix(in srgb, var(--rose) 35%, transparent);
-    background: color-mix(in srgb, var(--rose) 8%, transparent);
+.ws-mode__dot {
+    display: block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--text-soft);
+    transition: transform var(--dur-fast) var(--ease-standard),
+                background var(--dur-fast);
 }
 
+.ws-mode__record:hover {
+    border-color: #d9412f;
+    box-shadow: 0 0 0 3px rgba(217, 65, 47, 0.14);
+}
+
+/* Red only when it's about to record: hover, or while recording. */
+.ws-mode__record:hover .ws-mode__dot,
+.ws-mode__record:disabled .ws-mode__dot {
+    background: #d9412f;
+}
+
+.ws-mode__record:hover .ws-mode__dot {
+    transform: scale(1.15);
+}
+
+.ws-mode__record:active .ws-mode__dot {
+    transform: scale(0.85);
+}
+
+/* While list_windows runs: the dot pulses like a live recording light. */
 .ws-mode__record:disabled {
-    opacity: 0.5;
     cursor: default;
+}
+
+.ws-mode__record:disabled .ws-mode__dot {
+    animation: ws-rec-pulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes ws-rec-pulse {
+    to { opacity: 0.35; }
 }
 
 /* Notes panel */

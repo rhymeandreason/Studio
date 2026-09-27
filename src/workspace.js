@@ -298,7 +298,7 @@ function renderModes() {
 
     const screen = el("button", "ws-mode__screen", { type: "button" });
     screen.innerHTML =
-      `<span class="ws-mode__empty">${mi("record")}Record to capture</span>` +
+      `<span class="ws-mode__empty"><span class="ws-mode__dot"></span>Record to capture</span>` +
       `<span class="ws-mode__play">${mi("play", false)}</span>`;
     screen.addEventListener("click", () => playMode(mode, screen));
 
@@ -307,7 +307,10 @@ function renderModes() {
     const name = el("input", "ws-mode__name", { type: "text", value: mode.name, spellcheck: false });
     const saved = el("span", "ws-mode__saved");
     head.append(name, saved);
-    const recordBtn = el("button", "ws-mode__record", { type: "button", innerHTML: mi("record") });
+    const recordBtn = el("button", "ws-mode__record", {
+      type: "button",
+      innerHTML: '<span class="ws-mode__dot"></span>',
+    });
     foot.append(head, recordBtn);
 
     const refresh = () => {
@@ -730,12 +733,14 @@ export function addRow(list, value = "", autoBrowse = false) {
 
   card.append(input);
 
-  // Browse button for apps and files.
+  // Right-hand actions: Browse (on hover, for pickable types) + Open.
+  const actions = el("div", "ws-item__actions");
   if (meta.browse) {
-    const browse = document.createElement("button");
-    browse.type = "button";
-    browse.className = "ws-item__browse";
-    browse.innerHTML = `${mi("folder-open")}Browse…`;
+    const browse = el("button", "ws-item__btn ws-item__browse", {
+      type: "button",
+      title: "Browse…",
+      innerHTML: mi("folder-open"),
+    });
     browse.addEventListener("click", async () => {
       const picked =
         meta.browse === "dir"
@@ -752,9 +757,20 @@ export function addRow(list, value = "", autoBrowse = false) {
         scheduleWorkspaceSave();
       }
     });
-    card.append(browse);
+    actions.append(browse);
     if (autoBrowse) browse.click();
   }
+  const open = el("button", "ws-item__btn ws-item__open", {
+    type: "button",
+    title: list === "scripts" ? "Run" : "Open",
+    innerHTML: mi(list === "scripts" ? "play" : "arrow-up-right"),
+  });
+  open.addEventListener("click", () => openWorkspaceValue(card));
+  const syncOpen = () => (open.disabled = !input.value.trim());
+  input.addEventListener("input", syncOpen);
+  syncOpen();
+  actions.append(open);
+  card.append(actions);
 
   rows.append(card);
   if (meta.singleton) setSingletonBtn(list, true);

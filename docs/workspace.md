@@ -40,7 +40,8 @@ Cards are `.ws-item` elements holding a `<textarea>` (not `<input>` —
 `readList()` queries `textarea`). Selection/keyboard nav follows the shared
 interaction model (see `docs/interaction-spec.md`):
 multi-select via click/Cmd-click/Shift-click, arrow keys to move focus,
-Enter to open the item's value (`open` / `open -a` for apps), Delete/Backspace
+Enter (or the card's ↗ Open button; ▶ Run for scripts) to open the item's
+value (`open` / `open -a` for apps), Delete/Backspace
 to remove.
 
 ## Repo + editor: the Git panel
