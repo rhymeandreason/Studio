@@ -78,9 +78,14 @@ first recorded Mode layout (below). Two callers, two behaviors:
 ## Modes (record/play window layouts)
 
 `workspace.json`'s `modes` array (seeded with Code/Design/Default) holds named
-window-layout snapshots, rendered as cards in `#ws-modes` by
-`initModes()`/`renderModes()` in `src/workspace.js` — name + "Saved <when>"
-on top, a bigger record (●) and play (▶) button below. The timestamp comes
+window-layout snapshots, rendered as tiles in `#ws-modes` by
+`initModes()`/`renderModes()` in `src/workspace.js`. Each tile is a mini
+desktop drawn from `mode.layout` (`renderLayoutMap()`: every window as a rect,
+fitted into a 16:10 box on the project's washi tint) — click it to Play — over
+the editable name, a short "Aug 20 · Git" stamp (full "Saved …" string as its
+tooltip) and a Record (◉) button. An unrecorded mode shows "Record to
+capture" instead of a map. The panel has two sections, **Modes** (with its own
+"+ Mode" chip) and **Launchers** (the cards below, "+ Add" menu). The timestamp comes
 from `mode.recordedAt` (an ISO string set by the frontend on a successful
 Record, formatted by `formatSavedAt()`), persisted as `recordedAt` on the
 Rust side (`WorkspaceMode::recorded_at` — Rust only carries it through,

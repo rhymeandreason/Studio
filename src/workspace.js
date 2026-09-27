@@ -8,7 +8,6 @@ import { createSelection } from "./selection.js";
 import { panelKeymaps } from "./keymap.js";
 import { state } from "./state.js";
 import { selectTab, installOffClickDeselect } from "./main.js";
-import { SPRITES, DEFAULT_SPRITE, spriteStyle } from "./sprites.js";
 import { toast } from "./kit/app.js";
 import { openContextMenu } from "./kit/context-menu.js";
 import { washi } from "./kit/washi.js";
@@ -163,6 +162,17 @@ function formatSaved(mode) {
   return panel ? `${when} · ${panel}` : when;
 }
 
+// The tile's short form: "Aug 20 · Git", "Today · Notes". The full
+// formatSaved() string rides along as the tooltip.
+function formatSavedShort(mode) {
+  const d = new Date(mode.recordedAt || "");
+  if (!mode.recordedAt || isNaN(d)) return "Not recorded yet";
+  const today = new Date().toDateString() === d.toDateString();
+  const when = today ? "Today" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const panel = PANEL_LABELS[mode.panel];
+  return panel ? `${when} · ${panel}` : when;
+}
+
 function formatSavedAt(iso) {
   if (!iso) return "Not recorded yet";
   const d = new Date(iso);
@@ -178,7 +188,7 @@ function formatSavedAt(iso) {
   return `Saved ${date} at ${time}`;
 }
 
-async function recordMode(mode, btn, playBtn, savedEl) {
+async function recordMode(mode, btn, onRecorded) {
   btn.disabled = true;
   try {
     mode.layout = await invoke("list_windows");
@@ -186,8 +196,7 @@ async function recordMode(mode, btn, playBtn, savedEl) {
     mode.recordedAt = new Date().toISOString();
     scheduleWorkspaceSave();
     flashBtn(btn, "check");
-    playBtn.disabled = !mode.layout.length;
-    savedEl.textContent = formatSaved(mode);
+    onRecorded();
   } catch (err) {
     flashBtn(btn, "error");
     console.error(err);
@@ -196,25 +205,89 @@ async function recordMode(mode, btn, playBtn, savedEl) {
 }
 
 async function playMode(mode, btn) {
-  btn.disabled = true;
+  if (!mode.layout?.length || btn.classList.contains("is-busy")) return;
+  btn.classList.add("is-busy");
   try {
-    await invoke("apply_window_layout", { layout: mode.layout || [] });
+    await invoke("apply_window_layout", { layout: mode.layout });
     if (mode.panel) selectTab(mode.panel);
-    flashBtn(btn, "check");
   } catch (err) {
-    flashBtn(btn, "error");
+    toast(String(err));
     console.error(err);
   }
-  btn.disabled = false;
+  btn.classList.remove("is-busy");
 }
 
+// A tiny drawing of the recorded desktop: every window as a rect, fitted into
+// the tile's screen box. Fit the union of the windows plus the origin rather
+// than assuming a screen size. Front-to-back order → draw back first.
+//
+// Units: other apps come from winlayout in points, but Studio's own windows
+// (app "Studio", recorded via Tauri) are in physical pixels — restore uses
+// each path's own units so Play is fine, but the drawing must convert. Assumes
+// the recording display's scale matches this window's.
+// Studio's own windows all record as app "Studio"; name them by what they are.
+function windowName(w) {
+  if (w.app !== "Studio") return w.app || "";
+  if (w.tool_file)
+    return w.tool_file
+      .replace(/\.html$/, "")
+      .replace(/-/g, " ")
+      .replace(/^./, (c) => c.toUpperCase());
+  if (w.title?.startsWith("git-")) return "Git";
+  return "Studio";
+}
+
+function renderLayoutMap(screen, layout) {
+  screen.querySelector(".ws-mode__map")?.remove();
+  const dpr = window.devicePixelRatio || 1;
+  const wins = (layout || [])
+    .map((w) =>
+      w.app === "Studio"
+        ? { ...w, x: w.x / dpr, y: w.y / dpr, w: w.w / dpr, h: w.h / dpr }
+        : w,
+    )
+    .filter((w) => w.w > 0 && w.h > 0);
+  if (!wins.length) return;
+  const minX = Math.min(0, ...wins.map((w) => w.x));
+  const minY = Math.min(0, ...wins.map((w) => w.y));
+  const spanX = Math.max(...wins.map((w) => w.x + w.w)) - minX;
+  const spanY = Math.max(...wins.map((w) => w.y + w.h)) - minY;
+  // Letterbox the desktop into the 16:10 screen.
+  const a = spanX / spanY;
+  const fw = a > 1.6 ? 100 : (a / 1.6) * 100;
+  const fh = a > 1.6 ? (1.6 / a) * 100 : 100;
+  const map = el("div", "ws-mode__map");
+  Object.assign(map.style, {
+    left: (100 - fw) / 2 + "%",
+    top: (100 - fh) / 2 + "%",
+    width: fw + "%",
+    height: fh + "%",
+  });
+  for (const w of [...wins].reverse()) {
+    const win = el("div", "ws-mode__win");
+    const width = (w.w / spanX) * 100;
+    Object.assign(win.style, {
+      left: ((w.x - minX) / spanX) * 100 + "%",
+      top: ((w.y - minY) / spanY) * 100 + "%",
+      width: width + "%",
+      height: (w.h / spanY) * 100 + "%",
+    });
+    const name = windowName(w);
+    win.title = w.title && w.app !== "Studio" ? `${name} — ${w.title}` : name;
+    if (width > 26) win.textContent = name;
+    map.append(win);
+  }
+  screen.append(map);
+}
+
+// Each mode is a tile: a mini desktop showing what Play will restore (click it
+// to play), then the editable name, when it was saved, and a Record button.
 function renderModes() {
   const wrap = document.getElementById("ws-modes");
   wrap.innerHTML = "";
   wsModes.forEach((mode) => {
     if (!mode.id) mode.id = `mode-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const card = document.createElement("div");
-    card.className = "ws-mode";
+    const card = el("div", "ws-mode");
     card.dataset.modeId = mode.id;
     card.classList.toggle("is-selected", modeSelection.has(mode.id));
     // Click the card (but not its inputs/buttons) to select for deletion.
@@ -223,50 +296,44 @@ function renderModes() {
       modeSelection.toggle(mode.id);
     });
 
-    const head = document.createElement("div");
-    head.className = "ws-mode__head";
-    const name = document.createElement("input");
-    name.type = "text";
-    name.className = "ws-mode__name";
-    name.value = mode.name;
-    name.spellcheck = false;
-    const saved = document.createElement("span");
-    saved.className = "ws-mode__saved";
-    saved.textContent = formatSaved(mode);
+    const screen = el("button", "ws-mode__screen", { type: "button" });
+    screen.innerHTML =
+      `<span class="ws-mode__empty">${mi("record")}Record to capture</span>` +
+      `<span class="ws-mode__play">${mi("play", false)}</span>`;
+    screen.addEventListener("click", () => playMode(mode, screen));
+
+    const foot = el("div", "ws-mode__foot");
+    const head = el("div", "ws-mode__head");
+    const name = el("input", "ws-mode__name", { type: "text", value: mode.name, spellcheck: false });
+    const saved = el("span", "ws-mode__saved");
     head.append(name, saved);
+    const recordBtn = el("button", "ws-mode__record", { type: "button", innerHTML: mi("record") });
+    foot.append(head, recordBtn);
 
-    const actions = document.createElement("div");
-    actions.className = "ws-mode__actions";
-
-    const recordBtn = document.createElement("button");
-    recordBtn.type = "button";
-    recordBtn.className = "ws-mode__btn ws-mode__btn--record";
-    recordBtn.title = `Record current windows into "${mode.name}"`;
-    recordBtn.innerHTML = mi("circle");
-
-    const playBtn = document.createElement("button");
-    playBtn.type = "button";
-    playBtn.className = "ws-mode__btn ws-mode__btn--play";
-    playBtn.title = `Restore "${mode.name}"'s windows`;
+    const refresh = () => {
+      const recorded = !!mode.layout?.length;
+      card.classList.toggle("is-empty", !recorded);
+      screen.title = recorded ? `Play "${mode.name}" — restore its windows` : "";
+      screen.disabled = !recorded;
+      recordBtn.title = `Record current windows into "${mode.name}"`;
+      saved.textContent = formatSavedShort(mode);
+      saved.title = formatSaved(mode);
+      renderLayoutMap(screen, mode.layout);
+    };
+    refresh();
 
     name.addEventListener("input", () => {
       mode.name = name.value;
-      recordBtn.title = `Record current windows into "${mode.name}"`;
-      playBtn.title = `Restore "${mode.name}"'s windows`;
+      refresh();
     });
     name.addEventListener("change", () => {
       mode.name = name.value.trim() || mode.name;
       name.value = mode.name;
       scheduleWorkspaceSave();
     });
-    playBtn.disabled = !mode.layout?.length;
-    playBtn.innerHTML = mi("play");
+    recordBtn.addEventListener("click", () => recordMode(mode, recordBtn, refresh));
 
-    recordBtn.addEventListener("click", () => recordMode(mode, recordBtn, playBtn, saved));
-    playBtn.addEventListener("click", () => playMode(mode, playBtn));
-
-    actions.append(recordBtn, playBtn);
-    card.append(head, actions);
+    card.append(screen, foot);
     wrap.append(card);
   });
 }
@@ -735,7 +802,8 @@ function setList(list, values) {
 }
 
 let wsClaude = "terminal";
-let wsSprite = DEFAULT_SPRITE;
+// Legacy per-project sprite: no longer edited here, just carried through saves.
+let wsSprite = "";
 
 // The active project's repo path + theming, for the Git panel (git.js).
 export function activeRepoInfo() {
@@ -755,7 +823,7 @@ export async function loadWorkspace(path) {
   wsColor = ws.color || "";
   applyHeaderColor();
   wsClaude = ws.claude && ws.claude.mode ? ws.claude.mode : "terminal";
-  wsSprite = ws.sprite || DEFAULT_SPRITE;
+  wsSprite = ws.sprite || "";
   wsRepo = ws.repo || "";
   setList("figma", ws.figma ? [ws.figma] : []);
   setList("apps", ws.apps);
@@ -765,7 +833,6 @@ export async function loadWorkspace(path) {
   setList("scripts", ws.scripts);
   setStatus("");
   selectTab("workspace");
-  renderSpriteBadge();
   wsModes = ws.modes && ws.modes.length
     ? ws.modes
     : [
@@ -782,29 +849,6 @@ export async function syncProjectColor(path) {
   const ws = await invoke("read_workspace", { path }).catch(() => null);
   if (ws) wsColor = ws.color || "";
   applyHeaderColor();
-}
-
-function renderSpriteBadge() {
-  const sprite = document.querySelector("#sprite-badge .sprite-badge__sprite");
-  const { "--sprite-start": start, "--sprite-end": end, ...rest } = spriteStyle(
-    wsSprite,
-    "idle",
-    24,
-  );
-  Object.assign(sprite.style, rest);
-  sprite.style.setProperty("--sprite-start", start);
-  sprite.style.setProperty("--sprite-end", end);
-}
-
-const SPRITE_NAMES = Object.keys(SPRITES);
-
-export function initSpriteBadge() {
-  document.getElementById("sprite-badge").addEventListener("click", () => {
-    const idx = SPRITE_NAMES.indexOf(wsSprite);
-    wsSprite = SPRITE_NAMES[(idx + 1) % SPRITE_NAMES.length];
-    renderSpriteBadge();
-    scheduleWorkspaceSave();
-  });
 }
 
 function setStatus(text) {

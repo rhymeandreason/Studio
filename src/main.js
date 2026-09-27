@@ -25,7 +25,6 @@ import {
   initModes,
   initNewMarkdownButton,
   initFileDirectoryButton,
-  initSpriteBadge,
   initWorkspaceForm,
   loadWorkspace,
   syncProjectColor,
@@ -2656,7 +2655,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   initModes();
   initNewMarkdownButton();
   initFileDirectoryButton();
-  initSpriteBadge();
   initWorkspaceForm();
   initNotes();
   initMedia();

@@ -135,35 +135,6 @@ body {
     white-space: nowrap;
 }
 
-/* Animated animal sprite badge (Workspace toolbar, see sprites.js) */
-.sprite-badge {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    margin-right: 4px;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: none;
-    cursor: pointer;
-}
-
-.sprite-badge:hover {
-    background: var(--surface);
-}
-
-.sprite-badge__sprite {
-    background-color: transparent;
-}
-
-@keyframes sprite-cycle {
-    to {
-        background-position: var(--sprite-end);
-    }
-}
-
 /* Pill buttons */
 .btn-add.btn-main {
     background: #000;
@@ -508,7 +479,8 @@ display:none !important;
 .ws {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 28px;
+    padding-top: 6px;
 }
 
 .field {
@@ -606,21 +578,44 @@ select.field__input {
 
 .listfield__rows {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     align-items: start;
-    gap: 12px;
+    gap: 8px;
     position: relative;
 }
 
+.listfield__rows:empty::before {
+    content: "Nothing here yet. Add a link, app, file or script to open it from here.";
+    grid-column: 1 / -1;
+    padding: 18px 16px;
+    border: 1px dashed var(--hairline-strong);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+}
+
+/* Launcher card: an icon tile on the left (also the drag handle), the name and
+   a one-line path/URL beside it. The path opens up to full length on focus. */
 .ws-item {
+    position: relative;
     background: var(--elevated);
     border: 1px solid var(--hairline);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 12px;
+    row-gap: 2px;
+    align-content: center;
+    min-height: 58px;
+    padding: 10px 12px;
+    transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.ws-item:hover {
+    border-color: var(--hairline-strong);
 }
 
 .ws-item.is-selected {
@@ -628,18 +623,39 @@ select.field__input {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent), var(--shadow-sm);
 }
 
+.ws-item > :not(.ws-item__head) {
+    grid-column: 2;
+}
+
 .ws-item__head {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: center;
+    width: 34px;
+    height: 34px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--text-muted);
     cursor: grab; /* drag handle for reordering (workspace.js) */
+}
+
+.ws-item__head:active {
+    cursor: grabbing;
+}
+
+/* The icon tile says what it is; the word would just repeat it. */
+.ws-item__type {
+    display: none;
 }
 
 /* Brand icon (Google Drive/Docs/…) that replaces the generic link glyph. */
 .ws-item__brand {
     display: inline-flex;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
 }
 
 .ws-item__brand svg {
@@ -652,41 +668,40 @@ select.field__input {
     opacity: 0.4;
 }
 
-.ws-item__type {
-    font-size: 11.5px;
-    font-weight: 500;
-    color: var(--text-muted);
-    flex: 1 1 auto;
-}
-
-.ws-item .btn-remove {
-    opacity: 0;
-    transition: opacity 0.15s;
-}
-
-.ws-item:hover .btn-remove,
-.ws-item:focus-within .btn-remove {
-    opacity: 1;
-}
-
+/* App cards: the real app icon sits over the tile. */
 .ws-item__app {
     display: flex;
     align-items: center;
-    gap: 8px;
+    min-width: 0;
 }
 
 .ws-item__app-icon {
-    width: 28px;
-    height: 28px;
-    flex: 0 0 auto;
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    width: 38px;
+    height: 38px;
+    margin-top: -19px;
+    pointer-events: none;
+}
+
+.ws-item:has(.ws-item__app-icon:not([hidden])) .ws-item__head {
+    background: none;
+}
+
+.ws-item:has(.ws-item__app-icon:not([hidden])) .ws-item__head .mi {
+    visibility: hidden;
 }
 
 .ws-item__name {
-    font-size: 18px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text);
     line-height: 1.3;
-    word-break: break-all;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Editable title on URL cards — looks like the static name, edits in place. */
@@ -713,7 +728,7 @@ input.ws-item__name--edit:focus {
     border: none;
     color: var(--text);
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 12px;
     line-height: 1.5;
     outline: none;
     overflow: hidden;
@@ -724,8 +739,15 @@ input.ws-item__name--edit:focus {
 }
 
 .ws-item__input--path {
-    font-size: 11px;
+    font-size: 10.5px;
     color: var(--text-muted);
+}
+
+/* At rest a long path/URL shows one line, fading out at the end. */
+.ws-item:not(:focus-within) .ws-item__input--path {
+    max-height: 1.5em;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
 }
 
 .ws-item__input::placeholder {
@@ -733,19 +755,20 @@ input.ws-item__name--edit:focus {
 }
 
 .ws-item__browse {
-    align-self: flex-end;
-    margin-top: auto;
+    position: absolute;
+    top: 8px;
+    right: 8px;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    background: var(--surface);
+    gap: 4px;
+    background: var(--elevated);
     border: 1px solid var(--hairline-strong);
     border-radius: var(--radius-sm);
     color: var(--text-muted);
     cursor: pointer;
     font-family: var(--sans);
-    font-size: 12px;
-    padding: 5px 10px;
+    font-size: 11px;
+    padding: 3px 8px;
     opacity: 0;
     transition:
         color 0.15s,
@@ -754,13 +777,17 @@ input.ws-item__name--edit:focus {
         border-color 0.15s;
 }
 
+.ws-item__browse .mi {
+    font-size: 13px;
+}
+
 .ws-item:hover .ws-item__browse,
 .ws-item:focus-within .ws-item__browse {
     opacity: 1;
 }
 
 .ws-item__browse:hover {
-    background: var(--elevated);
+    background: var(--surface);
     border-color: var(--text);
     color: var(--text);
 }
@@ -805,24 +832,98 @@ input.ws-item__name--edit:focus {
     color: var(--text-muted);
 }
 
-/* Workspace modes — record/play a saved window layout per mode */
-.ws-modes {
+.ws-section {
     display: flex;
-grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ws-section__head {
+    display: flex;
+    align-items: flex-end;
     gap: 10px;
-    margin-bottom: 16px;
+    padding: 0 2px;
+}
+
+.ws-section__text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ws-section__title {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    margin: 0;
+}
+
+.ws-section__sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 2px 0 0;
+}
+
+/* Small pill action in a section header ("+ Mode", "+ Add"). */
+.ws-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 12px 0 9px;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 999px;
+    background: var(--elevated);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: background var(--dur-fast), border-color var(--dur-fast);
+}
+
+.ws-chip .mi {
+    font-size: 14px;
+}
+
+.ws-chip:hover {
+    background: var(--surface);
+    border-color: var(--text);
+}
+
+.ws-add {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.ws-section__head .ws__status:empty {
+    display: none;
+}
+
+/* Workspace modes — record/play a saved window layout per mode. Each tile is
+   a mini desktop (click to play) over its name + Record. */
+.ws-modes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
 }
 
 .ws-mode {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 12px 14px;
-    border: 1px solid var(--hairline-strong);
-    border-radius: var(--radius);
-    background: var(--surface);
-    min-width: 140px;
+    background: var(--elevated);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 6px;
+    min-width: 0;
+    transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.ws-mode:hover {
+    border-color: var(--hairline-strong);
 }
 
 .ws-mode.is-selected {
@@ -830,10 +931,119 @@ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent), var(--shadow-sm);
 }
 
+/* 16:10 via padding (not aspect-ratio — WKWebView collapses those in grids). */
+.ws-mode__screen {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 0;
+    padding: 0 0 62.5%;
+    border: none;
+    border-radius: 7px;
+    background: var(--project-color, var(--surface));
+    overflow: hidden;
+    cursor: pointer;
+    font: inherit;
+}
+
+.ws-mode__screen:disabled {
+    cursor: default;
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--hairline-strong);
+}
+
+.ws-mode__map {
+    position: absolute;
+}
+
+.ws-mode__win {
+    position: absolute;
+    overflow: hidden;
+    padding: 3px 3px 0 4px;
+    /* Opaque, so a window really in front hides the one behind it. */
+    background: #fbfaf7;
+    border: 1px solid rgba(42, 42, 40, 0.28);
+    border-radius: 2px;
+    box-shadow: 0 1px 2px rgba(42, 42, 40, 0.12);
+    color: rgba(42, 42, 40, 0.6);
+    font-size: 8px;
+    font-weight: 600;
+    line-height: 1.1;
+    text-align: left;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.ws-mode__empty {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.ws-mode__empty .mi {
+    color: var(--rose);
+    opacity: 0.7;
+}
+
+.ws-mode.is-empty .ws-mode__empty {
+    display: flex;
+}
+
+.ws-mode__play {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 38px;
+    height: 38px;
+    margin: -19px 0 0 -19px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--text);
+    color: var(--bg);
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    transform: scale(0.85);
+    transition: opacity var(--dur-fast) var(--ease-standard),
+                transform var(--dur-fast) var(--ease-standard);
+    z-index: 1;
+}
+
+.ws-mode__play .mi {
+    font-size: 17px;
+    margin-left: 2px;
+}
+
+.ws-mode__screen:not(:disabled):hover .ws-mode__play {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.ws-mode__screen.is-busy .ws-mode__play {
+    opacity: 0.6;
+    transform: scale(0.9);
+}
+
+.ws-mode__foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 4px 3px 6px;
+}
+
 .ws-mode__head {
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
 }
 
 .ws-mode__name {
@@ -848,6 +1058,7 @@ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     padding: 1px 3px;
     margin: -1px -3px;
     width: 100%;
+    min-width: 0;
 }
 
 .ws-mode__name:hover {
@@ -860,51 +1071,38 @@ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
 .ws-mode__saved {
-    font-size: 11px;
+    font-size: 10.5px;
     color: var(--text-muted);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.ws-mode__actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.ws-mode__btn {
+.ws-mode__record {
     flex: 0 0 auto;
-    width: 40px;
-    height: 40px;
+    width: 28px;
+    height: 28px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--bg);
-    border: 1px solid var(--hairline-strong);
+    background: transparent;
+    border: 1px solid transparent;
     border-radius: 50%;
     color: var(--text-muted);
     cursor: pointer;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
-.ws-mode__btn .mi {
-    font-size: 22px;
-}
-
-.ws-mode__btn:hover {
-    background: var(--surface);
-    color: var(--text);
-    border-color: var(--text);
-}
-
-.ws-mode__btn:disabled {
-    opacity: 0.35;
-    cursor: default;
-    pointer-events: none;
-}
-
-.ws-mode__btn--record:hover {
+.ws-mode__record:hover,
+.ws-mode.is-empty .ws-mode__record {
     color: var(--rose);
-    border-color: var(--rose);
+    border-color: color-mix(in srgb, var(--rose) 35%, transparent);
+    background: color-mix(in srgb, var(--rose) 8%, transparent);
+}
+
+.ws-mode__record:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 /* Notes panel */

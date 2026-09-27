@@ -177,28 +177,31 @@
 
                 <section class="panel" data-panel="workspace">
                     <form class="ws" id="ws-form">
-                        <div class="toolbar">
-                            <span class="ws__status" id="ws-status"></span>
-                            <button class="sprite-badge" id="sprite-badge" type="button" title="Click to change project sprite">
-                                <span class="sprite-badge__sprite"></span>
-                            </button>
-                            <div class="ws-add" style="position: relative">
-                                <button
-                                    type="button"
-                                    class="btn-round btn-round-filled"
-                                    id="ws-add-btn"
-                                    title="Add to workspace"
-                                >
-                                    <span class="mi mi-sm ph ph-plus"></span>
+                        <section class="ws-section">
+                            <header class="ws-section__head">
+                                <div class="ws-section__text">
+                                    <h3 class="ws-section__title">Modes</h3>
+                                    <p class="ws-section__sub">Snapshot your windows, replay them later.</p>
+                                </div>
+                                <button type="button" class="ws-chip" id="ws-add-mode" title="New mode">
+                                    <span class="mi mi-sm ph ph-plus"></span>Mode
                                 </button>
-                                <div class="menu" id="ws-add-menu" hidden>
-                                    <button
-                                        type="button"
-                                        class="menu__item"
-                                        id="ws-add-mode"
-                                    >
-                                        <span class="mi mi-sm ph ph-grid-four"></span>Mode
+                            </header>
+                            <div class="ws-modes" id="ws-modes"></div>
+                        </section>
+
+                        <section class="ws-section">
+                            <header class="ws-section__head">
+                                <div class="ws-section__text">
+                                    <h3 class="ws-section__title">Launchers</h3>
+                                    <p class="ws-section__sub">Links, apps and files for this project.</p>
+                                </div>
+                                <span class="ws__status" id="ws-status"></span>
+                                <div class="ws-add">
+                                    <button type="button" class="ws-chip" id="ws-add-btn" title="Add to workspace">
+                                        <span class="mi mi-sm ph ph-plus"></span>Add
                                     </button>
+                                    <div class="menu" id="ws-add-menu" hidden>
                                     <button
                                         type="button"
                                         class="menu__item"
@@ -242,13 +245,11 @@
                                     >
                                         <span class="mi mi-sm ph ph-terminal-window"></span>Script
                                     </button>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div class="ws-modes" id="ws-modes"></div>
-
-                        <div class="listfield__rows" id="ws-cards"></div>
+                            </header>
+                            <div class="listfield__rows" id="ws-cards"></div>
+                        </section>
                     </form>
                 </section>
 
