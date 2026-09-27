@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Workspace (alt): a gear in yellow striped washi.
+       The slider version is workspace.svg. -->
+  <defs>
+    <pattern id="stripe" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="3" height="3" fill="#f2b541"/>
+      <rect width="1.1" height="3" fill="#fff" opacity=".55"/>
+    </pattern>
+    <path id="gear" d="M20.90 11.07 L21.74 7.15 L26.26 7.15 L27.10 11.07 L30.95 12.66 L34.31 10.49 L37.51 13.69 L35.34 17.05 L36.93 20.90 L40.85 21.74 L40.85 26.26 L36.93 27.10 L35.34 30.95 L37.51 34.31 L34.31 37.51 L30.95 35.34 L27.10 36.93 L26.26 40.85 L21.74 40.85 L20.90 36.93 L17.05 35.34 L13.69 37.51 L10.49 34.31 L12.66 30.95 L11.07 27.10 L7.15 26.26 L7.15 21.74 L11.07 20.90 L12.66 17.05 L10.49 13.69 L13.69 10.49 L17.05 12.66Z" transform="rotate(10 24 24)"/>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round">
+    <use href="#gear"/>
+  </g>
+  <use href="#gear" fill="url(#stripe)" stroke="#f2b541" stroke-width="1" stroke-linejoin="round"/>
+  <circle cx="24" cy="24" r="5.6" fill="#fffaf0" stroke="#d99a2b" stroke-width="1.2"/>
+</svg>
