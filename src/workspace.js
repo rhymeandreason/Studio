@@ -31,20 +31,6 @@ function appNameFromPath(path) {
   return base.replace(/\.app$/i, "");
 }
 
-export function initClaudeButton() {
-  const btn = document.getElementById("claude-btn");
-  btn.addEventListener("click", (e) => {
-    if (!state.activeProject) return;
-    // Normal click → standalone Studio Claude app. Option-click → the in-Studio
-    // window (loads src/ live, for frontend iteration during `tauri dev`).
-    if (e.altKey) {
-      invoke("open_claude_window", { projectPath: state.activeProject.path });
-    } else {
-      invoke("launch_claude_app", { projectPath: state.activeProject.path });
-    }
-  });
-}
-
 // "New Markdown doc" — opens the project's Markdown Editor on a fresh untitled
 // file (Rust picks the name and tells an already-open window to make its own,
 // so a pending save can't collide with it). The button is a menu: a doc can

@@ -2906,12 +2906,6 @@ td.ntable__total-cell {
 /* Vertical (reels) clips: letterbox instead of cropping to a square. */
 .artifact__preview--vertical > .artifact__preview-media { object-fit: contain; }
 
-#claude-btn{
-    display:flex;
-    gap:8px;
-
-}
-
 /* ── Git panel (data-panel="git") ────────────────────────────────────────
    Repo/dev-tools cards: an inline Commit surface plus embedded Pulse/Server
    tool pages. One repo per project (git.js reads the Workspace repo card). */

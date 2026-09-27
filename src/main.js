@@ -23,7 +23,6 @@ import {
 } from "./media.js";
 import {
   initModes,
-  initClaudeButton,
   initNewMarkdownButton,
   initFileDirectoryButton,
   initSpriteBadge,
@@ -2643,7 +2642,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   initAllProjectsButton();
   initWorkspaceButton();
   initModes();
-  initClaudeButton();
   initNewMarkdownButton();
   initFileDirectoryButton();
   initSpriteBadge();
