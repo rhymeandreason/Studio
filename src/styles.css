@@ -191,12 +191,6 @@ body {
     cursor: default;
 }
 
-.claude-btn__icon {
-    width: 16px;
-    height: 16px;
-    mix-blend-mode: difference;
-}
-
 .btn-ghost {
     background: transparent;
     color: var(--text-muted);
