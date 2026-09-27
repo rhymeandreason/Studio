@@ -145,6 +145,35 @@
   flex: 0 0 auto;
 }
 
+/* --- Embedded as a Studio panel (?embedded; body.claude-embedded) ---
+   No OS window here: the bar isn't a drag region, and Studio's own header
+   already names the project. */
+.claude-embedded .claude-topbar {
+  -webkit-app-region: no-drag;
+  background: transparent;
+  border-radius: 0;
+}
+
+.claude-embedded .claude-project-name {
+  display: none;
+}
+
+.claude-topbar #popout-btn {
+  align-self: center;
+  flex: 0 0 auto;
+}
+
+/* "Connecting to Studio Claude…" — embedded only, while the bridge is down. */
+.claude-bridge-status {
+  margin: 0 10px 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--hairline);
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 .claude-tabs {
   display: flex;
   align-items: center;

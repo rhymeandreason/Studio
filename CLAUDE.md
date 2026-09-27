@@ -49,7 +49,8 @@ dev:watch` restores Tauri's stock reload-everything watcher.
   writes them, tools edit them, the panel shows them) — `artifacts.js`.
   [docs/artifacts.md](docs/artifacts.md)
 - **Claude window** (in-app `src/claude/` + standalone `companion/`; per-session
-  Artifacts/Code cwd toggle) — [docs/claude-window.md](docs/claude-window.md)
+  Artifacts/Code cwd toggle; also Studio's Claude tab, a remote view over the
+  companion's local bridge) — [docs/claude-window.md](docs/claude-window.md)
 - **Git windows** — `src/git/`. [docs/git.md](docs/git.md)
 - **Studio Dock** (full-height black strip on the right screen edge, above the
   menu bar; own clock/Wi-Fi/volume/battery controls) — `src-tauri/src/dock.rs` +

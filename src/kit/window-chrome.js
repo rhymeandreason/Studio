@@ -48,7 +48,9 @@ function init() {
         document.body.classList.add("is-embedded");
         // No OS window frame in a card: drop the window border + titlebar.
         document.body.classList.remove("outline-window");
-        document.querySelector("[data-window-bar]")?.remove();
+        // A page whose bar carries controls it still needs embedded (Claude:
+        // sessions, new, pop-out) opts out with data-keep-embedded.
+        document.querySelector("[data-window-bar]:not([data-keep-embedded])")?.remove();
         return;
     }
 

@@ -53,6 +53,9 @@
                     <button class="tab tab--round" id="plan-btn" data-tab="plan" title="Plan (⌥-click to pop out)">
                         <span class="mi ph ph-calendar"></span>
                     </button>
+                    <button class="tab tab--round" id="claude-tab-btn" data-tab="claude" title="Claude (⌥-click to pop out)">
+                        <span class="mi ph ph-butterfly"></span>
+                    </button>
                     <button class="btn btn-icon-only tab--round" id="workspace-btn" type="button" title="Workspace">
                         <span class="mi ph ph-sliders-horizontal"></span>
                     </button>
@@ -263,6 +266,11 @@
                 </section>
                 <section class="panel panel--files" data-panel="plan" hidden>
                     <iframe class="files-embed" id="plan-frame" title="Plan"></iframe>
+                </section>
+                <!-- Studio Claude's chat, embedded; it talks to the Studio Claude
+                     app over its local bridge (see docs/claude-window.md). -->
+                <section class="panel panel--files" data-panel="claude" hidden>
+                    <iframe class="files-embed" id="claude-frame" title="Claude" allow="clipboard-read; clipboard-write"></iframe>
                 </section>
             </div>
         </main>

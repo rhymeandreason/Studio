@@ -31,7 +31,9 @@
             </aside>
 
             <div class="claude-right">
-                <div class="claude-topbar" data-window-bar>
+                <!-- data-keep-embedded: embedded in Studio, window-chrome.js would
+                     otherwise remove this bar, and its buttons with it. -->
+                <div class="claude-topbar" data-window-bar data-keep-embedded>
                     <span class="claude-project-name" id="project-name"></span>
                     <button class="btn btn-icon-only" id="sessions-toggle" title="Sessions">
                         <span class="mi mi-sm ph ph-sidebar"></span>
@@ -39,6 +41,9 @@
 
                     <button class="btn btn-icon-only claude-newtab" id="new-session" title="New session">
                         <span class="mi mi-sm ph ph-plus"></span>
+                    </button>
+                    <button class="btn btn-icon-only" id="popout-btn" title="Open in Studio Claude window" hidden>
+                        <span class="mi mi-sm ph ph-arrow-square-out"></span>
                     </button>
                 </div>
 
@@ -74,6 +79,7 @@
                     </div>
                 </div>
 
+                <div class="claude-bridge-status" id="bridge-status" hidden></div>
                 <div class="claude-chat">
                     <div class="claude-transcript" id="transcript"></div>
                     <div class="claude-status" id="status">

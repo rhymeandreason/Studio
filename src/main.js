@@ -105,6 +105,7 @@ export function render(project) {
     loadNotes(project.path);
     loadMedia(project.path);
     renderArtifacts();
+    if (state.activePanel === "claude") syncClaudeFrame();
   } else {
     // No active project → show the all-projects overview, never a dead-end
     // "No project active" screen.
@@ -112,6 +113,24 @@ export function render(project) {
     state.notesData = { version: 1, notes: [] };
     showOverview();
   }
+}
+
+// Claude tab: Studio Claude's chat page, embedded. The Studio Claude app owns
+// the claude processes and sessions (the page connects to it over a local
+// bridge), so all this does is point the page at the active project. Loaded
+// on first open; reloaded only when the project changes.
+function syncClaudeFrame() {
+  const frame = document.getElementById("claude-frame");
+  const p = state.activeProject;
+  if (!frame || !p || frame.dataset.project === p.path) return;
+  frame.dataset.project = p.path;
+  const q = new URLSearchParams({
+    embedded: "1",
+    project: p.path,
+    name: p.name || "",
+    sprite: p.sprite || "",
+  });
+  frame.src = `claude/index.html?${q}`;
 }
 
 // --- All-projects overview -------------------------------------------------
@@ -577,6 +596,8 @@ export function selectTab(name) {
     const frame = document.getElementById("plan-frame");
     if (frame && !frame.src) frame.src = "tools/plan.html";
   }
+
+  if (name === "claude") syncClaudeFrame();
 
   if (name === "media") loadMediaIfStale();
 

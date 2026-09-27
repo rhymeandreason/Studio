@@ -1139,6 +1139,8 @@ async function initDragDrop() {
     state.draggingNoteId ||
     state.mediaDragActive ||
     !state.activeProject ||
+    // The Claude panel takes drops itself (as chat attachments).
+    state.activePanel === "claude" ||
     overFileDirectory(e && e.payload && e.payload.position);
   // Only drag-enter carries paths in Tauri v2 (drag-over is position-only), so
   // set the label on enter and just keep the overlay visible on over.

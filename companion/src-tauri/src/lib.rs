@@ -1,3 +1,5 @@
+mod bridge;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -21,7 +23,7 @@ struct Workspace {
     color: String,
 }
 
-fn read_workspace(project_path: &str) -> Workspace {
+fn load_workspace(project_path: &str) -> Workspace {
     let file = PathBuf::from(project_path).join("workspace.json");
     std::fs::read_to_string(&file)
         .ok()
@@ -33,8 +35,23 @@ fn read_workspace(project_path: &str) -> Workspace {
 /// dropdown; see `studio_claude_core::claude_cwd`).
 fn claude_cwd(app: &AppHandle, project_path: &str, mode: &str) -> PathBuf {
     let home = app.path().home_dir().ok();
-    let ws = read_workspace(project_path);
+    let ws = load_workspace(project_path);
     core::claude_cwd(home.as_deref(), project_path, mode, &ws.repo)
+}
+
+// --- Events -----------------------------------------------------------------
+
+/// Emit an event to this app's windows AND to bridge clients (Studio's
+/// embedded panel). Every event a view listens for must go through here.
+fn emit_all(app: &AppHandle, event: &str, payload: String) {
+    let _ = app.emit(event, payload.clone());
+    bridge::broadcast(app, event, &payload);
+}
+
+/// Put a synthetic message on a session's stream, so every view of it (this
+/// app's window and Studio's panel) sees the same thing. Types are `__x__`.
+fn emit_stream(app: &AppHandle, key: &str, msg: serde_json::Value) {
+    emit_all(app, &format!("claude-stream-{key}"), msg.to_string());
 }
 
 // --- Claude subprocesses --------------------------------------------------
@@ -44,15 +61,13 @@ struct ClaudeState {
     procs: Mutex<HashMap<String, ClaudeSession>>,
 }
 
-/// Send a message to a chat session, spawning the `claude` subprocess on first
-/// use. Streamed output is routed back via `claude-stream-<key>` events.
-///
-/// Async so it runs off the main thread: spawning can take a moment, and a
-/// sync command would freeze every window meanwhile. Returns the process pid.
-#[tauri::command]
-async fn claude_send(
-    app: AppHandle,
-    state: tauri::State<'_, ClaudeState>,
+// Each command is one function taking its args struct; the #[tauri::command]
+// wrappers (this app's windows) and `bridge_call` (Studio's panel) both call it.
+// Field names are camelCase on the wire, matching Tauri's invoke convention.
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SendArgs {
     key: String,
     project_path: String,
     model: String,
@@ -62,73 +77,130 @@ async fn claude_send(
     cwd: Option<String>,
     resume_cwd: Option<String>,
     content: Option<serde_json::Value>,
-) -> Result<u32, String> {
+    /// The user's message as the sending view shows it ({text, images: thumbs,
+    /// origin}); echoed on the stream as `__user__` so other views show it too.
+    echo: Option<serde_json::Value>,
+}
+
+/// Send a message to a chat session, spawning the `claude` subprocess on first
+/// use. Streamed output is routed back via `claude-stream-<key>` events.
+/// Returns the process pid.
+fn send_impl(app: &AppHandle, a: SendArgs) -> Result<u32, String> {
+    let state = app.state::<ClaudeState>();
     let mut procs = state.procs.lock().unwrap();
     // A process that already exited (crash, failed resume) can't take input;
     // drop it so this send respawns with --resume.
-    if procs.get_mut(&key).is_some_and(|p| !p.is_alive()) {
-        procs.remove(&key);
+    if procs.get_mut(&a.key).is_some_and(|p| !p.is_alive()) {
+        procs.remove(&a.key);
     }
-    if !procs.contains_key(&key) {
-        let mode = cwd.as_deref().unwrap_or("project");
+    if !procs.contains_key(&a.key) {
+        let mode = a.cwd.as_deref().unwrap_or("project");
         // The session last ran in a different working directory: bring its
         // log along so --resume can find it here.
         if let (Some(id), Some(from), Ok(home)) =
-            (resume.as_deref(), resume_cwd.as_deref(), app.path().home_dir())
+            (a.resume.as_deref(), a.resume_cwd.as_deref(), app.path().home_dir())
         {
             if !id.trim().is_empty() && from != mode {
                 let _ = core::carry_session(
                     &home,
-                    &claude_cwd(&app, &project_path, from),
-                    &claude_cwd(&app, &project_path, mode),
+                    &claude_cwd(app, &a.project_path, from),
+                    &claude_cwd(app, &a.project_path, mode),
                     id.trim(),
                 );
             }
         }
-        let event_name = format!("claude-stream-{key}");
-        let out_handle = app.clone();
-        let out_event = event_name.clone();
-        let err_handle = app.clone();
+        let (out_app, out_key) = (app.clone(), a.key.clone());
+        let (err_app, err_key) = (app.clone(), a.key.clone());
         let session = core::spawn_claude_session(
-            &claude_cwd(&app, &project_path, mode),
-            &model,
-            permission_mode.as_deref(),
-            resume.as_deref(),
-            move |line| {
-                let _ = out_handle.emit(&out_event, line);
-            },
-            move |line| {
-                let payload = serde_json::json!({ "type": "__stderr__", "line": line });
-                let _ = err_handle.emit(&event_name, payload.to_string());
-            },
+            &claude_cwd(app, &a.project_path, mode),
+            &a.model,
+            a.permission_mode.as_deref(),
+            a.resume.as_deref(),
+            move |line| emit_all(&out_app, &format!("claude-stream-{out_key}"), line),
+            move |line| emit_stream(&err_app, &err_key, serde_json::json!({ "type": "__stderr__", "line": line })),
         )?;
-        procs.insert(key.clone(), session);
+        // Every view learns the pid (to tell a stale close from a live one).
+        emit_stream(app, &a.key, serde_json::json!({ "type": "__spawned__", "pid": session.pid() }));
+        procs.insert(a.key.clone(), session);
     }
 
-    let session = procs.get_mut(&key).unwrap();
+    if let Some(mut echo) = a.echo {
+        echo["type"] = "__user__".into();
+        emit_stream(app, &a.key, echo);
+    }
+    let session = procs.get_mut(&a.key).unwrap();
     // `content` (text + image blocks, built by the UI) wins over plain `text`.
-    match content {
+    match a.content {
         Some(c) => session.send_content(c)?,
-        None => session.send_text(&text)?,
+        None => session.send_text(&a.text)?,
     }
     Ok(session.pid())
 }
 
+#[derive(Deserialize)]
+struct ControlArgs {
+    key: String,
+    message: serde_json::Value,
+    /// What this message means for the UI — an ask's outcome label ("Allowed",
+    /// …) or "interrupt". Broadcast as `__control__` so every view of the
+    /// session reacts the same way (settles the card, expects the stop).
+    note: Option<String>,
+}
+
 /// Write a raw stream-json message (control protocol: permission answers,
 /// interrupt, set_model, set_permission_mode) to a running session's stdin.
-/// Errors if the session has no live process.
-#[tauri::command]
-fn claude_control(state: tauri::State<ClaudeState>, key: String, message: serde_json::Value) -> Result<(), String> {
-    let mut procs = state.procs.lock().unwrap();
-    match procs.get_mut(&key) {
-        Some(p) => {
-            if !p.is_alive() {
-                return Err("claude process has exited".into());
-            }
-            p.send_json(&message)
+fn control_impl(app: &AppHandle, a: ControlArgs) -> Result<(), String> {
+    {
+        let state = app.state::<ClaudeState>();
+        let mut procs = state.procs.lock().unwrap();
+        let Some(p) = procs.get_mut(&a.key) else {
+            return Err("no running claude process for this session".into());
+        };
+        if !p.is_alive() {
+            return Err("claude process has exited".into());
         }
-        _ => Err("no running claude process for this session".into()),
+        p.send_json(&a.message)?;
     }
+    if let Some(note) = a.note {
+        let request_id = a.message["response"]["request_id"].clone();
+        emit_stream(app, &a.key, serde_json::json!({ "type": "__control__", "request_id": request_id, "note": note }));
+    }
+    Ok(())
+}
+
+/// Kill a chat session's subprocess, if running.
+fn stop_impl(app: &AppHandle, key: &str) {
+    if let Some(mut session) = app.state::<ClaudeState>().procs.lock().unwrap().remove(key) {
+        session.kill();
+    }
+}
+
+#[tauri::command]
+async fn claude_send(
+    app: AppHandle,
+    key: String,
+    project_path: String,
+    model: String,
+    text: String,
+    resume: Option<String>,
+    permission_mode: Option<String>,
+    cwd: Option<String>,
+    resume_cwd: Option<String>,
+    content: Option<serde_json::Value>,
+    echo: Option<serde_json::Value>,
+) -> Result<u32, String> {
+    // Async so it runs off the main thread: spawning can take a moment.
+    send_impl(&app, SendArgs { key, project_path, model, text, resume, permission_mode, cwd, resume_cwd, content, echo })
+}
+
+#[tauri::command]
+fn claude_control(app: AppHandle, key: String, message: serde_json::Value, note: Option<String>) -> Result<(), String> {
+    control_impl(&app, ControlArgs { key, message, note })
+}
+
+#[tauri::command]
+fn claude_stop(app: AppHandle, key: String) {
+    stop_impl(&app, &key)
 }
 
 /// Read an image file dropped on the chat as base64 (HEIC etc. converted to
@@ -138,14 +210,6 @@ async fn read_chat_image(path: String) -> Result<core::ChatImage, String> {
     tauri::async_runtime::spawn_blocking(move || core::read_chat_image(std::path::Path::new(&path)))
         .await
         .map_err(|e| e.to_string())?
-}
-
-/// Kill a chat session's subprocess, if running.
-#[tauri::command]
-fn claude_stop(state: tauri::State<ClaudeState>, key: String) {
-    if let Some(mut session) = state.procs.lock().unwrap().remove(&key) {
-        session.kill();
-    }
 }
 
 // --- Session persistence --------------------------------------------------
@@ -172,9 +236,8 @@ fn sessions_file(app: &AppHandle, project: &Option<String>) -> Option<PathBuf> {
     }
 }
 
-#[tauri::command]
-fn read_claude_sessions(app: AppHandle, project: Option<String>) -> String {
-    if let Some(f) = sessions_file(&app, &project) {
+fn read_sessions_impl(app: &AppHandle, project: Option<String>) -> String {
+    if let Some(f) = sessions_file(app, &project) {
         if let Some(text) = core::read_json_store(&f) {
             return text;
         }
@@ -202,20 +265,38 @@ fn read_claude_sessions(app: AppHandle, project: Option<String>) -> String {
     String::new()
 }
 
+/// Save a project's sessions, then tell every other view of that project to
+/// merge them in (`origin` is the saving view, which skips its own echo).
+fn save_sessions_impl(app: &AppHandle, project: Option<String>, data: String, origin: Option<String>) -> Result<(), String> {
+    let file = sessions_file(app, &project).ok_or("no config dir")?;
+    core::write_atomic(&file, &data)?;
+    let payload = serde_json::json!({ "project": project, "origin": origin });
+    emit_all(app, "claude-sessions-changed", payload.to_string());
+    Ok(())
+}
+
 #[tauri::command]
-fn save_claude_sessions(app: AppHandle, project: Option<String>, data: String) -> Result<(), String> {
-    let file = sessions_file(&app, &project).ok_or("no config dir")?;
-    core::write_atomic(&file, &data)
+fn read_claude_sessions(app: AppHandle, project: Option<String>) -> String {
+    read_sessions_impl(&app, project)
+}
+
+#[tauri::command]
+fn save_claude_sessions(app: AppHandle, project: Option<String>, data: String, origin: Option<String>) -> Result<(), String> {
+    save_sessions_impl(&app, project, data, origin)
 }
 
 /// Remember the most recent project so a cold launch (no deep link, e.g. Dock)
 /// can reopen something useful.
-#[tauri::command]
-fn save_last_project(app: AppHandle, path: String, name: String, sprite: String) -> Result<(), String> {
+fn save_last_project_impl(app: &AppHandle, path: String, name: String, sprite: String) -> Result<(), String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let v = serde_json::json!({ "path": path, "name": name, "sprite": sprite });
     std::fs::write(dir.join("last-project.json"), v.to_string()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_last_project(app: AppHandle, path: String, name: String, sprite: String) -> Result<(), String> {
+    save_last_project_impl(&app, path, name, sprite)
 }
 
 /// Open an http(s) link from the chat in the default browser (same command
@@ -232,33 +313,40 @@ fn open_path(path: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// A project's color/sprite (same command name as Studio's, which returns the
+/// whole workspace; the chat only reads these).
+#[tauri::command]
+fn read_workspace(path: String) -> serde_json::Value {
+    let ws = load_workspace(&path);
+    serde_json::json!({ "color": ws.color, "sprite": ws.sprite, "repo": ws.repo })
+}
+
 // --- Recorded session history (~/.claude/projects) -----------------------
 
-#[tauri::command]
-fn list_claude_project_sessions(
-    app: AppHandle,
-    project_path: String,
-    cwd: Option<String>,
-) -> Vec<ClaudeHistorySession> {
+fn list_history_impl(app: &AppHandle, project_path: &str, cwd: Option<String>) -> Vec<ClaudeHistorySession> {
     let Ok(home) = app.path().home_dir() else {
         return Vec::new();
     };
-    let cwd_path = claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project"));
+    let cwd_path = claude_cwd(app, project_path, cwd.as_deref().unwrap_or("project"));
     core::list_project_sessions(&home, &cwd_path)
 }
 
-#[tauri::command]
-fn read_claude_session_log(
-    app: AppHandle,
-    project_path: String,
-    session_id: String,
-    cwd: Option<String>,
-) -> Vec<ClaudeLogMessage> {
+fn read_log_impl(app: &AppHandle, project_path: &str, session_id: &str, cwd: Option<String>) -> Vec<ClaudeLogMessage> {
     let Ok(home) = app.path().home_dir() else {
         return Vec::new();
     };
-    let cwd_path = claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project"));
-    core::read_session_log(&home, &cwd_path, &session_id)
+    let cwd_path = claude_cwd(app, project_path, cwd.as_deref().unwrap_or("project"));
+    core::read_session_log(&home, &cwd_path, session_id)
+}
+
+#[tauri::command]
+fn list_claude_project_sessions(app: AppHandle, project_path: String, cwd: Option<String>) -> Vec<ClaudeHistorySession> {
+    list_history_impl(&app, &project_path, cwd)
+}
+
+#[tauri::command]
+fn read_claude_session_log(app: AppHandle, project_path: String, session_id: String, cwd: Option<String>) -> Vec<ClaudeLogMessage> {
+    read_log_impl(&app, &project_path, &session_id, cwd)
 }
 
 // --- Account usage (/api/oauth/usage) ------------------------------------
@@ -271,6 +359,59 @@ async fn get_claude_usage() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(core::fetch_usage)
         .await
         .map_err(|e| e.to_string())?
+}
+
+// --- Bridge dispatch (Studio's embedded panel) ----------------------------
+
+/// The same commands as the invoke handler, for bridge clients. Runs on a
+/// bridge worker thread, so blocking work is fine here.
+fn bridge_call(app: &AppHandle, cmd: &str, args: serde_json::Value) -> Result<serde_json::Value, String> {
+    use serde_json::{from_value, to_value, Value};
+    let str_arg = |k: &str| args.get(k).and_then(Value::as_str).map(String::from);
+    let req = |k: &str| str_arg(k).ok_or_else(|| format!("{cmd}: missing {k}"));
+    let json = |r: Result<Value, serde_json::Error>| r.map_err(|e| e.to_string());
+    match cmd {
+        "claude_send" => {
+            let a: SendArgs = from_value(args.clone()).map_err(|e| e.to_string())?;
+            Ok(send_impl(app, a)?.into())
+        }
+        "claude_control" => {
+            let a: ControlArgs = from_value(args.clone()).map_err(|e| e.to_string())?;
+            control_impl(app, a).map(|_| Value::Null)
+        }
+        "claude_stop" => {
+            stop_impl(app, &req("key")?);
+            Ok(Value::Null)
+        }
+        "read_chat_image" => json(to_value(core::read_chat_image(std::path::Path::new(&req("path")?))?)),
+        "read_claude_sessions" => Ok(read_sessions_impl(app, str_arg("project")).into()),
+        "save_claude_sessions" => {
+            save_sessions_impl(app, str_arg("project"), req("data")?, str_arg("origin")).map(|_| Value::Null)
+        }
+        "save_last_project" => save_last_project_impl(
+            app,
+            req("path")?,
+            str_arg("name").unwrap_or_default(),
+            str_arg("sprite").unwrap_or_default(),
+        )
+        .map(|_| Value::Null),
+        "open_path" => open_path(req("path")?).map(|_| Value::Null),
+        "read_workspace" => Ok(read_workspace(req("path")?)),
+        "list_claude_project_sessions" => json(to_value(list_history_impl(app, &req("projectPath")?, str_arg("cwd")))),
+        "read_claude_session_log" => {
+            json(to_value(read_log_impl(app, &req("projectPath")?, &req("sessionId")?, str_arg("cwd"))))
+        }
+        "get_claude_usage" => core::fetch_usage(),
+        // Pop the panel's project out into this app's own window.
+        "claude_open_window" => {
+            let (h, project) = (app.clone(), req("project")?);
+            let name = str_arg("name").unwrap_or_default();
+            app.run_on_main_thread(move || open_project_window(&h, &project, &name))
+                .map_err(|e| e.to_string())?;
+            Ok(Value::Null)
+        }
+        _ => Err(format!("unknown command {cmd}")),
+    }
 }
 
 // --- Deep links & per-project windows ------------------------------------
@@ -304,7 +445,7 @@ fn open_project_window(app: &AppHandle, project: &str, name: &str) {
         // rebuilt, so its color/sprite are whatever they were on first open —
         // re-read workspace.json now in case they've changed since (see
         // claude.js's "claude-jump" listener).
-        let ws = read_workspace(project);
+        let ws = load_workspace(project);
         let _ = win.emit(
             "claude-jump",
             serde_json::json!({
@@ -315,7 +456,7 @@ fn open_project_window(app: &AppHandle, project: &str, name: &str) {
         return;
     }
 
-    let ws = read_workspace(project);
+    let ws = load_workspace(project);
     let color = ws.color.trim();
     let url = format!(
         "claude/index.html?project={}&name={}&sprite={}&color={}",
@@ -348,8 +489,13 @@ fn open_project_window(app: &AppHandle, project: &str, name: &str) {
     }
 }
 
-/// Handle `studio-claude://open?project=<path>&name=<name>`.
+/// Handle `studio-claude://open?project=<path>&name=<name>`, or
+/// `studio-claude://start` (just be running — for Studio's embedded panel —
+/// without opening a window).
 fn handle_open_url(app: &AppHandle, url: &Url) {
+    if url.host_str() == Some("start") {
+        return;
+    }
     let mut project: Option<String> = None;
     let mut name: Option<String> = None;
     for (k, v) in url.query_pairs() {
@@ -440,6 +586,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_dialog::init())
         .manage(ClaudeState::default())
+        .manage(bridge::Bridge::default())
         .invoke_handler(tauri::generate_handler![
             claude_send,
             claude_stop,
@@ -449,13 +596,26 @@ pub fn run() {
             save_claude_sessions,
             save_last_project,
             open_path,
+            read_workspace,
             list_claude_project_sessions,
             read_claude_session_log,
             get_claude_usage,
         ])
         .setup(|app| {
-            // Cold launch: the project URL rides in on our own argv.
-            let opened = handle_open_args(app.handle(), &std::env::args().collect::<Vec<_>>());
+            // Studio's embedded panel connects over the local bridge.
+            if let Ok(dir) = app.path().app_config_dir() {
+                if let Err(e) = bridge::start(app.handle().clone(), &dir, bridge_call) {
+                    eprintln!("[companion] bridge failed to start: {e}");
+                }
+            }
+            // Cold launch: the project URL rides in on our own argv. A
+            // `studio-claude://start` launch (from the panel) opens no window.
+            let argv: Vec<String> = std::env::args().collect();
+            let background = argv.iter().any(|a| a.starts_with("studio-claude://start"));
+            let opened = handle_open_args(app.handle(), &argv);
+            if background {
+                return Ok(());
+            }
             // Fall back to the last project / an empty window only if no URL was
             // passed. The queued open above runs on the main thread once the event
             // loop starts, so wait a beat before deciding nothing opened — and do
@@ -496,9 +656,14 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running Claude companion")
         .run(|app, event| {
-            // macOS: clicking the Dock icon reopens a hidden window.
+            // macOS: clicking the Dock icon reopens a hidden window — or, if
+            // it was started for the panel with no window, the last project.
             if let tauri::RunEvent::Reopen { .. } = event {
-                show_any_window(app);
+                if app.webview_windows().is_empty() {
+                    open_last_project(app);
+                } else {
+                    show_any_window(app);
+                }
             }
         });
 }

@@ -77,6 +77,17 @@ export function initNewMarkdownButton() {
 export function initFileDirectoryButton() {
   initTabPopOut("file-directory-btn", "file-directory.html");
   initTabPopOut("plan-btn", "plan.html");
+  // Claude pops out to its own app's project window (not a Studio tool window).
+  const claudeTab = document.getElementById("claude-tab-btn");
+  claudeTab?.addEventListener(
+    "click",
+    (e) => {
+      if (!e.altKey || !state.activeProject) return;
+      e.stopPropagation();
+      invoke("launch_claude_app", { projectPath: state.activeProject.path });
+    },
+    true,
+  );
 }
 
 /** A tab that embeds a tool: Option-click pops the tool out as its own window

@@ -1,9 +1,26 @@
 import { spriteStyle, DEFAULT_SPRITE } from "../sprites.js";
-import { initDevInspect } from "../devinspect.js";
+import { createBridgeClient } from "./bridge-client.js";
 
-const { invoke } = window.__TAURI__.core;
-const { listen } = window.__TAURI__.event;
-const { getCurrentWindow } = window.__TAURI__.window;
+// Two ways this page runs:
+// - As Studio Claude's own window (companion/): Tauri IPC to that app.
+// - Embedded as a panel in Studio (`?embedded`): Studio Claude still owns the
+//   claude processes + sessions, so talk to it over its local bridge instead
+//   (bridge-client.js). Same commands, same events — the rest of this file
+//   doesn't know which.
+const EMBEDDED = new URLSearchParams(location.search).has("embedded");
+const bridge = EMBEDDED
+    ? createBridgeClient({
+          project: new URLSearchParams(location.search).get("project") || "",
+          onStatus: (status) => onBridgeStatus(status),
+      })
+    : null;
+const invoke = bridge ? bridge.invoke : window.__TAURI__.core.invoke;
+const listen = bridge ? bridge.listen : window.__TAURI__.event.listen;
+const getCurrentWindow = EMBEDDED ? null : window.__TAURI__.window.getCurrentWindow;
+
+// Identifies this view in events it causes, so it can skip its own echoes
+// while other views (the window vs. Studio's panel) pick them up.
+const VIEW_ID = crypto.randomUUID();
 
 // The project's animal sprite (from workspace.json), used for the status-bar
 // walker and assistant avatars. Defaults to the red panda. Persisted so it's
@@ -46,7 +63,7 @@ function setSprite(name) {
 }
 
 function setWindowTitle(projectName) {
-    getCurrentWindow().setTitle(projectName ? `Claude · ${projectName}` : "Claude");
+    getCurrentWindow?.().setTitle(projectName ? `Claude · ${projectName}` : "Claude");
     const el = document.getElementById("project-name");
     if (el) el.textContent = projectName || "";
 }
@@ -293,7 +310,9 @@ async function loadSessions() {
         // Per-project window: its own session file (companion). The in-Studio
         // window passes null and the backend uses the shared file.
         const raw = await invoke("read_claude_sessions", { project: currentProjectPath });
-        sessions = raw ? JSON.parse(raw) : [];
+        const list = raw ? JSON.parse(raw) : [];
+        tombstones = list.filter((s) => s.deleted);
+        sessions = list.filter((s) => !s.deleted);
         sessionsLoaded = true;
     } catch (err) {
         // Leave saving disabled: the backend has kept the unreadable file.
@@ -314,11 +333,107 @@ async function persistSessions() {
         // Don't persist huge transcripts indefinitely — keep last 50 turns.
         transcript: s.transcript.slice(-50),
     }));
+    // Keep a day of tombstones so another view's stale save can't resurrect
+    // a deleted session.
+    const dayAgo = Date.now() - 86400000;
+    tombstones = tombstones.filter((t) => t.deleted > dayAgo);
     await invoke("save_claude_sessions", {
         project: currentProjectPath,
-        data: JSON.stringify(slim),
+        data: JSON.stringify([...slim, ...tombstones]),
+        origin: VIEW_ID,
     });
 }
+
+// --- Two views, one store ------------------------------------------------------
+// The same project can be open in Studio Claude's window and in Studio's panel
+// at once. Both see the same stream (so they build the same transcripts) and
+// both save the whole list, so a save from the other view is MERGED in, never
+// adopted wholesale:
+// - settings (name, model, mode, cwd) — whichever side changed them last
+//   (`settingsAt`, stamped by touchSettings);
+// - transcript — the longer copy (they only grow; a saved one is trimmed);
+// - deletions — tombstones (`{key, deleted}`) win over live copies;
+// - sessions only we have (just created here) are kept.
+/** @type {Array<{key:string, deleted:number}>} */
+let tombstones = [];
+
+function touchSettings(session) {
+    session.settingsAt = Date.now();
+}
+
+function mergeSession(mine, theirs) {
+    if ((theirs.settingsAt || 0) > (mine.settingsAt || 0)) {
+        for (const k of ["name", "model", "permissionMode", "cwd", "settingsAt"]) mine[k] = theirs[k];
+    }
+    if ((theirs.transcript?.length || 0) > mine.transcript.length) mine.transcript = theirs.transcript;
+    mine.resumeId = mine.resumeId || theirs.resumeId;
+    mine.resumeCwd = mine.resumeCwd || theirs.resumeCwd;
+    mine.usage = mine.usage || theirs.usage;
+    return mine;
+}
+
+async function mergeFromStore() {
+    let list;
+    try {
+        const raw = await invoke("read_claude_sessions", { project: currentProjectPath });
+        list = raw ? JSON.parse(raw) : [];
+    } catch {
+        return;
+    }
+    for (const t of list.filter((s) => s.deleted)) {
+        if (!tombstones.some((x) => x.key === t.key)) tombstones.push(t);
+    }
+    const dead = new Set(tombstones.map((t) => t.key));
+    const mine = new Map(sessions.map((s) => [s.key, s]));
+    const merged = [];
+    for (const theirs of list) {
+        if (theirs.deleted || dead.has(theirs.key)) continue;
+        const local = mine.get(theirs.key);
+        mine.delete(theirs.key);
+        merged.push(local ? mergeSession(local, theirs) : theirs);
+    }
+    // Ours alone: just created here and not in that save yet.
+    merged.unshift(...[...mine.values()].filter((s) => !dead.has(s.key)));
+    sessions = merged;
+    listenToVisibleSessions();
+
+    const active = sessions.find((s) => s.key === activeKey);
+    if (!active) {
+        // Deleted in the other view.
+        activeKey = null;
+        if (sessions.length) await switchTo(sessions[0].key);
+        else renderSessionsList();
+        return;
+    }
+    sessionNameEl.textContent = active.name;
+    modelSelect.value = active.model || "sonnet";
+    permissionSelect.value = active.permissionMode || "default";
+    cwdSelect.value = active.cwd || "project";
+    renderUsageBars(active);
+    renderSessionsList();
+    // Don't redraw mid-turn (it would drop the streaming bubble's DOM).
+    if (!busyKeys.has(active.key) && transcriptEl.childElementCount !== active.transcript.length) {
+        renderTranscript(active);
+    }
+}
+
+// Listen to every session of this project, not just the active one, so a turn
+// driven from the other view keeps this view's copy (and busy state) current.
+function listenToVisibleSessions() {
+    for (const s of visibleSessions()) ensureListener(s.key);
+}
+
+listen("claude-sessions-changed", (event) => {
+    let msg;
+    try {
+        msg = JSON.parse(event.payload);
+    } catch {
+        return;
+    }
+    if (msg.origin === VIEW_ID || !sessionsLoaded) return;
+    if ((msg.project || null) !== (currentProjectPath || null)) return;
+    mergeFromStore();
+});
 
 const ROLE_ICONS = {
     user: "user",
@@ -631,27 +746,35 @@ function appendBubble(role, text, images) {
 // AskUserQuestion, or an ExitPlanMode (plan approval). Each becomes a card; the
 // user's choice goes back as a control_response and Claude continues.
 
-// Write a raw stream-json message to the session's claude process.
-function control(key, message) {
-    return invoke("claude_control", { key, message });
+// Write a raw stream-json message to the session's claude process. `note`
+// (optional) is echoed to every view of the session as a `__control__` event.
+function control(key, message, note) {
+    return invoke("claude_control", { key, message, note });
 }
 
 let controlSeq = 0;
-function controlRequest(key, request) {
-    return control(key, { type: "control_request", request_id: `studio-${++controlSeq}`, request });
+function controlRequest(key, request, note) {
+    return control(key, { type: "control_request", request_id: `studio-${++controlSeq}`, request }, note);
 }
 
 // Answer an ask and settle its card. `note` is the card's resolved label.
+// The outcome is also echoed to every view as `__control__` (via `note`), so the
+// same card settles in the other view too.
 function answerAsk(key, requestId, response, note) {
+    settleAsk(key, requestId, note);
+    control(
+        key,
+        { type: "control_response", response: { subtype: "success", request_id: requestId, response } },
+        note,
+    ).catch((err) => appendBubble("error", `Couldn't answer Claude: ${err}`));
+}
+
+function settleAsk(key, requestId, note) {
     const live = getLiveBubbles(key);
     live.asks.delete(requestId);
     if (!live.asks.size) live.activity = "Working";
     resolveAskCard(requestId, note);
     renderStatus();
-    control(key, {
-        type: "control_response",
-        response: { subtype: "success", request_id: requestId, response },
-    }).catch((err) => appendBubble("error", `Couldn't answer Claude: ${err}`));
 }
 
 // Replace a card's controls with a one-line outcome (Allowed / Denied / …).
@@ -954,6 +1077,7 @@ function beginRename(key, item) {
             const next = input.value.trim();
             if (next && next !== session.name) {
                 session.name = next;
+                touchSettings(session);
                 persistSessions();
                 if (key === activeKey) sessionNameEl.textContent = session.name;
             }
@@ -994,6 +1118,7 @@ function beginRenameTitle() {
             const next = input.value.trim();
             if (next && next !== session.name) {
                 session.name = next;
+                touchSettings(session);
                 persistSessions();
             }
         }
@@ -1020,6 +1145,7 @@ async function deleteSession(key) {
     const idx = sessions.findIndex((s) => s.key === key);
     if (idx === -1) return;
     const [removed] = sessions.splice(idx, 1);
+    tombstones.push({ key, deleted: Date.now() });
 
     // Tear down the subprocess and its stream listener, if any.
     try {
@@ -1249,6 +1375,30 @@ function handleStreamLine(key, line) {
             }
             break;
         }
+        // Synthetic events from Studio Claude, so every view of the session
+        // stays in step (see companion lib.rs `emit_stream`).
+        case "__spawned__": {
+            live.pid = msg.pid;
+            break;
+        }
+        case "__user__": {
+            // A message sent from the other view.
+            if (msg.origin === VIEW_ID) break;
+            const thumbs = msg.images || [];
+            if (isActive) appendBubble("user", msg.text, thumbs);
+            session.transcript.push(thumbs.length ? { role: "user", text: msg.text, images: thumbs } : { role: "user", text: msg.text });
+            live.turnStart = Date.now();
+            live.outputTokens = 0;
+            live.promptTokens = 0;
+            live.activity = "Working";
+            setBusy(key, true);
+            break;
+        }
+        case "__control__": {
+            if (msg.note === "interrupt") live.interrupting = true;
+            else if (msg.request_id && live.asks.has(msg.request_id)) settleAsk(key, msg.request_id, msg.note);
+            break;
+        }
         case "control_cancel_request": {
             live.asks.delete(msg.request_id);
             resolveAskCard(msg.request_id, "Cancelled");
@@ -1273,6 +1423,11 @@ function handleStreamLine(key, line) {
             // deleted) fails before doing anything. Drop the stale id and resend
             // the message as a fresh conversation once the dead process closes.
             const errors = Array.isArray(msg.errors) ? msg.errors.join("\n") : "";
+            if (msg.is_error && /No conversation found/i.test(errors) && live.pendingText == null) {
+                // The view that sent this message will retry it; nothing to show here.
+                setBusy(key, false);
+                break;
+            }
             if (msg.is_error && /No conversation found/i.test(errors) && live.pendingText) {
                 session.resumeId = null;
                 live.retryText = live.pendingText;
@@ -1572,6 +1727,8 @@ async function spawnAndSend(session, text, images = []) {
             model: session.model,
             text,
             content: messageContent(text, images),
+            // Shown by the other view (window ↔ panel) as it's sent.
+            echo: { text, images: images.map((i) => i.thumb), origin: VIEW_ID },
             resume: session.resumeId,
             permissionMode: session.permissionMode || "default",
             cwd: session.cwd || "project",
@@ -1595,10 +1752,10 @@ async function stopSession(key) {
     if (!busyKeys.has(key)) return;
     const live = getLiveBubbles(key);
     const session = sessions.find((s) => s.key === key);
-    if (session && !session._dead && live.pid) {
+    if (session && !session._dead) {
         live.interrupting = true;
         try {
-            await controlRequest(key, { subtype: "interrupt" });
+            await controlRequest(key, { subtype: "interrupt" }, "interrupt");
             setTimeout(() => {
                 if (live.interrupting && busyKeys.has(key)) killSession(key);
             }, 4000);
@@ -1764,7 +1921,12 @@ promptInput.addEventListener("paste", (e) => {
 // its path into the prompt so Claude can read it.
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|heic|heif|tiff?)$/i;
 const dropZone = document.querySelector(".claude-right");
-window.__TAURI__.webview?.getCurrentWebview().onDragDropEvent((event) => {
+// Embedded, the drop lands on Studio's window: listen there, and only act while
+// this panel is showing (Studio's own drop handling stands down for it).
+const dropHost = EMBEDDED ? window.parent.__TAURI__ : window.__TAURI__;
+const panelShowing = () => !EMBEDDED || window.frameElement?.offsetParent != null;
+dropHost?.webview?.getCurrentWebview().onDragDropEvent((event) => {
+    if (!panelShowing()) return;
     const { type, paths = [] } = event.payload || {};
     if (type === "enter" || type === "over") {
         dropZone.classList.add("is-dropping");
@@ -1816,17 +1978,16 @@ transcriptEl.addEventListener("dblclick", async (e) => {
 // requests). With no process, they're simply used as flags at the next spawn;
 // if the process turns out to be gone, respawn next time.
 function applyLive(session, request) {
-    const live = liveBubbles.get(session.key);
-    if (session._dead || !live?.pid) return;
-    controlRequest(session.key, request).catch(() => {
-        session._dead = true;
-    });
+    if (session._dead) return;
+    // Fails harmlessly when no process is running (the flags apply at spawn).
+    controlRequest(session.key, request).catch(() => {});
 }
 
 modelSelect.addEventListener("change", () => {
     const session = sessions.find((s) => s.key === activeKey);
     if (!session) return;
     session.model = modelSelect.value;
+    touchSettings(session);
     persistSessions();
     applyLive(session, { subtype: "set_model", model: session.model });
 });
@@ -1835,6 +1996,7 @@ permissionSelect.addEventListener("change", () => {
     const session = sessions.find((s) => s.key === activeKey);
     if (!session) return;
     session.permissionMode = permissionSelect.value;
+    touchSettings(session);
     persistSessions();
     applyLive(session, { subtype: "set_permission_mode", mode: session.permissionMode });
 });
@@ -1843,6 +2005,7 @@ cwdSelect.addEventListener("change", () => {
     const session = sessions.find((s) => s.key === activeKey);
     if (session) {
         session.cwd = cwdSelect.value;
+        touchSettings(session);
         persistSessions();
         // cwd is set when the claude process spawns; restart a running one so the
         // next send runs in the newly-selected directory.
@@ -1937,6 +2100,46 @@ listen("claude-jump", async (event) => {
     }
 });
 
+// --- Embedded in Studio (panel) ----------------------------------------------
+
+function initEmbedded() {
+    document.body.classList.add("claude-embedded");
+    // Pop out: open this project in Studio Claude's own window. Both stay
+    // live — they're two views of the same sessions.
+    const popout = document.getElementById("popout-btn");
+    popout.hidden = false;
+    popout.addEventListener("click", () => {
+        const params = new URLSearchParams(location.search);
+        invoke("claude_open_window", {
+            project: currentProjectPath || params.get("project"),
+            name: params.get("name") || "",
+        }).catch((err) => appendBubble("error", `Couldn't open Studio Claude: ${err}`));
+    });
+}
+
+// Connection to Studio Claude (embedded only). Runs from the bridge client,
+// possibly before the rest of this module has initialized — so DOM lookups
+// here, not the module's element constants.
+function onBridgeStatus(status) {
+    const banner = document.getElementById("bridge-status");
+    if (!banner) return;
+    const text = {
+        connecting: "Connecting to Studio Claude…",
+        disconnected: "Lost Studio Claude — reconnecting…",
+    }[status];
+    banner.hidden = !text;
+    banner.textContent = text || "";
+    // Back after a drop-out (e.g. Studio Claude was rebuilt): anything could
+    // have changed meanwhile, so pull the store fresh and redraw.
+    if (status === "reconnected" && sessionsLoaded) {
+        mergeFromStore().then(() => {
+            const active = sessions.find((s) => s.key === activeKey);
+            if (active && !busyKeys.has(active.key)) renderTranscript(active);
+        });
+        refreshUsage(true);
+    }
+}
+
 // localStorage is shared across the companion's per-project windows, so the
 // "last active session" must be keyed per project.
 function activeKeyName() {
@@ -1944,7 +2147,8 @@ function activeKeyName() {
 }
 
 (async function init() {
-    initDevInspect();
+    if (!EMBEDDED) import("../devinspect.js").then((m) => m.initDevInspect()).catch(() => {});
+    if (EMBEDDED) initEmbedded();
     renderStatus(); // hidden unless a turn is already running
     // A per-project window carries its project in the URL; adopt it before
     // loading that project's sessions.
@@ -1964,6 +2168,7 @@ function activeKeyName() {
     }
     applyStatusSprite();
     await loadSessions();
+    listenToVisibleSessions();
     renderSessionsList();
     refreshUsage(true);
     if (sessions.length) {

@@ -229,6 +229,49 @@ they're just the flags for the next spawn. `system` events carrying
 needs a respawn. Note: those switches emit `system` events while idle, so
 only `stream_event`/`assistant` may flip a session back to busy.
 
+## Embedded as Studio's Claude tab (the bridge)
+The same page also runs **inside Studio** as the Claude tab (`#claude-frame`,
+`?embedded=1&project=…`; `syncClaudeFrame()` in `main.js` repoints it when the
+project changes). Studio Claude stays the only owner of `claude` processes and
+the session store — the panel is a *remote view* of it, so a Studio restart
+never interrupts Claude, and the panel and the app's window can show the same
+session live. ⌥-click the tab (or the panel's pop-out button) opens the app's
+own window for the project.
+
+- **Transport** — `companion/src-tauri/src/bridge.rs`: a WebSocket on
+  `127.0.0.1:<random port>`. Every connection must carry `?token=` from
+  `~/Library/Application Support/com.studio.claude/bridge.json` (0600, rewritten
+  each launch), so web pages and other local programs can't drive `claude`.
+  Frames: `{id, cmd, args}` → `{id, ok, result|error}`; events
+  `{event, payload}`. Rust stays transport-only; `bridge_call` in `lib.rs`
+  maps each command to the same `*_impl` function its `#[tauri::command]`
+  wrapper calls — add a command in both places.
+- **Events reach both** — anything a view listens for is emitted via
+  `emit_all` (windows + bridge clients). Never `app.emit` a chat event directly.
+- **Client** — `src/claude/bridge-client.js` (embedded only) swaps in for
+  Tauri's invoke/listen; it reads `bridge.json` through Studio's
+  `read_text_file`, and if Studio Claude isn't running starts it windowless
+  (`launch_claude_app { background: true }` → `studio-claude://start`), then
+  retries. A banner shows while disconnected; on reconnect it re-merges.
+- **Embedded page** — no `window.__TAURI__` in an iframe: `getCurrentWindow`
+  is skipped, the dev inspector isn't loaded, drops come from Studio's window
+  (`window.parent.__TAURI__`, only while the panel is showing; `media.js`
+  stands down for the Claude tab). The top bar opts out of window-chrome's
+  embedded removal with `data-keep-embedded` (it holds the session buttons).
+
+**Two views, one session** (claude.js, see "Two views, one store"):
+- Stream sync: `__spawned__ {pid}`, `__user__ {text, images, origin}` (a
+  message sent from the other view — `claude_send`'s `echo`), `__control__
+  {request_id, note}` (an ask answered / "interrupt" — `claude_control`'s
+  `note`). Each view has a `VIEW_ID` and skips its own echoes. Views listen to
+  every session of the project, not just the active one.
+- Store sync: `save_claude_sessions` broadcasts `claude-sessions-changed
+  {project, origin}`; other views **merge** (`mergeFromStore`), never adopt:
+  settings by `settingsAt` (set via `touchSettings` on rename/model/mode/cwd),
+  transcript by length, deletions by tombstones (`{key, deleted}` entries kept
+  a day in the file), sessions only we have are kept.
+- Only the sending view retries a failed `--resume`.
+
 ## Images (paste / drop)
 Images wait in a tray above the input (`#attachments`) and go out with the next
 message as image content blocks (images first, then text) — `claude_send` takes

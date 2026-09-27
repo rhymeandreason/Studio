@@ -5771,17 +5771,25 @@ fn open_claude_window(
 /// or focuses that project's window. This avoids deep links, whose warm
 /// Apple-Event delivery to a running macOS app is unreliable. (The in-Studio
 /// `open_claude_window` above is kept for live frontend dev.)
+///
+/// `background: true` just makes sure the companion is running, without
+/// opening a window — the embedded Claude panel uses that before it connects
+/// to the companion's local bridge.
 #[tauri::command]
-fn launch_claude_app(project_path: String) -> Result<(), String> {
+fn launch_claude_app(project_path: String, background: Option<bool>) -> Result<(), String> {
     let name = Path::new(&project_path)
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("");
-    let url = format!(
-        "studio-claude://open?project={}&name={}",
-        url_encode(&project_path),
-        url_encode(name),
-    );
+    let url = if background.unwrap_or(false) {
+        "studio-claude://start".to_string()
+    } else {
+        format!(
+            "studio-claude://open?project={}&name={}",
+            url_encode(&project_path),
+            url_encode(name),
+        )
+    };
     Command::new("open")
         .args(["-n", "-b", "com.studio.claude", "--args"])
         .arg(url)
