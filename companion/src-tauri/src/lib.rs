@@ -109,6 +109,23 @@ async fn claude_send(
     Ok(session.pid())
 }
 
+/// Write a raw stream-json message (control protocol: permission answers,
+/// interrupt, set_model, set_permission_mode) to a running session's stdin.
+/// Errors if the session has no live process.
+#[tauri::command]
+fn claude_control(state: tauri::State<ClaudeState>, key: String, message: serde_json::Value) -> Result<(), String> {
+    let mut procs = state.procs.lock().unwrap();
+    match procs.get_mut(&key) {
+        Some(p) => {
+            if !p.is_alive() {
+                return Err("claude process has exited".into());
+            }
+            p.send_json(&message)
+        }
+        _ => Err("no running claude process for this session".into()),
+    }
+}
+
 /// Kill a chat session's subprocess, if running.
 #[tauri::command]
 fn claude_stop(state: tauri::State<ClaudeState>, key: String) {
@@ -412,6 +429,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             claude_send,
             claude_stop,
+            claude_control,
             read_claude_sessions,
             save_claude_sessions,
             save_last_project,

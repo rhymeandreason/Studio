@@ -166,12 +166,14 @@ const modelSelect = createDropdown(
     ],
     { icon: "claude-icon.svg" },
 );
-const permissionSelect = createDropdown(document.getElementById("permission-select"), [
+const PERMISSION_OPTIONS = [
     { value: "default", label: "Ask" },
     { value: "acceptEdits", label: "Accept edits" },
     { value: "plan", label: "Plan" },
     { value: "bypassPermissions", label: "Bypass" },
-]);
+];
+const PERMISSION_MODES = PERMISSION_OPTIONS.map((o) => o.value);
+const permissionSelect = createDropdown(document.getElementById("permission-select"), PERMISSION_OPTIONS);
 // Working directory: "project" runs Claude in the project folder (where media,
 // notes, and artifacts/ live — for design/artifact work); "repo" runs it in the
 // workspace's git repo (for code). Backend resolves the actual path.
@@ -477,6 +479,8 @@ function renderTranscript(session) {
     // A reply still streaming in: re-show it and keep streaming into it.
     const live = liveBubbles.get(session.key);
     if (live?.assistantText) live.assistantEl = appendBubble("assistant", live.assistantText);
+    // …and anything still waiting on an answer.
+    for (const [id, req] of live?.asks || []) appendAsk(session.key, id, req);
     // Switching into a session: jump to the latest.
     stickToBottom = true;
     scrollToBottom(true);
@@ -605,86 +609,276 @@ function appendBubble(role, text) {
     return body;
 }
 
-// Render an AskUserQuestion tool call as an interactive card: each question's
-// options become buttons. The raw stream-json pipe can't return a real
-// tool_result (the CLI auto-denies AskUserQuestion in -p mode), so picking an
-// answer just sends it back as a normal follow-up message, which Claude
-// continues from. `input` is the tool_use input: { questions: [...] }.
-function appendQuestion(input) {
+// --- Asks: permission, question, and plan cards ------------------------------
+// With `--permission-prompt-tool stdio`, Claude Code sends a `can_use_tool`
+// control_request whenever it needs the user: a tool permission, an
+// AskUserQuestion, or an ExitPlanMode (plan approval). Each becomes a card; the
+// user's choice goes back as a control_response and Claude continues.
+
+// Write a raw stream-json message to the session's claude process.
+function control(key, message) {
+    return invoke("claude_control", { key, message });
+}
+
+let controlSeq = 0;
+function controlRequest(key, request) {
+    return control(key, { type: "control_request", request_id: `studio-${++controlSeq}`, request });
+}
+
+// Answer an ask and settle its card. `note` is the card's resolved label.
+function answerAsk(key, requestId, response, note) {
+    const live = getLiveBubbles(key);
+    live.asks.delete(requestId);
+    if (!live.asks.size) live.activity = "Working";
+    resolveAskCard(requestId, note);
+    renderStatus();
+    control(key, {
+        type: "control_response",
+        response: { subtype: "success", request_id: requestId, response },
+    }).catch((err) => appendBubble("error", `Couldn't answer Claude: ${err}`));
+}
+
+// Replace a card's controls with a one-line outcome (Allowed / Denied / …).
+function resolveAskCard(requestId, note) {
+    const card = transcriptEl.querySelector(`[data-ask="${CSS.escape(requestId)}"]`);
+    if (!card) return;
+    card.classList.add("is-resolved");
+    card.querySelectorAll("button, input").forEach((b) => (b.disabled = true));
+    const actions = card.querySelector(".claude-ask__actions");
+    if (actions) {
+        actions.innerHTML = "";
+        const done = document.createElement("span");
+        done.className = "claude-ask__outcome";
+        done.textContent = note;
+        actions.append(done);
+    }
+}
+
+// The turn ended or the process went away: nothing can answer these now.
+function expireAsks(live) {
+    for (const id of live.asks.keys()) resolveAskCard(id, "Expired");
+    live.asks.clear();
+}
+
+const stripAnsi = (s) => String(s || "").replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
+
+function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+}
+
+function button(label, className, onClick) {
+    const b = el("button", `btn ${className || ""}`.trim(), label);
+    b.type = "button";
+    b.addEventListener("click", onClick);
+    return b;
+}
+
+function askCard(requestId, icon, title) {
     transcriptEl.querySelector(".claude-empty")?.remove();
-    const questions = Array.isArray(input?.questions) ? input.questions : [];
-    if (!questions.length) return;
+    const card = el("div", "claude-msg claude-ask");
+    card.dataset.ask = requestId;
+    const head = el("div", "claude-ask__head");
+    head.append(el("span", `mi mi-sm ph ph-${icon}`), el("span", "claude-ask__title", title));
+    card.append(head);
+    return card;
+}
 
-    const card = document.createElement("div");
-    card.className = "claude-msg claude-msg--question";
-    const selections = new Map(); // question index -> Set of chosen labels
-
-    questions.forEach((q, qi) => {
-        selections.set(qi, new Set());
-        const block = document.createElement("div");
-        block.className = "claude-q";
-        const head = document.createElement("div");
-        head.className = "claude-q__head";
-        head.textContent = q.question || q.header || "Question";
-        block.appendChild(head);
-
-        const opts = document.createElement("div");
-        opts.className = "claude-q__opts";
-        (q.options || []).forEach((opt) => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "claude-q__opt";
-            btn.title = opt.description || "";
-            const label = document.createElement("span");
-            label.className = "claude-q__opt-label";
-            label.textContent = opt.label;
-            btn.appendChild(label);
-            if (opt.description) {
-                const desc = document.createElement("span");
-                desc.className = "claude-q__opt-desc";
-                desc.textContent = opt.description;
-                btn.appendChild(desc);
-            }
-            btn.addEventListener("click", () => {
-                const set = selections.get(qi);
-                if (q.multiSelect) {
-                    btn.classList.toggle("is-selected");
-                    if (set.has(opt.label)) set.delete(opt.label);
-                    else set.add(opt.label);
-                } else {
-                    opts.querySelectorAll(".claude-q__opt").forEach((b) =>
-                        b.classList.remove("is-selected"),
-                    );
-                    btn.classList.add("is-selected");
-                    set.clear();
-                    set.add(opt.label);
-                }
-                sendBtnEl.disabled = !questions.every((_, i) => selections.get(i).size);
-            });
-            opts.appendChild(btn);
-        });
-        block.appendChild(opts);
-        card.appendChild(block);
-    });
-
-    const sendBtnEl = document.createElement("button");
-    sendBtnEl.type = "button";
-    sendBtnEl.className = "btn btn-primary claude-q__send";
-    sendBtnEl.textContent = "Send answer";
-    sendBtnEl.disabled = true;
-    sendBtnEl.addEventListener("click", () => {
-        const answer = questions
-            .map((q, i) => `${q.header || q.question}: ${[...selections.get(i)].join(", ")}`)
-            .join("\n");
-        card.classList.add("is-answered");
-        card.querySelectorAll("button").forEach((b) => (b.disabled = true));
-        sendMessage(answer);
-    });
-    card.appendChild(sendBtnEl);
-
+function mountAskCard(card) {
     transcriptEl.appendChild(card);
     scrollToBottom(true);
     return card;
+}
+
+function appendAsk(key, requestId, req) {
+    if (req.tool_name === "AskUserQuestion") return appendQuestion(key, requestId, req.input || {});
+    if (req.tool_name === "ExitPlanMode") return appendPlan(key, requestId, req.input || {});
+    return appendPermission(key, requestId, req);
+}
+
+// What the tool is about to do, in the most readable form for common tools.
+function describeToolInput(tool, input) {
+    const lines = (s, n) => {
+        const all = String(s ?? "").split("\n");
+        return all.length > n ? [...all.slice(0, n), `… ${all.length - n} more lines`] : all;
+    };
+    switch (tool) {
+        case "Bash":
+            return { subject: input.description, detail: input.command };
+        case "Edit":
+            return {
+                subject: input.file_path,
+                detail: [
+                    ...lines(input.old_string, 20).map((l) => `- ${l}`),
+                    ...lines(input.new_string, 20).map((l) => `+ ${l}`),
+                ].join("\n"),
+            };
+        case "Write":
+            return { subject: input.file_path, detail: lines(input.content, 30).join("\n") };
+        case "Read":
+        case "NotebookEdit":
+            return { subject: input.file_path || input.notebook_path };
+        case "WebFetch":
+            return { subject: input.url, detail: input.prompt };
+        case "WebSearch":
+            return { subject: input.query };
+        case "Glob":
+        case "Grep":
+            return { subject: input.pattern, detail: input.path };
+        default:
+            return { detail: JSON.stringify(input, null, 2) };
+    }
+}
+
+function appendPermission(key, requestId, req) {
+    const tool = req.display_name || req.tool_name || "a tool";
+    const card = askCard(requestId, "shield-check", req.title || `Allow ${tool}?`);
+    const { subject, detail } = describeToolInput(req.tool_name, req.input || {});
+    const about = req.description || subject;
+    if (about) card.append(el("div", "claude-ask__subject", about));
+    if (req.description && subject && subject !== req.description) {
+        card.append(el("div", "claude-ask__path", subject));
+    }
+    if (detail) card.append(el("pre", "claude-ask__detail", detail));
+    if (req.blocked_path) card.append(el("div", "claude-ask__reason", `Outside the project: ${req.blocked_path}`));
+    if (req.decision_reason) card.append(el("div", "claude-ask__reason", stripAnsi(req.decision_reason)));
+
+    const actions = el("div", "claude-ask__actions");
+    const deny = button("Deny", "", () =>
+        answerAsk(key, requestId, { behavior: "deny", message: "The user denied this. Ask what they'd like instead." }, "Denied"),
+    );
+    actions.append(deny);
+    // "Allow for session" applies Claude's own suggested rules, scoped to this
+    // session only (suggestions default to writing the project's settings).
+    const suggestions = req.permission_suggestions || [];
+    if (suggestions.length && !req.suppress_always_allow_rule) {
+        actions.append(
+            button("Allow for session", "", () =>
+                answerAsk(key, requestId, {
+                    behavior: "allow",
+                    updatedInput: req.input,
+                    updatedPermissions: suggestions.map((s) => ({ ...s, destination: "session" })),
+                }, "Allowed for this session"),
+            ),
+        );
+    }
+    actions.append(
+        button("Allow", "btn-primary", () =>
+            answerAsk(key, requestId, { behavior: "allow", updatedInput: req.input }, "Allowed"),
+        ),
+    );
+    card.append(actions);
+    mountAskCard(card);
+    // Risky asks must not be one stray keypress from approval.
+    if (req.default_to_no) deny.focus();
+}
+
+// AskUserQuestion: pick an option per question (or type your own), and the
+// answers go back as the tool's real result.
+function appendQuestion(key, requestId, input) {
+    const questions = Array.isArray(input.questions) ? input.questions : [];
+    const card = askCard(requestId, "chat-circle-dots", questions.length > 1 ? "Claude has a few questions" : "Claude has a question");
+    const answers = questions.map(() => ({ picked: new Set(), other: "" }));
+    let sendBtn;
+    const refresh = () => {
+        sendBtn.disabled = !answers.every((a) => a.picked.size || a.other.trim());
+    };
+
+    questions.forEach((q, qi) => {
+        const block = el("div", "claude-q");
+        block.append(el("div", "claude-q__head", q.question || q.header || "Question"));
+        const opts = el("div", "claude-q__opts");
+        const other = el("input", "field__input claude-q__other");
+        (q.options || []).forEach((opt) => {
+            const b = el("button", "claude-q__opt");
+            b.type = "button";
+            b.append(el("span", "claude-q__opt-label", opt.label));
+            if (opt.description) b.append(el("span", "claude-q__opt-desc", opt.description));
+            b.addEventListener("click", () => {
+                const a = answers[qi];
+                if (q.multiSelect) {
+                    b.classList.toggle("is-selected");
+                    if (a.picked.has(opt.label)) a.picked.delete(opt.label);
+                    else a.picked.add(opt.label);
+                } else {
+                    opts.querySelectorAll(".claude-q__opt").forEach((o) => o.classList.remove("is-selected"));
+                    b.classList.add("is-selected");
+                    a.picked = new Set([opt.label]);
+                    a.other = other.value = "";
+                }
+                refresh();
+            });
+            opts.append(b);
+        });
+        // Free-text answer instead of (single-select) or alongside (multi) the options.
+        other.placeholder = "Something else…";
+        other.addEventListener("input", () => {
+            answers[qi].other = other.value;
+            if (!q.multiSelect && other.value.trim()) {
+                answers[qi].picked.clear();
+                opts.querySelectorAll(".claude-q__opt").forEach((o) => o.classList.remove("is-selected"));
+            }
+            refresh();
+        });
+        other.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !sendBtn.disabled) sendBtn.click();
+        });
+        block.append(opts, other);
+        card.append(block);
+    });
+
+    const actions = el("div", "claude-ask__actions");
+    sendBtn = button("Send answer", "btn-primary", () => {
+        const out = {};
+        const summary = [];
+        questions.forEach((q, i) => {
+            const parts = [...answers[i].picked];
+            if (answers[i].other.trim()) parts.push(answers[i].other.trim());
+            out[q.question] = parts.join(", ");
+            summary.push(`${q.header || q.question}: ${out[q.question]}`);
+        });
+        const session = sessions.find((s) => s.key === key);
+        session?.transcript.push({ role: "system", text: `Answered — ${summary.join(" · ")}` });
+        answerAsk(key, requestId, { behavior: "allow", updatedInput: { ...input, answers: out } }, summary.join(" · "));
+    });
+    sendBtn.disabled = true;
+    actions.append(
+        button("Skip", "", () =>
+            answerAsk(key, requestId, { behavior: "deny", message: "The user skipped the question." }, "Skipped"),
+        ),
+        sendBtn,
+    );
+    card.append(actions);
+    return mountAskCard(card);
+}
+
+// ExitPlanMode: Claude's plan, rendered, with approve / keep-planning buttons.
+// Approving also switches the session out of Plan mode (the CLI then reports
+// the new mode, which syncs the picker).
+function appendPlan(key, requestId, input) {
+    const card = askCard(requestId, "list-checks", "Ready to go with this plan?");
+    card.classList.add("claude-ask--plan");
+    const plan = el("div", "claude-msg__body claude-md claude-ask__plan");
+    renderMarkdown(plan, input.plan || "");
+    card.append(plan);
+    const approve = (mode, note) =>
+        answerAsk(key, requestId, {
+            behavior: "allow",
+            updatedInput: input,
+            updatedPermissions: [{ type: "setMode", mode, destination: "session" }],
+        }, note);
+    const actions = el("div", "claude-ask__actions");
+    actions.append(
+        button("Keep planning", "", () =>
+            answerAsk(key, requestId, { behavior: "deny", message: "The user wants to keep planning. Ask what to change." }, "Kept planning"),
+        ),
+        button("Approve, ask before edits", "", () => approve("default", "Approved")),
+        button("Approve, accept edits", "btn-primary", () => approve("acceptEdits", "Approved — accepting edits")),
+    );
+    card.append(actions);
+    return mountAskCard(card);
 }
 
 function resetUsageBars() {
@@ -920,7 +1114,7 @@ function finalizeLive(session, live) {
 function getLiveBubbles(key) {
     let live = liveBubbles.get(key);
     if (!live) {
-        live = { assistantEl: null, toolKeys: new Set() };
+        live = { assistantEl: null, toolKeys: new Set(), asks: new Map() };
         liveBubbles.set(key, live);
     }
     return live;
@@ -942,11 +1136,9 @@ function handleStreamLine(key, line) {
     // The CLI can emit a "result" mid-task (e.g. around a compaction/continuation
     // boundary) and then keep working. Any further activity after that means
     // the turn isn't actually over — flip busy back on so the status bar (and
-    // stop button) reflect reality.
-    if (
-        !busyKeys.has(key) &&
-        (msg.type === "system" || msg.type === "stream_event" || msg.type === "assistant")
-    ) {
+    // stop button) reflect reality. (Not "system": model/mode switches emit
+    // those while idle.)
+    if (!busyKeys.has(key) && (msg.type === "stream_event" || msg.type === "assistant")) {
         setBusy(key, true);
     }
 
@@ -957,6 +1149,14 @@ function handleStreamLine(key, line) {
                 // Claude Code files the session under the cwd it runs in; remember
                 // which, so a later cwd switch can carry the log across.
                 session.resumeCwd = live.spawnCwd || session.cwd || "project";
+            }
+            // The mode can change from inside the session (approving a plan
+            // switches out of Plan) — keep the picker in sync.
+            if (msg.permissionMode && PERMISSION_MODES.includes(msg.permissionMode)
+                && msg.permissionMode !== session.permissionMode) {
+                session.permissionMode = msg.permissionMode;
+                if (isActive) permissionSelect.value = msg.permissionMode;
+                persistSessions();
             }
             break;
         }
@@ -997,10 +1197,9 @@ function handleStreamLine(key, line) {
                 if (block.type === "tool_use" && !live.toolKeys.has(block.id)) {
                     live.toolKeys.add(block.id);
                     const summary = `${block.name} ${JSON.stringify(block.input || {})}`;
-                    // AskUserQuestion renders as an interactive answer card rather
-                    // than a collapsed tool bubble.
-                    if (block.name === "AskUserQuestion") {
-                        if (isActive) appendQuestion(block.input);
+                    // These surface as cards when their control_request arrives
+                    // (see "control_request"), not as tool bubbles.
+                    if (block.name === "AskUserQuestion" || block.name === "ExitPlanMode") {
                         session.transcript.push({ role: "tool", text: summary });
                         continue;
                     }
@@ -1013,7 +1212,47 @@ function handleStreamLine(key, line) {
             }
             break;
         }
+        case "control_request": {
+            // Claude Code asks us: tool permission (incl. AskUserQuestion and
+            // ExitPlanMode, which are "asks" too). Anything else we don't
+            // implement gets an error reply so the CLI never waits on us.
+            const req = msg.request || {};
+            if (req.subtype === "can_use_tool") {
+                live.asks.set(msg.request_id, req);
+                live.activity = "Waiting for you";
+                live.toolSummary = null;
+                if (isActive) {
+                    appendAsk(key, msg.request_id, req);
+                    renderStatus();
+                }
+            } else {
+                control(key, {
+                    type: "control_response",
+                    response: { subtype: "error", request_id: msg.request_id, error: `Studio doesn't support ${req.subtype}` },
+                }).catch(() => {});
+            }
+            break;
+        }
+        case "control_cancel_request": {
+            live.asks.delete(msg.request_id);
+            resolveAskCard(msg.request_id, "Cancelled");
+            break;
+        }
         case "result": {
+            // Asks can't outlive their turn.
+            expireAsks(live);
+            // Stopped by the user (interrupt): the CLI reports that as an error
+            // result, but it's just a stop.
+            if (live.interrupting) {
+                live.interrupting = false;
+                finalizeLive(session, live);
+                live.pendingText = null;
+                if (isActive) appendBubble("system", "Stopped.");
+                session.transcript.push({ role: "system", text: "Stopped." });
+                setBusy(key, false);
+                persistSessions();
+                break;
+            }
             // A --resume whose conversation can't be found (e.g. its log was
             // deleted) fails before doing anything. Drop the stale id and resend
             // the message as a fresh conversation once the dead process closes.
@@ -1068,6 +1307,8 @@ function handleStreamLine(key, line) {
             // then a quick resend) must not mark the new one dead.
             if (msg.pid && live.pid && msg.pid !== live.pid) break;
             session._dead = true;
+            live.interrupting = false;
+            expireAsks(live);
             if (live.retryText) {
                 const text = live.retryText;
                 live.retryText = null;
@@ -1260,6 +1501,16 @@ async function sendMessage(text) {
     session.transcript.push({ role: "user", text });
     persistSessions();
 
+    // Claude is waiting on a card: like the terminal, typing instead of
+    // clicking declines the ask with the message as feedback.
+    const live = getLiveBubbles(session.key);
+    if (live.asks.size) {
+        for (const id of [...live.asks.keys()]) {
+            answerAsk(session.key, id, { behavior: "deny", message: `The user replied instead: ${text}` }, "Replied instead");
+        }
+        return;
+    }
+
     await spawnAndSend(session, text);
 }
 
@@ -1304,7 +1555,30 @@ async function spawnAndSend(session, text) {
 
 // Interrupt a session's in-progress turn: finalize any streamed text, kill the
 // subprocess (the next message respawns it with --resume, keeping context).
+// Stop the running turn. Interrupting keeps the process (and its context)
+// alive; the CLI ends the turn with a result, handled as "Stopped." If it
+// doesn't respond promptly, fall back to killing the process.
 async function stopSession(key) {
+    if (!busyKeys.has(key)) return;
+    const live = getLiveBubbles(key);
+    const session = sessions.find((s) => s.key === key);
+    if (session && !session._dead && live.pid) {
+        live.interrupting = true;
+        try {
+            await controlRequest(key, { subtype: "interrupt" });
+            setTimeout(() => {
+                if (live.interrupting && busyKeys.has(key)) killSession(key);
+            }, 4000);
+            return;
+        } catch {
+            live.interrupting = false;
+        }
+    }
+    killSession(key);
+}
+
+// End a turn by killing its process (the next send respawns with --resume).
+async function killSession(key) {
     if (!busyKeys.has(key)) return;
     const session = sessions.find((s) => s.key === key);
     const live = getLiveBubbles(key);
@@ -1313,6 +1587,8 @@ async function stopSession(key) {
         persistSessions();
     }
     live.pendingText = null;
+    live.interrupting = false;
+    expireAsks(live);
 
     try {
         await invoke("claude_stop", { key });
@@ -1324,11 +1600,11 @@ async function stopSession(key) {
     if (key === activeKey) appendBubble("system", "Stopped.");
 }
 
-// Flags fixed at spawn (permission mode, cwd) changed: end the session's
-// process so the next send respawns with them (--resume keeps the context).
+// The cwd is fixed at spawn: end the session's process so the next send
+// respawns in the new directory (--resume keeps the context).
 function restartOnNextSend(session) {
     if (busyKeys.has(session.key)) {
-        stopSession(session.key);
+        killSession(session.key);
     } else if (!session._dead && listeners.has(session.key)) {
         invoke("claude_stop", { key: session.key }).catch(() => {});
         session._dead = true;
@@ -1368,12 +1644,23 @@ transcriptEl.addEventListener("dblclick", async (e) => {
     }
 });
 
+// Model and permission mode apply to a running process live (control
+// requests). With no process, they're simply used as flags at the next spawn;
+// if the process turns out to be gone, respawn next time.
+function applyLive(session, request) {
+    const live = liveBubbles.get(session.key);
+    if (session._dead || !live?.pid) return;
+    controlRequest(session.key, request).catch(() => {
+        session._dead = true;
+    });
+}
+
 modelSelect.addEventListener("change", () => {
     const session = sessions.find((s) => s.key === activeKey);
-    if (session) {
-        session.model = modelSelect.value;
-        persistSessions();
-    }
+    if (!session) return;
+    session.model = modelSelect.value;
+    persistSessions();
+    applyLive(session, { subtype: "set_model", model: session.model });
 });
 
 permissionSelect.addEventListener("change", () => {
@@ -1381,10 +1668,7 @@ permissionSelect.addEventListener("change", () => {
     if (!session) return;
     session.permissionMode = permissionSelect.value;
     persistSessions();
-    // --permission-mode is applied when the session's claude process starts,
-    // so a change mid-session takes effect after it restarts. If one is
-    // already running, restart it on the next send so the new mode applies.
-    restartOnNextSend(session);
+    applyLive(session, { subtype: "set_permission_mode", mode: session.permissionMode });
 });
 
 cwdSelect.addEventListener("change", () => {

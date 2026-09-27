@@ -121,14 +121,19 @@ in-Studio backend.
 ## Process & streaming model
 Each UI session maps to one `claude -p` subprocess (`claude_send`), spawned on
 first message with `--input-format stream-json --output-format stream-json
---verbose --include-partial-messages` (plus `--model` and `--permission-mode`).
+--verbose --include-partial-messages --permission-prompt-tool stdio` (plus
+`--model` and `--permission-mode`), followed by the control-protocol
+`initialize` handshake (both in `studio_claude_core::spawn_claude_session`).
 PATH is resolved via a login shell (`claude_path`) because GUI apps don't inherit
 the user's shell PATH. The subprocess's stdout/stderr lines are emitted to the
 frontend as `claude-stream-<key>` events; the frontend parses the stream-json
 message types (`system`/`stream_event`/`assistant`/`result`/`rate_limit_event`).
 User messages are written to the subprocess stdin as a stream-json `user` frame.
-`claude_stop` kills a session's subprocess (used by the **stop button**, which
-also finalizes streamed text; the next message respawns with `--resume`).
+`claude_stop` kills a session's subprocess; the next message respawns with
+`--resume`. The **stop button** instead sends an `interrupt` control request,
+which ends the turn but keeps the process; the CLI reports it as an error
+`result`, shown as "Stopped." (`live.interrupting`). If no result comes within
+4s it falls back to killing.
 
 **Failure handling** (keep these when touching the stream code):
 - `claude_send` is **async** (off the main thread) and returns the process pid.
@@ -193,18 +198,36 @@ jsonl into user/assistant text + tool-call summaries) and continues it with
   activity (Working / Running `<tool>` / Writing), elapsed seconds, and live
   token counts: context from `message_start`, growing output from `message_delta`.
 
-## Permission mode
-Per-session dropdown (Ask=`default` / Accept edits=`acceptEdits` / Plan=`plan` /
-Bypass=`bypassPermissions`) passed as `--permission-mode`. Because the flag is
-fixed at spawn, changing it mid-session stops the subprocess so the next message
-restarts it (with `--resume`, preserving context).
+## Control protocol: permissions, questions, plans
+With `--permission-prompt-tool stdio`, Claude Code asks the UI instead of
+auto-denying: a `control_request` (`subtype: "can_use_tool"`) arrives on stdout
+and the UI answers with a `control_response` written to stdin via the generic
+`claude_control(key, message)` command (Rust is just the pipe; JS builds every
+message). Probe-verified shapes:
 
-**Limitation:** there are no per-call approve/deny buttons. Interactive
-permission prompts surface only via Claude Code's bidirectional **control
-protocol** (`can_use_tool` control_requests, requiring an `initialize`
-handshake) — which the raw stream-json pipe here does not speak. Adding real
-buttons would mean either driving that control protocol or switching to the
-Agent SDK's `canUseTool` callback. The permission-mode selector is the interim.
+- **Permission** → card with Deny / Allow for session / Allow. Allow replies
+  `{behavior:"allow", updatedInput}`; "for session" adds the request's
+  `permission_suggestions` with `destination` rewritten to `"session"` (they
+  default to writing project settings). Hidden when
+  `suppress_always_allow_rule`; `default_to_no` focuses Deny. Bash/Edit/Write/…
+  inputs get a readable preview (`describeToolInput`), Edit as a -/+ diff.
+- **AskUserQuestion** → option card (+ free-text "Something else…"). Replies
+  allow with `updatedInput: {...input, answers: {<question text>: "A, B"}}`;
+  Claude receives it as the tool's real result.
+- **ExitPlanMode** → the plan rendered as Markdown; approve replies allow +
+  `updatedPermissions: [{type:"setMode", mode, destination:"session"}]`.
+- Typing a message while an ask is pending declines it with the message as
+  feedback (like the terminal) instead of queueing a new turn.
+- Other `control_request` subtypes get an error reply so the CLI never waits.
+- Asks expire on `result`, `control_cancel_request`, or process exit; pending
+  asks are re-rendered when switching back to the session.
+
+**Model / permission mode** switch live via `set_model` /
+`set_permission_mode` control requests (no restart); with no running process
+they're just the flags for the next spawn. `system` events carrying
+`permissionMode` (e.g. after a plan approval) sync the picker. The cwd still
+needs a respawn. Note: those switches emit `system` events while idle, so
+only `stream_event`/`assistant` may flip a session back to busy.
 
 ## UI / layout
 - **Layout:** `.claude-app` is a row — the full-height sessions sidebar on the

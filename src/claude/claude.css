@@ -556,19 +556,94 @@
   scrollbar-color: var(--hairline-strong) transparent;
 }
 
-/* --- AskUserQuestion interactive card --- */
-.claude-msg--question {
+/* --- Ask cards: permission, AskUserQuestion, plan approval ---
+   Claude is waiting on the user. Outlined (the transcript is already
+   --surface), full width, with actions bottom-right. Once answered the
+   actions collapse to a one-line outcome and the card recedes. */
+/* .claude-msg.claude-ask: .claude-msg (later in this file) sets row flex. */
+.claude-msg.claude-ask {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  border-radius: 14px;
-  background: var(--surface);
-  max-width: 64% !important;
+  align-self: stretch;
+  align-items: stretch;
+  gap: 10px;
+  max-width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--text-soft);
+  border-radius: var(--radius-lg);
 }
 
-.claude-msg--question.is-answered {
+.claude-msg.claude-ask.is-resolved {
+  border-color: var(--hairline);
   opacity: 0.6;
+}
+
+.claude-ask.is-resolved .claude-q__other:placeholder-shown,
+.claude-ask.is-resolved .claude-ask__detail {
+  display: none;
+}
+
+.claude-ask__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.claude-ask__subject {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.claude-ask__path {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.claude-ask__detail {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--hairline);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.claude-ask__reason {
+  font-size: 11px;
+  color: var(--rose);
+}
+
+.claude-ask .claude-ask__plan {
+  max-height: 360px;
+  overflow: auto;
+  padding: 0;
+}
+
+.claude-ask__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.claude-ask__outcome {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.claude-q__other {
+  font-size: 12px;
 }
 
 .claude-q {
@@ -624,10 +699,6 @@
 .claude-q__opt-desc {
   font-size: 11px;
   color: var(--text-muted);
-}
-
-.claude-q__send {
-  align-self: flex-end;
 }
 
 /* Minimal scrollbar for the chat */

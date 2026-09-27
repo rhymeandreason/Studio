@@ -334,7 +334,11 @@ pub struct ClaudeSession {
 }
 
 /// Spawn `claude -p --input-format stream-json --output-format stream-json
-/// --verbose --include-partial-messages` in `cwd`, with optional model,
+/// --verbose --include-partial-messages --permission-prompt-tool stdio` in
+/// `cwd`, then send the control-protocol `initialize` handshake. With the
+/// stdio prompt tool, permission asks (and AskUserQuestion) arrive on stdout
+/// as `control_request`s that the UI answers via [`ClaudeSession::send_json`].
+/// Optional model,
 /// permission mode, and session id to resume (blank/whitespace values are
 /// skipped). Two reader threads stream output back:
 /// - `on_line(line)` gets each non-empty stdout line (a stream-json event),
@@ -356,7 +360,8 @@ pub fn spawn_claude_session(
         .args(["--input-format", "stream-json"])
         .args(["--output-format", "stream-json"])
         .arg("--verbose")
-        .arg("--include-partial-messages");
+        .arg("--include-partial-messages")
+        .args(["--permission-prompt-tool", "stdio"]);
     if !model.trim().is_empty() {
         cmd.args(["--model", model.trim()]);
     }
@@ -403,16 +408,28 @@ pub fn spawn_claude_session(
         }
     });
 
-    Ok(ClaudeSession { child, stdin })
+    let mut session = ClaudeSession { child, stdin };
+    session.send_json(&serde_json::json!({
+        "type": "control_request",
+        "request_id": "studio-init",
+        "request": { "subtype": "initialize" }
+    }))?;
+    Ok(session)
 }
 
 impl ClaudeSession {
     /// Write one user message (stream-json format) to the session's stdin.
     pub fn send_text(&mut self, text: &str) -> Result<(), String> {
-        let msg = serde_json::json!({
+        self.send_json(&serde_json::json!({
             "type": "user",
             "message": { "role": "user", "content": [{ "type": "text", "text": text }] }
-        });
+        }))
+    }
+
+    /// Write one stream-json message (e.g. a `control_response` answering a
+    /// permission ask, or a `control_request` like `interrupt`) to stdin. The
+    /// UI builds the message; this is just the pipe.
+    pub fn send_json(&mut self, msg: &serde_json::Value) -> Result<(), String> {
         writeln!(self.stdin, "{}", msg).map_err(|e| e.to_string())?;
         self.stdin.flush().map_err(|e| e.to_string())
     }
