@@ -51,9 +51,9 @@ in the page so a fix is a reload, not an app restart.
     grid working later). Bar: **Pull next 100** (→ *Pull new* once done: a
     fresh walk from the top that stops at the first fully-known page),
     **Keep going** toggle (batches back to back until done, persisted in
-    localStorage), **Stop** (after the current page), **Restart pull** (full
-    re-walk; posts no longer saved drop out when it finishes). 450ms between
-    pages.
+    localStorage), **Stop** (after the current page), **Pull recent** (primary)
+    (`pullRecent` — top of the saved feed only, up to 50 posts or the first
+    all-known page; no cursor change, no collections). 450ms between pages.
   - **Store**: `instagram-saved` (`store_spec` in lib.rs →
     `~/Library/Application Support/com.studio.app/instagram-saved.json`),
     read/written with `read_store` / `save_store`:

@@ -168,15 +168,15 @@
 <body>
   <div id="bar" data-window-bar>
     <div class="brand" data-window-close><span class="mi ph ph-bookmark-simple"></span> Instagram Saved</div>
-    <button class="btn" id="btn-instagram" title="Open Instagram (sign in / sign out here)">
-      <span class="mi mi-sm ph ph-arrow-square-out"></span> Instagram
-    </button>
     <label class="text-xs text-muted" style="display:flex;align-items:center;gap:6px" title="Run batches back to back until everything is pulled">
       <studio-toggle id="auto-toggle"></studio-toggle> Keep going
     </label>
-    <button class="btn btn-primary" id="btn-pull"><span class="mi mi-sm ph ph-arrows-clockwise"></span> Pull next 100</button>
+    <button class="btn btn-primary" id="btn-pull-recent" title="Fetch just your newest saves (up to 50); skips the full library and collections"><span class="mi mi-sm ph ph-clock-counter-clockwise"></span> Pull recent</button>
+    <button class="btn" id="btn-pull"><span class="mi mi-sm ph ph-arrows-clockwise"></span> Pull next 100</button>
     <button class="btn" id="btn-stop" hidden>Stop</button>
-    <button class="btn" id="btn-pull-full" title="Start over from the top so removed saves disappear too">Restart pull</button>
+    <button class="btn" id="btn-instagram" title="Open Instagram (sign in / sign out here)">
+      <span class="mi mi-sm ph ph-arrow-square-out"></span> Instagram
+    </button>
   </div>
 
   <div id="main">
@@ -249,7 +249,7 @@
         bp.innerHTML = `<span class="mi mi-sm ph ph-arrows-clockwise"></span> ${pulling ? 'Pulling…' : !doc.cursor ? 'Pull saved posts' : done ? 'Pull new' : `Pull next ${BATCH}`}`;
       }
       if ($('btn-stop')) $('btn-stop').hidden = !pulling;
-      if ($('btn-pull-full')) $('btn-pull-full').disabled = pulling || !session.logged_in;
+      if ($('btn-pull-recent')) $('btn-pull-recent').disabled = pulling || !session.logged_in;
 
       if (!has) {
         const text = $('empty-text'), sub = $('empty-sub'), btn = $('btn-empty-action');
@@ -497,6 +497,48 @@
       }
     }
 
+    // Quick pull: just the newest saves from the top of the feed. Leaves the
+    // resumable cursor and collections alone; stops at RECENT posts or at the
+    // first page that's all already known.
+    const RECENT = 50;
+    async function pullRecent() {
+      const byId = new Map(doc.items.map((i) => [i.id, i]));
+      const top = [];
+      let maxId = '';
+      setProgress({ done: 0, total: 0, note: 'Fetching recent saves' });
+      while (top.length < RECENT && !stopRequested) {
+        const page = await fetchPage('/api/v1/feed/saved/posts/', maxId);
+        let allKnown = true;
+        for (const m of mediaInPage(page)) {
+          const it = parseMedia(m);
+          if (!it) continue;
+          const prev = byId.get(it.id);
+          if (prev) Object.assign(prev, { ...it, thumb: prev.thumb, collections: prev.collections });
+          else { allKnown = false; doc.items.push(it); byId.set(it.id, it); }
+          top.push(it.id);
+        }
+        // Newest saves first, everything else keeps its order.
+        const pos = new Map(top.map((id, i) => [id, i]));
+        doc.items.sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9));
+        setProgress({ done: top.length, total: 0, note: 'Fetching recent saves' });
+        render();
+        if (allKnown || !page.more_available || !page.next_max_id) break;
+        maxId = page.next_max_id;
+        await sleep(PAGE_DELAY);
+      }
+      // A full walk in progress orders the grid by (and, when it finishes,
+      // keeps only) the ids it has seen. Saves newer than its start sit above
+      // where it began, so it would never see them: count them as seen, first.
+      const cur = doc.cursor;
+      if (cur?.phase === 'posts') {
+        const seen = new Set(cur.seen);
+        cur.seen = [...top.filter((id) => !seen.has(id)), ...cur.seen];
+      }
+      await saveDoc();
+      await cacheThumbs(top);
+      await saveDoc();
+    }
+
     // ---- actions --------------------------------------------------------------
     async function openLogin() {
       try { await invoke('instagram_open_login'); }
@@ -532,16 +574,19 @@
       catch (e) { session = { logged_in: false, login_window_open: false }; }
     }
 
-    async function pull(full) {
+    async function pull(full, recent) {
       if (pulling) return;
       pulling = true; stopRequested = false;
       progress.hidden = false;
       lastError = '';
       render();
       try {
-        do { await pullBatch(full); full = false; }
-        while (autoContinue && !stopRequested && doc.cursor?.phase !== 'done');
-        if (doc.cursor?.phase === 'done') toast(`Up to date · ${doc.items.length} saved posts`);
+        if (recent) { const n = doc.items.length; await pullRecent(); toast(`${doc.items.length - n} new saved posts`); }
+        else {
+          do { await pullBatch(full); full = false; }
+          while (autoContinue && !stopRequested && doc.cursor?.phase !== 'done');
+          if (doc.cursor?.phase === 'done') toast(`Up to date · ${doc.items.length} saved posts`);
+        }
       } catch (e) {
         lastError = `Pull failed: ${e.message || e}`;
         console.error(e);
@@ -675,7 +720,7 @@
     const on = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
     on('btn-instagram', openLogin);
     on('btn-pull', () => pull(doc.cursor?.phase === 'done'));
-    on('btn-pull-full', () => pull(true));
+    on('btn-pull-recent', () => pull(false, true));
     on('btn-stop', () => { stopRequested = true; toast('Stopping after this page'); });
     customElements.whenDefined('studio-toggle').then(() => {
       const tg = $('auto-toggle');
