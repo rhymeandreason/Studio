@@ -5794,10 +5794,13 @@ fn launch_claude_app(project_path: String) -> Result<(), String> {
 /// subprocess for it on first use. `key` is a UI-side session id used to
 /// route streamed output back via the "claude-stream-<key>" event; `resume`
 /// is the underlying Claude Code session id to resume, if any.
+///
+/// Async so it runs off the main thread: spawning can take a moment, and a
+/// sync command would freeze every window meanwhile. Returns the process pid.
 #[tauri::command]
-fn claude_send(
+async fn claude_send(
     app: AppHandle,
-    state: tauri::State<ClaudeState>,
+    state: tauri::State<'_, ClaudeState>,
     key: String,
     project_path: String,
     model: String,
@@ -5805,15 +5808,36 @@ fn claude_send(
     resume: Option<String>,
     permission_mode: Option<String>,
     cwd: Option<String>,
-) -> Result<(), String> {
+    resume_cwd: Option<String>,
+) -> Result<u32, String> {
     let mut procs = state.procs.lock().unwrap();
+    // A process that already exited (crash, failed resume) can't take input;
+    // drop it so this send respawns with --resume.
+    if procs.get_mut(&key).is_some_and(|p| !p.is_alive()) {
+        procs.remove(&key);
+    }
     if !procs.contains_key(&key) {
+        let mode = cwd.as_deref().unwrap_or("project");
+        // The session last ran in a different working directory: bring its
+        // log along so --resume can find it here.
+        if let (Some(id), Some(from), Ok(home)) =
+            (resume.as_deref(), resume_cwd.as_deref(), app.path().home_dir())
+        {
+            if !id.trim().is_empty() && from != mode {
+                let _ = claude_core::carry_session(
+                    &home,
+                    &claude_cwd(&app, &project_path, from),
+                    &claude_cwd(&app, &project_path, mode),
+                    id.trim(),
+                );
+            }
+        }
         let event_name = format!("claude-stream-{key}");
         let out_handle = app.clone();
         let out_event = event_name.clone();
         let err_handle = app.clone();
         let session = claude_core::spawn_claude_session(
-            &claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project")),
+            &claude_cwd(&app, &project_path, mode),
             &model,
             permission_mode.as_deref(),
             resume.as_deref(),
@@ -5828,7 +5852,9 @@ fn claude_send(
         procs.insert(key.clone(), session);
     }
 
-    procs.get_mut(&key).unwrap().send_text(&text)
+    let session = procs.get_mut(&key).unwrap();
+    session.send_text(&text)?;
+    Ok(session.pid())
 }
 
 /// Kill a companion-window chat session's subprocess, if running.
@@ -5847,14 +5873,14 @@ fn read_claude_sessions(app: AppHandle) -> String {
         Ok(d) => d,
         Err(_) => return String::new(),
     };
-    std::fs::read_to_string(dir.join("claude-sessions.json")).unwrap_or_default()
+    claude_core::read_json_store(&dir.join("claude-sessions.json")).unwrap_or_default()
 }
 
 #[tauri::command]
 fn save_claude_sessions(app: AppHandle, data: String) -> Result<(), String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("claude-sessions.json"), data).map_err(|e| e.to_string())
+    claude_core::write_atomic(&dir.join("claude-sessions.json"), &data)
 }
 
 /// List Claude Code sessions previously recorded for `project_path`, by

@@ -850,6 +850,119 @@
   padding: 4px 0;
 }
 
+/* Errors (API errors, crashes, failed spawns): centered like system notes,
+   but legible and tinted so they don't read as Claude talking. */
+.claude-msg--error .claude-msg__body {
+  color: var(--rose);
+  font-size: 12px;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--rose) 35%, transparent);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+}
+
+/* --- Markdown in assistant replies --- */
+.claude-md {
+  white-space: normal;
+}
+
+.claude-md > :first-child { margin-top: 0; }
+.claude-md > :last-child { margin-bottom: 0; }
+
+.claude-md p,
+.claude-md ul,
+.claude-md ol,
+.claude-md pre,
+.claude-md blockquote,
+.claude-md .claude-md__scroll {
+  margin: 0 0 0.7em;
+}
+
+.claude-md h1,
+.claude-md h2,
+.claude-md h3,
+.claude-md h4 {
+  margin: 1.1em 0 0.4em;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.claude-md h1 { font-size: 16px; }
+.claude-md h2 { font-size: 14px; }
+
+.claude-md ul,
+.claude-md ol {
+  padding-left: 1.4em;
+}
+
+.claude-md li + li { margin-top: 0.2em; }
+.claude-md li > p { margin: 0; }
+
+.claude-md code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--hairline);
+}
+
+.claude-md pre {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--hairline);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.claude-md pre code {
+  padding: 0;
+  background: none;
+  font-size: 11px;
+}
+
+.claude-md blockquote {
+  padding-left: 10px;
+  border-left: 2px solid var(--hairline-strong);
+  color: var(--text-muted);
+}
+
+.claude-md a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.claude-md a:hover { text-decoration-color: currentColor; }
+
+.claude-md hr {
+  border: none;
+  border-top: 1px solid var(--hairline);
+  margin: 1em 0;
+}
+
+.claude-md__scroll { overflow-x: auto; }
+
+.claude-md table {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.claude-md th,
+.claude-md td {
+  padding: 4px 8px;
+  border: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: top;
+}
+
+.claude-md th {
+  font-weight: 600;
+  background: var(--hairline);
+}
+
 /* --- Input --- */
 .claude-input {
   display: flex;

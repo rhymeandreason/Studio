@@ -46,10 +46,13 @@ struct ClaudeState {
 
 /// Send a message to a chat session, spawning the `claude` subprocess on first
 /// use. Streamed output is routed back via `claude-stream-<key>` events.
+///
+/// Async so it runs off the main thread: spawning can take a moment, and a
+/// sync command would freeze every window meanwhile. Returns the process pid.
 #[tauri::command]
-fn claude_send(
+async fn claude_send(
     app: AppHandle,
-    state: tauri::State<ClaudeState>,
+    state: tauri::State<'_, ClaudeState>,
     key: String,
     project_path: String,
     model: String,
@@ -57,15 +60,36 @@ fn claude_send(
     resume: Option<String>,
     permission_mode: Option<String>,
     cwd: Option<String>,
-) -> Result<(), String> {
+    resume_cwd: Option<String>,
+) -> Result<u32, String> {
     let mut procs = state.procs.lock().unwrap();
+    // A process that already exited (crash, failed resume) can't take input;
+    // drop it so this send respawns with --resume.
+    if procs.get_mut(&key).is_some_and(|p| !p.is_alive()) {
+        procs.remove(&key);
+    }
     if !procs.contains_key(&key) {
+        let mode = cwd.as_deref().unwrap_or("project");
+        // The session last ran in a different working directory: bring its
+        // log along so --resume can find it here.
+        if let (Some(id), Some(from), Ok(home)) =
+            (resume.as_deref(), resume_cwd.as_deref(), app.path().home_dir())
+        {
+            if !id.trim().is_empty() && from != mode {
+                let _ = core::carry_session(
+                    &home,
+                    &claude_cwd(&app, &project_path, from),
+                    &claude_cwd(&app, &project_path, mode),
+                    id.trim(),
+                );
+            }
+        }
         let event_name = format!("claude-stream-{key}");
         let out_handle = app.clone();
         let out_event = event_name.clone();
         let err_handle = app.clone();
         let session = core::spawn_claude_session(
-            &claude_cwd(&app, &project_path, cwd.as_deref().unwrap_or("project")),
+            &claude_cwd(&app, &project_path, mode),
             &model,
             permission_mode.as_deref(),
             resume.as_deref(),
@@ -80,7 +104,9 @@ fn claude_send(
         procs.insert(key.clone(), session);
     }
 
-    procs.get_mut(&key).unwrap().send_text(&text)
+    let session = procs.get_mut(&key).unwrap();
+    session.send_text(&text)?;
+    Ok(session.pid())
 }
 
 /// Kill a chat session's subprocess, if running.
@@ -118,7 +144,7 @@ fn sessions_file(app: &AppHandle, project: &Option<String>) -> Option<PathBuf> {
 #[tauri::command]
 fn read_claude_sessions(app: AppHandle, project: Option<String>) -> String {
     if let Some(f) = sessions_file(&app, &project) {
-        if let Ok(text) = std::fs::read_to_string(&f) {
+        if let Some(text) = core::read_json_store(&f) {
             return text;
         }
     }
@@ -148,7 +174,7 @@ fn read_claude_sessions(app: AppHandle, project: Option<String>) -> String {
 #[tauri::command]
 fn save_claude_sessions(app: AppHandle, project: Option<String>, data: String) -> Result<(), String> {
     let file = sessions_file(&app, &project).ok_or("no config dir")?;
-    std::fs::write(file, data).map_err(|e| e.to_string())
+    core::write_atomic(&file, &data)
 }
 
 /// Remember the most recent project so a cold launch (no deep link, e.g. Dock)
@@ -159,6 +185,20 @@ fn save_last_project(app: AppHandle, path: String, name: String, sprite: String)
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let v = serde_json::json!({ "path": path, "name": name, "sprite": sprite });
     std::fs::write(dir.join("last-project.json"), v.to_string()).map_err(|e| e.to_string())
+}
+
+/// Open an http(s) link from the chat in the default browser (same command
+/// name as Studio's, so the shared frontend works in both).
+#[tauri::command]
+fn open_path(path: String) -> Result<(), String> {
+    if !(path.starts_with("https://") || path.starts_with("http://")) {
+        return Err("only http(s) links can be opened".into());
+    }
+    std::process::Command::new("open")
+        .arg(&path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 // --- Recorded session history (~/.claude/projects) -----------------------
@@ -375,6 +415,7 @@ pub fn run() {
             read_claude_sessions,
             save_claude_sessions,
             save_last_project,
+            open_path,
             list_claude_project_sessions,
             read_claude_session_log,
             get_claude_usage,

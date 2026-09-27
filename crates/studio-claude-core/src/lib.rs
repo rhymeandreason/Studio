@@ -50,8 +50,14 @@ pub fn claude_cwd(home: Option<&Path>, project_path: &str, mode: &str, repo_fiel
 /// spawning "claude" — and "claude" itself spawning "node" via its shebang —
 /// often fails even though it works fine from a terminal. Resolve PATH via a
 /// login shell (which sources nvm/profile scripts), falling back to the
-/// app's own PATH plus common install dirs.
+/// app's own PATH plus common install dirs. Resolved once per app run: the
+/// login shell can take a second or more (nvm), and every spawn needs it.
 pub fn claude_path() -> String {
+    static PATH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    PATH.get_or_init(resolve_login_path).clone()
+}
+
+fn resolve_login_path() -> String {
     if let Ok(out) = Command::new("/bin/zsh")
         .args(["-l", "-c", "echo $PATH"])
         .output()
@@ -168,6 +174,51 @@ pub fn list_project_sessions(home: &Path, cwd: &Path) -> Vec<ClaudeHistorySessio
     }
     sessions.sort_by(|a, b| b.modified.cmp(&a.modified));
     sessions
+}
+
+/// Claude Code only resumes a session from the cwd it's recorded under, so a
+/// chat whose working directory changed (Artifacts ↔ Code) would fail with
+/// "No conversation found". Copy the session log from the cwd it last ran in
+/// to the new one (overwriting: the copy it last ran in is always the newest).
+pub fn carry_session(home: &Path, from_cwd: &Path, to_cwd: &Path, session_id: &str) -> Result<(), String> {
+    let from = sessions_dir(home, from_cwd).join(format!("{session_id}.jsonl"));
+    let to_dir = sessions_dir(home, to_cwd);
+    if from == to_dir.join(format!("{session_id}.jsonl")) || !from.exists() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(&to_dir).map_err(|e| e.to_string())?;
+    std::fs::copy(&from, to_dir.join(format!("{session_id}.jsonl")))
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Write `data` to `file` atomically (temp file + rename), so a crash or
+/// interrupted write can never leave a half-written file behind.
+pub fn write_atomic(file: &Path, data: &str) -> Result<(), String> {
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let tmp = file.with_extension("json.tmp");
+    std::fs::write(&tmp, data).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, file).map_err(|e| e.to_string())
+}
+
+/// Read a JSON store. If the file exists but isn't valid JSON, move it aside
+/// (`<name>.corrupt-<unix-secs>`) and return empty, so the next save can't
+/// overwrite the only copy of the user's data.
+pub fn read_json_store(file: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(file).ok()?;
+    if serde_json::from_str::<serde_json::Value>(&text).is_ok() {
+        return Some(text);
+    }
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let aside = file.with_extension(format!("corrupt-{secs}.json"));
+    let _ = std::fs::rename(file, &aside);
+    eprintln!("[claude-core] unreadable store moved to {}", aside.display());
+    Some(String::new())
 }
 
 /// One replayed message from a recorded session log.
@@ -287,7 +338,8 @@ pub struct ClaudeSession {
 /// permission mode, and session id to resume (blank/whitespace values are
 /// skipped). Two reader threads stream output back:
 /// - `on_line(line)` gets each non-empty stdout line (a stream-json event),
-///   then the sentinel `{"type":"__closed__"}` when stdout closes.
+///   then the sentinel `{"type":"__closed__","pid":<pid>}` when stdout closes
+///   (the pid lets a UI ignore a late close from a process it already replaced).
 /// - `on_stderr_line(line)` gets each non-empty stderr line.
 pub fn spawn_claude_session(
     cwd: &Path,
@@ -326,6 +378,7 @@ pub fn spawn_claude_session(
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let stderr = child.stderr.take().ok_or("no stderr")?;
     let stdin = child.stdin.take().ok_or("no stdin")?;
+    let pid = child.id();
 
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -336,7 +389,7 @@ pub fn spawn_claude_session(
             }
             on_line(line);
         }
-        on_line("{\"type\":\"__closed__\"}".to_string());
+        on_line(format!("{{\"type\":\"__closed__\",\"pid\":{pid}}}"));
     });
 
     std::thread::spawn(move || {
@@ -362,6 +415,18 @@ impl ClaudeSession {
         });
         writeln!(self.stdin, "{}", msg).map_err(|e| e.to_string())?;
         self.stdin.flush().map_err(|e| e.to_string())
+    }
+
+    /// The subprocess's pid (matches the `__closed__` sentinel's).
+    pub fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
+    /// Whether the subprocess is still running (false once it has exited, e.g.
+    /// a crash or a failed `--resume`) — a dead one must be respawned, since
+    /// writing to its stdin just fails with a broken pipe.
+    pub fn is_alive(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(None))
     }
 
     /// Kill the subprocess.

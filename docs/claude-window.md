@@ -108,7 +108,13 @@ folder if unset); anything else → the project folder. The mode is per-session
 (persisted like model/permission) and threaded through `claude_send` plus the
 session-history lookups (`list_claude_project_sessions` /
 `read_claude_session_log`), so Artifacts and Code sessions each show their own
-"Recent" list (Claude records sessions under the cwd it ran in). The headless
+"Recent" list (Claude records sessions under the cwd it ran in).
+
+`--resume` only finds a session under the cwd it's recorded in, so switching
+cwd mid-conversation would fail with "No conversation found". Each session
+stores `resumeCwd` (the mode it last ran in, set on the `system init` event);
+`claude_send` takes it and, when it differs from the new mode, copies the
+`.jsonl` across (`studio_claude_core::carry_session`) before spawning. The headless
 scheduled-task runner always uses `"repo"`. Same logic in the companion and the
 in-Studio backend.
 
@@ -124,10 +130,31 @@ User messages are written to the subprocess stdin as a stream-json `user` frame.
 `claude_stop` kills a session's subprocess (used by the **stop button**, which
 also finalizes streamed text; the next message respawns with `--resume`).
 
+**Failure handling** (keep these when touching the stream code):
+- `claude_send` is **async** (off the main thread) and returns the process pid.
+  The login-shell PATH lookup is cached once per run (`claude_path`).
+- `claude_send` drops a process that already exited (`is_alive`) and respawns.
+- `__closed__` carries the pid; the frontend ignores a close from a pid it has
+  already replaced (stop → quick resend).
+- Process exits mid-turn → streamed text is kept, an error bubble says so.
+- `result.is_error` (overloaded, max turns, login) → a rose `error` bubble
+  (`role: "error"` in the transcript), never shown as Claude's words.
+- A `--resume` that finds no conversation → drop the id, then resend the same
+  message fresh once the dead process has closed.
+
+## Markdown
+Assistant replies render through a `marked` instance (`src/vendor/marked.min.js`)
+in `claude.js`. Because this window can invoke `claude_send`, raw HTML is escaped,
+images become links, and only http(s) links render (opened via `open_path`, which
+the companion also defines). Streaming re-renders once per animation frame.
+Double-click copies the raw Markdown.
+
 ## Sessions
 - Persisted opaque JSON via `read_claude_sessions` / `save_claude_sessions`
   (`claude-sessions.json` in the app config dir). Transcripts are trimmed to the
-  last 50 turns on save.
+  last 50 turns on save. Saves are atomic (temp + rename). A store that isn't
+  valid JSON is moved aside as `*.corrupt-<secs>.json` rather than overwritten,
+  and the frontend never saves before a successful load.
 - Sidebar is **scoped to the current project** (`currentProjectPath`).
 - Each row shows the model as a pill, and supports **rename** (inline) and
   **delete** (drops the in-app record + kills the subprocess; does *not* delete

@@ -282,14 +282,21 @@ function uuid() {
     return crypto.randomUUID();
 }
 
+// Guard against saving before the store has loaded — a save then would write
+// an empty list over the user's sessions.
+let sessionsLoaded = false;
+
 async function loadSessions() {
     try {
         // Per-project window: its own session file (companion). The in-Studio
         // window passes null and the backend uses the shared file.
         const raw = await invoke("read_claude_sessions", { project: currentProjectPath });
         sessions = raw ? JSON.parse(raw) : [];
-    } catch {
+        sessionsLoaded = true;
+    } catch (err) {
+        // Leave saving disabled: the backend has kept the unreadable file.
         sessions = [];
+        console.error("[claude] couldn't load sessions", err);
     }
     // Drop usage stored by the old (cumulative, >100%) calculation so it
     // doesn't show a bogus number until the session's next turn recomputes it.
@@ -299,6 +306,7 @@ async function loadSessions() {
 }
 
 async function persistSessions() {
+    if (!sessionsLoaded) return;
     const slim = sessions.map((s) => ({
         ...s,
         // Don't persist huge transcripts indefinitely — keep last 50 turns.
@@ -445,6 +453,7 @@ async function resumeHistorySession(h, projectPath, projectName) {
         permissionMode: permissionSelect.value || "default",
         cwd: cwdSelect.value || "project",
         resumeId: h.session_id,
+        resumeCwd: cwdSelect.value || "project",
         transcript,
     };
     sessions.unshift(session);
@@ -465,10 +474,77 @@ function renderTranscript(session) {
     for (const msg of session.transcript) {
         appendBubble(msg.role, msg.text);
     }
+    // A reply still streaming in: re-show it and keep streaming into it.
+    const live = liveBubbles.get(session.key);
+    if (live?.assistantText) live.assistantEl = appendBubble("assistant", live.assistantText);
     // Switching into a session: jump to the latest.
     stickToBottom = true;
     scrollToBottom(true);
 }
+
+// --- Markdown -------------------------------------------------------------
+// Assistant replies render as Markdown. The window can invoke claude_send, so
+// raw HTML in a reply (e.g. echoed from a web page) must never become live DOM:
+// HTML is shown as text, images as links, and only http(s) links survive.
+const escapeHtml = (s) =>
+    String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const safeHref = (href) => (/^https?:\/\//i.test(href || "") ? href : null);
+const md = window.marked
+    ? new window.marked.Marked({
+          gfm: true,
+          renderer: {
+              html: (html) => escapeHtml(html),
+              link(href, title, text) {
+                  const url = safeHref(href);
+                  return url ? `<a href="${escapeHtml(url)}" title="${escapeHtml(title || url)}">${text}</a>` : text;
+              },
+              image(href, title, text) {
+                  const url = safeHref(href);
+                  return url ? `<a href="${escapeHtml(url)}">${escapeHtml(text || url)}</a>` : escapeHtml(text || "");
+              },
+          },
+      })
+    : null;
+
+// The raw text behind each rendered bubble, for double-click-to-copy.
+const rawText = new WeakMap();
+
+function renderMarkdown(body, text) {
+    rawText.set(body, text);
+    if (!md) {
+        body.textContent = text;
+        return;
+    }
+    body.innerHTML = md.parse(text);
+    // Wide tables scroll in their own box instead of crushing their columns.
+    body.querySelectorAll("table").forEach((t) => {
+        const scroller = document.createElement("div");
+        scroller.className = "claude-md__scroll";
+        t.replaceWith(scroller);
+        scroller.append(t);
+    });
+}
+
+// Streaming re-renders the whole reply, so coalesce deltas to one per frame.
+const pendingRenders = new Map(); // body el -> text
+function scheduleMarkdown(body, text) {
+    if (!pendingRenders.size) {
+        requestAnimationFrame(() => {
+            for (const [el, t] of pendingRenders) renderMarkdown(el, t);
+            pendingRenders.clear();
+            scrollToBottom();
+        });
+    }
+    pendingRenders.set(body, text);
+}
+
+// Links in replies open in the browser, never inside this window.
+transcriptEl.addEventListener("click", (e) => {
+    const a = e.target.closest(".claude-md a[href]");
+    if (!a) return;
+    e.preventDefault();
+    invoke("open_path", { path: a.getAttribute("href") }).catch(() => {});
+});
 
 function appendBubble(role, text) {
     transcriptEl.querySelector(".claude-empty")?.remove();
@@ -507,6 +583,8 @@ function appendBubble(role, text) {
         author.textContent = sessions.find((s) => s.key === activeKey)?.projectName || "";
         who.append(icon, author);
         el.appendChild(who);
+    } else if (role === "error") {
+        el.className = "claude-msg claude-msg--system claude-msg--error";
     } else if (role !== "system" && role !== "user") {
         const icon = document.createElement("span");
         icon.className = `mi ph ph-${ROLE_ICONS[role] || "circle"} claude-msg__icon`;
@@ -514,7 +592,12 @@ function appendBubble(role, text) {
     }
     const body = document.createElement("div");
     body.className = "claude-msg__body";
-    body.textContent = text;
+    if (role === "assistant") {
+        body.classList.add("claude-md");
+        renderMarkdown(body, text);
+    } else {
+        body.textContent = text;
+    }
     el.appendChild(body);
     transcriptEl.appendChild(el);
     // Always follow the user's own message; otherwise only if pinned to bottom.
@@ -810,14 +893,28 @@ async function defaultProject() {
     return lastProject;
 }
 
+// Returns the listen() promise so a send can wait until the listener is
+// attached (otherwise the process's first events can arrive before it).
 function ensureListener(key) {
-    if (listeners.has(key)) return;
-    console.log("[claude] listening on", `claude-stream-${key}`);
-    const promise = listen(`claude-stream-${key}`, (event) => {
-        console.log("[claude] event", event.payload);
-        handleStreamLine(key, event.payload);
-    });
-    listeners.set(key, promise);
+    if (!listeners.has(key)) {
+        listeners.set(
+            key,
+            listen(`claude-stream-${key}`, (event) => handleStreamLine(key, event.payload)),
+        );
+    }
+    return listeners.get(key);
+}
+
+// Move whatever streamed so far into the transcript and reset the live turn
+// state, so the next turn starts a fresh bubble (used on result, stop, crash).
+function finalizeLive(session, live) {
+    if (live.assistantText) {
+        session.transcript.push({ role: "assistant", text: live.assistantText });
+    }
+    live.assistantEl = null;
+    live.assistantText = "";
+    live.toolKeys = new Set();
+    live.toolSummary = null;
 }
 
 function getLiveBubbles(key) {
@@ -857,6 +954,9 @@ function handleStreamLine(key, line) {
         case "system": {
             if (msg.subtype === "init" && msg.session_id) {
                 session.resumeId = msg.session_id;
+                // Claude Code files the session under the cwd it runs in; remember
+                // which, so a later cwd switch can carry the log across.
+                session.resumeCwd = live.spawnCwd || session.cwd || "project";
             }
             break;
         }
@@ -881,11 +981,8 @@ function handleStreamLine(key, line) {
                 if (!live.assistantEl && isActive) {
                     live.assistantEl = appendBubble("assistant", "");
                 }
-                if (live.assistantEl) {
-                    live.assistantEl.textContent += ev.delta.text;
-                    if (isActive) scrollToBottom();
-                }
                 live.assistantText = (live.assistantText || "") + ev.delta.text;
+                if (live.assistantEl) scheduleMarkdown(live.assistantEl, live.assistantText);
                 live.activity = "Writing";
                 live.toolSummary = null;
             }
@@ -917,17 +1014,30 @@ function handleStreamLine(key, line) {
             break;
         }
         case "result": {
+            // A --resume whose conversation can't be found (e.g. its log was
+            // deleted) fails before doing anything. Drop the stale id and resend
+            // the message as a fresh conversation once the dead process closes.
+            const errors = Array.isArray(msg.errors) ? msg.errors.join("\n") : "";
+            if (msg.is_error && /No conversation found/i.test(errors) && live.pendingText) {
+                session.resumeId = null;
+                live.retryText = live.pendingText;
+                persistSessions();
+                break;
+            }
             // Finalize the streamed assistant message into the transcript.
-            if (live.assistantText) {
-                session.transcript.push({ role: "assistant", text: live.assistantText });
-            } else if (msg.result) {
+            const streamed = !!live.assistantText;
+            finalizeLive(session, live);
+            if (msg.is_error) {
+                // Overloaded, max turns, expired login…: show it as an error, not
+                // as if Claude had said it.
+                const text = errors || msg.result || `Claude stopped (${msg.subtype || "error"})`;
+                if (isActive) appendBubble("error", text);
+                session.transcript.push({ role: "error", text });
+            } else if (!streamed && msg.result) {
                 if (isActive) appendBubble("assistant", msg.result);
                 session.transcript.push({ role: "assistant", text: msg.result });
             }
-            live.assistantEl = null;
-            live.assistantText = "";
-            live.toolKeys = new Set();
-            live.toolSummary = null;
+            live.pendingText = null;
 
             // Auto-name the session from the first exchange.
             if (session.name === "New session") {
@@ -954,7 +1064,29 @@ function handleStreamLine(key, line) {
             break;
         }
         case "__closed__": {
+            // A late close from a process that has since been replaced (stop,
+            // then a quick resend) must not mark the new one dead.
+            if (msg.pid && live.pid && msg.pid !== live.pid) break;
             session._dead = true;
+            if (live.retryText) {
+                const text = live.retryText;
+                live.retryText = null;
+                if (isActive) {
+                    appendBubble("system", "Couldn't find the previous conversation — continuing in a fresh one.");
+                }
+                spawnAndSend(session, text);
+                break;
+            }
+            // Exited mid-turn (crash, killed from outside): keep what streamed
+            // and say so, rather than leaving a spinner that never ends.
+            if (busyKeys.has(key)) {
+                finalizeLive(session, live);
+                const text = "Claude exited unexpectedly. Send again to resume.";
+                if (isActive) appendBubble("error", text);
+                session.transcript.push({ role: "error", text });
+                persistSessions();
+            }
+            live.pendingText = null;
             setBusy(key, false);
             break;
         }
@@ -1128,27 +1260,28 @@ async function sendMessage(text) {
     session.transcript.push({ role: "user", text });
     persistSessions();
 
+    await spawnAndSend(session, text);
+}
+
+// Write a message to the session's claude process, (re)spawning it if needed.
+async function spawnAndSend(session, text) {
     if (session._dead) {
         await invoke("claude_stop", { key: session.key });
         session._dead = false;
     }
 
-    ensureListener(session.key);
+    await ensureListener(session.key);
     // Reset live progress state for this turn.
     const live = getLiveBubbles(session.key);
     live.turnStart = Date.now();
     live.outputTokens = 0;
     live.promptTokens = 0;
     live.activity = "Working";
+    live.pendingText = text;
+    live.spawnCwd = session.cwd || "project";
     setBusy(session.key, true);
-    console.log("[claude] sending", {
-        key: session.key,
-        projectPath: session.projectPath,
-        model: session.model,
-        resume: session.resumeId,
-    });
     try {
-        await invoke("claude_send", {
+        live.pid = await invoke("claude_send", {
             key: session.key,
             projectPath: session.projectPath,
             model: session.model,
@@ -1156,11 +1289,15 @@ async function sendMessage(text) {
             resume: session.resumeId,
             permissionMode: session.permissionMode || "default",
             cwd: session.cwd || "project",
+            // Where the conversation was last recorded (it may differ from cwd
+            // after an Artifacts ↔ Code switch; the backend carries it over).
+            resumeCwd: session.resumeCwd || session.cwd || "project",
         });
-        console.log("[claude] claude_send returned");
     } catch (err) {
-        console.error("[claude] claude_send error", err);
-        appendBubble("system", `Error: ${err}`);
+        const msg = `Couldn't start Claude: ${err}`;
+        if (session.key === activeKey) appendBubble("error", msg);
+        session.transcript.push({ role: "error", text: msg });
+        live.pendingText = null;
         setBusy(session.key, false);
     }
 }
@@ -1171,13 +1308,11 @@ async function stopSession(key) {
     if (!busyKeys.has(key)) return;
     const session = sessions.find((s) => s.key === key);
     const live = getLiveBubbles(key);
-    if (session && live.assistantText) {
-        session.transcript.push({ role: "assistant", text: live.assistantText });
+    if (session) {
+        finalizeLive(session, live);
         persistSessions();
     }
-    live.assistantEl = null;
-    live.assistantText = "";
-    live.toolKeys = new Set();
+    live.pendingText = null;
 
     try {
         await invoke("claude_stop", { key });
@@ -1187,6 +1322,17 @@ async function stopSession(key) {
     if (session) session._dead = true;
     setBusy(key, false);
     if (key === activeKey) appendBubble("system", "Stopped.");
+}
+
+// Flags fixed at spawn (permission mode, cwd) changed: end the session's
+// process so the next send respawns with them (--resume keeps the context).
+function restartOnNextSend(session) {
+    if (busyKeys.has(session.key)) {
+        stopSession(session.key);
+    } else if (!session._dead && listeners.has(session.key)) {
+        invoke("claude_stop", { key: session.key }).catch(() => {});
+        session._dead = true;
+    }
 }
 
 stopBtn.addEventListener("click", () => {
@@ -1213,7 +1359,7 @@ transcriptEl.addEventListener("dblclick", async (e) => {
     const body = e.target.closest(".claude-msg__body");
     if (!body) return;
     try {
-        await navigator.clipboard.writeText(body.textContent);
+        await navigator.clipboard.writeText(rawText.get(body) ?? body.textContent);
         window.getSelection()?.removeAllRanges();
         body.classList.add("is-copied");
         setTimeout(() => body.classList.remove("is-copied"), 600);
@@ -1238,10 +1384,7 @@ permissionSelect.addEventListener("change", () => {
     // --permission-mode is applied when the session's claude process starts,
     // so a change mid-session takes effect after it restarts. If one is
     // already running, restart it on the next send so the new mode applies.
-    if (!session._dead && listeners.has(session.key)) {
-        invoke("claude_stop", { key: session.key }).catch(() => {});
-        session._dead = true;
-    }
+    restartOnNextSend(session);
 });
 
 cwdSelect.addEventListener("change", () => {
@@ -1251,10 +1394,7 @@ cwdSelect.addEventListener("change", () => {
         persistSessions();
         // cwd is set when the claude process spawns; restart a running one so the
         // next send runs in the newly-selected directory.
-        if (!session._dead && listeners.has(session.key)) {
-            invoke("claude_stop", { key: session.key }).catch(() => {});
-            session._dead = true;
-        }
+        restartOnNextSend(session);
     }
     // The "Recent" history list is per-directory — re-list for the new cwd.
     const proj = sessions.find((s) => s.key === activeKey) || lastProject;
