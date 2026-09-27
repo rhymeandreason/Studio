@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Ceramics: a speckled celadon tea bowl -->
+  <defs>
+    <pattern id="clay" width="2.8" height="2.8" patternUnits="userSpaceOnUse"><rect width="2.8" height="2.8" fill="#cf9467"/><circle cx="1.4" cy="1.4" r="0.45" fill="#a86a3e" opacity="0.8"/></pattern>
+    <pattern id="glaze" width="2.4" height="2.4" patternUnits="userSpaceOnUse"><rect width="2.4" height="2.4" fill="#9fc1b6"/><circle cx="1.2" cy="1.2" r="0.35" fill="#5f7f76" opacity="0.7"/></pattern>
+    <clipPath id="b"><path d="M7 19H41C41 30.5 34 38 24 38 14 38 7 30.5 7 19Z"/></clipPath>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M7 19H41C41 30.5 34 38 24 38 14 38 7 30.5 7 19Z"/>
+    <rect x="17.5" y="36" width="13" height="5.5" rx="1.2"/>
+  </g>
+  <rect x="17.5" y="36" width="13" height="5.5" rx="1.2" fill="#b97e52"/>
+  <path d="M7 19H41C41 30.5 34 38 24 38 14 38 7 30.5 7 19Z" fill="url(#clay)"/>
+  <path d="M7 19H41C41 23 40.5 26 39.5 28.5 38 27.5 37 29 36.5 31 35 29.5 33.5 30 32.5 32.5 30.5 31 29 32 27.5 34 25.5 32 23 32.5 21.5 34.5 19.5 32.5 17.5 33 16 31 14 31.5 12.5 29.5 10.5 29.5 9 28 8 26 7 22.5 7 19Z" fill="url(#glaze)" clip-path="url(#b)"/>
+  <ellipse cx="24" cy="19" rx="17" ry="4.2" fill="#7fa39a"/>
+  <ellipse cx="24" cy="19.8" rx="14.5" ry="3" fill="#6b8f86"/>
+</svg>

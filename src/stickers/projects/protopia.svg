@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Protopia: a little globe with a sprout -->
+  <defs>
+    <pattern id="sea" width="3.2" height="3.2" patternUnits="userSpaceOnUse"><rect width="3.2" height="3.2" fill="#a9cbe0"/><circle cx="1.6" cy="1.6" r="0.6" fill="#fff" opacity="0.7"/></pattern>
+    <pattern id="land" width="2.6" height="2.6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.6" height="2.6" fill="#43c98b"/><rect width="0.9" height="2.6" fill="#fff" opacity="0.35"/></pattern>
+    <clipPath id="g"><circle cx="24" cy="29" r="13"/></clipPath>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="24" cy="29" r="13"/>
+    <path d="M24 17V9" stroke-width="7" fill="none"/>
+    <path d="M24 11C21 11 17 9.5 16 5.5 20 5 23.5 7 24 11ZM24 12C27 11 31 8.5 31.5 4.5 27.5 4.5 24.5 7 24 12Z"/>
+  </g>
+  <circle cx="24" cy="29" r="13" fill="url(#sea)"/>
+  <g clip-path="url(#g)" fill="url(#land)"><path d="M11 25C15 21 19 23 21 26 23 29 19 33 15 33 12 33 10 29 11 25Z"/><path d="M27 19C31 18 36 21 37 25 34 27 30 25 28 27 26 29 29 34 32 36 30 40 25 41 24 38 22 35 26 32 25 29 23 26 24 21 27 19Z"/></g>
+  <path d="M24 17V9.5" stroke="#5f8f4a" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M24 11C21 11 17 9.5 16 5.5 20 5 23.5 7 24 11Z" fill="#7fa965"/>
+  <path d="M24 12C27 11 31 8.5 31.5 4.5 27.5 4.5 24.5 7 24 12Z" fill="#94b973"/>
+</svg>

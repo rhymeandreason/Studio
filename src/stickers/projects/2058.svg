@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- 2058: a retro-future diary with a ringed-planet clasp -->
+  <defs>
+    <pattern id="stars" width="9" height="9" patternUnits="userSpaceOnUse"><rect width="9" height="9" fill="#34507a"/><circle cx="2" cy="2" r=".6" fill="#fff"/><circle cx="6.5" cy="4" r=".4" fill="#fff" opacity=".8"/><circle cx="4" cy="7.5" r=".5" fill="#fff" opacity=".6"/></pattern>
+    <pattern id="strap" width="2.6" height="2.6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.6" height="2.6" fill="#43e8a0"/><rect width="0.9" height="2.6" fill="#fff" opacity="0.45"/></pattern>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <g transform="rotate(-6 24 24)"><rect x="10" y="7" width="28" height="35" rx="2.5"/><rect x="33" y="21" width="9" height="8" rx="2"/></g>
+  </g>
+  <g transform="rotate(-6 24 24)">
+    <rect x="10" y="7" width="28" height="35" rx="2.5" fill="url(#stars)"/>
+    <rect x="10" y="7" width="4.5" height="35" rx="1.5" fill="#263d60"/>
+    <rect x="18" y="11.5" width="15" height="7" rx="1" fill="#fffaf0"/>
+    <text x="25.5" y="17" text-anchor="middle" font-family="Futura, Avenir, sans-serif" font-weight="700" font-size="5.6" fill="#2f2628">2058</text>
+    <rect x="30" y="22" width="11" height="6" rx="1.5" fill="url(#strap)"/>
+    <circle cx="24" cy="31" r="4.4" fill="#f2b541"/>
+    <ellipse cx="24" cy="31" rx="8" ry="2.2" fill="none" stroke="#ea8048" stroke-width="1.4" transform="rotate(-18 24 31)"/>
+    <path d="M19.8 29.1A4.4 4.4 0 0 1 28.2 29.3" fill="#f2b541"/>
+  </g>
+</svg>

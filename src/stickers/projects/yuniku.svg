@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Yuniku: an arctic fox in pale blue polka-dot -->
+  <defs>
+    <pattern id="fur" width="3.2" height="3.2" patternUnits="userSpaceOnUse"><rect width="3.2" height="3.2" fill="#dde9f2"/><circle cx="1.6" cy="1.6" r="0.75" fill="#fff" opacity="0.9"/></pattern>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <g transform="translate(24 27) scale(1.02)"><path d="M-13.5-3C-14-12-12-16-9.5-16-7-16-5-13-3-10Z"/><path d="M 13.5 -3 C 14 -12 12 -16 9.5 -16 7 -16 5 -13 3 -10Z"/><path d="M0 16C-6 13-12 10-18 8-16 4-14.5 1-14-2-14-8-8-11 0-11 8-11 14-8 14-2 14.5 1 16 4 18 8 12 10 6 13 0 16Z"/></g>
+  </g>
+  <g transform="translate(24 27) scale(1.02)">
+    <g fill="url(#fur)" stroke="url(#fur)" stroke-width="1.5" stroke-linejoin="round"><path d="M-13.5-3C-14-12-12-16-9.5-16-7-16-5-13-3-10Z"/><path d="M 13.5 -3 C 14 -12 12 -16 9.5 -16 7 -16 5 -13 3 -10Z"/></g>
+    <path d="M-11.5-5.5C-12-11-11-13.5-9.5-13.5-8-13.5-6.5-11.5-5.5-9.5Z" fill="#a9c4da"/><path d="M 11.5 -5.5 C 12 -11 11 -13.5 9.5 -13.5 8 -13.5 6.5 -11.5 5.5 -9.5Z" fill="#a9c4da"/>
+    <path d="M0 16C-6 13-12 10-18 8-16 4-14.5 1-14-2-14-8-8-11 0-11 8-11 14-8 14-2 14.5 1 16 4 18 8 12 10 6 13 0 16Z" fill="url(#fur)"/>
+    <path d="M-18 8C-12 5-6 4.5 0 7.5 6 4.5 12 5 18 8 12 10 6 13 0 16-6 13-12 10-18 8Z" fill="#fffdf8"/>
+    <ellipse cx="-6" cy="1" rx="1.6" ry="2.1" fill="#2f2628"/><ellipse cx="6" cy="1" rx="1.6" ry="2.1" fill="#2f2628"/><circle cx="-5.5" cy=".2" r=".55" fill="#fff"/><circle cx="6.5" cy=".2" r=".55" fill="#fff"/>
+    <circle cx="-10" cy="6" r="1.6" fill="#f4b6c2"/><circle cx="10" cy="6" r="1.6" fill="#f4b6c2"/>
+    <ellipse cx="0" cy="13.6" rx="2" ry="1.4" fill="#2f2628"/>
+  </g>
+</svg>

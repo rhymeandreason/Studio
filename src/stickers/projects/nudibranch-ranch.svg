@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Nudibranch Ranch: a purple nudibranch with orange frills -->
+  <defs>
+    <pattern id="body" width="3.2" height="3.2" patternUnits="userSpaceOnUse"><rect width="3.2" height="3.2" fill="#9b7fd4"/><circle cx="1.6" cy="1.6" r="0.6" fill="#fff" opacity="0.55"/></pattern>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M5 33C5 27 11 23.5 19 23 27 21.5 36 22.5 41.5 27.5 44 30 43.5 34 40 35 30 37.5 16 37.5 8 36.5 6 36 5 34.5 5 33Z"/>
+    <path d="M6 35.5Q7.5 39.5 9.6 36.3Q11.7 39.5 13.8 36.3Q15.9 39.5 18.0 36.3Q20.1 39.5 22.2 36.3Q24.3 39.5 26.4 36.3Q28.5 39.5 30.6 36.3Q32.7 39.5 34.8 36.3Q36.9 39.5 39.0 36.3" fill="none" stroke-width="7"/>
+    <path d="M13 24 11 15.5M17 23 17.5 14.5" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <g stroke-width="7" fill="none"><path d="M35 24 29.8 21.0"/><path d="M35 24 32.0 18.8"/><path d="M35 24 35.0 18.0"/><path d="M35 24 38.0 18.8"/><path d="M35 24 40.2 21.0"/></g>
+    <circle cx="39" cy="11" r="3"/><circle cx="33" cy="7" r="2"/>
+  </g>
+  <path d="M6 35.5Q7.5 39.5 9.6 36.3Q11.7 39.5 13.8 36.3Q15.9 39.5 18.0 36.3Q20.1 39.5 22.2 36.3Q24.3 39.5 26.4 36.3Q28.5 39.5 30.6 36.3Q32.7 39.5 34.8 36.3Q36.9 39.5 39.0 36.3" fill="none" stroke="#f2a03d" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M5 33C5 27 11 23.5 19 23 27 21.5 36 22.5 41.5 27.5 44 30 43.5 34 40 35 30 37.5 16 37.5 8 36.5 6 36 5 34.5 5 33Z" fill="url(#body)"/>
+  <path d="M10 27.5C18 25 30 24.5 38 28" fill="none" stroke="#f7d36b" stroke-width="1.6" stroke-linecap="round"/>
+  <path stroke="#6c52a8" d="M13 24 11 15.5M17 23 17.5 14.5" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  <circle cx="11" cy="15.5" r="1.7" fill="#f2a03d"/><circle cx="17.5" cy="14.5" r="1.7" fill="#f2a03d"/>
+  <g stroke="#f2a03d" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M35 24 29.8 21.0"/><path d="M35 24 32.0 18.8"/><path d="M35 24 35.0 18.0"/><path d="M35 24 38.0 18.8"/><path d="M35 24 40.2 21.0"/></g>
+  <circle cx="11.5" cy="28.5" r="1.2" fill="#2f2628"/>
+  <g fill="#fffaf0" stroke="#86c3b0" stroke-width="1"><circle cx="39" cy="11" r="2.4"/><circle cx="33" cy="7" r="1.4"/></g>
+</svg>

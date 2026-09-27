@@ -447,6 +447,26 @@ display:none !important;
     flex: 0 0 auto;
 }
 
+/* A sticker icon (.studio-icon.svg, masters in src/stickers/projects/) is shown
+   whole, tilted and lifting on hover, like the header's sticker tabs. */
+.card__icon--sticker {
+    border-radius: 0;
+    object-fit: contain;
+    transform: rotate(var(--tilt, 0deg));
+    filter: drop-shadow(0 1px 1.5px rgba(40, 20, 24, 0.28));
+    transition:
+        transform var(--dur-base) cubic-bezier(0.3, 1.5, 0.5, 1),
+        filter var(--dur-base) var(--ease-standard);
+}
+.project-card:nth-child(4n + 1) .card__icon--sticker { --tilt: -4deg; }
+.project-card:nth-child(4n + 2) .card__icon--sticker { --tilt: 3deg; }
+.project-card:nth-child(4n + 3) .card__icon--sticker { --tilt: -2deg; }
+.project-card:nth-child(4n + 4) .card__icon--sticker { --tilt: 4deg; }
+.project-card:hover .card__icon--sticker {
+    transform: rotate(0deg) scale(1.06);
+    filter: drop-shadow(0 4px 4px rgba(40, 20, 24, 0.3));
+}
+
 .card__info {
     display: flex;
     flex-direction: column;

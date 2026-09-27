@@ -517,6 +517,11 @@ Lightweight, convention-file based — no metadata store, no `list_projects` cha
 - **Non-square images:** center-crop to square in CSS (`object-fit: cover`); the
   full image is stored, the card just crops the display.
 - **Reset/remove:** deferred (no action scoped yet).
+- **Stickers:** a `<project>/.studio-icon.svg` (masters in `src/stickers/projects/`)
+  wins over the PNG and is drawn whole and tilted (`.card__icon--sticker`), not
+  cropped. The card tries SVG → PNG → letter. Pasting an image icon moves the
+  SVG to the Trash so the new image shows. Both files need their own
+  `assetProtocol.scope` entry (globs skip dotfiles).
 
 ---
 

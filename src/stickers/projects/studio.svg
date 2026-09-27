@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Studio: a red fox in an indigo painter's beret -->
+  <defs>
+    <pattern id="fur" width="2.6" height="2.6" patternUnits="userSpaceOnUse" patternTransform="rotate(60)"><rect width="2.6" height="2.6" fill="#e8804a"/><rect width="0.8" height="2.6" fill="#fff" opacity="0.25"/></pattern>
+    <pattern id="beret" width="3.4" height="3.4" patternUnits="userSpaceOnUse"><rect width="3.4" height="3.4" fill="#3e5d8c"/><circle cx="1.7" cy="1.7" r="0.65" fill="#fff" opacity="0.6"/></pattern>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <g transform="translate(24 27) scale(1.02)"><path d="M-13-3-12-19-3-10Z"/><path d="M 13 -3 12 -19 3 -10Z"/><path d="M0 16C-6 13-12 10-18 8-16 4-14.5 1-14-2-14-8-8-11 0-11 8-11 14-8 14-2 14.5 1 16 4 18 8 12 10 6 13 0 16Z"/></g>
+    <g transform="translate(26 13) rotate(-14)"><ellipse rx="10.5" ry="4.2"/><rect x="-1" y="-6.5" width="2" height="3.5" rx="1"/></g>
+  </g>
+  <g transform="translate(24 27) scale(1.02)">
+    <g fill="url(#fur)" stroke="url(#fur)" stroke-width="1.5" stroke-linejoin="round"><path d="M-13-3-12-19-3-10Z"/><path d="M 13 -3 12 -19 3 -10Z"/></g>
+    <path d="M-11.3-5.5-11.1-15.5-5.5-10Z" fill="#2f2628"/><path d="M 11.3 -5.5 11.1 -15.5 5.5 -10Z" fill="#2f2628"/>
+    <path d="M0 16C-6 13-12 10-18 8-16 4-14.5 1-14-2-14-8-8-11 0-11 8-11 14-8 14-2 14.5 1 16 4 18 8 12 10 6 13 0 16Z" fill="url(#fur)"/>
+    <path d="M-18 8C-12 5-6 4.5 0 7.5 6 4.5 12 5 18 8 12 10 6 13 0 16-6 13-12 10-18 8Z" fill="#fffaf0"/>
+    <ellipse cx="-6" cy="1" rx="1.6" ry="2.1" fill="#2f2628"/><ellipse cx="6" cy="1" rx="1.6" ry="2.1" fill="#2f2628"/><circle cx="-5.5" cy=".2" r=".55" fill="#fff"/><circle cx="6.5" cy=".2" r=".55" fill="#fff"/>
+    <circle cx="-10" cy="6" r="1.6" fill="#f4b6c2"/><circle cx="10" cy="6" r="1.6" fill="#f4b6c2"/>
+    <ellipse cx="0" cy="13.6" rx="2" ry="1.4" fill="#2f2628"/>
+  </g>
+  <g transform="translate(26 13) rotate(-14)"><ellipse fill="url(#beret)" rx="10.5" ry="4.2"/><rect fill="#2f2628" x="-1" y="-6.5" width="2" height="3.5" rx="1"/></g>
+</svg>

@@ -338,6 +338,8 @@ async function setSelectedProjectIcon() {
   if (sel.length !== 1) return;
   try {
     await invoke("set_project_icon", { projectPath: sel[0] });
+    // A pasted image replaces the sticker, which would otherwise win.
+    await invoke("fs_trash", { paths: [`${sel[0]}/.studio-icon.svg`] }).catch(() => {});
     iconVersion = Date.now();
     showOverview();
   } catch (_) {
@@ -428,14 +430,20 @@ function buildProjectCard(p) {
   if (archivedPaths.has(p.path)) card.classList.add("is-archived");
   if (projectsSelection.has(p.path)) card.classList.add("is-selected");
 
-  // Icon: the project's .studio-icon.png if present, else a letter avatar.
-  // The img failing to load IS the existence check (no Rust call needed).
+  // Icon: the project's sticker (.studio-icon.svg, drawn uncropped and tilted),
+  // else its pasted .studio-icon.png, else a letter avatar. The img failing to
+  // load IS the existence check (no Rust call needed).
+  const iconSrc = (file) =>
+    window.__TAURI__.core.convertFileSrc(`${p.path}/${file}`) + `?v=${iconVersion}`;
   const icon = document.createElement("img");
-  icon.className = "card__icon";
-  icon.src =
-    window.__TAURI__.core.convertFileSrc(`${p.path}/.studio-icon.png`) +
-    `?v=${iconVersion}`;
+  icon.className = "card__icon card__icon--sticker";
+  icon.src = iconSrc(".studio-icon.svg");
   icon.addEventListener("error", () => {
+    if (icon.classList.contains("card__icon--sticker")) {
+      icon.classList.remove("card__icon--sticker");
+      icon.src = iconSrc(".studio-icon.png");
+      return;
+    }
     const letter = document.createElement("div");
     letter.className = "card__icon card__icon--letter";
     letter.textContent = (p.name[0] || "?").toUpperCase();
