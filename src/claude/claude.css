@@ -26,6 +26,7 @@
 
 /* Everything besides the full-height sidebar lives in this column. */
 .claude-right {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -1032,6 +1033,99 @@
 .claude-md th {
   font-weight: 600;
   background: var(--hairline);
+}
+
+/* --- Images: attachment tray, message thumbnails, drop target --- */
+.claude-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 10px 8px;
+}
+
+.claude-attachment {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface);
+}
+
+.claude-attachment img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.claude-attachment.is-loading {
+  animation: claude-attachment-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes claude-attachment-pulse {
+  to { opacity: 0.5; }
+}
+
+.claude-attachment__remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--bg, #fff);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.claude-attachment:hover .claude-attachment__remove {
+  display: flex;
+}
+
+/* Images in a sent message: a strip of thumbnails above the text. */
+.claude-msg--user:has(.claude-msg__images) {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.claude-msg__images {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.claude-msg__images img {
+  max-width: 160px;
+  max-height: 120px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+}
+
+/* A file is being dragged over the window (.claude-right is the anchor). */
+.claude-right.is-dropping::after {
+  content: "Drop to attach";
+  position: absolute;
+  inset: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--text-soft);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 10;
 }
 
 /* --- Input --- */

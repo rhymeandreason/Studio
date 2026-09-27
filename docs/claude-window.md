@@ -229,6 +229,22 @@ they're just the flags for the next spawn. `system` events carrying
 needs a respawn. Note: those switches emit `system` events while idle, so
 only `stream_event`/`assistant` may flip a session back to busy.
 
+## Images (paste / drop)
+Images wait in a tray above the input (`#attachments`) and go out with the next
+message as image content blocks (images first, then text) — `claude_send` takes
+an optional `content` array that replaces the plain-text message.
+- **Paste** reads the paste event's own `clipboardData.files` (no permission
+  prompt, unlike `navigator.clipboard.read()`; Studio's `pbimage` helper isn't
+  in the companion build). Text pastes pass through.
+- **Drop** uses `getCurrentWebview().onDragDropEvent` (this window only — a
+  global `listen("tauri://drag-drop")` would also fire for other windows).
+  Image paths are read by `read_chat_image` (shared crate; HEIC/TIFF converted
+  to JPEG with `sips`); other files drop their path into the prompt.
+- `prepareImage` scales anything over 2000px on the long edge or ~3.5 MB of
+  base64 (API cap is 5 MB/image), re-encoding PNG, then JPEG if still large.
+- The transcript stores only 160px JPEG thumbnails (`images` on user entries),
+  so the sessions file stays small.
+
 ## UI / layout
 - **Layout:** `.claude-app` is a row — the full-height sessions sidebar on the
   left, everything else in a `.claude-right` column (top tab bar, header, usage

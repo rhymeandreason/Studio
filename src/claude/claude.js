@@ -474,7 +474,7 @@ function renderTranscript(session) {
         return;
     }
     for (const msg of session.transcript) {
-        appendBubble(msg.role, msg.text);
+        appendBubble(msg.role, msg.text, msg.images);
     }
     // A reply still streaming in: re-show it and keep streaming into it.
     const live = liveBubbles.get(session.key);
@@ -550,7 +550,7 @@ transcriptEl.addEventListener("click", (e) => {
     invoke("open_path", { path: a.getAttribute("href") }).catch(() => {});
 });
 
-function appendBubble(role, text) {
+function appendBubble(role, text, images) {
     transcriptEl.querySelector(".claude-empty")?.remove();
 
     // Tool calls render collapsed: a clickable header (the tool name) that
@@ -593,6 +593,22 @@ function appendBubble(role, text) {
         const icon = document.createElement("span");
         icon.className = `mi ph ph-${ROLE_ICONS[role] || "circle"} claude-msg__icon`;
         el.appendChild(icon);
+    }
+    if (images?.length) {
+        const strip = document.createElement("div");
+        strip.className = "claude-msg__images";
+        for (const src of images) {
+            const img = document.createElement("img");
+            img.src = src;
+            img.alt = "";
+            strip.append(img);
+        }
+        el.appendChild(strip);
+        if (!text) {
+            transcriptEl.appendChild(el);
+            scrollToBottom(role === "user");
+            return strip;
+        }
     }
     const body = document.createElement("div");
     body.className = "claude-msg__body";
@@ -1260,6 +1276,7 @@ function handleStreamLine(key, line) {
             if (msg.is_error && /No conversation found/i.test(errors) && live.pendingText) {
                 session.resumeId = null;
                 live.retryText = live.pendingText;
+                live.retryImages = live.pendingImages || [];
                 persistSessions();
                 break;
             }
@@ -1281,7 +1298,7 @@ function handleStreamLine(key, line) {
             // Auto-name the session from the first exchange.
             if (session.name === "New session") {
                 const firstUser = session.transcript.find((m) => m.role === "user");
-                if (firstUser) session.name = firstUser.text.slice(0, 40);
+                if (firstUser) session.name = firstUser.text.slice(0, 40) || "Image";
             }
 
             updateUsage(session, live.lastUsage, msg.modelUsage);
@@ -1309,13 +1326,14 @@ function handleStreamLine(key, line) {
             session._dead = true;
             live.interrupting = false;
             expireAsks(live);
-            if (live.retryText) {
+            if (live.retryText != null) {
                 const text = live.retryText;
-                live.retryText = null;
+                const images = live.retryImages || [];
+                live.retryText = live.retryImages = null;
                 if (isActive) {
                     appendBubble("system", "Couldn't find the previous conversation — continuing in a fresh one.");
                 }
-                spawnAndSend(session, text);
+                spawnAndSend(session, text, images);
                 break;
             }
             // Exited mid-turn (crash, killed from outside): keep what streamed
@@ -1485,7 +1503,7 @@ function daysUntil(iso) {
     return Math.max(0, Math.ceil(ms / 86400000));
 }
 
-async function sendMessage(text) {
+async function sendMessage(text, images = []) {
     if (!activeKey) {
         const proj = await defaultProject();
         if (!proj) {
@@ -1497,25 +1515,40 @@ async function sendMessage(text) {
     const session = sessions.find((s) => s.key === activeKey);
     if (!session) return;
 
-    appendBubble("user", text);
-    session.transcript.push({ role: "user", text });
+    // The transcript keeps only small thumbnails; the full images go to Claude.
+    const thumbs = images.map((i) => i.thumb);
+    appendBubble("user", text, thumbs);
+    session.transcript.push(thumbs.length ? { role: "user", text, images: thumbs } : { role: "user", text });
     persistSessions();
 
     // Claude is waiting on a card: like the terminal, typing instead of
-    // clicking declines the ask with the message as feedback.
+    // clicking declines the ask with the message as feedback. (With images
+    // attached, decline and send the message as a turn so they aren't lost.)
     const live = getLiveBubbles(session.key);
     if (live.asks.size) {
         for (const id of [...live.asks.keys()]) {
             answerAsk(session.key, id, { behavior: "deny", message: `The user replied instead: ${text}` }, "Replied instead");
         }
-        return;
+        if (!images.length) return;
     }
 
-    await spawnAndSend(session, text);
+    await spawnAndSend(session, text, images);
+}
+
+// Stream-json content for a user message: images first (as the API
+// recommends), then the text. Plain text needs no blocks.
+function messageContent(text, images) {
+    if (!images.length) return null;
+    const blocks = images.map((i) => ({
+        type: "image",
+        source: { type: "base64", media_type: i.media_type, data: i.data },
+    }));
+    if (text) blocks.push({ type: "text", text });
+    return blocks;
 }
 
 // Write a message to the session's claude process, (re)spawning it if needed.
-async function spawnAndSend(session, text) {
+async function spawnAndSend(session, text, images = []) {
     if (session._dead) {
         await invoke("claude_stop", { key: session.key });
         session._dead = false;
@@ -1529,6 +1562,7 @@ async function spawnAndSend(session, text) {
     live.promptTokens = 0;
     live.activity = "Working";
     live.pendingText = text;
+    live.pendingImages = images;
     live.spawnCwd = session.cwd || "project";
     setBusy(session.key, true);
     try {
@@ -1537,6 +1571,7 @@ async function spawnAndSend(session, text) {
             projectPath: session.projectPath,
             model: session.model,
             text,
+            content: messageContent(text, images),
             resume: session.resumeId,
             permissionMode: session.permissionMode || "default",
             cwd: session.cwd || "project",
@@ -1553,8 +1588,6 @@ async function spawnAndSend(session, text) {
     }
 }
 
-// Interrupt a session's in-progress turn: finalize any streamed text, kill the
-// subprocess (the next message respawns it with --resume, keeping context).
 // Stop the running turn. Interrupting keeps the process (and its context)
 // alive; the CLI ends the turn with a result, handled as "Stopped." If it
 // doesn't respond promptly, fall back to killing the process.
@@ -1618,9 +1651,144 @@ stopBtn.addEventListener("click", () => {
 form.addEventListener("submit", (e) => {
     e.preventDefault();
     const text = promptInput.value.trim();
-    if (!text) return;
+    if (!text && !attachments.length) return;
+    // Wait for images still being read/resized before sending.
+    if (attachments.some((a) => !a.ready)) return;
+    const images = attachments.map((a) => a.image);
     promptInput.value = "";
-    sendMessage(text);
+    attachments = [];
+    renderAttachments();
+    sendMessage(text, images);
+});
+
+// --- Image attachments (paste / drop) ------------------------------------------
+// Images wait in a tray above the input and go out with the next message as
+// image content blocks. Large ones are scaled down first: Claude downsizes
+// anything much bigger anyway, and the API caps each image at 5 MB.
+const attachmentsEl = document.getElementById("attachments");
+const MAX_EDGE = 2000;
+const MAX_BASE64 = 3_500_000;
+/** @type {Array<{id:number, ready:boolean, thumb?:string, image?:{media_type:string,data:string,thumb:string}, error?:string}>} */
+let attachments = [];
+let attachmentSeq = 0;
+
+function canvasFor(bitmap, maxEdge) {
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return canvas;
+}
+
+const base64Of = (dataUrl) => dataUrl.slice(dataUrl.indexOf(",") + 1);
+
+// Blob → { media_type, data, thumb }, re-encoding only when too big.
+async function prepareImage(blob) {
+    const bitmap = await createImageBitmap(blob);
+    const thumb = canvasFor(bitmap, 160).toDataURL("image/jpeg", 0.8);
+    const dataUrl = await new Promise((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.readAsDataURL(blob);
+    });
+    const tooBig = Math.max(bitmap.width, bitmap.height) > MAX_EDGE || dataUrl.length > MAX_BASE64;
+    if (!tooBig && /^image\/(png|jpeg|gif|webp)$/.test(blob.type)) {
+        return { media_type: blob.type, data: base64Of(dataUrl), thumb };
+    }
+    const canvas = canvasFor(bitmap, MAX_EDGE);
+    let out = canvas.toDataURL("image/png");
+    let type = "image/png";
+    if (out.length > MAX_BASE64) {
+        out = canvas.toDataURL("image/jpeg", 0.9);
+        type = "image/jpeg";
+    }
+    return { media_type: type, data: base64Of(out), thumb };
+}
+
+function addAttachment(load) {
+    const a = { id: ++attachmentSeq, ready: false };
+    attachments.push(a);
+    renderAttachments();
+    load()
+        .then((image) => {
+            a.image = image;
+            a.thumb = image.thumb;
+            a.ready = true;
+        })
+        .catch((err) => {
+            attachments = attachments.filter((x) => x !== a);
+            appendBubble("error", `Couldn't attach image: ${err}`);
+        })
+        .finally(renderAttachments);
+}
+
+function renderAttachments() {
+    attachmentsEl.innerHTML = "";
+    attachmentsEl.hidden = !attachments.length;
+    for (const a of attachments) {
+        const tile = document.createElement("div");
+        tile.className = "claude-attachment" + (a.ready ? "" : " is-loading");
+        if (a.thumb) {
+            const img = document.createElement("img");
+            img.src = a.thumb;
+            img.alt = "";
+            tile.append(img);
+        }
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "claude-attachment__remove";
+        remove.title = "Remove";
+        remove.innerHTML = `<span class="mi ph ph-x"></span>`;
+        remove.addEventListener("click", () => {
+            attachments = attachments.filter((x) => x !== a);
+            renderAttachments();
+            promptInput.focus();
+        });
+        tile.append(remove);
+        attachmentsEl.append(tile);
+    }
+}
+
+// Paste: the paste event's own clipboard data (no permission prompt, unlike
+// navigator.clipboard.read()). Text pastes are left alone.
+promptInput.addEventListener("paste", (e) => {
+    const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
+    if (!files.length) return;
+    e.preventDefault();
+    for (const f of files) addAttachment(() => prepareImage(f));
+});
+
+// Drop: macOS file drops arrive as Tauri drag-drop events with paths (the
+// webview never sees HTML5 file drags). Images attach; any other file drops
+// its path into the prompt so Claude can read it.
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|heic|heif|tiff?)$/i;
+const dropZone = document.querySelector(".claude-right");
+window.__TAURI__.webview?.getCurrentWebview().onDragDropEvent((event) => {
+    const { type, paths = [] } = event.payload || {};
+    if (type === "enter" || type === "over") {
+        dropZone.classList.add("is-dropping");
+        return;
+    }
+    dropZone.classList.remove("is-dropping");
+    if (type !== "drop" || !paths.length) return;
+    const others = [];
+    for (const path of paths) {
+        if (!IMAGE_EXT.test(path)) {
+            others.push(path);
+            continue;
+        }
+        addAttachment(async () => {
+            const { media_type, data } = await invoke("read_chat_image", { path });
+            const blob = await (await fetch(`data:${media_type};base64,${data}`)).blob();
+            return prepareImage(blob);
+        });
+    }
+    if (others.length) {
+        const sep = promptInput.value && !/\s$/.test(promptInput.value) ? " " : "";
+        promptInput.value += sep + others.join(" ");
+    }
+    promptInput.focus();
 });
 
 promptInput.addEventListener("keydown", (e) => {

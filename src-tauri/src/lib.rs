@@ -5809,6 +5809,7 @@ async fn claude_send(
     permission_mode: Option<String>,
     cwd: Option<String>,
     resume_cwd: Option<String>,
+    content: Option<serde_json::Value>,
 ) -> Result<u32, String> {
     let mut procs = state.procs.lock().unwrap();
     // A process that already exited (crash, failed resume) can't take input;
@@ -5853,7 +5854,11 @@ async fn claude_send(
     }
 
     let session = procs.get_mut(&key).unwrap();
-    session.send_text(&text)?;
+    // `content` (text + image blocks, built by the UI) wins over plain `text`.
+    match content {
+        Some(c) => session.send_content(c)?,
+        None => session.send_text(&text)?,
+    }
     Ok(session.pid())
 }
 
@@ -5872,6 +5877,15 @@ fn claude_control(state: tauri::State<ClaudeState>, key: String, message: serde_
         }
         _ => Err("no running claude process for this session".into()),
     }
+}
+
+/// Read an image file dropped on the chat as base64 (HEIC etc. converted to
+/// JPEG); see `studio_claude_core::read_chat_image`. Async: `sips` can be slow.
+#[tauri::command]
+async fn read_chat_image(path: String) -> Result<claude_core::ChatImage, String> {
+    tauri::async_runtime::spawn_blocking(move || claude_core::read_chat_image(std::path::Path::new(&path)))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Kill a companion-window chat session's subprocess, if running.
@@ -6062,6 +6076,7 @@ pub fn run() {
             claude_send,
             claude_stop,
             claude_control,
+            read_chat_image,
             run_schedule_now,
             run_claude_prompt,
             day_agenda,

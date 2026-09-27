@@ -289,6 +289,57 @@ pub fn read_session_log(home: &Path, cwd: &Path, session_id: &str) -> Vec<Claude
     out
 }
 
+// --- Images for chat messages ------------------------------------------------
+
+/// An image file read for a chat message: its media type + base64 bytes, ready
+/// for an `{"type":"image","source":{"type":"base64",…}}` content block.
+#[derive(Clone, Serialize)]
+pub struct ChatImage {
+    pub media_type: String,
+    pub data: String,
+}
+
+/// Read an image file (dropped on the chat) as base64. PNG/JPEG/GIF/WebP are
+/// read as-is; HEIC/HEIF/TIFF (iPhone photos, some screenshots) are converted
+/// to JPEG with `sips` first, since the API doesn't take them. The UI does any
+/// resizing.
+pub fn read_chat_image(path: &Path) -> Result<ChatImage, String> {
+    use base64::Engine;
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let (media_type, bytes) = match ext.as_str() {
+        "png" => ("image/png", std::fs::read(path)),
+        "jpg" | "jpeg" => ("image/jpeg", std::fs::read(path)),
+        "gif" => ("image/gif", std::fs::read(path)),
+        "webp" => ("image/webp", std::fs::read(path)),
+        "heic" | "heif" | "tif" | "tiff" => {
+            let out = std::env::temp_dir().join(format!("studio-claude-{}.jpg", std::process::id()));
+            let status = Command::new("sips")
+                .args(["-s", "format", "jpeg"])
+                .arg(path)
+                .arg("--out")
+                .arg(&out)
+                .output()
+                .map_err(|e| e.to_string())?;
+            if !status.status.success() {
+                return Err(format!("couldn't convert {}", path.display()));
+            }
+            let bytes = std::fs::read(&out);
+            let _ = std::fs::remove_file(&out);
+            ("image/jpeg", bytes)
+        }
+        _ => return Err(format!("not a supported image: {}", path.display())),
+    };
+    let bytes = bytes.map_err(|e| e.to_string())?;
+    Ok(ChatImage {
+        media_type: media_type.to_string(),
+        data: base64::engine::general_purpose::STANDARD.encode(bytes),
+    })
+}
+
 // --- Account usage (/api/oauth/usage) ---------------------------------------
 
 /// Current account usage (the numbers behind Claude's `/usage`): 5-hour and
@@ -423,6 +474,15 @@ impl ClaudeSession {
         self.send_json(&serde_json::json!({
             "type": "user",
             "message": { "role": "user", "content": [{ "type": "text", "text": text }] }
+        }))
+    }
+
+    /// Write one user message with arbitrary content blocks (text + images),
+    /// built by the UI.
+    pub fn send_content(&mut self, content: serde_json::Value) -> Result<(), String> {
+        self.send_json(&serde_json::json!({
+            "type": "user",
+            "message": { "role": "user", "content": content }
         }))
     }
 
