@@ -49,8 +49,6 @@ function init() {
     // tool's own titlebar entirely (the host card provides its own header).
     if (embedded) {
         document.body.classList.add("is-embedded");
-        // No OS window frame in a card: drop the window border + titlebar.
-        document.body.classList.remove("outline-window");
         // A page whose bar carries controls it still needs embedded (Claude:
         // sessions, new, pop-out) opts out with data-keep-embedded.
         document.querySelector("[data-window-bar]:not([data-keep-embedded])")?.remove();
