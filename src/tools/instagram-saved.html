@@ -92,6 +92,7 @@
       opacity: 0; transition: opacity var(--dur-fast);
     }
     .post:hover .actions { opacity: 1; }
+    .post .actions .btn-icon-s:hover { background: var(--elevated); color: var(--rose); }
     .post .no-thumb {
       display: flex; align-items: center; justify-content: center;
       color: var(--text-soft); font-size: 32px;
@@ -208,6 +209,7 @@
           <div class="text"><b id="v-user"></b><span id="v-caption"></span></div>
           <div class="btns">
             <button class="btn" id="v-save" title="Save full-size to the active project's media/instagram"><span class="mi mi-sm ph ph-download-simple"></span> Save</button>
+            <button class="btn" id="v-delete" title="Delete from this grid (stays saved on Instagram) · Delete key"><span class="mi mi-sm ph ph-trash"></span> Delete</button>
             <button class="btn" id="v-open"><span class="mi mi-sm ph ph-arrow-square-out"></span> Instagram</button>
           </div>
         </div>
@@ -279,7 +281,8 @@
       filters.querySelector('[data-col=""]').classList.toggle('is-active', activeCollection === '');
 
       const q = query.trim().toLowerCase();
-      const shown = doc.items.filter((it) =>
+      const kept = doc.items.filter((it) => !it.deleted);
+      const shown = kept.filter((it) =>
         (!activeCollection || it.collections.includes(activeCollection)) &&
         (!q || it.caption.toLowerCase().includes(q) || it.username.toLowerCase().includes(q)));
 
@@ -287,7 +290,7 @@
       const cur = doc.cursor;
       const stage = !cur || cur.phase === 'done' ? (when ? `up to date ${when}` : '')
         : cur.phase === 'posts' ? 'more to pull' : `collections ${cur.col_index}/${doc.collections.length}`;
-      $('status').textContent = `${shown.length}${shown.length !== doc.items.length ? ` of ${doc.items.length}` : ''} posts${stage ? ` · ${stage}` : ''}`;
+      $('status').textContent = `${shown.length}${shown.length !== kept.length ? ` of ${kept.length}` : ''} posts${stage ? ` · ${stage}` : ''}`;
 
       grid.innerHTML = shown.map(card).join('');
     }
@@ -301,7 +304,7 @@
         ${thumb}
         ${badge ? `<span class="mi badge ph ph-${badge}"></span>` : ''}
         <div class="actions">
-          <button class="btn btn-icon-s" data-act="save" title="${project ? `Save full-size to ${esc(project.name)}/media/instagram` : 'Activate a project to save media into it'}" ${project ? '' : 'disabled'}><span class="mi mi-sm ph ph-download-simple"></span></button>
+          <button class="btn btn-icon-s" data-act="delete" title="Delete from this grid (stays saved on Instagram)"><span class="mi mi-sm ph ph-trash"></span></button>
         </div>
         <div class="meta"><b>@${esc(it.username)}</b><span>${esc(it.caption)}</span></div>
       </div>`;
@@ -687,6 +690,16 @@
       vFrames = frames;
       showFrame();
     }
+    // Local-only delete: the post stays in the store flagged `deleted` (pulls
+    // keep the flag, so it never comes back) and just drops out of the grid.
+    function deletePost(it) {
+      it.deleted = true;
+      if (vItem === it) closeViewer();
+      saveDoc();
+      render();
+      toast('Deleted from grid');
+    }
+
     function closeViewer() { viewer.hidden = true; vItem = null; vGen++; }
     function stepFrame(d) {
       if (vFrames.length < 2) return;
@@ -699,10 +712,12 @@
     $('v-next').onclick = () => stepFrame(1);
     // `open` on a URL → default browser; tool-* windows aren't granted opener:allow-open-url.
     $('v-open').onclick = () => vItem && invoke('open_path', { path: vItem.url });
+    $('v-delete').onclick = () => vItem && deletePost(vItem);
     $('v-save').onclick = () => vItem && saveMedia(vItem.id);
     document.addEventListener('keydown', (e) => {
       if (viewer.hidden) return;
       if (e.key === 'Escape') closeViewer();
+      else if (e.key === 'Delete' || e.key === 'Backspace') vItem && deletePost(vItem);
       else if (e.key === 'ArrowLeft') stepFrame(-1);
       else if (e.key === 'ArrowRight') stepFrame(1);
     });
@@ -741,7 +756,7 @@
       const it = doc.items.find((i) => i.id === post.dataset.id);
       if (!it) return;
       const act = e.target.closest('[data-act]');
-      if (act) { e.stopPropagation(); saveMedia(it.id); return; }
+      if (act) { e.stopPropagation(); deletePost(it); return; }
       openViewer(it);
     });
 

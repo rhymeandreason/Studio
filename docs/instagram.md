@@ -60,7 +60,10 @@ in the page so a fix is a reload, not an app restart.
     `{ version, pulled_at, username, items: [item], collections: [{ id, name, count }] }`.
     An item keeps id/code/url, `media_type` (1 photo · 2 video · 8
     carousel), caption, username, cached `thumb` path plus the (expiring)
-    `thumb_url` / `image_url` / `video_url`, `like_count`, `collections`.
+    `thumb_url` / `image_url` / `video_url`, `like_count`, `collections`, and `deleted: true` once deleted locally
+    (trash on tile hover / viewer, or Delete key in the viewer). Deleted posts
+    stay in the store so pulls keep the flag, and the grid skips them. There's
+    no undo UI; remove the flag from the JSON to bring a post back.
   - **UI**: sign-in card → login window (polls `instagram_session` every 1.5s
     until a session appears, closes the window, starts the first pull).
     Collection chips + caption/user search filter client-side. Click a post
@@ -69,8 +72,7 @@ in the page so a fix is a reload, not an app restart.
     downloads the full-size frame(s) to `<cache>/<id>-full[-n].jpg` and swaps
     them in; ←/→ or arrows step a carousel, Esc / backdrop closes. Buttons:
     *Instagram* (`open_path` → default browser) and *Save* (full-size media
-    into the active project's `media/instagram/` as `<code>[-n].jpg|mp4`;
-    also on tile hover).
+    into the active project's `media/instagram/` as `<code>[-n].jpg|mp4`).
     A failed pull stays on the card in red (not just a toast).
 
 ## Requests

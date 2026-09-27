@@ -43,7 +43,7 @@ body {
         transform var(--dur-fast) var(--ease-standard);
 }
 .btn:hover {
-    background: var(--text-dim);
+    background: color-mix(in srgb, var(--surface), var(--text) 8%);
     border-color: var(--text-soft);
 }
 .btn:active {
