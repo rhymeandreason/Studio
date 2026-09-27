@@ -20,12 +20,18 @@
 
     /* Tall vertical timeline of commits. */
     body {
+      --pane: var(--bg);
       font-family: var(--sans);
       color: var(--text);
       height: 100vh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
+    }
+
+    /* Embedded in the Git panel, sit flush on the card's white. */
+    body.is-embedded {
+      --pane: var(--elevated);
     }
 
     /* Titlebar geometry comes from window-chrome.css (.titlebar). The close dot is
@@ -47,31 +53,67 @@
     /* The branch label lives in the toolbar, not the titlebar: window-chrome.js
      *removes* [data-window-bar] entirely when the tool is embedded in a card. */
     #branch {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 28px;
+      padding: 0 8px 0 6px;
+      border-radius: var(--radius-sm);
+      background: var(--surface);
       font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
       flex-shrink: 0;
-      max-width: 90px;
+      max-width: 110px;
+    }
+
+    #branch .mi {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    #branch-name {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    #branch:empty {
+    #branch:has(#branch-name:empty) {
       display: none;
     }
 
     .bar {
-      background: var(--bg);
+      background: var(--pane);
       border-bottom: 1px solid var(--hairline);
       flex-shrink: 0;
-      padding: 8px 12px;
+      padding: 4px 12px 10px;
       display: flex;
       gap: 6px;
       align-items: center;
     }
 
-    #search {
+    .search {
       flex: 1;
       min-width: 0;
+      position: relative;
+    }
+
+    .search .mi {
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 13px;
+      color: var(--text-soft);
+      pointer-events: none;
+    }
+
+    #search {
+      height: 28px;
+      padding-left: 26px;
+      font-family: var(--sans);
+      font-size: 12px;
+      background: var(--pane);
     }
 
     #star-filter.is-on {
@@ -113,39 +155,54 @@
     }
 
     #list {
-      background: var(--bg);
+      background: var(--pane);
       flex: 1;
       overflow-y: auto;
       padding: 0px 0 20px;
     }
 
     .day {
-      padding: 12px 12px 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 14px 14px 4px 14px;
       position: sticky;
       top: 0;
-      background: var(--bg);
+      background: var(--pane);
       z-index: 2;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+    }
+
+    .day__count {
+      font-family: var(--mono);
+      font-weight: 400;
+      letter-spacing: 0;
+      color: var(--text-soft);
     }
 
     /* One commit. The rail (dot + connecting line) is drawn in the left gutter. */
     .row {
       --row-pad: 6px;
       display: grid;
-      grid-template-columns: 26px 1fr auto;
+      grid-template-columns: 22px 1fr auto;
       align-items: start;
-      padding: var(--row-pad) 12px var(--row-pad) 0;
+      margin: 0 6px;
+      padding: var(--row-pad) 6px var(--row-pad) 0;
+      border-radius: var(--radius-sm);
       cursor: pointer;
       position: relative;
     }
 
-    .row:hover {
+    .row:hover,
+    .row.is-open {
       background: var(--surface);
     }
 
     .rail {
       display: flex;
       justify-content: center;
-      padding-top: 4px;
+      padding-top: 4.5px;
       position: relative;
       /* Full row height (the grid is align-items:start for the text) so the
          line reaches its neighbours — rows sit flush, so they join up. */
@@ -163,7 +220,7 @@
       top: calc(-1 * var(--row-pad));
       bottom: calc(-1 * var(--row-pad));
       width: 1px;
-      background: var(--hairline);
+      background: var(--hairline-strong);
     }
 
     .row.is-first .rail::after {
@@ -179,30 +236,40 @@
       display: none;
     }
 
+    /* Plain commits are open rings; HEAD / bookmarks / time-travel fill in. */
     .dot {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      background: var(--border);
+      border: 1.5px solid var(--text-muted);
+      background: var(--pane);
       flex-shrink: 0;
       z-index: 1;
     }
 
+    .row:hover .dot,
+    .row.is-open .dot {
+      background: var(--surface);
+      border-color: var(--text);
+    }
+
     .row.is-head .dot {
+      width: 9px;
+      height: 9px;
+      margin-top: -1px;
+      border: none;
       background: var(--accent);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
     }
 
-    .row.is-here .dot {
-      background: var(--accent);
-    }
-
+    .row.is-here .dot,
     .row.is-marked .dot {
+      border-color: var(--accent);
       background: var(--accent);
     }
 
     .subject {
-      font-size: 12px;
+      font-size: 12.5px;
       line-height: 1.35;
       overflow: hidden;
       display: -webkit-box;
@@ -212,13 +279,21 @@
 
     .meta {
       font-size: 10px;
-      color: var(--text-muted);
+      color: var(--text-soft);
       font-family: var(--mono);
-      margin-top: 2px;
+      margin-top: 3px;
       display: flex;
       flex-wrap: wrap;
-      gap: 5px;
+      gap: 6px;
       align-items: center;
+    }
+
+    .meta .time {
+      color: var(--text-muted);
+    }
+
+    .row.is-head .subject {
+      font-weight: 600;
     }
 
     .ref {
@@ -359,8 +434,8 @@ border-color: var(--elevated);
   </div>
 
   <div class="bar">
-    <span id="branch" class="text-xs text-muted"></span>
-    <input id="search" class="field" type="search" placeholder="Search commits…" />
+    <span id="branch" title="Current branch"><span class="mi ph ph-git-branch"></span><span id="branch-name"></span></span>
+    <label class="search"><span class="mi ph ph-magnifying-glass"></span><input id="search" class="field" type="search" placeholder="Search commits" /></label>
     <button id="star-filter" class="btn btn-icon-only" type="button" title="Show bookmarked only">
       <span class="mi mi-sm ph ph-star"></span>
     </button>
@@ -379,7 +454,7 @@ border-color: var(--elevated);
 
     const PAGE = 100;
     const listEl = document.getElementById("list");
-    const branchEl = document.getElementById("branch");
+    const branchEl = document.getElementById("branch-name");
     const travelEl = document.getElementById("travel");
     const travelText = document.getElementById("travel-text");
     const searchEl = document.getElementById("search");
@@ -487,6 +562,12 @@ border-color: var(--elevated);
         (d.getFullYear() !== today.getFullYear() ? ", " + d.getFullYear() : "");
     }
 
+    // "Jul 29, 2026 at 11:04" → "11:04". The day header already carries the date.
+    function timeOf(c) {
+      const m = c.date.match(/(\d{1,2}:\d{2})$/);
+      return m ? m[1] : c.rel;
+    }
+
     // "HEAD -> main, origin/main, tag: v1" → chips (HEAD-> prefix stripped).
     function refChips(refs) {
       return refs
@@ -511,6 +592,8 @@ border-color: var(--elevated);
       // The rail line runs the full height of each row, so it joins up between
       // rows on its own. Only the ends of a day's run need trimming to the dot —
       // marked here, where the grouping is known (CSS can't see "last of group").
+      const perDay = new Map();
+      for (const c of rows) perDay.set(c.day, (perDay.get(c.day) || 0) + 1);
       let lastDay = "";
       let prevRow = null;
       for (const c of rows) {
@@ -520,7 +603,8 @@ border-color: var(--elevated);
           prevRow?.classList.add("is-last");
           const h = document.createElement("div");
           h.className = "day eyebrow";
-          h.textContent = dayLabel(c.day);
+          const n = perDay.get(c.day);
+          h.innerHTML = `<span>${esc(dayLabel(c.day))}</span><span class="day__count">${n}</span>`;
           listEl.append(h);
         }
         const row = buildRow(c);
@@ -566,7 +650,7 @@ border-color: var(--elevated);
       row.innerHTML =
         `<div class="rail"><span class="dot"></span></div>` +
         `<div><div class="subject">${esc(c.subject)}</div>` +
-        `<div class="meta"><span>${esc(c.short)}</span><span>${esc(c.rel)}</span>${refChips(c.refs)}</div></div>` +
+        `<div class="meta"><span class="time" title="${esc(c.rel)}">${esc(timeOf(c))}</span><span>${esc(c.short)}</span>${refChips(c.refs)}</div></div>` +
         `<div class="acts">` +
         `<button class="btn btn-icon-only star${marked ? " is-on" : ""}" type="button" title="${marked ? "Remove bookmark" : "Bookmark this commit"}"><span class="mi mi-sm ${marked ? "ph-fill" : "ph"} ph-star"></span></button>` +
         `<button class="btn btn-icon-only travel" type="button" title="Step back in time to this commit"><span class="mi mi-sm ph ph-clock-counter-clockwise"></span></button>` +
