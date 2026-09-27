@@ -689,13 +689,12 @@ fn tool_style(filename: &str) -> ToolStyle {
     }
 }
 
-/// Apply a tool's window style (size + the minimal custom chrome) to its
-/// builder. `decorations(false)` removes the native bar + traffic lights;
-/// `transparent(true)` lets the page's rounded corners show the desktop
-/// through them. `shadow(false)` is required: the default macOS window shadow
-/// is drawn around the SQUARE window bounds, which reads as a 1px black
-/// border + square corners (same recipe as the Spotlight / Mode switcher
-/// windows).
+/// Apply a tool's window style (size + chrome) to its builder. Tool windows
+/// keep the NATIVE macOS frame — system corner radius, shadow, resize edges —
+/// but with an Overlay title bar (the page runs under it and paints its own
+/// tinted bar + close dot via kit/window-chrome.js) and no title text. The
+/// traffic lights are hidden after build: use `build_tool_window`, not
+/// `.build()`. Same recipe as the main window.
 fn apply_tool_chrome<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
     builder: tauri::webview::WebviewWindowBuilder<'a, R, M>,
     filename: &str,
@@ -706,9 +705,8 @@ fn apply_tool_chrome<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
         // A shared floor, small enough for the tiniest tool (window-size
         // resizes itself to 240×80).
         .min_inner_size(240.0, 80.0)
-        .decorations(false)
-        .transparent(true)
-        .shadow(false)
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true)
         // Headless tools (Color Picker) never paint: keep the window off-screen
         // for its lifetime rather than flashing an empty frame.
         .visible(!tool_is_headless(filename))
@@ -716,6 +714,19 @@ fn apply_tool_chrome<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
         // acts (e.g. starts a file drag) in one motion, instead of the first
         // click being swallowed just to focus.
         .accept_first_mouse(true)
+}
+
+/// Style (`apply_tool_chrome`), build, and hide the traffic lights — the one
+/// way to create a tool window. Must run on the main thread (window building
+/// already does).
+fn build_tool_window<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
+    builder: tauri::webview::WebviewWindowBuilder<'a, R, M>,
+    filename: &str,
+) -> tauri::Result<tauri::WebviewWindow<R>> {
+    let win = apply_tool_chrome(builder, filename).build()?;
+    #[cfg(target_os = "macos")]
+    hide_traffic_lights(&win);
+    Ok(win)
 }
 
 /// Per-project window label for the Code Editor, so each project gets its own
@@ -784,7 +795,7 @@ fn open_code_editor_window(app: &AppHandle, color: &str, project_path: &str, ope
     // Empty native title — the page paints its own bar.
     let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
         .title(String::new());
-    let _ = apply_tool_chrome(builder, filename).build();
+    let _ = build_tool_window(builder, filename);
 }
 
 /// Per-project window label for the Markdown Editor (same scheme as the Code
@@ -953,7 +964,7 @@ fn open_markdown_editor_window(
     let url = format!("tools/{}{}", filename, qs);
     let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
         .title(String::new());
-    let _ = apply_tool_chrome(builder, filename).build();
+    let _ = build_tool_window(builder, filename);
 }
 
 /// The active project's folder path, or empty if none is active.
@@ -1111,7 +1122,7 @@ fn open_tool_window(
     // Empty native title everywhere — the page paints its own bar.
     let builder =
         WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into())).title(String::new());
-    if let Ok(win) = apply_tool_chrome(builder, filename).build() {
+    if let Ok(win) = build_tool_window(builder, filename) {
         if let Some(rect) = near {
             position_below_tray_icon(&win, &rect);
         }
@@ -5706,11 +5717,12 @@ fn open_video_window(app: AppHandle, path: String, file: Option<String>) -> Resu
         .title("")
         .inner_size(900.0, 640.0)
         .min_inner_size(560.0, 420.0)
-        .decorations(false)
-        .transparent(true)
-        .shadow(false)
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true)
         .build()
         .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    hide_traffic_lights(&win);
     let _ = win.restore_state(StateFlags::SIZE | StateFlags::POSITION);
     Ok(())
 }
@@ -5729,19 +5741,20 @@ fn open_claude_window(
         let _ = win.set_focus();
     } else {
         use tauri_plugin_window_state::{StateFlags, WindowExt};
-        // Custom chrome: the page paints its own title bar + project-color tint
-        // (kit/window-chrome.js). transparent + shadowless so the rounded corners
-        // read cleanly. Matches the standalone companion window.
+        // Native frame (system corners + shadow) with an Overlay title bar: the
+        // page paints its own title bar + project-color tint
+        // (kit/window-chrome.js). Matches the standalone companion window.
         let win =
             WebviewWindowBuilder::new(&app, "claude", WebviewUrl::App("claude/index.html".into()))
                 .title("Claude")
                 .inner_size(600.0, 800.0)
                 .min_inner_size(420.0, 360.0)
-                .decorations(false)
-                .transparent(true)
-                .shadow(false)
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .hidden_title(true)
                 .build()
                 .map_err(|e| e.to_string())?;
+        #[cfg(target_os = "macos")]
+        hide_traffic_lights(&win);
         // The window is created dynamically, so the window-state plugin doesn't
         // auto-restore it — apply the saved size/position explicitly. It's saved
         // again on app exit by the plugin.
@@ -6018,10 +6031,10 @@ fn rotate_video(path: String, degrees: i32) -> Result<(), String> {
 
 /// Hide the macOS traffic-light buttons on a window while keeping its native
 /// frame, shadow, rounded corners, and title-bar dragging (so the project-color
-/// strip stays draggable). The main window uses titleBarStyle: Overlay, which
-/// otherwise floats the buttons over the header.
+/// strip stays draggable). The main + tool windows use titleBarStyle: Overlay,
+/// which otherwise floats the buttons over the page's own title bar.
 #[cfg(target_os = "macos")]
-fn hide_traffic_lights(win: &tauri::WebviewWindow) {
+fn hide_traffic_lights<R: tauri::Runtime>(win: &tauri::WebviewWindow<R>) {
     use cocoa::appkit::{NSWindow, NSWindowButton};
     use cocoa::base::id;
     use objc::{msg_send, sel, sel_impl};
@@ -6301,8 +6314,8 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            // Hide the main window's traffic lights (kept frameless-looking but
-            // still a normal decorated window for shadow + dragging).
+            // Hide the main window's traffic lights (still a normal decorated
+            // window for native corners, shadow, and dragging).
             #[cfg(target_os = "macos")]
             if let Some(win) = app.get_webview_window("main") {
                 hide_traffic_lights(&win);

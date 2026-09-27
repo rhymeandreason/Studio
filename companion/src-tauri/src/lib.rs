@@ -23,6 +23,29 @@ struct Workspace {
     color: String,
 }
 
+/// Hide the traffic lights on an Overlay-title-bar window: the page paints its
+/// own close dot, macOS keeps the native corners + shadow. (Same as Studio's
+/// `hide_traffic_lights` in src-tauri/src/lib.rs.)
+fn hide_traffic_lights(win: &tauri::WebviewWindow) {
+    use cocoa::appkit::{NSWindow, NSWindowButton};
+    use cocoa::base::id;
+    use objc::{msg_send, sel, sel_impl};
+    let Ok(ptr) = win.ns_window() else { return };
+    let ns = ptr as id;
+    unsafe {
+        for b in [
+            NSWindowButton::NSWindowCloseButton,
+            NSWindowButton::NSWindowMiniaturizeButton,
+            NSWindowButton::NSWindowZoomButton,
+        ] {
+            let btn: id = ns.standardWindowButton_(b);
+            if !btn.is_null() {
+                let _: () = msg_send![btn, setHidden: true];
+            }
+        }
+    }
+}
+
 fn load_workspace(project_path: &str) -> Workspace {
     let file = PathBuf::from(project_path).join("workspace.json");
     std::fs::read_to_string(&file)
@@ -470,19 +493,19 @@ fn open_project_window(app: &AppHandle, project: &str, name: &str) {
     } else {
         format!("Claude · {name}")
     };
-    // Custom chrome: the page paints its own title bar (kit/window-chrome.js) and
-    // tints the whole window with the project color. transparent + shadowless so
-    // the page's rounded corners read cleanly (see docs/tools.md window style).
+    // Native frame (system corners + shadow) with an Overlay title bar: the page
+    // paints its own title bar (kit/window-chrome.js) and tints the whole window
+    // with the project color (see docs/tools.md window style).
     match tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
         .title(title)
         .inner_size(600.0, 800.0)
         .min_inner_size(420.0, 360.0)
-        .decorations(false)
-        .transparent(true)
-        .shadow(false)
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true)
         .build()
     {
         Ok(win) => {
+            hide_traffic_lights(&win);
             let _ = win.restore_state(StateFlags::SIZE | StateFlags::POSITION);
         }
         Err(e) => eprintln!("[companion] failed to build window {label}: {e}"),
@@ -628,7 +651,7 @@ pub fn run() {
                         open_last_project(&h);
                     }
                     if h.webview_windows().is_empty() {
-                        let _ = tauri::WebviewWindowBuilder::new(
+                        if let Ok(win) = tauri::WebviewWindowBuilder::new(
                             &h,
                             "main",
                             tauri::WebviewUrl::App("claude/index.html".into()),
@@ -636,10 +659,12 @@ pub fn run() {
                         .title("Studio Claude")
                         .inner_size(600.0, 800.0)
                         .min_inner_size(420.0, 360.0)
-                        .decorations(false)
-                        .transparent(true)
-                        .shadow(false)
-                        .build();
+                        .title_bar_style(tauri::TitleBarStyle::Overlay)
+                        .hidden_title(true)
+                        .build()
+                        {
+                            hide_traffic_lights(&win);
+                        }
                     }
                 });
             });

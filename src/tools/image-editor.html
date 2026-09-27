@@ -20,12 +20,9 @@
         height: 100%;
         margin: 0;
       }
-      /* The lightbox is position:fixed, so body's overflow clip can't round it —
-         round + clip it itself (body stays transparent; window-chrome.css). */
       .lightbox {
         position: fixed;
         inset: 0;
-        border-radius: var(--window-radius, 10px);
         overflow: hidden;
       }
       .tb-title {

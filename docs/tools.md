@@ -18,15 +18,14 @@ Every tool must link these in `<head>`, in order:
 <script type="module" src="../kit/window-chrome.js"></script>
 ```
 
-**Window chrome is required.** Every tool window opens with the minimal
-custom chrome (no native title bar — `decorations(false)` + transparent +
-shadowless; see `tool_style` in `src-tauri/src/lib.rs`), so the page must
-paint its own bar: mark the tool's top bar element with `data-window-bar`,
-and its leading group with `data-window-close` — window-chrome.js injects
-the close dot there and wires Cmd+W and window dragging. Keep `html`/`body`
-backgrounds **transparent** and put the opaque `var(--bg)` fill on the
-content containers below the bar, or the rounded corners won't round
-(window-chrome.css explains the quirk). `file-directory.html` is the
+**Window chrome is required.** Every tool window keeps the native macOS
+frame (system corner radius + shadow) but with an Overlay title bar and the
+traffic lights hidden (`apply_tool_chrome` / `build_tool_window` in
+`src-tauri/src/lib.rs`), so the page runs under the bar area and must paint
+its own bar: mark the tool's top bar element with `data-window-bar`, and its
+leading group with `data-window-close` — window-chrome.js injects the close
+dot there and wires Cmd+W and window dragging. macOS rounds the corners; don't
+add a page-level border-radius. `file-directory.html` is the
 reference. A per-tool row in `tool_style` is only needed for a non-default
 window size or a project-colored tint.
 
@@ -153,57 +152,37 @@ windows in `src-tauri/capabilities/tools.json`.
 
 ## Window style (title bar / chrome)
 
-**One source of truth.** A tool's window look is decided by the `tool_style(filename)`
-table in `src-tauri/src/lib.rs`, returning a `ToolStyle { w, h, empty_title,
-chrome, tint }`. All three tool-window builders (`open_tool_window_near`,
-`open_tool_window_with_color`, `open_tool`) route through `apply_tool_chrome()`,
-so the style can't drift between them. To restyle a tool you edit *one* table
+**One source of truth.** A tool's window size + tint come from the
+`tool_style(filename)` table in `src-tauri/src/lib.rs` (`ToolStyle { w, h,
+tint }`). Every tool window is built through `build_tool_window()` (=
+`apply_tool_chrome()` + `.build()` + `hide_traffic_lights()`), so the chrome
+can't drift between builders. To resize or retint a tool, edit *one* table
 entry — never the builders.
 
-`Chrome` has three variants:
+The chrome is the same for all tools: **native frame, custom bar.**
+`title_bar_style(Overlay)` + `hidden_title(true)` keep the real NSWindow
+frame — system corner radius, shadow, resize edges — while the webview fills
+the whole window, bar area included. The traffic lights are hidden after
+build; the page paints its own tinted bar and close dot via the kit module.
+(Video + Claude windows use the same recipe inline. Floating overlays —
+Spotlight, Mode switcher, task-notify, the Dock — stay borderless:
+`decorations(false).transparent(true).shadow(false)`.)
 
-- **`Native`** (default) — plain OS title bar showing the file's stem
-  (`bento-grid.html` → "Bento Grid").
-- **`NativeTint`** — transparent native title bar tinted to `tint`
-  (`Tint::Paper` = `--bg`, or `Tint::Project` = the active project's color). The
-  webview starts *below* the bar; the page can't draw into it. Used by the
-  paper tools (Daily Notes, RAM, etc.) and Code Preview.
-- **`Custom`** — fully custom: no native bar or traffic lights. The page paints
-  its own draggable bar, close control, and rounded corners via the shared kit
-  module (below). This is the target style for most project tools.
+### Custom bar — the recipe
 
-### Custom chrome — the recipe
-
-For new tools and migrations alike (Code Editor was the first migration —
-`git show 1591afb` is the reference diff). Do the whole list in one pass; a
-half-done tool opens with no way to drag or close it.
-
-1. **Rust:** point the tool's arm in `tool_style()` at `Chrome::Custom`, pick
-   its `tint` (`Project` for project-scoped tools, `Paper`/`None` for globals),
-   set `empty_title: true`. Don't touch the builders — `apply_tool_chrome`
-   already does `decorations(false).transparent(true).shadow(false)` and passes
-   the resolved color as `?color=`. `cargo check`.
-
-   > `shadow(false)` is required: the native macOS shadow is drawn around the
-   > *square* window bounds and reads as a 1px black border / square corners.
+1. **Rust:** only if the tool needs a non-default size or `Tint::Project`,
+   add its arm to `tool_style()`. The builders pass the resolved color as
+   `?color=`. Build any new tool window via `build_tool_window`, not
+   `.build()`, or the traffic lights show.
 
 2. **HTML:** link `../kit/window-chrome.css` after kit.css, `import
    "../kit/window-chrome.js"` in the module script, and mark the top bar
    `data-window-bar`. The module reads `?color=` → sets `--titlebar-tint` /
    `--window-color`, makes the bar a Tauri drag region (buttons inside still
    click), injects the `.window-close` dot (into a `[data-window-close]`
-   element if the tool marks one, else at the bar's left edge), wires
-   Cmd/Ctrl+W, and rounds the corners. Remove any hand-rolled close button,
-   Cmd+W handler, `data-tauri-drag-region`, or local titlebar/corner CSS —
-   the module owns those now.
-
-3. **Move the background off `html`/`body`** — the step every migration needs
-   and the easiest to forget: a background there propagates to the square
-   viewport (CSS "canvas background" quirk) and **ignores border-radius**, so
-   corners stay square. Make `html`/`body` transparent and paint the opaque
-   fill on the content rows *inside* body (Code Editor: `#main`); body's
-   `overflow:hidden` clip is what rounds them. Every region of the window must
-   be covered by an opaque child or the desktop shows through.
+   element if the tool marks one, else at the bar's left edge), and wires
+   Cmd/Ctrl+W. Remove any hand-rolled close button, Cmd+W handler,
+   `data-tauri-drag-region`, or local titlebar CSS — the module owns those.
 
    > **Don't put live content in the bar.** When the tool is embedded as an
    > iframe (Git panel cards), `window-chrome.js` *removes* `[data-window-bar]`
@@ -213,13 +192,13 @@ half-done tool opens with no way to drag or close it.
    > card renders blank below the bar. Keep such elements in a row *below* the
    > bar; the bar is for the title alone.
 
-4. **Runtime retint** (optional): `?color=` is applied automatically; a tool
+3. **Runtime retint** (optional): `?color=` is applied automatically; a tool
    that retints later (Code Editor, per open file) sets `--titlebar-tint` on
    `documentElement` itself.
 
-5. **Test in the running app** (restart for the Rust change): no traffic
-   lights, draggable bar, close dot + Cmd+W, rounded corners with no black
-   edge, tint matches the project.
+4. **Test in the running app** (restart for any Rust change): no traffic
+   lights, draggable bar, close dot + Cmd+W, native corners + shadow, tint
+   matches the project.
 
 The needed window permissions (`core:window:allow-start-dragging`,
 `allow-close`, `allow-minimize`) are already granted to all `tool-*` windows

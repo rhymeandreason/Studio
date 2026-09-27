@@ -18,9 +18,6 @@
   box-sizing: border-box;
   /* The window background is the active project's color. */
   background: var(--window-color, var(--bg));
-  /* Round the opaque fill to match the window-chrome corners (body is
-       transparent, so the rounding must live on this opaque layer). */
-  border-radius: var(--window-radius, 20px);
   overflow: hidden;
 }
 

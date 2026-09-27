@@ -6,7 +6,7 @@
 2. **`src/kit/kit.css`** — Component classes built on tokens. No JS. Link after `tokens.css`.
 3. **`src/kit/components.js`** — `<studio-*>` Web Components for widgets that need JS behavior. Each exposes `.value` + emits `input`/`change` like a native form control.
 
-Also in the kit: **`src/kit/window-chrome.{js,css}`** — custom window chrome for decorationless tool windows (draggable title bar, close dot, color tint, rounded corners). Opt in by linking the CSS, importing the JS, and marking the top bar `data-window-bar`. See the "Window style" section in [tools.md](tools.md).
+Also in the kit: **`src/kit/window-chrome.{js,css}`** — custom title bar for tool windows (native frame + Overlay title bar, traffic lights hidden): draggable bar, close dot, color tint. Opt in by linking the CSS, importing the JS, and marking the top bar `data-window-bar`. See the "Window style" section in [tools.md](tools.md).
 
 Also **`src/kit/context-menu.js`** — `openContextMenu(x, y, items)` builds the app's right-click menu from plain data: `{ label, icon, run, items (submenu), checked, swatch, font, disabled }`, `"-"` for a separator. It renders as a `.menu` panel (`.ctxmenu` positions it in viewport coordinates) and closes itself on outside click, Escape, blur or resize. Used by the Notes card menu; new panels/tools should use it rather than hand-rolling a menu.
 

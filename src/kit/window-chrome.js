@@ -1,7 +1,7 @@
 // Studio kit — custom window chrome.
 //
-// Self-initializing module for tool windows built with no native decorations
-// (decorations(false) + transparent(true), set per-tool in src-tauri/src/lib.rs).
+// Self-initializing module for tool windows: native frame + Overlay title bar
+// with the traffic lights hidden (`build_tool_window` in src-tauri/src/lib.rs).
 // Import once per document:
 //   <link rel="stylesheet" href="../kit/window-chrome.css" />
 //   <script type="module" src="../kit/window-chrome.js"></script>

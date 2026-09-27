@@ -1,29 +1,22 @@
 /* Studio kit — custom window chrome.
  *
- * For tool windows built with no native decorations (decorations(false) +
- * transparent(true) on the Rust side): the page paints its own title bar,
- * rounded corners, and close control. Pairs with window-chrome.js.
+ * Tool windows keep the native macOS frame (system corner radius + shadow)
+ * with an Overlay title bar and hidden traffic lights (src-tauri/src/lib.rs
+ * `apply_tool_chrome`). The page runs under the title bar and paints its own
+ * tinted bar + close control. Pairs with window-chrome.js.
  *
  * Opt in from a tool: link this after kit.css, mark the top bar element with
  * `data-window-bar`, and import window-chrome.js. See docs/tools.md.
  *
  * Layer ABOVE tokens.css + kit.css. */
 
-/* Custom-window corner radius. The on-tint color palette lives in tokens.css
-   as `.on-tint`, which window-chrome.js adds to the tool body. */
-:root { --window-radius: 20px; }
-
-/* Rounded corners. IMPORTANT: a background on `html` or `body` propagates to
-   the square viewport (the CSS "canvas background" quirk) and ignores
-   border-radius — so the corners won't round. Keep html/body TRANSPARENT and
-   paint the opaque surface on the content rows inside body; body's overflow
-   clip then rounds them. The window itself is transparent + shadowless (set in
-   src-tauri/src/lib.rs), so the corner pixels reveal the desktop. */
-html, body { background: transparent; }
-body {
-    border-radius: var(--window-radius, 10px);
-    overflow: hidden;          /* clips content rows to the rounded corners */
-}
+/* The on-tint color palette lives in tokens.css as `.on-tint`, which
+   window-chrome.js adds to the tool body. Corners are rounded by macOS. */
+html, body { background: var(--bg); }
+body { overflow: hidden; }
+/* Embedded as an iframe card (window-chrome.js adds .is-embedded): let the
+   host card show through, as before. */
+html:has(> body.is-embedded), body.is-embedded { background: transparent; }
 
 .titlebar, #titlebar{
 height: 44px;
@@ -35,7 +28,6 @@ padding: 0 14px;
 
 main, #main, .main{
 background: var(--bg);
-border-radius: 0 0 var(--window-radius) var(--window-radius);
 }
 
 .outline-window{
@@ -46,7 +38,6 @@ border: 2px solid var(--border);
    window-chrome.js from the ?color= URL param), draggable, no text selection. */
 [data-window-bar] {
     background: var(--titlebar-tint, var(--bg));
-    border-radius: var(--window-radius, 10px) var(--window-radius, 10px) 0 0;
     -webkit-user-select: none;
     user-select: none;
 }

@@ -21,3 +21,5 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
 studio-claude-core = { path = "../../crates/studio-claude-core" }
+cocoa = "0.26"
+objc = "0.2"
