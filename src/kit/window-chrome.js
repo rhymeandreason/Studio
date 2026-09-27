@@ -8,16 +8,19 @@
 // and mark the tool's top bar element with `data-window-bar`.
 //
 // It then:
-//   - reads ?color= from the URL and tints the bar (--titlebar-tint) + exposes
-//     the raw color as --window-color for the tool to use however it likes;
+//   - reads the (vivid) project ?color= from the URL and tints the bar
+//     (--titlebar-tint) + exposes --window-color for the tool to use however it
+//     likes — both as the washi tint (kit/washi.js), since they fill areas;
 //   - makes the bar a Tauri drag region (buttons inside still click);
 //   - injects a close dot at the bar's left edge and wires Cmd/Ctrl+W.
 //
 // Tools that retint dynamically (e.g. the Code Editor, per open file) just set
-// --titlebar-tint themselves later; the initial ?color= is the first paint.
+// --titlebar-tint themselves later (through washi() too); the initial ?color=
+// is the first paint.
 
 // Per-window dev reload (no-op outside `npm run dev`).
 import "./dev-reload.js";
+import { washi } from "./washi.js";
 
 const TAURI = window.__TAURI__;
 
@@ -26,8 +29,8 @@ const TAURI = window.__TAURI__;
 const color = new URLSearchParams(location.search).get("color") || "";
 if (color) {
     const root = document.documentElement.style;
-    root.setProperty("--titlebar-tint", color);
-    root.setProperty("--window-color", color);
+    root.setProperty("--titlebar-tint", washi(color));
+    root.setProperty("--window-color", washi(color));
 }
 
 function closeWin() {

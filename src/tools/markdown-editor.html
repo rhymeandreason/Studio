@@ -179,6 +179,7 @@
   <script type="module">
     import "../kit/window-chrome.js";
     import { hasTauri, invoke, listen, toast } from "../kit/app.js";
+    import { washi } from "../kit/washi.js";
     import {
       EditorState, EditorView, Plugin, PluginKey, Decoration, DecorationSet,
       schema as baseSchema, defaultMarkdownParser, defaultMarkdownSerializer,
@@ -515,7 +516,7 @@
       try {
         const color = await invoke("git_color_for_path", { path });
         if (generation !== loadGeneration) return;  // a newer file owns the bar now
-        if (color) document.documentElement.style.setProperty("--titlebar-tint", color);
+        if (color) document.documentElement.style.setProperty("--titlebar-tint", washi(color));
       } catch {}
       refreshDiff();
       view.focus();

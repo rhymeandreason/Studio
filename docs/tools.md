@@ -194,7 +194,10 @@ Spotlight, Mode switcher, task-notify, the Dock — stay borderless:
 
 3. **Runtime retint** (optional): `?color=` is applied automatically; a tool
    that retints later (Code Editor, per open file) sets `--titlebar-tint` on
-   `documentElement` itself.
+   `documentElement` itself — through `washi(color)` from `../kit/washi.js`.
+   `?color=` is the project's *vivid* color; anything that fills an area (bar,
+   window background, a tinted card) paints its washi tint instead, and only
+   small accents (dots, accent text) use the vivid color directly.
 
 4. **Test in the running app** (restart for any Rust change): no traffic
    lights, draggable bar, close dot + Cmd+W, native corners + shadow, tint

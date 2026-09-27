@@ -564,6 +564,7 @@ import "../vendor/prism-markdown.min.js"; // adds Prism.languages.markdown
 import "../kit/window-chrome.js";         // custom title bar: drag, close dot, tint
 import "../kit/components.js";            // <studio-*> kit components (icon toggle)
 import { hasTauri, invoke } from "../kit/app.js";
+import { washi } from "../kit/washi.js";
 
 const TAURI = window.__TAURI__;
 const evt = TAURI ? TAURI.event : null;
@@ -590,7 +591,7 @@ async function applyTitleColor() {
   // No file (or file outside any known repo) → fall back to the active project's color.
   if (!titleColor) titleColor = await invoke("active_git_color");
   // Tint our custom title bar (the toolbar); empty string clears to paper.
-  document.documentElement.style.setProperty("--titlebar-tint", titleColor || "");
+  document.documentElement.style.setProperty("--titlebar-tint", washi(titleColor));
   // Keep `.on-tint` in sync with the live tint: window-chrome.js only sets it
   // from the initial ?color=, but we resolve the color dynamically (and may open
   // with no ?color= at all), so the tint-harmonized CSS would otherwise be lost.

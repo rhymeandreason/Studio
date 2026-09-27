@@ -11,6 +11,7 @@ import { selectTab, installOffClickDeselect } from "./main.js";
 import { SPRITES, DEFAULT_SPRITE, spriteStyle } from "./sprites.js";
 import { toast } from "./kit/app.js";
 import { openContextMenu } from "./kit/context-menu.js";
+import { washi } from "./kit/washi.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -743,8 +744,9 @@ export function activeRepoInfo() {
 
 // Reflect the active project's accent onto the app header (a CSS var on :root;
 // styles.css uses it for the .projhead background, falling back to --surface).
+// A header is an area, so it gets the washi tint, not the vivid color.
 function applyHeaderColor() {
-  document.documentElement.style.setProperty("--project-color", wsColor || "");
+  document.documentElement.style.setProperty("--project-color", washi(wsColor));
 }
 
 export async function loadWorkspace(path) {

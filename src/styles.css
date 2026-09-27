@@ -2998,7 +2998,7 @@ td.ntable__total-cell {
 .git-branch::before { content: "⎇ "; opacity: 0.6; }
 
 /* ── Commit card: styled like the standalone Git window ──────────────────
-   Fully tinted with the project color (--git-accent), dark ink, translucent-
+   Fully tinted with the project's washi tint (--git-tint), dark ink, translucent-
    white inner surfaces. Mirrors src/git/index.html's look. */
 .git-card--commit {
     --gc-ink: #1a1a1a;
@@ -3006,8 +3006,8 @@ td.ntable__total-cell {
     --gc-line: rgba(26, 26, 26, 0.16);
     --gc-fill: rgba(255, 255, 255, 0.45);
     --gc-fill-strong: rgba(255, 255, 255, 0.72);
-    background: var(--git-accent);
-    border-color: color-mix(in srgb, var(--git-accent), #000 12%);
+    background: var(--git-tint, var(--git-accent));
+    border-color: color-mix(in srgb, var(--git-tint, var(--git-accent)), #000 12%);
     color: var(--gc-ink);
 }
 .git-card--commit .git-card__name { color: var(--gc-ink); }
@@ -3033,7 +3033,7 @@ td.ntable__total-cell {
 .git-card--commit .git-msg::placeholder { color: var(--gc-ink-dim); }
 .git-card--commit .git-commit {
     background: var(--gc-ink);
-    color: var(--git-accent);
+    color: var(--git-tint, var(--git-accent));
 }
 .git-card--commit .git-prev {
     border-top: 1px solid var(--gc-line);

@@ -1,5 +1,6 @@
 import { spriteStyle, DEFAULT_SPRITE } from "../sprites.js";
 import { createBridgeClient } from "./bridge-client.js";
+import { washi } from "../kit/washi.js";
 
 // Two ways this page runs:
 // - As Studio Claude's own window (companion/): Tauri IPC to that app.
@@ -74,8 +75,8 @@ function setWindowTitle(projectName) {
 function setProjectColor(color) {
     const root = document.documentElement.style;
     if (color) {
-        root.setProperty("--window-color", color);
-        root.setProperty("--titlebar-tint", color);
+        root.setProperty("--window-color", washi(color));
+        root.setProperty("--titlebar-tint", washi(color));
         document.body.classList.add("on-tint");
     } else {
         root.removeProperty("--window-color");

@@ -11,6 +11,7 @@
 //     already follows the active project) — only when the repo has dev scripts.
 
 import { invoke, toast } from "./kit/app.js";
+import { washi } from "./kit/washi.js";
 import { el, mi } from "./dom.js";
 import { state } from "./state.js";
 import {
@@ -119,7 +120,8 @@ function buildCommitCard(repo, color, editor, pushUI, onChange, onExternal) {
     innerHTML: mi("arrow-square-out"),
   });
   popout.addEventListener("click", () =>
-    invoke("open_git_window", { repo, color }),
+    // Rust paints the window's native title bar with this, so pass the tint.
+    invoke("open_git_window", { repo, color: washi(color) }),
   );
   head.append(title, popout);
 
@@ -536,6 +538,7 @@ export async function renderGitPanel() {
   // Tint the whole panel with the project's accent (cards read var(--git-accent),
   // falling back to the app accent when the project has no color).
   panel.style.setProperty("--git-accent", color || "var(--accent)");
+  panel.style.setProperty("--git-tint", color ? washi(color) : "var(--accent)");
 
   // Skip a full rebuild when nothing changed — keeps the commit draft/scroll and
   // avoids reloading the embedded tools on every tab switch.

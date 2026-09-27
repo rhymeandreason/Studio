@@ -165,6 +165,7 @@
 
   <script type="module">
     import { hasTauri, invoke, listen, toast } from "../kit/app.js";
+    import { washi } from "../kit/washi.js";
 
     const root = document.documentElement.style;
     const titleEl = document.getElementById("title");
@@ -204,8 +205,8 @@
       }
       const color = await invoke("active_git_color").catch(() => "");
       if (color) {
-        root.setProperty("--window-color", color);
-        root.setProperty("--titlebar-tint", color);
+        root.setProperty("--window-color", washi(color));
+        root.setProperty("--titlebar-tint", washi(color));
       }
       const ws = await invoke("read_workspace", { path: project.path }).catch(() => ({}));
       repo = (ws.repo || "").trim();
