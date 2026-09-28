@@ -6,6 +6,7 @@
 import { state } from "./state.js";
 import { el, mi } from "./dom.js";
 import { createSelection } from "./selection.js";
+import { toast } from "./kit/app.js";
 import { renderDiagram } from "./diagram/render.js";
 import { createShaderRenderer } from "./video/shaders.js";
 
@@ -292,8 +293,16 @@ function artifactCard(item) {
 
   const card = el("div", "artifact-card");
   card.dataset.path = item.path;
+  const isSwatch = item.kind === "swatch";
   card.addEventListener("click", (e) => {
     artifactsSelection.toggle(item.path, e.metaKey || e.ctrlKey);
+    // Plain click on a swatch copies its hex (sync write, see CLAUDE.md).
+    if (isSwatch && data.value && !(e.metaKey || e.ctrlKey || e.shiftKey)) {
+      // Footer click copies the rgb() shown there; anywhere else, the hex.
+      const rgb = hexToRgb(data.value);
+      const text = rgb && e.target.closest(".artifact-card__foot") ? rgb : data.value;
+      navigator.clipboard.writeText(text).then(() => toast(`Copied ${text}`));
+    }
   });
   card.appendChild(
     item.kind === "brand-kit"
@@ -320,7 +329,11 @@ function artifactCard(item) {
 
   const foot = el("div", "artifact-card__foot");
   const info = el("div", "artifact-card__info");
-  info.appendChild(el("span", "artifact-card__name", { textContent: item.name }));
+  info.appendChild(
+    el("span", "artifact-card__name", {
+      textContent: isSwatch ? hexToRgb(data.value) || item.name : item.name,
+    }),
+  );
   if (item.kind === "presentation") {
     const n = Array.isArray(data.slides) ? data.slides.length : 0;
     info.appendChild(
@@ -328,7 +341,7 @@ function artifactCard(item) {
     );
   }
   foot.appendChild(info);
-  foot.appendChild(actionBtn("arrow-square-out", "Open", open, true));
+  if (!isSwatch) foot.appendChild(actionBtn("arrow-square-out", "Open", open, true));
   card.appendChild(foot);
 
   card.addEventListener("dblclick", open);
@@ -407,6 +420,14 @@ export function swatchPreview(data) {
   hex.style.fontFamily = "var(--font-mono, monospace)";
   wrap.appendChild(hex);
   return wrap;
+}
+
+// "#1b7119" → "rgb(27, 113, 25)"; null if not a 6-digit hex.
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec((hex || "").trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
 }
 
 // Black or white, whichever reads on the given hex (sRGB luminance).
