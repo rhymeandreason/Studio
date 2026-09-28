@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Browser Frame</title>
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<link rel="stylesheet" href="../kit/window-chrome.css" />
+<script type="module" src="../kit/components.js"></script>
+<script type="module" src="../kit/window-chrome.js"></script>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--text);
+    background: var(--bg);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #titlebar {
+    height: 40px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+  }
+
+  #body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 4px 16px 16px;
+  }
+
+  .row { display: flex; flex-direction: column; gap: 6px; }
+  .pill-tabs { align-self: flex-start; }
+  .pill-tab { display: inline-flex; align-items: center; gap: 5px; }
+
+  /* Ratio tiles: each draws its own shape, so the choice reads at a glance. */
+  #ratios { display: flex; gap: 8px; }
+  .ratio {
+    flex: 1 1 0;
+    height: 64px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 8px 0 6px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-muted);
+    font: 12px var(--sans);
+    cursor: pointer;
+  }
+  .ratio:hover { color: var(--text); }
+  .ratio i {
+    display: block;
+    border: 1.5px solid currentColor;
+    border-radius: 2px;
+  }
+  .ratio.is-active { color: var(--text); border-color: var(--accent); background: var(--surface); }
+  .ratio.is-active i { background: var(--accent); border-color: var(--accent); }
+
+  #go { width: 100%; justify-content: center; margin-top: auto; }
+
+  #status { min-height: 32px; font-size: 11px; line-height: 1.45; }
+  #status b { font-weight: 600; color: var(--text); }
+  #status.warn { color: var(--text); }
+</style>
+</head>
+<body>
+  <div id="titlebar" data-window-bar>
+    <div data-window-close></div>
+  </div>
+
+  <div id="body">
+    <div class="row">
+      <span class="label">Browser</span>
+      <div class="pill-tabs" id="browsers">
+        <button class="pill-tab" data-app="Safari"><span class="mi mi-sm ph ph-compass"></span>Safari</button>
+        <button class="pill-tab" data-app="Google Chrome"><span class="mi mi-sm ph ph-google-chrome-logo"></span>Chrome</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="label">Aspect ratio</span>
+      <div id="ratios">
+        <button class="ratio" data-ratio="16:9"><i style="width:32px;height:18px"></i>16:9</button>
+        <button class="ratio" data-ratio="1:1"><i style="width:22px;height:22px"></i>1:1</button>
+        <button class="ratio" data-ratio="4:5"><i style="width:20px;height:25px"></i>4:5</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="label">Page size</span>
+      <div class="pill-tabs" id="sizes">
+        <button class="pill-tab" data-short="720">720p</button>
+        <button class="pill-tab" data-short="1080">1080p</button>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="go"></button>
+    <div id="status" class="text-muted"></div>
+  </div>
+
+<script type="module">
+  import { hasTauri, invoke } from "../kit/app.js";
+
+  // ---- Persisted choices --------------------------------------------------
+  const KEY = "browser-frame";
+  let prefs = { app: "Safari", ratio: "16:9", short: 1080, chrome: {} };
+  try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch {}
+  if (![720, 1080].includes(prefs.short)) prefs.short = 1080;
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {} };
+
+  const $ = (s) => document.querySelector(s);
+  const goBtn = $("#go"), statusEl = $("#status");
+
+  function pick(groupSel, attr, value) {
+    for (const b of document.querySelectorAll(`${groupSel} [data-${attr}]`)) {
+      b.classList.toggle("is-active", b.dataset[attr] === String(value));
+    }
+  }
+  function render() {
+    pick("#browsers", "app", prefs.app);
+    pick("#ratios", "ratio", prefs.ratio);
+    pick("#sizes", "short", prefs.short);
+    goBtn.textContent = `Frame ${prefs.app === "Safari" ? "Safari" : "Chrome"}`;
+  }
+  function wire(groupSel, attr, key, cast = String) {
+    $(groupSel).addEventListener("click", (e) => {
+      const b = e.target.closest(`[data-${attr}]`);
+      if (!b) return;
+      prefs[key] = cast(b.dataset[attr]);
+      save(); render();
+    });
+  }
+  wire("#browsers", "app", "app");
+  wire("#ratios", "ratio", "ratio");
+  wire("#sizes", "short", "short", Number);
+  render();
+
+  // ---- The work: runs inside osascript (JXA), not in this page ------------
+  // Serialized with toString(); P is prepended as a const. Sizes the browser's
+  // front window so its *page area* hits the ratio at the chosen size (in
+  // screen points — Retina records it at 2×),
+  // centered on whichever screen the window is on.
+  function frameBrowser() {
+    const app = Application(P.app);
+    if (!app.running()) return JSON.stringify({ error: `${P.app} isn’t running.` });
+    const w = app.windows[0];
+    if (!w.exists()) return JSON.stringify({ error: `No ${P.app} window is open.` });
+
+    // Page viewport in points. innerWidth * dpr / backingScale survives
+    // Chrome's page zoom (its dpr includes zoom); Safari needs 100% zoom.
+    const JS = 'window.innerWidth*devicePixelRatio+","+window.innerHeight*devicePixelRatio';
+    function page(scale) {
+      try {
+        const r = P.app === "Safari"
+          ? app.doJavaScript(JS, { in: w.currentTab() })
+          : w.activeTab().execute({ javascript: JS });
+        const [pw, ph] = String(r).split(",").map(Number);
+        return pw > 0 && ph > 0 ? { w: pw / scale, h: ph / scale } : null;
+      } catch (e) { return null; }
+    }
+
+    // Screens in top-left coords (the space window bounds use).
+    const screens = ObjC.unwrap($.NSScreen.screens);
+    const primaryH = screens[0].frame.size.height;
+    const flip = (f) => ({ x: f.origin.x, y: primaryH - f.origin.y - f.size.height, w: f.size.width, h: f.size.height });
+
+    const b = w.bounds();
+    const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+    let scr = screens[0];
+    for (const s of screens) {
+      const f = flip(s.frame);
+      if (cx >= f.x && cx < f.x + f.w && cy >= f.y && cy < f.y + f.h) { scr = s; break; }
+    }
+    const vf = flip(scr.visibleFrame);
+    const scale = scr.backingScaleFactor;
+
+    // Browser chrome (tabs, toolbar) = window minus page. If the page can't
+    // be asked, reuse what a previous run measured; else size the window.
+    const p0 = page(scale);
+    const known = p0 ? { w: Math.round(b.width - p0.w), h: Math.round(b.height - p0.h) } : P.chrome;
+    const chromeW = known ? known.w : 0, chromeH = known ? known.h : 0;
+
+    // Target page size in points (the short side is P.short).
+    const [rw, rh] = P.ratio;
+    let unit = P.short / Math.min(rw, rh);
+    const maxUnit = Math.min((vf.w - chromeW) / rw, (vf.h - chromeH) / rh);
+    const fitted = unit > maxUnit;
+    if (fitted) unit = Math.floor(maxUnit * scale / 2) * 2 / scale;
+    const tw = Math.round(rw * unit), th = Math.round(rh * unit);
+
+    const set = (cw, ch) => {
+      const W = tw + cw, H = th + ch;
+      w.bounds = { x: Math.round(vf.x + (vf.w - W) / 2), y: Math.round(vf.y + (vf.h - H) / 2), width: W, height: H };
+    };
+    set(chromeW, chromeH);
+    // One correction pass: some chrome (Chrome's bookmark bar, Safari's tab
+    // bar) changes height as the window resizes.
+    let p1 = p0 ? page(scale) : null;
+    if (p1 && (Math.round(p1.w) !== tw || Math.round(p1.h) !== th)) {
+      set(chromeW + tw - Math.round(p1.w), chromeH + th - Math.round(p1.h));
+      p1 = page(scale);
+    }
+    const fb = w.bounds();
+    return JSON.stringify({
+      measured: !!p0, chrome: known || null, scale, fitted,
+      pageW: p1 ? Math.round(p1.w) : fb.width - chromeW,
+      pageH: p1 ? Math.round(p1.h) : fb.height - chromeH,
+    });
+  }
+
+  const JS_SETTING = {
+    "Safari": "Safari › Settings › Advanced › Show features for web developers, then Develop › Allow JavaScript from Apple Events",
+    "Google Chrome": "Chrome › View › Developer › Allow JavaScript from Apple Events",
+  };
+
+  function show(html, warn = false) {
+    statusEl.innerHTML = html;
+    statusEl.classList.toggle("warn", warn);
+  }
+
+  async function go() {
+    if (!hasTauri) return show("Needs Studio to run.", true);
+    const app = prefs.app;
+    const P = {
+      app,
+      ratio: prefs.ratio.split(":").map(Number),
+      short: prefs.short,
+      chrome: prefs.chrome[app] || null,
+    };
+    const script = `ObjC.import("AppKit");\nconst P = ${JSON.stringify(P)};\n${frameBrowser}\nfunction run() { return frameBrowser(); }`;
+    goBtn.disabled = true;
+    try {
+      const r = JSON.parse(await invoke("run_osascript", { script, jxa: true }));
+      if (r.error) return show(r.error, true);
+      if (r.measured) { prefs.chrome[app] = r.chrome; save(); }
+
+      const px = `${Math.round(r.pageW * r.scale)} × ${Math.round(r.pageH * r.scale)}`;
+      let msg = `Page <b>${r.pageW} × ${r.pageH}</b> pt · records <b>${px}</b>`;
+      if (r.fitted) msg += `<br>Shrunk to fit this screen.`;
+      if (!r.measured) {
+        msg += r.chrome
+          ? `<br>Used the last-measured toolbar size — couldn't ask this tab.`
+          : `<br>Sized the whole window. For the page area, turn on ${JS_SETTING[app]}.`;
+      }
+      show(msg, !r.measured && !r.chrome);
+    } catch (e) {
+      const err = String(e);
+      show(/-1743|not allowed/i.test(err)
+        ? `Allow Studio to control ${app} in System Settings › Privacy & Security › Automation.`
+        : err, true);
+    } finally {
+      goBtn.disabled = false;
+    }
+  }
+
+  goBtn.addEventListener("click", go);
+  document.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+</script>
+</body>
+</html>

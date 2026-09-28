@@ -67,7 +67,12 @@ does its work, and closes itself. Re-launching while one is running is a no-op.
 
 - Drop a self-contained `.html` file into [`src/tools/`](../src/tools)
   (plain HTML + inline `<style>`/`<script>`, no build step).
-- It appears under the **wrench (🔧) tray icon's** dropdown menu (🔧 *name*).
+- **Add it to [`Tools.json`](../Tools.json)** (`{ "file": "my-tool.html",
+  "name": "My Tool" }`) — that file exists, so it's the whole list: a tool
+  not in it won't show anywhere. Then quit and relaunch `npm run tauri dev`
+  (the list is copied into the bundle at build time; a reload won't pick it up).
+- It appears under the **wrench (🔧) tray icon's** dropdown menu (🔧 *name*)
+  and in Spotlight.
 - Clicking it opens the file in its **own native window**, loaded via
   `tauri://localhost/tools/<file>` (the same `tauri://` protocol the main
   window uses, since `src/` is `frontendDist`) — not a browser tab and not
@@ -88,9 +93,9 @@ Implementation: `scan_tools` / `open_tool_window` in
 
 ## Choosing which tools show (`Tools.json`)
 
-By default every `*.html` file in `src/tools/` shows up, sorted
-alphabetically. To control which tools appear and in what order, edit
-[`Tools.json`](../Tools.json) at the root of the Studio project:
+[`Tools.json`](../Tools.json) at the root of the Studio project lists which
+tools appear and in what order. **It exists, so every new tool must be added
+here** — the scan-everything fallback only applies when the file is missing.
 
 ```json
 [

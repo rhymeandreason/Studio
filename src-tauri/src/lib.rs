@@ -682,6 +682,7 @@ fn tool_style(filename: &str) -> ToolStyle {
         // Tall and narrow: a vertical timeline of commits.
         "git-history.html" => s(360.0, 780.0, Tint::Project),
         "server.html" => s(240.0, 440.0, Tint::Project),
+        "browser-frame.html" => s(280.0, 300.0, Tint::Paper),
         "daily-briefing.html" => s(1080.0, 760.0, Tint::Paper),
         "mycelium.html" => s(1100.0, 760.0, Tint::Paper),
         "instagram-saved.html" => s(1000.0, 720.0, Tint::Paper),
@@ -3221,6 +3222,23 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
 /// Escape a string for embedding in an AppleScript double-quoted literal.
 fn applescript_quote(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Dumb `osascript` proxy for tool pages: runs `script` (AppleScript, or JXA
+/// when `jxa` is true) and returns trimmed stdout. The logic lives in the page
+/// (Browser Frame drives Safari/Chrome window bounds through it).
+#[tauri::command(async)]
+fn run_osascript(script: String, jxa: Option<bool>) -> Result<String, String> {
+    let mut cmd = Command::new("osascript");
+    if jxa.unwrap_or(false) {
+        cmd.args(["-l", "JavaScript"]);
+    }
+    let out = cmd.args(["-e", &script]).output().map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
 }
 
 /// Run a macOS Shortcut via the `shortcuts` CLI. Used for Image Playground
@@ -6091,6 +6109,7 @@ pub fn run() {
         .manage(AppState::default())
         .manage(ClaudeState::default())
         .invoke_handler(tauri::generate_handler![
+            run_osascript,
             open_claude_window,
             launch_claude_app,
             open_schedules_window,
