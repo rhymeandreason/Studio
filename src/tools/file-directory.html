@@ -443,7 +443,7 @@ max-width:350px;
   <div id="fd-menu" hidden></div>
 
   <script type="module">
-    import { hasTauri, invoke, listen, dragFilesOut, toast, esc } from '../kit/app.js';
+    import { hasTauri, invoke, listen, listenHere, dragFilesOut, toast, esc } from '../kit/app.js';
 
     const tree = document.getElementById('tree');
 
@@ -1591,12 +1591,12 @@ max-width:350px;
     main();
 
     if (hasTauri) {
-      listen('tauri://drag-over', (e) => {
+      listenHere('tauri://drag-over', (e) => {
         const { x, y } = toCss(e.payload.position);
         highlightDrop(dropDirAt(x, y));
       });
-      listen('tauri://drag-leave', clearDrop);
-      listen('tauri://drag-drop', async (e) => {
+      listenHere('tauri://drag-leave', clearDrop);
+      listenHere('tauri://drag-drop', async (e) => {
         const { x, y } = toCss(e.payload.position);
         const dir = dropDirAt(x, y);
         clearDrop();

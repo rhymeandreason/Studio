@@ -33,6 +33,15 @@ export const listen = hasTauri
     ? tauri.event.listen
     : () => Promise.resolve(() => {});
 
+// Like `listen`, but only for events aimed at this page's own window. Use it
+// for OS file drops (`tauri://drag-*`): the global `listen` hears every
+// window's drops, so a File Directory window would act on a drop made on the
+// main window at the same coordinates. Embedded frames borrow the parent's
+// Tauri, so this scopes to the host window — which is where their drops land.
+export const listenHere = hasTauri
+    ? (event, cb) => tauri.webview.getCurrentWebview().listen(event, cb)
+    : () => Promise.resolve(() => {});
+
 /** Escape a string for interpolation into HTML. */
 export function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({

@@ -1098,7 +1098,10 @@ async function closeLightbox() {
 
 // Native file drag-and-drop → copy images into the active project's media/.
 async function initDragDrop() {
-  const { listen } = window.__TAURI__.event;
+  // Scoped to this window: the global event listen also hears drops made on
+  // other Studio windows (File Directory, Slides…).
+  const webview = window.__TAURI__.webview.getCurrentWebview();
+  const listenHere = (event, cb) => webview.listen(event, cb);
   const zone = document.getElementById("dropzone");
   const IMG_RE = /\.(png|jpe?g|gif|webp|heic|heif|tiff?|bmp)$/i;
   // Heuristic preview of what a drop will do (the actual handling on drop uses
@@ -1144,19 +1147,19 @@ async function initDragDrop() {
     overFileDirectory(e && e.payload && e.payload.position);
   // Only drag-enter carries paths in Tauri v2 (drag-over is position-only), so
   // set the label on enter and just keep the overlay visible on over.
-  await listen("tauri://drag-enter", (e) => {
+  await listenHere("tauri://drag-enter", (e) => {
     if (blocked(e)) return;
     const preview = dropPreview((e.payload && e.payload.paths) || []);
     document.getElementById("dropzone-icon").className = `mi ph ph-${preview.icon}`;
     document.getElementById("dropzone-label").textContent = preview.label;
     zone.hidden = false;
   });
-  await listen("tauri://drag-over", (e) => {
+  await listenHere("tauri://drag-over", (e) => {
     if (blocked(e)) return;
     zone.hidden = false;
   });
-  await listen("tauri://drag-leave", () => (zone.hidden = true));
-  await listen("tauri://drag-drop", async (e) => {
+  await listenHere("tauri://drag-leave", () => (zone.hidden = true));
+  await listenHere("tauri://drag-drop", async (e) => {
     zone.hidden = true;
     // The same guard the overlay uses — this used to test only activeProject /
     // draggingNoteId, so a drop the overlay had declined was still acted on.
