@@ -76,20 +76,6 @@
   }
   .tile:hover .pin, .tile.is-pinned .pin { opacity: 0.75; }
 
-  /* The selected specimen gently opens and closes its wings. */
-  .tile.is-sel .side {
-    transform-box: fill-box;
-    transform-origin: 0% 50%;
-    animation: flap 3.2s var(--ease-standard) infinite;
-  }
-  @keyframes flap {
-    0%, 62%, 100% { transform: scaleX(1); }
-    70% { transform: scaleX(0.3); }
-    78% { transform: scaleX(1); }
-    85% { transform: scaleX(0.55); }
-    92% { transform: scaleX(1); }
-  }
-  @media (prefers-reduced-motion: reduce) { .tile.is-sel .side { animation: none; } }
 
   /* ---- panel ---- */
   #panel {
@@ -244,13 +230,42 @@ function renderTile(i) {
 
 function select(i) {
   if (i < 0 || i >= plate.items.length) return;
-  grid.children[plate.sel]?.classList.remove("is-sel");
+  const old = grid.children[plate.sel];
+  old?.classList.remove("is-sel");
+  old?.querySelectorAll(".side").forEach((el) => el.removeAttribute("transform"));
   plate.sel = i;
   grid.children[i]?.classList.add("is-sel");
+  flapStart = performance.now();
   grid.children[i]?.scrollIntoView({ block: "nearest" });
   syncPanel();
   persist();
 }
+
+/* The selected specimen flaps: two beats, then a rest. Driven through the SVG
+ * `transform` attribute, whose pivot is the group's local origin, i.e. the
+ * body midline. CSS transform-origin on SVG is unreliable here: fill-box
+ * includes the oversized clipped pattern shapes, and WebKit resolves the
+ * origin inconsistently, so wings would pivot off the body. */
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const beat = (p) => (1 - Math.cos(p * Math.PI * 2)) / 2;
+let flapStart = performance.now(), lastFlap = "";
+function flapFrame(now) {
+  const sides = grid.children[plate.sel]?.querySelectorAll(".side");
+  if (sides?.length) {
+    const t = ((now - flapStart) / 1000) % 3.6;
+    let k = 1;
+    if (t < 0.55) k = 1 - 0.7 * beat(t / 0.55);
+    else if (t < 1) k = 1 - 0.4 * beat((t - 0.55) / 0.45);
+    const v = k === 1 ? "" : `scale(${k.toFixed(3)} 1)`;
+    // Rewrite on change, or when the tile was just re-rendered.
+    if (v !== lastFlap || sides[0].getAttribute("transform") !== (v || null)) {
+      for (const el of sides) v ? el.setAttribute("transform", v) : el.removeAttribute("transform");
+      lastFlap = v;
+    }
+  }
+  requestAnimationFrame(flapFrame);
+}
+if (!reduceMotion) requestAnimationFrame(flapFrame);
 
 // Size tiles in pixels from the plate width.
 new ResizeObserver(() => {

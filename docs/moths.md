@@ -25,10 +25,11 @@ const { name, latin } = describe(spec);         // "Coral-banded Carpet", "Geome
 - `fit: "plate"` uses a fixed `PLATE` box (220×185 units), so a small white
   butterfly stays small next to a big silk moth. Tiles should use that aspect.
 - Each call uses unique clip-path ids, so many specimens can share one page.
-- Wings are in `<g class="side">` groups, one per side and each pivoting at
-  the body. The tool flaps the selected specimen with a CSS `scaleX` keyframe
-  on `.side`; `transform-box: fill-box; transform-origin: 0% 50%` hinges it at
-  the body.
+- Wings are in `<g class="side">` groups, one per side, whose local origin
+  is the body midline. To flap, set the SVG attribute
+  `transform="scale(k 1)"` on both groups (the tool does this per frame).
+  Don't use CSS `transform-origin`: `fill-box` counts the oversized clipped
+  pattern shapes, so the pivot lands off the body.
 
 ## The spec (store this, not the SVG)
 
