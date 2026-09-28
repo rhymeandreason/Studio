@@ -103,9 +103,15 @@ body {
     background: transparent;
 }
 
-.btn-icon-only:hover{
-    color:var(--window-color);
-    background:var(--text);
+/* Hover = a saturated, slightly deeper take on the bar's tint: the main
+   window's --project-color, else a tool's --titlebar-tint (what its bar
+   actually shows; the editors retint only this), else --window-color
+   (always set — tokens.css defaults it to paper). */
+.btn-icon-only:hover {
+    --btn-tint: var(--project-color, var(--titlebar-tint, var(--window-color)));
+    color: var(--text);
+    background: oklch(from var(--btn-tint) calc(l - 0.08) calc(c * 2.2) h);
+    border-color: transparent;
 }
 
 /* Close dot — small round button standing in for the macOS traffic lights on

@@ -73,7 +73,7 @@ body {
 
 /* Top control row (also the drag strip — the window has no traffic lights, and
    uses titleBarStyle: Overlay so content runs to the top edge). Close + back at
-   the left, the action buttons at the right; the project name sits below it. */
+   the left, the action buttons at the right, the project name centered. */
 .projhead__bar {
     display: flex;
     align-items: center;
@@ -95,6 +95,7 @@ body {
     justify-content: space-between;
     gap: 10px;
     padding: 8px 12px;
+    position: relative;   /* anchors the centered .projhead__name */
 }
 
 .projhead__row {
@@ -133,6 +134,13 @@ body {
     margin: 0;
     line-height: 1;
     white-space: nowrap;
+    /* Centered on the whole bar, independent of the side groups' widths. */
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100% - 200px);
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Pill buttons */
