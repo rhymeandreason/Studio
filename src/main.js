@@ -141,6 +141,14 @@ const projectsSelection = createSelection({
   onChange: () => repaintProjectsSelection(),
 });
 
+// OS file drops on the Projects overview land in the one selected card's
+// project (none selected, or several → the drop is ignored). state.activeProject
+// still holds the last-opened project here, so it must not be the target.
+state.overviewDropProject = () => {
+  const sel = projectsSelection.get();
+  return sel.length === 1 ? overviewProjects.find((p) => p.path === sel[0]) || null : null;
+};
+
 // Global manual project order (paths). Empty = sort by name.
 let projectOrder = [];
 

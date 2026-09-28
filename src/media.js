@@ -1135,10 +1135,16 @@ async function initDragDrop() {
     );
   };
 
+  // The project a drop lands in: the one the window is showing. On the
+  // Projects overview that's the selected card, not the last-opened project.
+  const dropProject = () =>
+    state.activePanel === "projects"
+      ? state.overviewDropProject?.()
+      : state.activeProject;
   const blocked = (e) =>
     state.draggingNoteId ||
     state.mediaDragActive ||
-    !state.activeProject ||
+    !dropProject() ||
     // The Claude panel takes drops itself (as chat attachments).
     state.activePanel === "claude" ||
     overFileDirectory(e && e.payload && e.payload.position);
@@ -1163,13 +1169,17 @@ async function initDragDrop() {
     if (blocked(e)) return;
     const paths = (e.payload && e.payload.paths) || [];
     if (!paths.length) return;
+    const project = dropProject();
     try {
       // Classify the drop (§8.1): images → media/, files → project root,
       // folders → Workspace entries (referenced in place).
       const res = await invoke("handle_dropped_paths", {
-        projectPath: state.activeProject.path,
+        projectPath: project.path,
         paths,
       });
+      // Dropped onto a card on the Projects overview: filed away, nothing to
+      // switch to (the Workspace/Media panels belong to another project).
+      if (project !== state.activeProject) return;
       if (res.folders.length) {
         res.folders.forEach((f) => addRow("folders", f));
         scheduleWorkspaceSave();
