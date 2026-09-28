@@ -226,7 +226,7 @@
     import { initDevInspect } from "../devinspect.js";
     import { renderSlide as renderSlideBase, colorScheme, SCHEMES, HEADING_DEFAULT, loadPresets } from "../deck/render.js";
     import { renderDiagram } from "../diagram/render.js";
-    import { hasTauri, invoke, listen, listenHere, esc } from "../kit/app.js";
+    import { hasTauri, invoke, listen, esc } from "../kit/app.js";
     const marked = window.marked;
 
     // ---------- Layouts ----------
@@ -1074,9 +1074,9 @@
     // current slide. The OS drop overlay is handled by Tauri's drag-drop event.
     function initImageImport(){
       if (!hasTauri) return;
-      listenHere("tauri://drag-enter", () => document.body.classList.add("dropping"));
-      listenHere("tauri://drag-leave", () => document.body.classList.remove("dropping"));
-      listenHere("tauri://drag-drop", async (e) => {
+      listen("tauri://drag-enter", () => document.body.classList.add("dropping"));
+      listen("tauri://drag-leave", () => document.body.classList.remove("dropping"));
+      listen("tauri://drag-drop", async (e) => {
         document.body.classList.remove("dropping");
         if (!projectRoot) { statusEl.textContent = "Save the deck first so images have a project to import into."; return; }
         const paths = (e.payload && e.payload.paths) || [];

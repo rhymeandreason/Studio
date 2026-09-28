@@ -443,7 +443,7 @@ max-width:350px;
   <div id="fd-menu" hidden></div>
 
   <script type="module">
-    import { hasTauri, invoke, listen, listenHere, dragFilesOut, toast, esc } from '../kit/app.js';
+    import { hasTauri, invoke, listen, dragFilesOut, toast, esc } from '../kit/app.js';
 
     const tree = document.getElementById('tree');
 
@@ -1591,12 +1591,19 @@ max-width:350px;
     main();
 
     if (hasTauri) {
-      listenHere('tauri://drag-over', (e) => {
+      // Embedded as Studio's Files tab, this page borrows the main window's
+      // Tauri and hears every drop on it — even while another tab (Media,
+      // Settings…) is showing and this frame is hidden. Only act when visible,
+      // or a drop meant for Media gets moved into whatever row sits there.
+      const showing = () => !window.frameElement || window.frameElement.offsetParent != null;
+      listen('tauri://drag-over', (e) => {
+        if (!showing()) return;
         const { x, y } = toCss(e.payload.position);
         highlightDrop(dropDirAt(x, y));
       });
-      listenHere('tauri://drag-leave', clearDrop);
-      listenHere('tauri://drag-drop', async (e) => {
+      listen('tauri://drag-leave', clearDrop);
+      listen('tauri://drag-drop', async (e) => {
+        if (!showing()) return;
         const { x, y } = toCss(e.payload.position);
         const dir = dropDirAt(x, y);
         clearDrop();
