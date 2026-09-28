@@ -122,8 +122,8 @@ const MOTH_BODY = { thW: 6.5, thH: 9, abLen: [26, 34], abW: 5.4, headR: 4.4, fuz
 export const FAMILIES = {
     brushfoot: {
         label: "Brush-foot", moth: false, weight: 3,
-        fw: { a0: [-44, -32], a1: [16, 30], L: [78, 90], tornus: [0.58, 0.68], bulge: [0, 0.08], costa: [0.03, 0.07], falcate: [0, 0.04], inner: [0, 0.04], round: 2 },
-        hw: { a0: [-8, 4], a1: [92, 106], L: [50, 60], tornus: [0.62, 0.78], bulge: [0.06, 0.14], scallop: [0, 0.035], scallopN: [5, 8], round: 2 },
+        fw: { tip: [0.16, 0.24], heel: [0.12, 0.2], a0: [-44, -32], a1: [16, 30], L: [78, 90], tornus: [0.58, 0.68], bulge: [0, 0.08], costa: [0.03, 0.07], falcate: [0, 0.04], inner: [0, 0.04], round: 2 },
+        hw: { tip: [0.22, 0.32], heel: [0.14, 0.22], a0: [-8, 4], a1: [92, 106], L: [50, 60], tornus: [0.62, 0.78], bulge: [0.06, 0.14], scallop: [0, 0.035], scallopN: [5, 8], round: 2 },
         body: BUTTERFLY_BODY,
         recipes: { monarch: 3, eyed: 2, bordered: 3, twotone: 2, banded: 2, spotted: 2 },
         nouns: ["Admiral", "Fritillary", "Lady", "Emperor", "Checkerspot", "Buckeye", "Brush-foot"],
@@ -131,8 +131,8 @@ export const FAMILIES = {
     },
     swallowtail: {
         label: "Swallowtail", moth: false, weight: 2,
-        fw: { a0: [-40, -30], a1: [12, 22], L: [86, 96], tornus: [0.52, 0.6], bulge: [-0.02, 0.04], costa: [0.03, 0.06], falcate: [0, 0.02], inner: [0, 0.03], round: 1 },
-        hw: { a0: [6, 16], a1: [98, 108], L: [50, 58], tornus: [0.78, 0.9], bulge: [0.02, 0.07], scallop: [0.04, 0.07], scallopN: [5, 7], tail: { t: [0.52, 0.62], len: [0.4, 0.6], w: [0.03, 0.042] }, round: 1 },
+        fw: { tip: [0.12, 0.18], heel: [0.1, 0.16], a0: [-40, -30], a1: [12, 22], L: [86, 96], tornus: [0.52, 0.6], bulge: [-0.02, 0.04], costa: [0.03, 0.06], falcate: [0, 0.02], inner: [0, 0.03], round: 1 },
+        hw: { tip: [0.18, 0.26], heel: [0.08, 0.12], a0: [6, 16], a1: [98, 108], L: [50, 58], tornus: [0.78, 0.9], bulge: [0.02, 0.07], scallop: [0.04, 0.07], scallopN: [5, 7], tail: { t: [0.52, 0.62], len: [0.4, 0.6], w: [0.03, 0.042] }, round: 1 },
         body: BUTTERFLY_BODY,
         recipes: { monarch: 2, bordered: 3, banded: 2, twotone: 1, eyed: 1 },
         nouns: ["Swallowtail", "Kite", "Birdwing"],
@@ -140,8 +140,8 @@ export const FAMILIES = {
     },
     morpho: {
         label: "Morpho", moth: false, weight: 1.5,
-        fw: { a0: [-40, -34], a1: [22, 32], L: [88, 98], tornus: [0.66, 0.74], bulge: [0.04, 0.09], costa: [0.05, 0.08], round: 2 },
-        hw: { a0: [0, 8], a1: [94, 104], L: [56, 64], tornus: [0.66, 0.78], bulge: [0.1, 0.16], scallop: [0.01, 0.03], scallopN: [6, 9], round: 2 },
+        fw: { tip: [0.2, 0.28], heel: [0.14, 0.22], a0: [-40, -34], a1: [22, 32], L: [88, 98], tornus: [0.66, 0.74], bulge: [0.04, 0.09], costa: [0.05, 0.08], round: 2 },
+        hw: { tip: [0.26, 0.36], heel: [0.16, 0.24], a0: [0, 8], a1: [94, 104], L: [56, 64], tornus: [0.66, 0.78], bulge: [0.1, 0.16], scallop: [0.01, 0.03], scallopN: [6, 9], round: 2 },
         body: BUTTERFLY_BODY,
         recipes: { morpho: 4, bordered: 1, eyed: 1, spotted: 1 },
         nouns: ["Morpho", "Blue", "Glasswing"],
@@ -149,8 +149,8 @@ export const FAMILIES = {
     },
     pierid: {
         label: "White & Sulphur", moth: false, weight: 1.5,
-        fw: { a0: [-46, -38], a1: [24, 34], L: [66, 76], tornus: [0.66, 0.76], bulge: [0.08, 0.14], costa: [0.04, 0.07], round: 3 },
-        hw: { a0: [0, 10], a1: [96, 106], L: [44, 52], tornus: [0.7, 0.82], bulge: [0.12, 0.18], round: 3 },
+        fw: { tip: [0.24, 0.32], heel: [0.16, 0.24], a0: [-46, -38], a1: [24, 34], L: [66, 76], tornus: [0.66, 0.76], bulge: [0.08, 0.14], costa: [0.04, 0.07], round: 3 },
+        hw: { tip: [0.28, 0.38], heel: [0.18, 0.26], a0: [0, 10], a1: [96, 106], L: [44, 52], tornus: [0.7, 0.82], bulge: [0.12, 0.18], round: 3 },
         body: { ...BUTTERFLY_BODY, abLen: [26, 32], antLen: [30, 36] },
         recipes: { tip: 3, spotted: 2, bordered: 2, monarch: 1 },
         nouns: ["White", "Sulphur", "Orangetip", "Jezebel", "Brimstone"],
@@ -158,8 +158,8 @@ export const FAMILIES = {
     },
     silk: {
         label: "Silk Moth", moth: true, weight: 2,
-        fw: { a0: [-24, -12], a1: [30, 42], L: [84, 96], tornus: [0.62, 0.72], bulge: [-0.02, 0.05], costa: [0.02, 0.05], falcate: [0.04, 0.1], round: 1 },
-        hw: { a0: [8, 20], a1: [100, 112], L: [58, 68], tornus: [0.66, 0.8], bulge: [0.08, 0.16], round: 2 },
+        fw: { tip: [0.15, 0.22], heel: [0.12, 0.2], a0: [-24, -12], a1: [30, 42], L: [84, 96], tornus: [0.62, 0.72], bulge: [-0.02, 0.05], costa: [0.02, 0.05], falcate: [0.04, 0.1], round: 1 },
+        hw: { tip: [0.24, 0.34], heel: [0.16, 0.24], a0: [8, 20], a1: [100, 112], L: [58, 68], tornus: [0.66, 0.8], bulge: [0.08, 0.16], round: 2 },
         body: MOTH_BODY,
         recipes: { eyed: 4, banded: 2, twotone: 2 },
         nouns: ["Emperor", "Silk Moth", "Atlas", "Royal Moth"],
@@ -167,8 +167,8 @@ export const FAMILIES = {
     },
     luna: {
         label: "Moon Moth", moth: true, weight: 1.5,
-        fw: { a0: [-26, -16], a1: [26, 36], L: [70, 80], tornus: [0.62, 0.72], bulge: [0, 0.05], costa: [0.02, 0.04], falcate: [0.03, 0.08], round: 1 },
-        hw: { a0: [14, 24], a1: [88, 98], L: [46, 54], tornus: [0.62, 0.72], bulge: [0.04, 0.1], tail: { t: [0.7, 0.8], len: [1.1, 1.5], w: [0.07, 0.1] }, round: 2 },
+        fw: { tip: [0.16, 0.24], heel: [0.12, 0.18], a0: [-26, -16], a1: [26, 36], L: [70, 80], tornus: [0.62, 0.72], bulge: [0, 0.05], costa: [0.02, 0.04], falcate: [0.03, 0.08], round: 1 },
+        hw: { tip: [0.2, 0.3], heel: [0.1, 0.16], a0: [14, 24], a1: [88, 98], L: [46, 54], tornus: [0.62, 0.72], bulge: [0.04, 0.1], tail: { t: [0.7, 0.8], len: [1.1, 1.5], w: [0.07, 0.1] }, round: 2 },
         body: MOTH_BODY,
         recipes: { eyed: 3, bordered: 2, banded: 1 },
         nouns: ["Moon Moth", "Comet Moth", "Luna"],
@@ -176,8 +176,8 @@ export const FAMILIES = {
     },
     tiger: {
         label: "Tiger Moth", moth: true, weight: 3,
-        fw: { a0: [30, 42], a1: [72, 82], L: [78, 90], tornus: [0.82, 0.92], bulge: [0.02, 0.08], costa: [0.02, 0.05], round: 1 },
-        hw: { a0: [12, 22], a1: [70, 84], L: [56, 66], tornus: [0.8, 0.9], bulge: [0.06, 0.12], round: 2 },
+        fw: { tip: [0.14, 0.22], heel: [0.14, 0.22], a0: [30, 42], a1: [72, 82], L: [78, 90], tornus: [0.82, 0.92], bulge: [0.02, 0.08], costa: [0.02, 0.05], round: 1 },
+        hw: { tip: [0.22, 0.32], heel: [0.16, 0.24], a0: [12, 22], a1: [70, 84], L: [56, 66], tornus: [0.8, 0.9], bulge: [0.06, 0.12], round: 2 },
         body: { ...MOTH_BODY, antenna: ["feather", "thread"] },
         recipes: { tiger: 4, ermine: 2, squiggle: 2, dashes: 2, banded: 1 },
         nouns: ["Tiger Moth", "Footman", "Ermine", "Arctiid", "Tussock"],
@@ -185,8 +185,8 @@ export const FAMILIES = {
     },
     hawk: {
         label: "Hawk-moth", moth: true, weight: 2,
-        fw: { a0: [38, 50], a1: [60, 70], L: [80, 92], tornus: [0.55, 0.64], bulge: [0.02, 0.06], costa: [0.03, 0.05], falcate: [0, 0.04], round: 1 },
-        hw: { a0: [30, 40], a1: [78, 90], L: [44, 52], tornus: [0.72, 0.85], bulge: [0.06, 0.12], round: 2 },
+        fw: { tip: [0.14, 0.2], heel: [0.1, 0.16], a0: [38, 50], a1: [60, 70], L: [80, 92], tornus: [0.55, 0.64], bulge: [0.02, 0.06], costa: [0.03, 0.05], falcate: [0, 0.04], round: 1 },
+        hw: { tip: [0.22, 0.3], heel: [0.14, 0.2], a0: [30, 40], a1: [78, 90], L: [44, 52], tornus: [0.72, 0.85], bulge: [0.06, 0.12], round: 2 },
         body: { ...MOTH_BODY, thW: 8, thH: 11, abLen: [44, 52], abW: 7.5, headR: 5, antenna: ["thread"], antLen: [22, 28] },
         recipes: { rays: 3, banded: 2, twotone: 2, dashes: 1 },
         nouns: ["Hawk-moth", "Sphinx", "Hummingbird Moth"],
@@ -194,8 +194,8 @@ export const FAMILIES = {
     },
     geometer: {
         label: "Geometer", moth: true, weight: 2,
-        fw: { a0: [-12, 0], a1: [28, 38], L: [72, 84], tornus: [0.55, 0.66], bulge: [0.02, 0.06], costa: [0.03, 0.05], falcate: [0, 0.04], round: 1 },
-        hw: { a0: [28, 38], a1: [98, 108], L: [44, 52], tornus: [0.72, 0.84], bulge: [0.06, 0.12], scallop: [0, 0.03], scallopN: [7, 10], round: 2 },
+        fw: { tip: [0.17, 0.25], heel: [0.14, 0.2], a0: [-12, 0], a1: [28, 38], L: [72, 84], tornus: [0.55, 0.66], bulge: [0.02, 0.06], costa: [0.03, 0.05], falcate: [0, 0.04], round: 1 },
+        hw: { tip: [0.24, 0.34], heel: [0.16, 0.24], a0: [28, 38], a1: [98, 108], L: [44, 52], tornus: [0.72, 0.84], bulge: [0.06, 0.12], scallop: [0, 0.03], scallopN: [7, 10], round: 2 },
         body: { ...MOTH_BODY, thW: 5, abW: 4.2, antenna: ["feather", "thread"] },
         recipes: { banded: 3, squiggle: 2, ermine: 1, eyed: 1, spotted: 1 },
         nouns: ["Carpet", "Wave", "Looper", "Emerald", "Pug"],
@@ -240,6 +240,34 @@ function thin(pts, min) {
 }
 const poly = (pts, close = true) => "M" + pts.map((p) => f1(p[0]) + " " + f1(p[1])).join("L") + (close ? "Z" : "");
 
+/** Replace the corner at pts[i] with a near-circular cubic arc that starts
+ *  `rad` back along the outline on each side (arc length, capped by the ends). */
+function roundCorner(pts, i, rad) {
+    if (!(rad > 0)) return pts;
+    const walk = (dir) => {
+        let j = i, d = 0;
+        while (j + dir > 0 && j + dir < pts.length - 1) {
+            const step = Math.hypot(pts[j + dir][0] - pts[j][0], pts[j + dir][1] - pts[j][1]);
+            if (d + step >= rad) break;
+            d += step; j += dir;
+        }
+        return j;
+    };
+    const ia = walk(-1), ib = walk(1);
+    const A = pts[ia], B = pts[ib], C = pts[i], k = 0.55;
+    const c1 = [A[0] + (C[0] - A[0]) * k, A[1] + (C[1] - A[1]) * k];
+    const c2 = [B[0] + (C[0] - B[0]) * k, B[1] + (C[1] - B[1]) * k];
+    const arc = [];
+    for (let n = 1; n < 12; n++) {
+        const t = n / 12, u = 1 - t;
+        arc.push([
+            u * u * u * A[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * B[0],
+            u * u * u * A[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * B[1],
+        ]);
+    }
+    return [...pts.slice(0, ia + 1), ...arc, ...pts.slice(ib)];
+}
+
 /** Build one wing: outline path + the fan() coordinate map patterns use. */
 function makeWing(o) {
     const A0 = o.a0 * DEG, A1 = o.a1 * DEG, L = o.L;
@@ -277,6 +305,11 @@ function makeWing(o) {
         ...margin,
         ...quad(tornus, bow(tornus, rb, o.inner), rb, 12),
     ];
+    // Round the apex and tornus with a real radius. Chaikin alone barely
+    // touches a corner between densely sampled edges.
+    const tornusAt = 12 + N;
+    outline = roundCorner(outline, tornusAt, o.heel * L);
+    outline = roundCorner(outline, 12, o.tip * L);
     outline = thin(chaikin(outline, o.round), 1.1);
 
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -293,6 +326,8 @@ function resolveWing(ranges, r, isFw) {
     o.scallopN = Math.round(rr(r, ranges.scallopN) || 6);
     o.round = ranges.round ?? 2;
     if (ranges.tail) o.tail = { t: rr(r, ranges.tail.t), len: rr(r, ranges.tail.len), w: rr(r, ranges.tail.w) };
+    o.tip = rr(r, ranges.tip ?? [0.12, 0.18]);   // apex corner radius, × L
+    o.heel = rr(r, ranges.heel ?? [0.1, 0.16]);  // tornus corner radius, × L
     o.origin = isFw ? [2, -4] : [2, 3];
     o.rootFront = isFw ? [1.5, -9] : [1.5, -2];
     o.rootBack = isFw ? [1.5, 0] : [1.5, 9];

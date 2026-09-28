@@ -53,7 +53,9 @@ follow color edits ("Mint Emperor" turns into "Coral Emperor").
 Each wing is a **fan** out from its root at the body. A margin function
 `r(t)` gives the outer edge for `t ∈ [0,1]`, running from the apex to the
 tornus. It has a bulge, a falcate (hooked) apex, a scalloped edge, and tails
-as lobes. `fan(t, f)` maps a position along the margin and a fraction out from
+as lobes. The apex and tornus corners are then rounded with a real
+radius (`tip` / `heel`, as a fraction of wing length, set per family). The
+references have soft, rounded tips, and smoothing alone leaves them sharp. `fan(t, f)` maps a position along the margin and a fraction out from
 the root to a point. Every pattern layer is written in those coordinates and
 clipped to the wing, so any pattern fits any silhouette:
 
