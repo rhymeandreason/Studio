@@ -510,7 +510,7 @@ fn list_tools(app: AppHandle) -> Vec<SpotlightTool> {
 
 /// Nominal logical sizes of the two overlay launchers, clamped per-display by
 /// `place_overlay`.
-const SPOTLIGHT_SIZE: (f64, f64) = (640.0, 460.0);
+const SPOTLIGHT_SIZE: (f64, f64) = (900.0, 660.0);
 const MODE_SWITCHER_SIZE: (f64, f64) = (960.0, 690.0);
 
 /// Size + center one of the transparent overlay launchers (Spotlight, Mode
@@ -535,8 +535,11 @@ fn place_overlay(app: &AppHandle, win: &tauri::WebviewWindow, w: f64, h: f64) {
     let h = h.min(avail_h.max(240.0));
 
     let _ = win.set_size(tauri::LogicalSize::new(w, h));
-    let x = area.position.x as f64 + (area.size.width as f64 - w * scale) / 2.0;
-    let y = area.position.y as f64 + (area.size.height as f64 - h * scale) / 2.0;
+    // Center on the whole screen, not the work area (menu bar + Studio Dock
+    // would pull it off-center).
+    let (pos, size) = (monitor.position(), monitor.size());
+    let x = pos.x as f64 + (size.width as f64 - w * scale) / 2.0;
+    let y = pos.y as f64 + (size.height as f64 - h * scale) / 2.0;
     let _ = win.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
 }
 

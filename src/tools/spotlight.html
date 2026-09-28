@@ -29,8 +29,9 @@
     position: fixed;
     top: 50%;
     left: 50%;
-    width: min(620px, 96vw);
-    height: min(540px, 117vh);
+    /* Regular hexagon: height = width * √3/2; width capped so it fits both axes. */
+    width: min(620px, 96vw, 112vh);
+    aspect-ratio: 2 / 1.732;
     transform: translate(-50%, -50%);
     background: #0047ab;
     clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
@@ -93,16 +94,17 @@
 
     const listEl = document.getElementById('list');
 
-    // Drive window size from JS so it can be tuned with a reload (no restart).
-    const { LogicalSize } = window.__TAURI__.dpi;
-    win.setSize(new LogicalSize(900, 660)).then(() => win.center()).catch(() => {});
-
+    // Curated launcher list, in display order (filenames in src/tools/).
+    const PINNED = [
+      'window-size.html', 'browser-frame.html', 'color-picker.html',
+      'image-editor.html', 'instagram-saved.html', 'mycelium.html',
+    ];
     let tools = [];
     let activeIndex = 0;
 
     async function loadTools() {
-      tools = await invoke('list_tools').catch(() => []);
-      tools.sort((a, b) => a.name.localeCompare(b.name));
+      const all = await invoke('list_tools').catch(() => []);
+      tools = PINNED.map(f => all.find(t => t.file === f)).filter(Boolean);
       activeIndex = 0;
       render();
     }
@@ -170,7 +172,7 @@
 
     // Built once, then hidden/shown — pull fresh tools each time it opens.
     // Re-center on show in case window-state restored an old position.
-    listen('spotlight-shown', () => { loadTools(); win.center(); });
+    listen('spotlight-shown', () => loadTools());
     window.addEventListener('focus', focusActive);
 
     loadTools();
