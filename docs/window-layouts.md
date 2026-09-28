@@ -6,6 +6,15 @@ concept / not built.** This captures the direction for what the
 > button that opens apps without placing them) is a degenerate first draft of
 > the idea below. Nothing here is implemented yet.
 
+> **What actually shipped for the laptop:** despite "no reflow" below, one
+> layout per mode *is* scaled proportionally when played on a different
+> screen — authoring two versions of every mode was too much friction. Each
+> recorded window stores its screen's work area (`WindowSnapshot.screen`);
+> `fit_layout_to_screens` (lib.rs) + `src-tauri/src/screens.rs` map it onto the
+> best current screen and clamp it fully visible. Separately, a display
+> watcher pulls Studio's own windows back on screen when a display is
+> unplugged.
+
 ## The reframe
 
 Workspace was never meant to be a bookmark launcher. The actual want is a

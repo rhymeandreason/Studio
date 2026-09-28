@@ -3,6 +3,7 @@ mod files;
 mod git;
 mod instagram;
 mod patchmatch;
+mod screens;
 
 use dock::{
     dock_open_settings, dock_set_volume, dock_status, dock_toggle_mute, dock_toggle_wifi,
@@ -206,6 +207,12 @@ struct WindowSnapshot {
     /// replayed through its own builder. Missing/absent = "plain".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     tool_kind: Option<String>,
+    /// Work area (logical points) of the screen this window was on at record
+    /// time, so replay on a different screen can scale the frame
+    /// proportionally (see screens.rs). Absent on layouts recorded before it
+    /// existed — those fall back to the layout's bounding box.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    screen: Option<screens::Rect>,
 }
 
 /// label → (file, query, kind) for every tool window opened this session, so
@@ -3049,6 +3056,7 @@ const STUDIO_APP: &str = "Studio";
 fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
     let git_windows = read_git_windows(app);
     let tool_windows = tool_windows_store().lock().unwrap().clone();
+    let screen_areas = screens::work_areas(app);
     app.webview_windows()
         .into_iter()
         .filter(|(_, win)| win.is_visible().unwrap_or(false))
@@ -3061,6 +3069,13 @@ fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
             // set_size(), which sets the inner (content) size — pairing it
             // with outer_size would re-add the title bar height on restore.
             let size = win.inner_size().ok()?;
+            let scale = win.scale_factor().unwrap_or(2.0);
+            let points = screens::Rect {
+                x: pos.x as f64 / scale,
+                y: pos.y as f64 / scale,
+                w: size.width as f64 / scale,
+                h: size.height as f64 / scale,
+            };
             let git = git_windows.iter().find(|w| git_label(&w.repo) == label);
             let tool = tool_windows.get(&label);
             Some(WindowSnapshot {
@@ -3075,6 +3090,7 @@ fn studio_window_snapshots(app: &AppHandle) -> Vec<WindowSnapshot> {
                 tool_file: tool.map(|(file, _, _)| file.clone()),
                 tool_query: tool.and_then(|(_, query, _)| query.clone()),
                 tool_kind: tool.map(|(_, _, kind)| kind.clone()),
+                screen: screens::screen_of(&points, &screen_areas),
             })
         })
         .collect()
@@ -3094,8 +3110,82 @@ fn list_windows(app: AppHandle) -> Result<Vec<WindowSnapshot>, String> {
     }
     let mut snapshots: Vec<WindowSnapshot> =
         serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())?;
+    let areas = screens::work_areas(&app);
+    for w in &mut snapshots {
+        w.screen = screens::screen_of(&snapshot_rect(w), &areas);
+    }
     snapshots.extend(studio_window_snapshots(&app));
     Ok(snapshots)
+}
+
+/// A snapshot's frame in logical points. Studio's own snapshots are stored
+/// in physical pixels (Tauri's outer_position/inner_size) — converted with
+/// the primary display's scale, which matches every Retina Mac setup;
+/// everything else (winlayout/AX) is already in points.
+fn snapshot_rect(w: &WindowSnapshot) -> screens::Rect {
+    screens::Rect { x: w.x as f64, y: w.y as f64, w: w.w as f64, h: w.h as f64 }
+}
+
+/// Studio windows keep at least this width (logical points) when a layout
+/// is scaled down onto a smaller screen.
+const STUDIO_MIN_FIT_W: f64 = 350.0;
+
+/// Rewrite a layout so every window lands fully on a screen attached now:
+/// windows recorded on a screen that's gone are scaled proportionally onto
+/// the best current one (screens.rs). Returns all frames in logical points —
+/// Studio's own entries are placed with Logical sizes by `place_studio_window`.
+fn fit_layout_to_screens(app: &AppHandle, mut layout: Vec<WindowSnapshot>) -> Vec<WindowSnapshot> {
+    let studio_scale = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| m.scale_factor())
+        .unwrap_or(2.0);
+    let rects: Vec<screens::Rect> = layout
+        .iter()
+        .map(|w| {
+            let r = snapshot_rect(w);
+            if w.app == STUDIO_APP {
+                screens::Rect {
+                    x: r.x / studio_scale,
+                    y: r.y / studio_scale,
+                    w: r.w / studio_scale,
+                    h: r.h / studio_scale,
+                }
+            } else {
+                r
+            }
+        })
+        .collect();
+    let areas = screens::work_areas(app);
+    // Legacy layouts (no per-window screen): if everything already fits on
+    // the current screens, leave it; otherwise treat the whole arrangement's
+    // bounding box as the screen it was authored on and scale it as a unit.
+    let all_fit = rects.iter().all(|r| areas.iter().any(|a| r.clamp_into(a) == *r));
+    let legacy_src = if all_fit { None } else { screens::bounds(&rects) };
+    for (w, r) in layout.iter_mut().zip(&rects) {
+        let Some(src) = w.screen.or(legacy_src) else {
+            // Legacy + already fits: keep as recorded (still converted to points).
+            w.x = r.x.round() as i32;
+            w.y = r.y.round() as i32;
+            w.w = r.w.round() as i32;
+            w.h = r.h.round() as i32;
+            continue;
+        };
+        let min_w = if w.app == STUDIO_APP { STUDIO_MIN_FIT_W } else { 0.0 };
+        let f = screens::fit(r, &src, &areas, min_w);
+        w.x = f.x.round() as i32;
+        w.y = f.y.round() as i32;
+        w.w = f.w.round() as i32;
+        w.h = f.h.round() as i32;
+    }
+    layout
+}
+
+/// Move/resize one of Studio's own windows to a (fitted, logical) snapshot.
+fn place_studio_window(win: &tauri::WebviewWindow, target: &WindowSnapshot) {
+    let _ = win.set_position(tauri::LogicalPosition::new(target.x, target.y));
+    let _ = win.set_size(tauri::LogicalSize::new(target.w.max(0), target.h.max(0)));
 }
 
 /// Restore a saved window layout: move/resize/un-minimize each window in
@@ -3112,6 +3202,7 @@ fn list_windows(app: AppHandle) -> Result<Vec<WindowSnapshot>, String> {
 fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<(), String> {
     use std::io::Write;
 
+    let layout = fit_layout_to_screens(&app, layout);
     let (studio_targets, other_targets): (Vec<_>, Vec<_>) =
         layout.into_iter().partition(|w| w.app == STUDIO_APP);
 
@@ -3121,11 +3212,7 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
             matched_labels.insert(label);
             let _ = win.unminimize();
             let _ = win.show();
-            let _ = win.set_position(tauri::PhysicalPosition::new(target.x, target.y));
-            let _ = win.set_size(tauri::PhysicalSize::new(
-                target.w.max(0) as u32,
-                target.h.max(0) as u32,
-            ));
+            place_studio_window(&win, target);
         } else {
             // hide(), not minimize(): instant (no genie animation) and the
             // same "hide, don't quit" semantics the close button already
@@ -3194,11 +3281,7 @@ fn apply_window_layout(app: AppHandle, layout: Vec<WindowSnapshot>) -> Result<()
             continue;
         }
         if let Some(win) = app.get_webview_window(&target.title) {
-            let _ = win.set_position(tauri::PhysicalPosition::new(target.x, target.y));
-            let _ = win.set_size(tauri::PhysicalSize::new(
-                target.w.max(0) as u32,
-                target.h.max(0) as u32,
-            ));
+            place_studio_window(&win, target);
         }
     }
 
@@ -6441,6 +6524,9 @@ pub fn run() {
             }
 
             let handle = app.handle().clone();
+
+            // Unplugging a display: pull Studio's windows back on screen.
+            screens::start_display_watcher(handle.clone());
 
             // Option+Space opens/hides the Spotlight-style tool launcher.
             {
