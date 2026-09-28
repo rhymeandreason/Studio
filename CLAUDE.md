@@ -22,7 +22,9 @@ non-destructive image editor), notes, workspace, and artifacts.
 - Vendored & offline (never CDN): `src/vendor/` — `marked`, `coloris`,
   `motion-one`, Phosphor icons (`vendor/phosphor/`, stock regular + fill CSS/woff2).
 - Native Swift helpers via `build.rs`, run as subprocesses: `bgremove` (Vision),
-  `qlthumb`, `pbimage`, `winbounds` / `winowner` (CGWindowListCopyWindowInfo). WebP via the `webp` crate; HEIC via `sips`.
+  `qlthumb`, `pbimage`, `winbounds` / `winowner` (CGWindowListCopyWindowInfo),
+  `screenrec` (ScreenCaptureKit rect → .mov) + `webarea` (AX: a browser's page
+  rect, minus docked inspector) for Browser Frame. WebP via the `webp` crate; HEIC via `sips`.
 
 ## Run
 `npm install` then `npm run tauri dev`. macOS 14+ (Vision). Menu-bar app, no Dock

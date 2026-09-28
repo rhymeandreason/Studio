@@ -71,7 +71,41 @@
   .ratio.is-active { color: var(--text); border-color: var(--accent); background: var(--surface); }
   .ratio.is-active i { background: var(--accent); border-color: var(--accent); }
 
-  #go { width: 100%; justify-content: center; margin-top: auto; }
+  #actions { display: flex; align-items: center; gap: 10px; margin-top: auto; }
+  #go { flex: 1 1 auto; justify-content: center; }
+
+  /* Record: the tape-deck button from Workspace modes (a dot in a ring).
+     Red on hover; while recording the dot becomes a stop square and pulses. */
+  #rec {
+    --rec: #d9412f;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: var(--elevated);
+    border: 1.5px solid var(--hairline-strong);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  #rec i {
+    display: block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--text-soft);
+    transition: transform var(--dur-fast) var(--ease-standard), border-radius var(--dur-fast), background var(--dur-fast);
+  }
+  #rec:hover, #rec.is-live { border-color: var(--rec); box-shadow: 0 0 0 3px rgba(217, 65, 47, 0.14); }
+  #rec:hover i, #rec.is-live i { background: var(--rec); }
+  #rec:active i { transform: scale(0.85); }
+  #rec.is-live i { width: 10px; height: 10px; border-radius: 2px; animation: rec-pulse 0.8s ease-in-out infinite alternate; }
+  #rec:disabled { cursor: default; opacity: 0.6; }
+  @keyframes rec-pulse { to { opacity: 0.35; } }
 
   #status { min-height: 32px; font-size: 11px; line-height: 1.45; }
   #status b { font-weight: 600; color: var(--text); }
@@ -109,22 +143,28 @@
       </div>
     </div>
 
-    <button class="btn btn-primary" id="go"></button>
+    <div id="actions">
+      <button class="btn btn-primary" id="go"></button>
+      <button id="rec" title="Record the page area"><i></i></button>
+    </div>
     <div id="status" class="text-muted"></div>
   </div>
 
 <script type="module">
-  import { hasTauri, invoke } from "../kit/app.js";
+  import { hasTauri, invoke, esc } from "../kit/app.js";
 
   // ---- Persisted choices --------------------------------------------------
   const KEY = "browser-frame";
-  let prefs = { app: "Safari", ratio: "16:9", short: 1080, chrome: {} };
+  let prefs = { app: "Safari", ratio: "16:9", short: 1080 };
   try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch {}
   if (![720, 1080].includes(prefs.short)) prefs.short = 1080;
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {} };
+  const save = () => {
+    const { app, ratio, short } = prefs;
+    try { localStorage.setItem(KEY, JSON.stringify({ app, ratio, short })); } catch {}
+  };
 
   const $ = (s) => document.querySelector(s);
-  const goBtn = $("#go"), statusEl = $("#status");
+  const goBtn = $("#go"), recBtn = $("#rec"), statusEl = $("#status");
 
   function pick(groupSel, attr, value) {
     for (const b of document.querySelectorAll(`${groupSel} [data-${attr}]`)) {
@@ -150,126 +190,145 @@
   wire("#sizes", "short", "short", Number);
   render();
 
-  // ---- The work: runs inside osascript (JXA), not in this page ------------
-  // Serialized with toString(); P is prepended as a const. Sizes the browser's
-  // front window so its *page area* hits the ratio at the chosen size (in
-  // screen points — Retina records it at 2×),
-  // centered on whichever screen the window is on.
-  function frameBrowser() {
-    const app = Application(P.app);
-    if (!app.running()) return JSON.stringify({ error: `${P.app} isn’t running.` });
-    const w = app.windows[0];
-    if (!w.exists()) return JSON.stringify({ error: `No ${P.app} window is open.` });
-
-    // Page viewport in points. innerWidth * dpr / backingScale survives
-    // Chrome's page zoom (its dpr includes zoom); Safari needs 100% zoom.
-    const JS = 'window.innerWidth*devicePixelRatio+","+window.innerHeight*devicePixelRatio';
-    function page(scale) {
-      try {
-        const r = P.app === "Safari"
-          ? app.doJavaScript(JS, { in: w.currentTab() })
-          : w.activeTab().execute({ javascript: JS });
-        const [pw, ph] = String(r).split(",").map(Number);
-        return pw > 0 && ph > 0 ? { w: pw / scale, h: ph / scale } : null;
-      } catch (e) { return null; }
-    }
-
-    // Screens in top-left coords (the space window bounds use).
-    const screens = ObjC.unwrap($.NSScreen.screens);
-    const primaryH = screens[0].frame.size.height;
-    const flip = (f) => ({ x: f.origin.x, y: primaryH - f.origin.y - f.size.height, w: f.size.width, h: f.size.height });
-
-    const b = w.bounds();
-    const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
-    let scr = screens[0];
-    for (const s of screens) {
-      const f = flip(s.frame);
-      if (cx >= f.x && cx < f.x + f.w && cy >= f.y && cy < f.y + f.h) { scr = s; break; }
-    }
-    const vf = flip(scr.visibleFrame);
-    const scale = scr.backingScaleFactor;
-
-    // Browser chrome (tabs, toolbar) = window minus page. If the page can't
-    // be asked, reuse what a previous run measured; else size the window.
-    const p0 = page(scale);
-    const known = p0 ? { w: Math.round(b.width - p0.w), h: Math.round(b.height - p0.h) } : P.chrome;
-    const chromeW = known ? known.w : 0, chromeH = known ? known.h : 0;
-
-    // Target page size in points (the short side is P.short).
-    const [rw, rh] = P.ratio;
-    let unit = P.short / Math.min(rw, rh);
-    const maxUnit = Math.min((vf.w - chromeW) / rw, (vf.h - chromeH) / rh);
-    const fitted = unit > maxUnit;
-    if (fitted) unit = Math.floor(maxUnit * scale / 2) * 2 / scale;
-    const tw = Math.round(rw * unit), th = Math.round(rh * unit);
-
-    const set = (cw, ch) => {
-      const W = tw + cw, H = th + ch;
-      w.bounds = { x: Math.round(vf.x + (vf.w - W) / 2), y: Math.round(vf.y + (vf.h - H) / 2), width: W, height: H };
-    };
-    set(chromeW, chromeH);
-    // One correction pass: some chrome (Chrome's bookmark bar, Safari's tab
-    // bar) changes height as the window resizes.
-    let p1 = p0 ? page(scale) : null;
-    if (p1 && (Math.round(p1.w) !== tw || Math.round(p1.h) !== th)) {
-      set(chromeW + tw - Math.round(p1.w), chromeH + th - Math.round(p1.h));
-      p1 = page(scale);
-    }
-    const fb = w.bounds();
-    return JSON.stringify({
-      measured: !!p0, chrome: known || null, scale, fitted,
-      pageW: p1 ? Math.round(p1.w) : fb.width - chromeW,
-      pageH: p1 ? Math.round(p1.h) : fb.height - chromeH,
-    });
-  }
-
-  const JS_SETTING = {
-    "Safari": "Safari › Settings › Advanced › Show features for web developers, then Develop › Allow JavaScript from Apple Events",
-    "Google Chrome": "Chrome › View › Developer › Allow JavaScript from Apple Events",
-  };
-
   function show(html, warn = false) {
     statusEl.innerHTML = html;
     statusEl.classList.toggle("warn", warn);
   }
 
-  async function go() {
+  // ---- Measuring ----------------------------------------------------------
+  // `web_area` (the webarea Swift helper, AX API) returns the browser's front
+  // window, its page area (the web view minus any docked inspector) and the
+  // screen's visible frame — global points, top-left origin.
+  const probe = (opts = {}) => invoke("web_area", { app: prefs.app, ...opts });
+
+  // The page must stop short of the window's bottom edge, or its rounded
+  // corners clip the recording. A bottom-docked inspector fills that strip;
+  // Frame opens one (the helper's --inspector) when none is docked.
+  const CORNER = 24;
+  const clipsCorners = (m) => m.win.y + m.win.h - (m.page.y + m.page.h) < CORNER;
+  const DOCK = {
+    "Safari": "the dock-to-bottom button in the inspector's toolbar",
+    "Google Chrome": "DevTools' ⋮ menu › Dock side › bottom",
+  };
+  // m.inspector: docked in this window (then it's on the side); otherwise it
+  // opened in its own window.
+  const cornerHint = (m) =>
+    `The window's rounded corners will clip the bottom of the page — ${m.inspector
+      ? "the inspector is docked on the side"
+      : "the inspector opened in its own window"}. Dock it at the bottom (${DOCK[prefs.app]}), then Frame again.`;
+  const NO_PAGE = "Couldn't find the page — open a tab with a web page.";
+
+  // ---- Frame --------------------------------------------------------------
+  // Size the window so the page area is exactly the ratio at the chosen size
+  // (screen points — Retina records it at 2×), centered on its screen.
+  async function frame() {
     if (!hasTauri) return show("Needs Studio to run.", true);
-    const app = prefs.app;
-    const P = {
-      app,
-      ratio: prefs.ratio.split(":").map(Number),
-      short: prefs.short,
-      chrome: prefs.chrome[app] || null,
-    };
-    const script = `ObjC.import("AppKit");\nconst P = ${JSON.stringify(P)};\n${frameBrowser}\nfunction run() { return frameBrowser(); }`;
     goBtn.disabled = true;
     try {
-      const r = JSON.parse(await invoke("run_osascript", { script, jxa: true }));
-      if (r.error) return show(r.error, true);
-      if (r.measured) { prefs.chrome[app] = r.chrome; save(); }
+      let m = await probe({ activate: true, inspector: true });
+      if (!m.page) return show(NO_PAGE, true);
+      const cw = m.win.w - m.page.w, ch = m.win.h - m.page.h;
+      const s = m.screen;
 
-      const px = `${Math.round(r.pageW * r.scale)} × ${Math.round(r.pageH * r.scale)}`;
-      let msg = `Page <b>${r.pageW} × ${r.pageH}</b> pt · records <b>${px}</b>`;
-      if (r.fitted) msg += `<br>Shrunk to fit this screen.`;
-      if (!r.measured) {
-        msg += r.chrome
-          ? `<br>Used the last-measured toolbar size — couldn't ask this tab.`
-          : `<br>Sized the whole window. For the page area, turn on ${JS_SETTING[app]}.`;
+      const [rw, rh] = prefs.ratio.split(":").map(Number);
+      let unit = prefs.short / Math.min(rw, rh);
+      const maxUnit = Math.min((s.w - cw) / rw, (s.h - ch) / rh);
+      const fitted = unit > maxUnit;
+      if (fitted) unit = Math.floor(maxUnit * s.scale / 2) * 2 / s.scale;
+      const tw = Math.round(rw * unit), th = Math.round(rh * unit);
+
+      const place = (W, H) => probe({ frame: [s.x + (s.w - W) / 2, s.y + (s.h - H) / 2, W, H] });
+      m = await place(tw + cw, th + ch);
+      // One correction pass: some chrome (Safari's tab bar, Chrome's
+      // bookmarks bar) changes size as the window resizes.
+      if (m.page && (m.page.w !== tw || m.page.h !== th)) {
+        m = await place(m.win.w + tw - m.page.w, m.win.h + th - m.page.h);
       }
-      show(msg, !r.measured && !r.chrome);
+      if (!m.page) return show(NO_PAGE, true);
+
+      const { w, h } = m.page;
+      let msg = `Page <b>${w} × ${h}</b> pt · records <b>${w * s.scale} × ${h * s.scale}</b>`;
+      if (w !== tw || h !== th) msg += `<br>Couldn't hit ${tw} × ${th} exactly.`;
+      if (fitted) msg += "<br>Shrunk to fit this screen.";
+      const clipped = clipsCorners(m);
+      if (clipped) msg += `<br>${cornerHint(m)}`;
+      show(msg, clipped);
     } catch (e) {
-      const err = String(e);
-      show(/-1743|not allowed/i.test(err)
-        ? `Allow Studio to control ${app} in System Settings › Privacy & Security › Automation.`
-        : err, true);
+      show(esc(String(e)), true);
     } finally {
       goBtn.disabled = false;
     }
   }
 
-  goBtn.addEventListener("click", go);
-  document.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  // ---- Record -------------------------------------------------------------
+  // Records the page area wherever it is right now (screenrec helper,
+  // ScreenCaptureKit); the movie goes into the active project's media/.
+  let recStart = 0, recTimer = null, recNote = "";
+
+  async function moviePath() {
+    const project = await invoke("get_active_project").catch(() => null);
+    const d = new Date(), p = (n) => String(n).padStart(2, "0");
+    const name = `Screencap ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} at ${p(d.getHours())}.${p(d.getMinutes())}.${p(d.getSeconds())}.mov`;
+    return project?.path ? `${project.path}/media/${name}` : `~/Movies/${name}`;
+  }
+
+  function setLive(live) {
+    recBtn.classList.toggle("is-live", live);
+    recBtn.title = live ? "Stop recording" : "Record the page area";
+    goBtn.disabled = live;
+    clearInterval(recTimer);
+    if (!live) return;
+    const tick = () => {
+      const s = Math.floor((Date.now() - recStart) / 1000);
+      show(`<b>Recording</b> · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}${recNote}`, !!recNote);
+    };
+    tick();
+    recTimer = setInterval(tick, 500);
+  }
+
+  async function record() {
+    if (!hasTauri) return show("Needs Studio to run.", true);
+    recBtn.disabled = true;
+    try {
+      const m = await probe({ activate: true });
+      if (!m.page) return show(NO_PAGE, true);
+      const p = m.page;
+      await invoke("screenrec_start", { x: p.x, y: p.y, w: p.w, h: p.h, path: await moviePath() });
+      recNote = clipsCorners(m) ? `<br>${cornerHint(m)}` : "";
+      recStart = Date.now();
+      setLive(true);
+    } catch (e) {
+      show(/declined|TCC|permission/i.test(String(e)) && !/Accessibility/.test(String(e))
+        ? "Allow Studio in System Settings › Privacy & Security › Screen Recording, then restart Studio."
+        : esc(String(e)), true);
+    } finally {
+      recBtn.disabled = false;
+    }
+  }
+
+  async function stop() {
+    recBtn.disabled = true;
+    try {
+      const path = await invoke("screenrec_stop");
+      setLive(false);
+      show(`Saved <b>${esc(path.split("/").pop())}</b> · <a href="#" id="reveal">Show in Finder</a>`);
+      $("#reveal").addEventListener("click", (e) => { e.preventDefault(); invoke("reveal_in_finder", { path }); });
+    } catch (e) {
+      setLive(false);
+      show(esc(String(e)), true);
+    } finally {
+      recBtn.disabled = false;
+    }
+  }
+
+  recBtn.addEventListener("click", () => (recBtn.classList.contains("is-live") ? stop() : record()));
+  // Reopened mid-recording: pick the live state back up (timer restarts at 0).
+  if (hasTauri) invoke("screenrec_active").then((live) => { if (live) { recStart = Date.now(); setLive(true); } });
+
+  goBtn.addEventListener("click", frame);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !recBtn.classList.contains("is-live")) frame();
+  });
 </script>
 </body>
 </html>

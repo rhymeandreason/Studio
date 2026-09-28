@@ -109,6 +109,22 @@ fn main() {
     println!("cargo:rustc-env=CONTACTSDUMP_BIN={}", cd_bin.display());
     println!("cargo:rerun-if-changed={cd_src}");
 
+    // Browser page-area probe (AX API: window + web area frames, optional
+    // resize), for Browser Frame.
+    let wa_src = "swift/webarea.swift";
+    let wa_bin = Path::new(&out_dir).join("webarea");
+    swiftc(wa_src, &wa_bin, "macosx14.0");
+    println!("cargo:rustc-env=WEBAREA_BIN={}", wa_bin.display());
+    println!("cargo:rerun-if-changed={wa_src}");
+
+    // Screen-rect recorder (ScreenCaptureKit → H.264 .mov), for Browser
+    // Frame's Record button. macOS 14+ for SCContentFilter.pointPixelScale.
+    let sr_src = "swift/screenrec.swift";
+    let sr_bin = Path::new(&out_dir).join("screenrec");
+    swiftc(sr_src, &sr_bin, "macosx14.0");
+    println!("cargo:rustc-env=SCREENREC_BIN={}", sr_bin.display());
+    println!("cargo:rerun-if-changed={sr_src}");
+
     tauri_build::build();
 }
 

@@ -682,7 +682,7 @@ fn tool_style(filename: &str) -> ToolStyle {
         // Tall and narrow: a vertical timeline of commits.
         "git-history.html" => s(360.0, 780.0, Tint::Project),
         "server.html" => s(240.0, 440.0, Tint::Project),
-        "browser-frame.html" => s(280.0, 300.0, Tint::Paper),
+        "browser-frame.html" => s(280.0, 330.0, Tint::Paper),
         "daily-briefing.html" => s(1080.0, 760.0, Tint::Paper),
         "mycelium.html" => s(1100.0, 760.0, Tint::Paper),
         "instagram-saved.html" => s(1000.0, 720.0, Tint::Paper),
@@ -3224,21 +3224,115 @@ fn applescript_quote(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
-/// Dumb `osascript` proxy for tool pages: runs `script` (AppleScript, or JXA
-/// when `jxa` is true) and returns trimmed stdout. The logic lives in the page
-/// (Browser Frame drives Safari/Chrome window bounds through it).
+/// Browser Frame's window probe: runs the `webarea` Swift helper (AX API) for
+/// `app`'s front window — optionally activating it, opening a docked
+/// inspector, and setting its frame `[x, y, w, h]` first — and returns
+/// `{win, page, screen, inspector}` in global top-left points. The sizing
+/// math lives in the page.
 #[tauri::command(async)]
-fn run_osascript(script: String, jxa: Option<bool>) -> Result<String, String> {
-    let mut cmd = Command::new("osascript");
-    if jxa.unwrap_or(false) {
-        cmd.args(["-l", "JavaScript"]);
+fn web_area(
+    app: String,
+    frame: Option<[f64; 4]>,
+    activate: Option<bool>,
+    inspector: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    let mut cmd = Command::new(env!("WEBAREA_BIN"));
+    if activate.unwrap_or(false) {
+        cmd.arg("--activate");
     }
-    let out = cmd.args(["-e", &script]).output().map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    if inspector.unwrap_or(false) {
+        cmd.arg("--inspector");
+    }
+    cmd.arg(&app);
+    if let Some(f) = frame {
+        cmd.args(f.map(|v| v.round().to_string()));
+    }
+    let out = cmd.output().map_err(|e| e.to_string())?;
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .map_err(|_| String::from_utf8_lossy(&out.stderr).trim().to_string())?;
+    match v.get("error").and_then(|e| e.as_str()) {
+        Some(e) => Err(e.to_string()),
+        None => Ok(v),
+    }
+}
+
+/// A running `screenrec` helper (Browser Frame's Record button): the child
+/// plus its stdout, which prints "recording" once capture starts and the
+/// movie's path when it finishes.
+struct ScreenRec {
+    child: std::process::Child,
+    out: std::io::BufReader<std::process::ChildStdout>,
+}
+static SCREENREC: Mutex<Option<ScreenRec>> = Mutex::new(None);
+
+fn child_stderr(child: &mut std::process::Child) -> String {
+    use std::io::Read;
+    let mut s = String::new();
+    if let Some(mut e) = child.stderr.take() {
+        let _ = e.read_to_string(&mut s);
+    }
+    s.trim().to_string()
+}
+
+/// Start recording a screen rect (global points, top-left origin — the space
+/// AppleScript window bounds use) to `path` (leading `~/` expanded, parent
+/// dirs created). Returns the path once frames are flowing, or the helper's
+/// error (e.g. Screen Recording permission missing).
+#[tauri::command(async)]
+fn screenrec_start(x: f64, y: f64, w: f64, h: f64, path: String) -> Result<String, String> {
+    use std::io::BufRead;
+    let mut slot = SCREENREC.lock().unwrap();
+    if slot.is_some() {
+        return Err("Already recording.".into());
+    }
+    let path = match path.strip_prefix("~/") {
+        Some(rest) => format!("{}/{rest}", std::env::var("HOME").map_err(|_| "No HOME env var.")?),
+        None => path,
+    };
+    if let Some(dir) = Path::new(&path).parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let mut child = Command::new(env!("SCREENREC_BIN"))
+        .args([x, y, w, h].map(|v| v.to_string()))
+        .arg(&path)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let mut out = std::io::BufReader::new(child.stdout.take().ok_or("No helper stdout.")?);
+    let mut line = String::new();
+    let _ = out.read_line(&mut line);
+    if line.trim() != "recording" {
+        let _ = child.wait();
+        let err = child_stderr(&mut child);
+        return Err(if err.is_empty() { "Recording didn't start.".into() } else { err });
+    }
+    *slot = Some(ScreenRec { child, out });
+    Ok(path)
+}
+
+/// Stop the recording and wait for the movie to finish writing; returns its path.
+#[tauri::command(async)]
+fn screenrec_stop() -> Result<String, String> {
+    use std::io::BufRead;
+    let Some(mut rec) = SCREENREC.lock().unwrap().take() else {
+        return Err("Not recording.".into());
+    };
+    let _ = Command::new("kill").args(["-INT", &rec.child.id().to_string()]).status();
+    let mut line = String::new();
+    let _ = rec.out.read_line(&mut line);
+    let status = rec.child.wait().map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(line.trim().to_string())
     } else {
-        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+        Err(child_stderr(&mut rec.child))
     }
+}
+
+/// Whether a recording is running (a reopened Browser Frame picks it back up).
+#[tauri::command]
+fn screenrec_active() -> bool {
+    SCREENREC.lock().unwrap().is_some()
 }
 
 /// Run a macOS Shortcut via the `shortcuts` CLI. Used for Image Playground
@@ -6109,7 +6203,10 @@ pub fn run() {
         .manage(AppState::default())
         .manage(ClaudeState::default())
         .invoke_handler(tauri::generate_handler![
-            run_osascript,
+            web_area,
+            screenrec_start,
+            screenrec_stop,
+            screenrec_active,
             open_claude_window,
             launch_claude_app,
             open_schedules_window,
