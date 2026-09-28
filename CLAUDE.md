@@ -77,6 +77,9 @@ dev:watch` restores Tauri's stock reload-everything watcher.
   via a native login webview's cookies; cached thumbnail grid, save-to-project) —
   `src-tauri/src/instagram.rs` + `src/tools/instagram-saved.html`.
   [docs/instagram.md](docs/instagram.md)
+- **Moths** (procedural butterflies & moths as flat SVG; pure importable
+  generator in `src/moths/moths.js`, specimen-plate tool saves PNGs to
+  `media/`) — `src/tools/moths.html`. [docs/moths.md](docs/moths.md)
 - **Interaction model** (shared selection + keyboard) — `selection.js` /
   `keymap.js`. [docs/interaction-spec.md](docs/interaction-spec.md)
 

@@ -21,5 +21,6 @@
   { "file": "mycelium.html", "name": "Mycelium" },
   { "file": "instagram-saved.html", "name": "Instagram Saved" },
   { "file": "trees.html", "name": "Trees" },
+  { "file": "moths.html", "name": "Lepidoptera" },
   { "file": "color-picker.html", "name": "Color Picker" }
 ]

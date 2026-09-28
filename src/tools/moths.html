@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lepidoptera</title>
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<link rel="stylesheet" href="../kit/window-chrome.css" />
+<script type="module" src="../kit/components.js"></script>
+<script type="module" src="../kit/window-chrome.js"></script>
+<style>
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    font-family: var(--sans);
+  }
+  #titlebar {
+    height: 44px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+  }
+  .tb-title { display: flex; align-items: center; gap: 8px; }
+  #main { flex: 1 1 auto; display: flex; min-height: 0; }
+
+  /* ---- plate: a specimen sheet, like a printed natural-history plate ---- */
+  #plate {
+    --plate-bg: #f5efe6;
+    --plate-ink: #3a3430;
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    background: var(--plate-bg);
+    border-radius: var(--radius-lg);
+    margin: 0 0 12px 12px;
+    padding: 18px 18px 26px;
+    transition: background var(--dur-base) var(--ease-standard);
+  }
+  #plate.is-dark { --plate-ink: #efe8dc; }
+  /* flex-wrap + pixel tiles, not grid + aspect-ratio (WKWebView row collapse) */
+  #grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tile {
+    position: relative;
+    width: var(--tile, 200px);
+    border-radius: var(--radius);
+    cursor: pointer;
+    padding-bottom: 12px;
+    transition: background var(--dur-fast) var(--ease-standard);
+  }
+  .tile:hover { background: color-mix(in srgb, var(--plate-ink) 4%, transparent); }
+  .tile.is-sel { background: color-mix(in srgb, var(--plate-ink) 7%, transparent); }
+  .tile .art { height: var(--art, 170px); }
+  .tile .art svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .tile .cap { text-align: center; color: var(--plate-ink); padding: 0 8px; }
+  .tile .nm {
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tile .lat { font-size: 11px; font-style: italic; opacity: 0.6; margin-top: 1px; }
+  .tile .pin {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    color: var(--plate-ink);
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-standard);
+  }
+  .tile:hover .pin, .tile.is-pinned .pin { opacity: 0.75; }
+
+  /* The selected specimen gently opens and closes its wings. */
+  .tile.is-sel .side {
+    transform-box: fill-box;
+    transform-origin: 0% 50%;
+    animation: flap 3.2s var(--ease-standard) infinite;
+  }
+  @keyframes flap {
+    0%, 62%, 100% { transform: scaleX(1); }
+    70% { transform: scaleX(0.3); }
+    78% { transform: scaleX(1); }
+    85% { transform: scaleX(0.55); }
+    92% { transform: scaleX(1); }
+  }
+  @media (prefers-reduced-motion: reduce) { .tile.is-sel .side { animation: none; } }
+
+  /* ---- panel ---- */
+  #panel {
+    width: 272px;
+    flex-shrink: 0;
+    padding: 4px 16px 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .section { display: flex; flex-direction: column; gap: 8px; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row .btn { flex: 1; justify-content: center; }
+  .pick-row { display: flex; gap: 6px; align-items: center; }
+  .pick-row .field { flex: 1; min-width: 0; }
+  #sel-name { font-size: 15px; line-height: 1.25; }
+  #sel-latin { font-style: italic; }
+  .color-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+  .color-grid .ctl { display: flex; flex-direction: column; gap: 3px; }
+  .ctl .label { margin-bottom: -2px; }
+  .bg-row { display: flex; gap: 6px; }
+  .bg-swatch {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 1px solid var(--hairline-strong);
+    cursor: pointer;
+    padding: 0;
+  }
+  .bg-swatch.is-on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent); }
+</style>
+</head>
+<body>
+  <div id="titlebar" data-window-bar>
+    <div class="tb-title" data-window-close><span class="eyebrow">Lepidoptera</span></div>
+  </div>
+
+  <div id="main">
+    <div id="plate"><div id="grid"></div></div>
+
+    <div id="panel">
+      <div class="section">
+        <div class="btn-row">
+          <button class="btn btn-primary" id="shuffle"><span class="mi mi-sm ph ph-dice-five"></span>Shuffle</button>
+        </div>
+        <div class="text-xs text-muted">Space shuffles · pinned specimens stay</div>
+      </div>
+
+      <div class="section">
+        <div>
+          <div id="sel-name" class="text-body"></div>
+          <div id="sel-latin" class="text-muted text-xs"></div>
+        </div>
+        <span class="label">Wings</span>
+        <div class="pick-row">
+          <select class="field" id="family"></select>
+          <button class="btn btn-icon btn-ghost" id="roll-shape" title="New wing shape"><span class="mi mi-sm ph ph-dice-three"></span></button>
+        </div>
+        <span class="label">Pattern</span>
+        <div class="pick-row">
+          <select class="field" id="recipe"></select>
+          <button class="btn btn-icon btn-ghost" id="roll-pattern" title="New pattern"><span class="mi mi-sm ph ph-dice-three"></span></button>
+        </div>
+        <span class="label">Palette</span>
+        <div class="pick-row">
+          <select class="field" id="palette"></select>
+          <button class="btn btn-icon btn-ghost" id="roll-colors" title="Reassign colors"><span class="mi mi-sm ph ph-dice-three"></span></button>
+        </div>
+        <div class="color-grid" id="colors"></div>
+        <div class="ctl"><span class="label">Size</span>
+          <input class="range" id="size" type="range" min="0.7" max="1.2" step="0.01" /></div>
+      </div>
+
+      <div class="section">
+        <span class="label">Export</span>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="save" title="Save PNG to the project's media folder (⌘S)"><span class="mi mi-sm ph ph-image"></span>Save</button>
+          <button class="btn" id="copy" title="Copy PNG (⌘C)"><span class="mi mi-sm ph ph-copy"></span>Copy</button>
+          <button class="btn" id="svg" title="Save SVG to designs/"><span class="mi mi-sm ph ph-bezier-curve"></span>SVG</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <span class="label">Plate</span>
+        <div class="bg-row" id="bgs"></div>
+        <div class="pick-row">
+          <select class="field" id="count">
+            <option value="6">6 specimens</option>
+            <option value="9">9 specimens</option>
+            <option value="12">12 specimens</option>
+            <option value="16">16 specimens</option>
+            <option value="20">20 specimens</option>
+          </select>
+        </div>
+        <button class="btn" id="save-plate"><span class="mi mi-sm ph ph-squares-four"></span>Save plate to media</button>
+      </div>
+    </div>
+  </div>
+
+<script type="module">
+import { hasTauri, invoke, toast, esc } from "../kit/app.js";
+import { enterStagger } from "../kit/motion.js";
+import {
+  specimen, specimenSVG, describe, paletteColors, randomSeed,
+  FAMILIES, RECIPES, PALETTES, COLOR_ROLES, PLATE,
+} from "../moths/moths.js";
+
+if (window.__TAURI__) {
+  const { getCurrentWindow } = window.__TAURI__.window;
+  const { LogicalSize } = window.__TAURI__.dpi;
+  getCurrentWindow().setSize(new LogicalSize(1200, 800));
+}
+
+const $ = (id) => document.getElementById(id);
+const BGS = [
+  ["#f5efe6", "Paper"], ["#f4e6e4", "Blush"], ["#f3ecd6", "Parchment"],
+  ["#ffffff", "White"], ["#dfe7e1", "Sage"], ["#1f1d1b", "Ink"],
+];
+const STORE = "studio.moths";
+
+/* ---------- state ----------------------------------------------------------- */
+// plate.items: [{ spec, pinned }]. Specs are plain JSON (see moths.js), so the
+// whole plate round-trips through localStorage.
+let plate = { items: [], sel: 0, bg: BGS[0][0], count: 12 };
+try { Object.assign(plate, JSON.parse(localStorage.getItem(STORE)) || {}); } catch {}
+const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(plate)); } catch {} };
+const cur = () => plate.items[plate.sel];
+
+/* ---------- plate grid ------------------------------------------------------ */
+const grid = $("grid"), plateEl = $("plate");
+
+function tileHTML(item, i) {
+  const { name, latin } = describe(item.spec);
+  return `<div class="tile${i === plate.sel ? " is-sel" : ""}${item.pinned ? " is-pinned" : ""}" data-i="${i}">
+    <div class="art">${specimenSVG(item.spec, { fit: "plate" })}</div>
+    <div class="cap"><div class="nm">${esc(name)}</div><div class="lat">${esc(latin)}</div></div>
+    <button class="pin btn btn-icon btn-ghost" data-pin="${i}" title="Pin (P)">
+      <span class="mi mi-sm ${item.pinned ? "ph-fill" : "ph"} ph-push-pin"></span></button>
+  </div>`;
+}
+
+function renderGrid(animateIdx = null) {
+  grid.innerHTML = plate.items.map(tileHTML).join("");
+  if (animateIdx?.length) enterStagger(animateIdx.map((i) => grid.children[i]), { each: 0.025 });
+}
+
+function renderTile(i) {
+  const old = grid.children[i];
+  if (!old) return renderGrid();
+  old.outerHTML = tileHTML(plate.items[i], i);
+}
+
+function select(i) {
+  if (i < 0 || i >= plate.items.length) return;
+  grid.children[plate.sel]?.classList.remove("is-sel");
+  plate.sel = i;
+  grid.children[i]?.classList.add("is-sel");
+  grid.children[i]?.scrollIntoView({ block: "nearest" });
+  syncPanel();
+  persist();
+}
+
+// Size tiles in pixels from the plate width.
+new ResizeObserver(() => {
+  const w = plateEl.clientWidth - 36;
+  const cols = Math.max(2, Math.floor((w + 6) / 206));
+  const tile = Math.floor((w - (cols - 1) * 6) / cols);
+  plateEl.style.setProperty("--tile", tile + "px");
+  plateEl.style.setProperty("--art", Math.round(tile * PLATE.h / PLATE.w) + "px");
+}).observe(plateEl);
+
+grid.addEventListener("click", (e) => {
+  const pin = e.target.closest("[data-pin]");
+  if (pin) { togglePin(+pin.dataset.pin); return; }
+  const tile = e.target.closest(".tile");
+  if (tile) select(+tile.dataset.i);
+});
+
+function togglePin(i) {
+  const it = plate.items[i];
+  if (!it) return;
+  it.pinned = !it.pinned;
+  renderTile(i);
+  persist();
+}
+
+function shuffle() {
+  const fresh = [];
+  const n = plate.count;
+  plate.items = plate.items.slice(0, Math.max(n, plate.items.filter((x) => x.pinned).length));
+  for (let i = 0; i < n; i++) {
+    if (plate.items[i]?.pinned) continue;
+    plate.items[i] = { spec: specimen({ seed: randomSeed() }), pinned: false };
+    fresh.push(i);
+  }
+  plate.sel = Math.min(plate.sel, plate.items.length - 1);
+  renderGrid(fresh);
+  syncPanel();
+  persist();
+}
+
+/* ---------- panel ----------------------------------------------------------- */
+const famSel = $("family"), recSel = $("recipe"), palSel = $("palette"), sizeIn = $("size");
+const opts = (sel, entries) => { sel.innerHTML = entries.map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join(""); };
+opts(famSel, Object.entries(FAMILIES));
+opts(recSel, Object.entries(RECIPES));
+opts(palSel, [...Object.entries(PALETTES), ["custom", { label: "Custom" }]]);
+
+const colorsEl = $("colors");
+colorsEl.innerHTML = COLOR_ROLES.map(([k, label]) =>
+  `<div class="ctl"><span class="label">${label}</span><studio-color data-role="${k}"></studio-color></div>`).join("");
+
+let syncing = false; // studio-color fires `input` when set programmatically
+
+function syncPanel() {
+  const it = cur();
+  if (!it) return;
+  const { spec } = it;
+  const { name, latin } = describe(spec);
+  $("sel-name").textContent = name;
+  $("sel-latin").textContent = latin;
+  famSel.value = spec.family;
+  recSel.value = spec.recipe;
+  palSel.value = spec.palette;
+  sizeIn.value = spec.size;
+  syncing = true;
+  for (const el of colorsEl.querySelectorAll("studio-color")) el.value = spec.colors[el.dataset.role];
+  syncing = false;
+  $("count").value = plate.count;
+  for (const b of $("bgs").children) b.classList.toggle("is-on", b.dataset.bg === plate.bg);
+}
+
+// Mutate the selected spec, then redraw just its tile.
+function edit(fn) {
+  const it = cur();
+  if (!it) return;
+  fn(it.spec);
+  it.spec = specimen(it.spec);
+  renderTile(plate.sel);
+  syncPanel();
+  persist();
+}
+
+famSel.addEventListener("change", () => edit((s) => { s.family = famSel.value; }));
+recSel.addEventListener("change", () => edit((s) => { s.recipe = recSel.value; }));
+palSel.addEventListener("change", () => edit((s) => {
+  if (palSel.value === "custom") return;
+  s.palette = palSel.value;
+  s.colors = paletteColors(s, s.palette);
+}));
+sizeIn.addEventListener("input", () => edit((s) => { s.size = +sizeIn.value; }));
+$("roll-shape").addEventListener("click", () => edit((s) => { s.shapeSeed = randomSeed(); }));
+$("roll-pattern").addEventListener("click", () => edit((s) => { s.patternSeed = randomSeed(); }));
+$("roll-colors").addEventListener("click", () => edit((s) => {
+  if (!PALETTES[s.palette]) s.palette = Object.keys(PALETTES)[Math.floor(Math.random() * Object.keys(PALETTES).length)];
+  s.colorSeed = randomSeed();
+  s.colors = paletteColors(s, s.palette, s.colorSeed);
+}));
+colorsEl.addEventListener("input", (e) => {
+  const el = e.target;
+  if (el.tagName !== "STUDIO-COLOR" || syncing) return; // the inner <input>'s event bubbles too
+  edit((s) => { s.colors = { ...s.colors, [el.dataset.role]: el.value }; s.palette = "custom"; });
+});
+
+$("bgs").innerHTML = BGS.map(([c, label]) =>
+  `<button class="bg-swatch" data-bg="${c}" title="${label}" style="background:${c}"></button>`).join("");
+$("bgs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-bg]");
+  if (!b) return;
+  plate.bg = b.dataset.bg;
+  applyBg();
+  syncPanel();
+  persist();
+});
+function applyBg() {
+  plateEl.style.setProperty("--plate-bg", plate.bg);
+  plateEl.classList.toggle("is-dark", plate.bg === "#1f1d1b");
+}
+$("count").addEventListener("change", () => {
+  plate.count = +$("count").value;
+  if (plate.items.length > plate.count) {
+    plate.items = plate.items.filter((x, i) => i < plate.count || x.pinned);
+    plate.sel = Math.min(plate.sel, plate.items.length - 1);
+    renderGrid();
+    syncPanel();
+    persist();
+  } else shuffleMissing();
+});
+function shuffleMissing() {
+  const fresh = [];
+  while (plate.items.length < plate.count) {
+    plate.items.push({ spec: specimen({ seed: randomSeed() }), pinned: false });
+    fresh.push(plate.items.length - 1);
+  }
+  renderGrid(fresh);
+  syncPanel();
+  persist();
+}
+
+/* ---------- export ---------------------------------------------------------- */
+const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+function shortHash(obj) {
+  let h = 0x811c9dc5;
+  for (const ch of JSON.stringify(obj)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return (h >>> 0).toString(36).slice(0, 5);
+}
+const baseName = (spec) => `${slug(describe(spec).name)}-${shortHash(spec)}`;
+
+/** Rasterize an SVG string to a PNG blob, longest side = `px`. */
+async function svgToPng(svg, px = 1400) {
+  const [, , vw, vh] = svg.match(/viewBox="([^"]+)"/)[1].split(" ").map(Number);
+  const k = px / Math.max(vw, vh), w = Math.round(vw * k), h = Math.round(vh * k);
+  const sized = svg.replace("<svg ", `<svg width="${w}" height="${h}" `);
+  const img = new Image();
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(sized);
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  c.getContext("2d").drawImage(img, 0, 0, w, h);
+  return new Promise((res) => c.toBlob(res, "image/png"));
+}
+const blobToBase64 = (blob) => new Promise((res) => {
+  const fr = new FileReader();
+  fr.onload = () => res(String(fr.result).split(",")[1]);
+  fr.readAsDataURL(blob);
+});
+
+/** Write a PNG into the active project's media/ (created if missing). */
+async function saveToMedia(filename, blob) {
+  if (!hasTauri) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+    return;
+  }
+  const project = await invoke("get_active_project");
+  if (!project) { toast("Open a project to save into its media"); return; }
+  const data = await blobToBase64(blob);
+  const path = `${project.path}/media/${filename}`;
+  try {
+    await invoke("write_image", { path, dataBase64: data });
+  } catch {
+    await invoke("fs_new_folder", { dir: project.path, name: "media" });
+    await invoke("write_image", { path, dataBase64: data });
+  }
+  toast(`Saved to ${project.name}/media`);
+}
+
+async function saveSelected() {
+  const it = cur();
+  if (!it) return;
+  const png = await svgToPng(specimenSVG(it.spec, { padding: 10 }));
+  await saveToMedia(`${baseName(it.spec)}.png`, png);
+}
+
+function copySelected() {
+  const it = cur();
+  if (!it) return;
+  // Keep the write synchronous in the gesture: the PNG is a Promise inside the item.
+  const png = svgToPng(specimenSVG(it.spec, { padding: 10 }));
+  navigator.clipboard.write([new ClipboardItem({ "image/png": png })])
+    .then(() => toast("Copied"), () => toast("Couldn't copy"));
+}
+
+async function saveSVG() {
+  const it = cur();
+  if (!it) return;
+  const svg = specimenSVG(it.spec, { padding: 10 });
+  const filename = `${baseName(it.spec)}.svg`;
+  if (!hasTauri) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })); a.download = filename; a.click();
+    return;
+  }
+  try {
+    const path = await invoke("save_tool_export", { filename, content: svg });
+    toast(`Saved ${path.split("/").slice(-2).join("/")}`);
+  } catch (e) { if (e !== "__cancelled__") toast(String(e)); }
+}
+
+/** The whole sheet as one SVG: specimens in a grid with captions, on the plate color. */
+function plateSVG() {
+  const cols = Math.min(4, Math.ceil(Math.sqrt(plate.items.length)) + (plate.items.length > 9 ? 1 : 0));
+  const cw = PLATE.w, ch = PLATE.h, capH = 38, pad = 40;
+  const rows = Math.ceil(plate.items.length / cols);
+  const W = pad * 2 + cols * cw, H = pad * 2 + rows * (ch + capH);
+  const ink = plate.bg === "#1f1d1b" ? "#efe8dc" : "#3a3430";
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${plate.bg}"/>`;
+  plate.items.forEach((it, i) => {
+    const x = pad + (i % cols) * cw, y = pad + Math.floor(i / cols) * (ch + capH);
+    const { name, latin } = describe(it.spec);
+    s += specimenSVG(it.spec, { fit: "plate" }).replace("<svg ", `<svg x="${x}" y="${y}" width="${cw}" height="${ch}" `);
+    s += `<text x="${x + cw / 2}" y="${y + ch + 12}" text-anchor="middle" font-family="Futura, sans-serif" font-size="9.5" letter-spacing="1.3" fill="${ink}">${esc(name.toUpperCase())}</text>`;
+    s += `<text x="${x + cw / 2}" y="${y + ch + 26}" text-anchor="middle" font-family="Futura, sans-serif" font-style="italic" font-size="10" fill="${ink}" opacity="0.6">${esc(latin)}</text>`;
+  });
+  return s + "</svg>";
+}
+
+async function savePlate() {
+  const png = await svgToPng(plateSVG(), 2400);
+  await saveToMedia(`moth-plate-${shortHash(plate.items.map((x) => x.spec))}.png`, png);
+}
+
+$("shuffle").addEventListener("click", shuffle);
+$("save").addEventListener("click", saveSelected);
+$("copy").addEventListener("click", copySelected);
+$("svg").addEventListener("click", saveSVG);
+$("save-plate").addEventListener("click", savePlate);
+
+/* ---------- keys ------------------------------------------------------------ */
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest("input, select, textarea, [contenteditable]")) return;
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.key === "c") { e.preventDefault(); copySelected(); return; }
+  if (mod && e.key === "s") { e.preventDefault(); saveSelected(); return; }
+  if (mod || e.altKey) return;
+  const cols = Math.max(1, Math.round(grid.clientWidth / (grid.children[0]?.offsetWidth || 200)));
+  const moves = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols };
+  if (e.key === " ") { e.preventDefault(); shuffle(); }
+  else if (moves[e.key]) { e.preventDefault(); select(plate.sel + moves[e.key]); }
+  else if (e.key === "p") togglePin(plate.sel);
+});
+
+/* ---------- boot ------------------------------------------------------------ */
+applyBg();
+if (!plate.items.length) shuffle();
+else {
+  plate.items = plate.items.map((it) => ({ ...it, spec: specimen(it.spec) }));
+  renderGrid();
+  syncPanel();
+}
+</script>
+</body>
+</html>

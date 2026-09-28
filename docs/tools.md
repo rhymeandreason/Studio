@@ -71,6 +71,10 @@ does its work, and closes itself. Re-launching while one is running is a no-op.
   "name": "My Tool" }`) — that file exists, so it's the whole list: a tool
   not in it won't show anywhere. Then quit and relaunch `npm run tauri dev`
   (the list is copied into the bundle at build time; a reload won't pick it up).
+  It has to be the `tauri dev` process itself: if only the Studio binary
+  restarts, it keeps reading the stale copy in `src-tauri/target/debug/Tools.json`.
+  Spotlight re-reads that copy each time it opens, but the wrench menu is
+  built once at startup.
 - It appears under the **wrench (🔧) tray icon's** dropdown menu (🔧 *name*)
   and in Spotlight.
 - Clicking it opens the file in its **own native window**, loaded via
