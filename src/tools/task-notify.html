@@ -18,9 +18,11 @@
       font-family: var(--sans);
     }
     #card {
+      /* Inset, not height:100% + margin — that overflowed by 12px and
+         clipped the buttons and bottom border. */
       box-sizing: border-box;
-      height: 100%;
-      margin: 6px;
+      position: absolute;
+      inset: 6px;
       padding: 14px 16px;
       background: var(--bg);
       color: var(--text);
