@@ -578,17 +578,30 @@ if (TAURI) {
   // provided by kit/window-chrome.js, imported below. Re-tint on launch even
   // before a file is opened (it retints per open file via applyTitleColor).
   setTimeout(() => applyTitleColor(), 0);
+  // Already-open windows are just re-shown on a Modes switch; pick up a
+  // project color edited since launch.
+  TAURI.event.listen("project-activated", () => applyTitleColor());
+  window.addEventListener("focus", () => applyTitleColor());
 }
 
 const $ = (id) => document.getElementById(id);
 
-// Tint the title bar to match the Git-window color of the open file's repo
-// (independent of the active project), and mirror it to the preview window.
+// Tint the title bar with the color of the project this window belongs to
+// (its `?session=` path) — not the *active* project, which lags or leads this
+// window during a Modes switch. A file outside this project takes its own
+// repo's Git-window color. Mirrored to the preview window.
 let titleColor = "";
+async function projectColor(path) {
+  const ws = await invoke("read_workspace", { path }).catch(() => null);
+  if (!ws) return "";
+  return (ws.color || "").trim() || (ws.gitColor || "").trim() || "#ffd23f";
+}
 async function applyTitleColor() {
   if (!hasTauri) return;
-  titleColor = currentPath ? await invoke("git_color_for_path", { path: currentPath }) : "";
-  // No file (or file outside any known repo) → fall back to the active project's color.
+  const inProject = sessionScope && (!currentPath || currentPath.startsWith(sessionScope.replace(/\/?$/, "/")));
+  titleColor = inProject ? await projectColor(sessionScope)
+    : currentPath ? await invoke("git_color_for_path", { path: currentPath }) : "";
+  // No project scope (or file outside any known repo) → fall back to the active project's color.
   if (!titleColor) titleColor = await invoke("active_git_color");
   // Tint our custom title bar (the toolbar); empty string clears to paper.
   document.documentElement.style.setProperty("--titlebar-tint", washi(titleColor));
