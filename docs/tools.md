@@ -70,7 +70,10 @@ borderless, transparent, shadowless, always on top and on every Space, with no
 kit window chrome. The page paints its own shape + CSS shadow and sizes/moves
 the native window around it (`setSize` + `setPosition`). Like headless tools,
 closing really closes it (`is_disposable_tool_label`) — for the camera that's
-what turns the green light off.
+what turns the green light off. Its Tab background replacement sends small
+frames through `person_mask` (`personseg.rs`, a raw-bytes pipe) to the
+long-running `personseg` Swift helper (Vision) and composites the mask in a
+canvas over the bubble's colored fill.
 
 ## How it works
 

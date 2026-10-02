@@ -23,11 +23,14 @@
       border-radius: var(--r);
       overflow: hidden;
       background: #1a1a19;
+      transition: border-radius 180ms ease-out, background-color 180ms ease-out;
       box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
       cursor: grab;
       outline: none;
-      transition: border-radius 180ms ease-out;
     }
+    /* Background on: the bubble's own fill is the backdrop and the canvas
+       carries just the person (alpha-masked), so a color change is pure CSS. */
+    body.bg #bubble { background: var(--bg-color); }
     /* A hairline so a dark backdrop doesn't swallow the edge. */
     #bubble::after {
       content: "";
@@ -37,14 +40,20 @@
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
       pointer-events: none;
     }
-    video {
+    video, canvas {
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
       pointer-events: none;
     }
-    body.mirror video { transform: scaleX(-1); }
+    body.mirror video, body.mirror canvas { transform: scaleX(-1); }
+    canvas { opacity: 0; }
+    /* Until the first mask lands (Vision warms up for ~2s) the plain video stays. */
+    body.bg.bg-ready canvas { opacity: 1; }
+    body.bg.bg-ready video { opacity: 0; }
     #msg {
       position: absolute;
       inset: 0;
@@ -65,15 +74,17 @@
 <body class="mirror">
   <div id="bubble" tabindex="0">
     <video id="video" autoplay muted playsinline></video>
+    <canvas id="out"></canvas>
     <div id="msg"><span class="mi ph ph-video-camera-slash"></span><span id="msg-text"></span></div>
   </div>
 
   <script type="module">
-    import { hasTauri } from "../kit/app.js";
+    import { hasTauri, invoke } from "../kit/app.js";
 
     // 1/2/3 pick the shape; scroll or pinch (or +/-) resizes about the center;
-    // drag anywhere moves; C cycles cameras, M toggles mirroring; Esc closes
-    // (the window really closes, so the camera turns off).
+    // drag anywhere moves; Tab toggles background replacement, ←/→ cycle its
+    // color; C cycles cameras, M toggles mirroring; Esc closes (the window
+    // really closes, so the camera turns off).
     const PAD = 16; // shadow margin around the shape, inside the window
     const MIN = 96, MAX = 640;
     const SHAPES = {
@@ -82,6 +93,21 @@
       portrait: (s) => ({ w: s, h: Math.round(s * 16 / 9), r: s * 0.16 }),
     };
     const KEY_SHAPE = { 1: "circle", 2: "square", 3: "portrait" };
+    // Backdrop colors for ←/→, in cycle order.
+    const COLORS = [
+      "#9000ff", // purple
+      "#f7f5f0", // paper
+      "#e8dccb", // sand
+      "#f5d77a", // butter
+      "#f2c4b8", // blush
+      "#ff6b3d", // tangerine
+      "#c9d8c5", // sage
+      "#1f6f50", // forest
+      "#bcd3e6", // sky
+      "#3b5bdb", // cobalt
+      "#2a2a28", // ink
+    ];
+    const SEG_W = 384; // width of the frame sent to Vision (its mask is 512×384 regardless)
     const STORE = "camera-bubble";
 
     const bubble = document.getElementById("bubble");
@@ -93,8 +119,9 @@
     const win = hasTauri ? window.__TAURI__.window.getCurrentWindow() : null;
     const { LogicalSize, LogicalPosition } = hasTauri ? window.__TAURI__.dpi : {};
 
-    // { shape, size (shape width, logical px), cx, cy (screen center), camera, mirror }
-    let prefs = { shape: "circle", size: 200, cx: null, cy: null, camera: null, mirror: true };
+    // { shape, size (shape width, logical px), cx, cy (screen center), camera,
+    //   mirror, bg (background replacement on), bgColor (index into COLORS) }
+    let prefs = { shape: "circle", size: 200, cx: null, cy: null, camera: null, mirror: true, bg: false, bgColor: 0 };
     try { Object.assign(prefs, JSON.parse(localStorage.getItem(STORE)) || {}); } catch {}
     const save = () => { try { localStorage.setItem(STORE, JSON.stringify(prefs)); } catch {} };
 
@@ -203,6 +230,101 @@
       startCamera();
     }
 
+    // ---- background replacement
+    //
+    // Loop: snapshot the video frame, send a small copy to Vision (person_mask →
+    // the personseg helper), and when its mask comes back composite *that same*
+    // snapshot through it — a frame or two of latency, but the mask never lags
+    // the picture. The person lands on a transparent canvas over the bubble's
+    // colored fill.
+
+    const out = document.getElementById("out");
+    const outCtx = out.getContext("2d");
+    const frame = document.createElement("canvas");   // the snapshot awaiting its mask
+    const frameCtx = frame.getContext("2d");
+    const small = document.createElement("canvas");   // what Vision sees
+    const smallCtx = small.getContext("2d", { willReadFrequently: true });
+    const maskCv = document.createElement("canvas");
+    const maskCtx = maskCv.getContext("2d");
+    let maskImg = null;
+    let bgGen = 0;
+
+    const nextVideoFrame = () => new Promise((r) =>
+      video.requestVideoFrameCallback ? video.requestVideoFrameCallback(() => r()) : requestAnimationFrame(() => r()));
+
+    async function segLoop(gen) {
+      while (gen === bgGen) {
+        await nextVideoFrame();
+        if (gen !== bgGen) return;
+        const vw = video.videoWidth, vh = video.videoHeight;
+        if (!vw || !vh) continue;
+
+        if (frame.width !== vw || frame.height !== vh) {
+          frame.width = out.width = vw;
+          frame.height = out.height = vh;
+          small.width = SEG_W;
+          small.height = Math.round(SEG_W * vh / vw);
+        }
+        frameCtx.drawImage(video, 0, 0);
+        smallCtx.drawImage(video, 0, 0, small.width, small.height);
+        const px = smallCtx.getImageData(0, 0, small.width, small.height).data;
+        const req = new Uint8Array(4 + px.length);
+        new DataView(req.buffer).setUint16(0, small.width, true);
+        new DataView(req.buffer).setUint16(2, small.height, true);
+        req.set(px, 4);
+
+        let reply;
+        try {
+          reply = new Uint8Array(await invoke("person_mask", req));
+        } catch (e) {
+          console.warn("person_mask", e);
+          if (gen === bgGen) setBackground(false, "Background removal isn't available.");
+          return;
+        }
+        if (gen !== bgGen) return;
+        const dv = new DataView(reply.buffer);
+        const mw = dv.getUint16(0, true), mh = dv.getUint16(2, true);
+        if (!mw || !mh) continue; // Vision skipped this frame
+
+        if (!maskImg || maskImg.width !== mw || maskImg.height !== mh) {
+          maskCv.width = mw;
+          maskCv.height = mh;
+          maskImg = maskCtx.createImageData(mw, mh);
+        }
+        const m = maskImg.data;
+        for (let i = 0, n = mw * mh; i < n; i++) m[i * 4 + 3] = reply[4 + i];
+        maskCtx.putImageData(maskImg, 0, 0);
+
+        // One synchronous block, so the canvas never shows a half-built frame.
+        outCtx.globalCompositeOperation = "copy";
+        outCtx.drawImage(frame, 0, 0);
+        outCtx.globalCompositeOperation = "destination-in";
+        outCtx.imageSmoothingQuality = "high";
+        outCtx.drawImage(maskCv, 0, 0, out.width, out.height);
+        document.body.classList.add("bg-ready");
+      }
+    }
+
+    function setBackground(on, why) {
+      prefs.bg = on;
+      save();
+      document.body.classList.toggle("bg", on);
+      document.body.classList.remove("bg-ready");
+      const gen = ++bgGen;
+      if (on) segLoop(gen);
+      if (why) {
+        showMessage(why);
+        setTimeout(() => { if (msgText.textContent === why) showMessage(""); }, 2500);
+      }
+    }
+
+    function stepColor(dir) {
+      prefs.bgColor = (prefs.bgColor + dir + COLORS.length) % COLORS.length;
+      bubble.style.setProperty("--bg-color", COLORS[prefs.bgColor]);
+      save();
+      if (!prefs.bg) setBackground(true); // picking a color means "show it"
+    }
+
     function stopAndClose() {
       stream?.getTracks().forEach((t) => t.stop());
       win?.close();
@@ -235,6 +357,9 @@
       if (KEY_SHAPE[k]) setShape(KEY_SHAPE[k]);
       else if (k === "=" || k === "+") setSize(prefs.size * 1.12);
       else if (k === "-" || k === "_") setSize(prefs.size / 1.12);
+      else if (k === "tab") setBackground(!prefs.bg);
+      else if (k === "arrowright") stepColor(1);
+      else if (k === "arrowleft") stepColor(-1);
       else if (k === "c") nextCamera();
       else if (k === "m") {
         prefs.mirror = !prefs.mirror;
@@ -248,6 +373,8 @@
     // ---- boot
 
     document.body.classList.toggle("mirror", prefs.mirror);
+    prefs.bgColor = Math.min(prefs.bgColor, COLORS.length - 1);
+    bubble.style.setProperty("--bg-color", COLORS[prefs.bgColor]);
 
     if (win) {
       const { w, h } = target();
@@ -280,6 +407,7 @@
     await applyWindow(target());
     bubble.focus();
     startCamera();
+    if (prefs.bg) setBackground(true);
   </script>
 </body>
 </html>

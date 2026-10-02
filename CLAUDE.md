@@ -24,7 +24,8 @@ non-destructive image editor), notes, workspace, and artifacts.
 - Native Swift helpers via `build.rs`, run as subprocesses: `bgremove` (Vision),
   `qlthumb`, `pbimage`, `winbounds` / `winowner` (CGWindowListCopyWindowInfo),
   `screenrec` (ScreenCaptureKit rect → .mov) + `webarea` (AX: a browser's page
-  rect, minus docked inspector) for Browser Frame. WebP via the `webp` crate; HEIC via `sips`.
+  rect, minus docked inspector) for Browser Frame; `personseg` (Vision person
+  segmentation, long-running over a stdin/stdout pipe) for Camera Bubble. WebP via the `webp` crate; HEIC via `sips`.
 
 ## Run
 `npm install` then `npm run tauri dev`. macOS 14+ (Vision). Menu-bar app, no Dock

@@ -3,6 +3,7 @@ mod files;
 mod git;
 mod instagram;
 mod patchmatch;
+mod personseg;
 mod screens;
 
 use dock::{
@@ -6317,6 +6318,7 @@ pub fn run() {
         .manage(AppState::default())
         .manage(ClaudeState::default())
         .invoke_handler(tauri::generate_handler![
+            personseg::person_mask,
             web_area,
             screenrec_start,
             screenrec_stop,

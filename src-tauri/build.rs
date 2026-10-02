@@ -125,6 +125,14 @@ fn main() {
     println!("cargo:rustc-env=SCREENREC_BIN={}", sr_bin.display());
     println!("cargo:rerun-if-changed={sr_src}");
 
+    // Person segmentation (Vision), long-running over stdin/stdout, for the
+    // Camera Bubble's background replacement.
+    let ps_src = "swift/personseg.swift";
+    let ps_bin = Path::new(&out_dir).join("personseg");
+    swiftc(ps_src, &ps_bin, "macosx14.0");
+    println!("cargo:rustc-env=PERSONSEG_BIN={}", ps_bin.display());
+    println!("cargo:rerun-if-changed={ps_src}");
+
     tauri_build::build();
 }
 
