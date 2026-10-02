@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Camera Bubble</title>
+  <link rel="stylesheet" href="../tokens.css" />
+  <!-- A floating overlay (tool_is_floating in lib.rs): borderless, transparent,
+       always on top. No kit window chrome — the shape *is* the window. -->
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    /* Fills the window minus a margin for the drop shadow; the page sizes the
+       native window around whichever shape is active. */
+    #bubble {
+      position: absolute;
+      inset: var(--pad);
+      border-radius: var(--r);
+      overflow: hidden;
+      background: #1a1a19;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+      cursor: grab;
+      outline: none;
+      transition: border-radius 180ms ease-out;
+    }
+    /* A hairline so a dark backdrop doesn't swallow the edge. */
+    #bubble::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+      pointer-events: none;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+    }
+    body.mirror video { transform: scaleX(-1); }
+    #msg {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 16px;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    #msg.show { display: flex; }
+  </style>
+</head>
+<body class="mirror">
+  <div id="bubble" tabindex="0">
+    <video id="video" autoplay muted playsinline></video>
+    <div id="msg"><span class="mi ph ph-video-camera-slash"></span><span id="msg-text"></span></div>
+  </div>
+
+  <script type="module">
+    import { hasTauri } from "../kit/app.js";
+
+    // 1/2/3 pick the shape; scroll or pinch (or +/-) resizes about the center;
+    // drag anywhere moves; C cycles cameras, M toggles mirroring; Esc closes
+    // (the window really closes, so the camera turns off).
+    const PAD = 16; // shadow margin around the shape, inside the window
+    const MIN = 96, MAX = 640;
+    const SHAPES = {
+      circle:   (s) => ({ w: s, h: s, r: s / 2 }),
+      square:   (s) => ({ w: s, h: s, r: s * 0.22 }),
+      portrait: (s) => ({ w: s, h: Math.round(s * 16 / 9), r: s * 0.16 }),
+    };
+    const KEY_SHAPE = { 1: "circle", 2: "square", 3: "portrait" };
+    const STORE = "camera-bubble";
+
+    const bubble = document.getElementById("bubble");
+    const video = document.getElementById("video");
+    const msg = document.getElementById("msg");
+    const msgText = document.getElementById("msg-text");
+    document.documentElement.style.setProperty("--pad", PAD + "px");
+
+    const win = hasTauri ? window.__TAURI__.window.getCurrentWindow() : null;
+    const { LogicalSize, LogicalPosition } = hasTauri ? window.__TAURI__.dpi : {};
+
+    // { shape, size (shape width, logical px), cx, cy (screen center), camera, mirror }
+    let prefs = { shape: "circle", size: 200, cx: null, cy: null, camera: null, mirror: true };
+    try { Object.assign(prefs, JSON.parse(localStorage.getItem(STORE)) || {}); } catch {}
+    const save = () => { try { localStorage.setItem(STORE, JSON.stringify(prefs)); } catch {} };
+
+    // ---- geometry: the native window is always shape + PAD, centered on (cx, cy)
+
+    let shown = null;        // dims currently applied to the window
+    let selfMoveUntil = 0;   // ignore the onMoved echo of our own setPosition
+
+    async function applyWindow(d) {
+      shown = d;
+      bubble.style.setProperty("--r", d.r + "px");
+      if (!win || prefs.cx == null) return;
+      const w = d.w + PAD * 2, h = d.h + PAD * 2;
+      selfMoveUntil = performance.now() + 250;
+      await Promise.all([
+        win.setSize(new LogicalSize(w, h)),
+        win.setPosition(new LogicalPosition(Math.round(prefs.cx - w / 2), Math.round(prefs.cy - h / 2))),
+      ]);
+    }
+
+    const target = () => SHAPES[prefs.shape](prefs.size);
+
+    // Shape switches tween the window so the change reads as one motion rather
+    // than a jump (the corner radius tweens in CSS alongside).
+    let tweenId = 0;
+    function tweenTo(to, ms = 180) {
+      const from = shown || to;
+      const id = ++tweenId;
+      const t0 = performance.now();
+      const ease = (t) => 1 - Math.pow(1 - t, 3);
+      const step = () => {
+        if (id !== tweenId) return;
+        const t = Math.min(1, (performance.now() - t0) / ms);
+        const k = ease(t);
+        const lerp = (a, b) => Math.round(a + (b - a) * k);
+        applyWindow({ w: lerp(from.w, to.w), h: lerp(from.h, to.h), r: to.r });
+        if (t < 1) requestAnimationFrame(step);
+      };
+      step();
+    }
+
+    function setShape(shape) {
+      if (shape === prefs.shape) return;
+      prefs.shape = shape;
+      save();
+      tweenTo(target());
+    }
+
+    // Scroll/pinch fire far faster than the window can resize: coalesce to a frame.
+    let resizeQueued = false;
+    function setSize(size) {
+      prefs.size = Math.round(Math.max(MIN, Math.min(MAX, size)));
+      save();
+      if (resizeQueued) return;
+      resizeQueued = true;
+      requestAnimationFrame(() => {
+        resizeQueued = false;
+        tweenId++; // a live resize supersedes a running shape tween
+        applyWindow(target());
+      });
+    }
+
+    // ---- camera
+
+    let stream = null;
+
+    function showMessage(text) {
+      msgText.textContent = text;
+      msg.classList.toggle("show", !!text);
+    }
+
+    async function startCamera() {
+      stream?.getTracks().forEach((t) => t.stop());
+      stream = null;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        showMessage("Camera isn't available in this window.");
+        return;
+      }
+      const video_ = { width: { ideal: 1280 }, height: { ideal: 720 } };
+      if (prefs.camera) video_.deviceId = { exact: prefs.camera };
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: video_, audio: false });
+      } catch (e) {
+        // A remembered camera that's gone (iPhone out of range): fall back to the default.
+        if (prefs.camera && (e.name === "OverconstrainedError" || e.name === "NotFoundError")) {
+          prefs.camera = null;
+          save();
+          return startCamera();
+        }
+        showMessage(e.name === "NotAllowedError"
+          ? "Camera access is off. Allow it in System Settings › Privacy & Security › Camera."
+          : "No camera found.");
+        return;
+      }
+      showMessage("");
+      video.srcObject = stream;
+    }
+
+    async function nextCamera() {
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+      if (cams.length < 2) return;
+      const current = stream?.getVideoTracks()[0]?.getSettings().deviceId;
+      const i = cams.findIndex((c) => c.deviceId === current);
+      prefs.camera = cams[(i + 1) % cams.length].deviceId;
+      save();
+      startCamera();
+    }
+
+    function stopAndClose() {
+      stream?.getTracks().forEach((t) => t.stop());
+      win?.close();
+    }
+
+    // ---- input
+
+    bubble.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      bubble.focus();
+      win?.startDragging();
+    });
+
+    bubble.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      if (gestureBase) return; // pinch is handled by the gesture events
+      setSize(prefs.size * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.003)));
+    }, { passive: false });
+
+    // WebKit reports trackpad pinch as gesture* events with a cumulative scale.
+    let gestureBase = 0;
+    document.addEventListener("gesturestart", (e) => { e.preventDefault(); gestureBase = prefs.size; });
+    document.addEventListener("gesturechange", (e) => { e.preventDefault(); setSize(gestureBase * e.scale); });
+    document.addEventListener("gestureend", (e) => { e.preventDefault(); gestureBase = 0; });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.metaKey && e.key.toLowerCase() === "w") { e.preventDefault(); stopAndClose(); return; }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (KEY_SHAPE[k]) setShape(KEY_SHAPE[k]);
+      else if (k === "=" || k === "+") setSize(prefs.size * 1.12);
+      else if (k === "-" || k === "_") setSize(prefs.size / 1.12);
+      else if (k === "c") nextCamera();
+      else if (k === "m") {
+        prefs.mirror = !prefs.mirror;
+        document.body.classList.toggle("mirror", prefs.mirror);
+        save();
+      } else if (k === "escape") stopAndClose();
+      else return;
+      e.preventDefault();
+    });
+
+    // ---- boot
+
+    document.body.classList.toggle("mirror", prefs.mirror);
+
+    if (win) {
+      const { w, h } = target();
+      // First run: bottom-left of the screen, the usual spot for a face cam.
+      if (prefs.cx == null) {
+        const mon = await window.__TAURI__.window.currentMonitor();
+        if (mon) {
+          const s = mon.scaleFactor;
+          const mx = mon.position.x / s, my = mon.position.y / s;
+          const mh = mon.size.height / s;
+          prefs.cx = mx + 40 + PAD + w / 2;
+          prefs.cy = my + mh - 40 - PAD - h / 2;
+        } else {
+          const pos = (await win.outerPosition()).toLogical(await win.scaleFactor());
+          prefs.cx = pos.x + PAD + w / 2;
+          prefs.cy = pos.y + PAD + h / 2;
+        }
+        save();
+      }
+      // Dragging moves the window natively; keep the stored center in step.
+      win.onMoved(async ({ payload }) => {
+        if (performance.now() < selfMoveUntil || !shown) return;
+        const s = await win.scaleFactor(); // may have crossed onto another display
+        const p = { x: payload.x / s, y: payload.y / s };
+        prefs.cx = p.x + PAD + shown.w / 2;
+        prefs.cy = p.y + PAD + shown.h / 2;
+        save();
+      });
+    }
+    await applyWindow(target());
+    bubble.focus();
+    startCamera();
+  </script>
+</body>
+</html>

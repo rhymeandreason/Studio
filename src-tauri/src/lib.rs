@@ -654,12 +654,24 @@ fn tool_is_headless(filename: &str) -> bool {
 
 const HEADLESS_TOOLS: &[&str] = &["color-picker.html"];
 
-/// True for the window label of a headless tool (`tool-color-picker`). Those
-/// windows are throwaway — one per run — so `CloseRequested` must let them
-/// actually close instead of hiding them like every other menu-bar window; a
-/// hidden leftover would make the next launch a no-op.
-fn is_headless_tool_label(label: &str) -> bool {
-    HEADLESS_TOOLS.iter().any(|f| {
+/// Tools that are just a floating shape on the desktop (the Camera Bubble):
+/// built borderless, transparent, shadowless and always-on-top on every Space,
+/// with no window chrome — the page paints its own shape (and shadow) and
+/// sizes the window around it.
+fn tool_is_floating(filename: &str) -> bool {
+    FLOATING_TOOLS.contains(&filename)
+}
+
+const FLOATING_TOOLS: &[&str] = &["camera-bubble.html"];
+
+/// True for the window label of a headless or floating tool
+/// (`tool-color-picker`, `tool-camera-bubble`). Those windows are throwaway —
+/// one per run — so `CloseRequested` must let them actually close instead of
+/// hiding them like every other menu-bar window: a hidden headless leftover
+/// would make the next launch a no-op, and a hidden Camera Bubble would keep
+/// the camera (and its green light) on.
+fn is_disposable_tool_label(label: &str) -> bool {
+    HEADLESS_TOOLS.iter().chain(FLOATING_TOOLS).any(|f| {
         let stem: String = Path::new(f)
             .file_stem()
             .and_then(|n| n.to_str())
@@ -696,6 +708,8 @@ fn tool_style(filename: &str) -> ToolStyle {
         "daily-briefing.html" => s(1080.0, 760.0, Tint::Paper),
         "mycelium.html" => s(1100.0, 760.0, Tint::Paper),
         "instagram-saved.html" => s(1000.0, 720.0, Tint::Paper),
+        // A 200px circle + the page's shadow margin; the page resizes itself.
+        "camera-bubble.html" => s(232.0, 232.0, Tint::Paper),
         _ => s(900.0, 640.0, Tint::Paper),
     }
 }
@@ -711,6 +725,18 @@ fn apply_tool_chrome<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
     filename: &str,
 ) -> tauri::webview::WebviewWindowBuilder<'a, R, M> {
     let st = tool_style(filename);
+    if tool_is_floating(filename) {
+        return builder
+            .inner_size(st.w, st.h)
+            .decorations(false)
+            .transparent(true)
+            .shadow(false)
+            .resizable(false)
+            .always_on_top(true)
+            .visible_on_all_workspaces(true)
+            .skip_taskbar(true)
+            .accept_first_mouse(true);
+    }
     builder
         .inner_size(st.w, st.h)
         // A shared floor, small enough for the tiniest tool (window-size
@@ -736,7 +762,9 @@ fn build_tool_window<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
 ) -> tauri::Result<tauri::WebviewWindow<R>> {
     let win = apply_tool_chrome(builder, filename).build()?;
     #[cfg(target_os = "macos")]
-    hide_traffic_lights(&win);
+    if !tool_is_floating(filename) {
+        hide_traffic_lights(&win);
+    }
     Ok(win)
 }
 
@@ -6501,9 +6529,9 @@ pub fn run() {
                     }
                     return;
                 }
-                // A headless tool window exists only for the length of one run
-                // and closes itself at the end: let it go for real.
-                if is_headless_tool_label(window.label()) {
+                // A headless/floating tool window exists only for the length of
+                // one run and closes itself at the end: let it go for real.
+                if is_disposable_tool_label(window.label()) {
                     return;
                 }
                 // Other windows live in the menu bar — hide, don't quit Studio.

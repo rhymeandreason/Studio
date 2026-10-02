@@ -63,6 +63,15 @@ macOS's sampler loupe) is listed in `tool_is_headless()` in `lib.rs`: its window
 is built with `visible(false)`, so the page skips the window chrome entirely,
 does its work, and closes itself. Re-launching while one is running is a no-op.
 
+**Floating tools.** A tool that is just a shape on the desktop (the Camera
+Bubble — a FaceTime-style camera circle/square/portrait for screencasts) is
+listed in `FLOATING_TOOLS` in `lib.rs`: `apply_tool_chrome` builds it
+borderless, transparent, shadowless, always on top and on every Space, with no
+kit window chrome. The page paints its own shape + CSS shadow and sizes/moves
+the native window around it (`setSize` + `setPosition`). Like headless tools,
+closing really closes it (`is_disposable_tool_label`) — for the camera that's
+what turns the green light off.
+
 ## How it works
 
 - Drop a self-contained `.html` file into [`src/tools/`](../src/tools)

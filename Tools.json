@@ -14,6 +14,7 @@
   { "file": "server.html", "name": "Server" },
   { "file": "window-size.html", "name": "Window Size" },
   { "file": "browser-frame.html", "name": "Browser Record" },
+  { "file": "camera-bubble.html", "name": "Camera Bubble" },
   { "file": "file-directory.html", "name": "File Directory" },
   { "file": "plan.html", "name": "Plan" },
   { "file": "modes.html", "name": "Modes" },

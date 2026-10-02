@@ -6,5 +6,7 @@
 	<string>Studio reads today's events to build your morning briefing.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Mycelium matches your Mac Contacts to fill in email/phone for people in your graph.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera Bubble shows your camera in a floating shape for screen recordings.</string>
 </dict>
 </plist>
