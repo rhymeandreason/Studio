@@ -61,7 +61,7 @@ number comes from `layout()`, so the 2D view, the 3D view and the STL all agree.
 - Drag to move (snaps to 0.5 mm, the face centre, this face's connectors and the
   other cutouts' centres). Drag the corners to resize. Option = no snapping.
   Double-click empty face = add a Ø6 round hole. Arrow keys nudge (Shift = 5 mm),
-  ⌘D duplicates, ⌫ deletes, ⌘Z / ⇧⌘Z undo/redo.
+  R rotates 90° (swaps W/H), ⌘D duplicates, ⌫ deletes, ⌘Z / ⇧⌘Z undo/redo.
 - Selection dimensions (distance from the left and bottom edges) are drawn in
   the 2D view; exact numbers are in the footer fields.
 - Autosaves to the artifact after the first edit; reloads live when Claude edits the file

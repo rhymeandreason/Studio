@@ -446,6 +446,13 @@ function removeSelected() {
   sel = null;
   commit(); renderInspector(); update();
 }
+/** Quarter turn about the centre = swap width and height. */
+function rotateSelected() {
+  const c = resolved(sel), raw = rawCut(sel);
+  if (!c || c.shape === "circle") return;
+  raw.w = r2(c.h); raw.h = r2(c.w);
+  commit(); update(); renderFoot();
+}
 function duplicateSelected() {
   const c = resolved(sel);
   if (!c) return;
@@ -471,6 +478,7 @@ function renderFoot() {
   h += fld("cx", "X", r2(c.cx)) + fld("cy", "Y", r2(c.cy));
   h += fld("w", c.shape === "circle" ? "Ø" : "W", r2(c.w));
   if (c.shape !== "circle") h += fld("h", "H", r2(c.h));
+  if (c.shape !== "circle") h += `<button class="btn btn-icon btn-ghost" data-act="rotate" title="Rotate 90° (R)"><span class="mi mi-sm ph ph-arrow-clockwise"></span></button>`;
   if (c.shape === "rect") h += fld("r", "Radius", r2(c.r));
   if (c.shape === "vent") h += fld("slot", "Slot", c.slot || 2) + fld("gap", "Gap", c.gap || 2);
   h += fld("label", "Label", raw.label ?? (c.linked ? c.label : ""), "wide");
@@ -497,6 +505,7 @@ $("foot").addEventListener("click", (e) => {
   }
   const act = e.target.closest("[data-act]")?.dataset.act;
   if (act === "del") removeSelected();
+  if (act === "rotate") rotateSelected();
   if (act === "reset") { for (const k of ["dx", "dy", "w", "h", "r", "shape"]) delete raw[k]; commit(); update(); renderFoot(); }
 });
 $("foot").addEventListener("input", (e) => {
@@ -525,6 +534,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (typing) { if (e.key === "Escape") e.target.blur(); return; }
   if (mod && e.key.toLowerCase() === "d" && sel) { e.preventDefault(); duplicateSelected(); return; }
+  if (!mod && e.key.toLowerCase() === "r" && sel) { e.preventDefault(); rotateSelected(); return; }
   if ((e.key === "Backspace" || e.key === "Delete") && sel) { e.preventDefault(); removeSelected(); return; }
   if (e.key === "Escape" && sel) { sel = null; update({ geometry: false }); return; }
   const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
