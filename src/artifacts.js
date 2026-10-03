@@ -8,6 +8,7 @@ import { el, mi } from "./dom.js";
 import { createSelection } from "./selection.js";
 import { toast } from "./kit/app.js";
 import { renderDiagram } from "./diagram/render.js";
+import { enclosureSvg } from "./enclosure/preview.js";
 import { createShaderRenderer } from "./video/shaders.js";
 
 const { invoke, convertFileSrc } = window.__TAURI__.core;
@@ -54,6 +55,7 @@ const EDITOR = {
   "presentation": "slides.html",
   "theme": "theme-editor.html",
   "diagram": "diagram.html",
+  "enclosure": "enclosure.html",
 };
 
 const KIND_LABEL = {
@@ -61,6 +63,7 @@ const KIND_LABEL = {
   "presentation": "Presentations",
   "theme": "Themes",
   "diagram": "Diagrams",
+  "enclosure": "Enclosures",
 };
 
 // renderArtifacts rebuilds the panel (and the add-menu) from scratch on every
@@ -111,6 +114,7 @@ export async function renderArtifacts() {
     { icon: "presentation", label: "Presentation", action: () => invoke("open_tool", { file: EDITOR["presentation"], query: null }) },
     { icon: "swatches", label: "Theme", action: () => invoke("open_tool", { file: EDITOR["theme"], query: null }) },
     { icon: "flow-arrow", label: "Diagram", action: () => invoke("open_tool", { file: EDITOR["diagram"], query: null }) },
+    { icon: "cube", label: "Enclosure", action: () => invoke("open_tool", { file: EDITOR["enclosure"], query: null }) },
     {
       icon: "film-strip",
       label: "Video",
@@ -315,7 +319,9 @@ function artifactCard(item) {
             ? diagramPreview(data)
             : item.kind === "swatch"
               ? swatchPreview(data)
-              : el("div", "artifact__preview"),
+              : item.kind === "enclosure"
+                ? enclosurePreview(data)
+                : el("div", "artifact__preview"),
   );
 
   const open = () => {
@@ -528,6 +534,20 @@ export function diagramPreview(data) {
     wrap.appendChild(svg);
   } catch {
     wrap.appendChild(el("span", "artifact-card__meta", { textContent: "diagram" }));
+  }
+  return wrap;
+}
+
+export function enclosurePreview(data) {
+  const wrap = el("div", "artifact__preview");
+  wrap.style.justifyContent = "center";
+  try {
+    wrap.innerHTML = enclosureSvg(data);
+    const svg = wrap.firstChild;
+    svg.style.width = "100%";
+    svg.style.height = "100%";
+  } catch {
+    wrap.appendChild(el("span", "artifact-card__meta", { textContent: "enclosure" }));
   }
   return wrap;
 }

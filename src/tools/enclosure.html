@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enclosure</title>
+<!-- OrbitControls imports bare "three"; must precede every module script. -->
+<script type="importmap">{ "imports": { "three": "../vendor/three/three.module.js" } }</script>
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../kit/kit.css" />
+<link rel="stylesheet" href="../kit/window-chrome.css" />
+<script type="module" src="../kit/components.js"></script>
+<script type="module" src="../kit/window-chrome.js"></script>
+<style>
+  body { color: var(--text); font-family: var(--sans); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  #titlebar { height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 14px; }
+  .tb-title { display: flex; align-items: center; gap: 8px; }
+  #name { border: none; background: transparent; color: var(--text); font-family: var(--sans); font-size: 13px; width: 240px; min-width: 0; padding: 4px 6px; border-radius: var(--radius-sm); }
+  #name:focus { outline: none; background: var(--elevated); }
+  .tb-spacer { flex: 1 1 auto; }
+  #dims { font-family: var(--mono); font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+  #main { flex: 1 1 auto; display: flex; min-height: 0; background: var(--bg); border-top: 1px solid var(--hairline); }
+
+  /* ---- 2D face editor ---- */
+  .face-pane { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+  .pane-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--hairline); flex-wrap: wrap; }
+  .pill-tab sup { font-size: 9px; color: var(--text-soft); margin-left: 2px; }
+  .pill-tab.is-active sup { color: var(--text-muted); }
+  .add-btns { display: flex; gap: 2px; margin-left: auto; }
+  .face-stage { flex: 1 1 auto; min-height: 0; position: relative; }
+  #face-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
+  #face-svg .cut { cursor: grab; }
+  body.dragging, body.dragging #face-svg .cut { cursor: grabbing; }
+  #face-svg .handle { cursor: nwse-resize; }
+  #face-svg .handle[data-corner="ne"], #face-svg .handle[data-corner="sw"] { cursor: nesw-resize; }
+  .face-foot { border-top: 1px solid var(--hairline); padding: 10px 12px; min-height: 58px; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+  .face-foot .hint { align-self: center; }
+  .foot-fld { display: flex; flex-direction: column; gap: 3px; width: 62px; }
+  .foot-fld.wide { width: 120px; }
+  .foot-fld > span, .fld > span { font-size: 10.5px; color: var(--text-muted); letter-spacing: .03em; }
+  .foot-fld .field, .fld .field { height: 28px; font-size: 12px; padding: 0 7px; }
+  .link-note { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); align-self: center; }
+
+  /* ---- 3D view ---- */
+  .view-pane { flex: 1.15 1 0; min-width: 0; position: relative; border-left: 1px solid var(--hairline); }
+  #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+  .view-tools { position: absolute; top: 10px; left: 10px; display: flex; gap: 2px; z-index: 1; }
+  .view-status { position: absolute; left: 12px; right: 12px; bottom: 10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted); display: flex; gap: 10px; align-items: center; pointer-events: none; }
+  .view-status a { color: var(--text); text-decoration: underline; cursor: pointer; pointer-events: auto; }
+
+  /* ---- inspector ---- */
+  .inspector { flex: 0 0 280px; border-left: 1px solid var(--hairline); overflow-y: auto; }
+  .insp-sec { padding: 14px; border-bottom: 1px solid var(--hairline); display: flex; flex-direction: column; gap: 10px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fld { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .hint { font-size: 11px; color: var(--text-muted); line-height: 1.45; }
+  .hint.warn { color: var(--rose); }
+  .port-row { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; }
+  .port-row .edge { margin-left: auto; font-size: 10.5px; color: var(--text-soft); }
+  .sec-head { display: flex; align-items: center; justify-content: space-between; }
+  .size-readout { font-family: var(--mono); font-size: 12px; }
+  textarea.field { font-family: var(--mono); font-size: 11px; min-height: 70px; }
+</style>
+</head>
+<body>
+  <div id="titlebar" data-window-bar>
+    <div class="tb-title" data-window-close><span class="eyebrow">Enclosure</span></div>
+    <input id="name" spellcheck="false" />
+    <span class="tb-spacer"></span>
+    <span id="dims"></span>
+    <button class="btn btn-primary" id="export"><span class="mi mi-sm ph ph-download-simple"></span> Export STL</button>
+  </div>
+
+  <div id="main">
+    <section class="face-pane">
+      <div class="pane-bar">
+        <div class="pill-tabs" id="face-tabs"></div>
+        <div class="add-btns">
+          <button class="btn btn-icon btn-ghost" data-add="rect" title="Add rectangle"><span class="mi mi-sm ph ph-square"></span></button>
+          <button class="btn btn-icon btn-ghost" data-add="slot" title="Add slot"><span class="mi mi-sm ph ph-pill"></span></button>
+          <button class="btn btn-icon btn-ghost" data-add="circle" title="Add round hole"><span class="mi mi-sm ph ph-circle"></span></button>
+          <button class="btn btn-icon btn-ghost" data-add="vent" title="Add vent grille"><span class="mi mi-sm ph ph-columns"></span></button>
+        </div>
+      </div>
+      <div class="face-stage"><svg id="face-svg"></svg></div>
+      <div class="face-foot" id="foot"></div>
+    </section>
+
+    <section class="view-pane" id="view-pane">
+      <canvas id="view" tabindex="-1"></canvas>
+      <div class="view-tools">
+        <button class="btn btn-icon btn-ghost" id="t-lid" title="Show lid"><span class="mi mi-sm ph-fill ph-package"></span></button>
+        <button class="btn btn-icon btn-ghost" id="t-explode" title="Lift lid"><span class="mi mi-sm ph ph-arrows-out-line-vertical"></span></button>
+        <button class="btn btn-icon btn-ghost" id="t-board" title="Show board"><span class="mi mi-sm ph-fill ph-cpu"></span></button>
+        <button class="btn btn-icon btn-ghost" id="t-home" title="Reset view"><span class="mi mi-sm ph ph-crosshair"></span></button>
+      </div>
+      <div class="view-status" id="status"></div>
+    </section>
+
+    <aside class="inspector" id="inspector"></aside>
+  </div>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "../vendor/three/OrbitControls.js";
+import { hasTauri, invoke, listen, esc, toast } from "../kit/app.js";
+import { BOARDS, BOARD_ORDER } from "../enclosure/boards.js";
+import {
+  FACES, FACE_LABEL, newEnclosure, normalize, resolveBoard, defaultPortCutouts, layout, faceSize, faceBasis,
+  faceToWorld, worldToFace, nearestFace, portOnFace, portBox, resolveCutouts, cutoutPolys, roundedRectPoly, polyPath, uid,
+} from "../enclosure/model.js";
+import { loadManifold, buildParts, lidForPrint, toSTL } from "../enclosure/geometry.js";
+
+if (window.__TAURI__) {
+  const { getCurrentWindow } = window.__TAURI__.window;
+  const { LogicalSize } = window.__TAURI__.dpi;
+  getCurrentWindow().setSize(new LogicalSize(1400, 860));
+}
+
+// ---------------------------------------------------------------- state
+let doc = newEnclosure("pi5");
+let L = null, cuts = [];
+let face = "front", sel = null;
+let activePath = null, projectRoot = null;
+const view = { lid: true, explode: false, board: true };
+const $ = (id) => document.getElementById(id);
+const r2 = (v) => Math.round(v * 100) / 100;
+const snapTo = (v, s) => Math.round(v / s) * s;
+const statusEl = $("status");
+
+const rawCut = (id) => doc.cutouts.find((c) => c.id === id);
+const resolved = (id) => cuts.find((c) => c.id === id);
+
+// ---------------------------------------------------------------- history
+let history = [], hIdx = -1;
+function commit() {
+  const s = JSON.stringify(doc);
+  if (s === history[hIdx]) return;
+  history = history.slice(0, hIdx + 1);
+  history.push(s); hIdx = history.length - 1;
+  if (history.length > 200) { history.shift(); hIdx--; }
+}
+function restore(i) {
+  hIdx = i; doc = JSON.parse(history[i]);
+  if (sel && !rawCut(sel)) sel = null;
+  $("name").value = doc.name;
+  renderInspector(); update();
+}
+
+// ---------------------------------------------------------------- update loop
+function update({ geometry = true } = {}) {
+  L = layout(doc);
+  cuts = resolveCutouts(doc, L);
+  $("dims").textContent = `${r2(L.W)} × ${r2(L.D)} × ${r2(L.H)} mm`;
+  renderTabs();
+  draw2D();
+  if (!$("foot").contains(document.activeElement)) renderFoot();
+  syncHints();
+  if (geometry) schedule3D(); else updateHighlight();
+  scheduleSave();
+}
+
+// ---------------------------------------------------------------- face tabs
+function renderTabs() {
+  const counts = Object.fromEntries(FACES.map((f) => [f, 0]));
+  for (const c of cuts) counts[c.face]++;
+  $("face-tabs").innerHTML = FACES.map((f) =>
+    `<button class="pill-tab${f === face ? " is-active" : ""}" data-face="${f}">${FACE_LABEL[f]}${counts[f] ? `<sup>${counts[f]}</sup>` : ""}</button>`).join("");
+}
+$("face-tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-face]");
+  if (!b) return;
+  setFace(b.dataset.face, { turn: true });
+});
+function setFace(f, { turn = false } = {}) {
+  if (f !== face && sel && resolved(sel)?.face !== f) sel = null;
+  face = f;
+  update({ geometry: false });
+  if (turn) turnCameraTo(f);
+}
+
+// ---------------------------------------------------------------- 2D face editor
+const svg = $("face-svg");
+let vb = { x: 0, y: 0, w: 100, h: 100 }, scale = 1, guides = [];
+
+function pxScale() {
+  const r = svg.getBoundingClientRect();
+  return Math.min(r.width / vb.w, r.height / vb.h) || 1;
+}
+
+function draw2D() {
+  const { w: fw, h: fh } = faceSize(face, L);
+  const m = Math.max(fw, fh) * 0.09 + 8;
+  vb = { x: -m, y: -m, w: fw + 2 * m, h: fh + 2 * m };
+  svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  scale = pxScale();
+  const px = (n) => n / scale;                     // screen px → mm
+  const Y = (v) => fh - v;
+  const f = faceBasis(face, L);
+  const top = face === "top" || face === "bottom";
+  const ns = `vector-effect="non-scaling-stroke"`;
+  let s = "";
+
+  // grid inside the face: 5 mm, stronger every 10
+  let grid = "";
+  for (let u = 5; u < fw; u += 5) grid += `<line x1="${u}" y1="0" x2="${u}" y2="${fh}" stroke-opacity="${u % 10 ? 0.5 : 1}"/>`;
+  for (let v = 5; v < fh; v += 5) grid += `<line x1="0" y1="${Y(v)}" x2="${fw}" y2="${Y(v)}" stroke-opacity="${v % 10 ? 0.5 : 1}"/>`;
+
+  // face body
+  const body = top ? polyPath([roundedRectPoly(0, 0, fw, fh, L.radius)], fh) : `M0 0H${fw}V${fh}H0Z`;
+  s += `<path d="${body}" fill="var(--elevated)" stroke="none"/>`;
+  s += `<clipPath id="fc"><path d="${body}"/></clipPath>`;
+  s += `<g clip-path="url(#fc)" stroke="var(--hairline)" stroke-width="1" ${ns}>${grid.replaceAll("<line ", `<line ${ns} `)}</g>`;
+
+  // structure hints
+  const dash = `fill="none" stroke="var(--text-soft)" stroke-dasharray="4 3" ${ns}`;
+  if (top) {
+    s += `<path d="${polyPath([roundedRectPoly(L.wall, L.wall, L.iw, L.id, Math.max(0.5, L.radius - L.wall))], fh)}" ${dash}/>`;
+    if (face === "top" && L.style === "screw") for (const [x, y] of L.bosses) s += `<circle cx="${x}" cy="${Y(y)}" r="${L.screw.clear}" fill="none" stroke="var(--text-muted)" ${ns}/>`;
+  } else {
+    const iu0 = L.wall, iu1 = fw - L.wall, topIn = L.style === "slide" ? L.z0 : L.baseH;
+    s += `<rect x="${iu0}" y="${Y(topIn)}" width="${iu1 - iu0}" height="${topIn - L.floor}" ${dash}/>`;
+    if (L.style !== "slide") {
+      s += `<rect x="0" y="0" width="${fw}" height="${L.H - L.baseH}" fill="var(--surface)" opacity=".7"/>`;
+      s += `<line x1="0" x2="${fw}" y1="${Y(L.baseH)}" y2="${Y(L.baseH)}" stroke="var(--text-muted)" ${ns}/>`;
+    } else if (face === "front") {
+      const g = L.grooveDepth;
+      s += `<rect x="${L.wall - g}" y="0" width="${fw - 2 * (L.wall - g)}" height="${L.H - L.z0}" fill="var(--surface)" opacity=".7" stroke="var(--text-muted)" ${ns}/>`;
+    } else {
+      s += `<rect x="${L.wall - L.grooveDepth}" y="${Y(L.z0 + L.lidT + L.fit)}" width="${fw - 2 * (L.wall - L.grooveDepth)}" height="${L.lidT + L.fit}" ${dash}/>`;
+    }
+  }
+
+  // board silhouette
+  if (view.board) s += boardSilhouette(f, fh, ns, top);
+
+  // outline on top of the fills
+  s += `<path d="${body}" fill="none" stroke="var(--text)" stroke-width="1.25" ${ns}/>`;
+
+  // cutouts
+  const mine = cuts.filter((c) => c.face === face);
+  for (const c of mine) {
+    const on = c.id === sel;
+    s += `<path class="cut" data-cut="${c.id}" d="${polyPath(cutoutPolys(c), fh)}" fill="var(--text)" fill-opacity="${on ? 0.9 : 0.75}" fill-rule="nonzero"/>`;
+    if (c.shape === "vent") s += `<rect class="cut" data-cut="${c.id}" x="${c.cx - c.w / 2}" y="${Y(c.cy + c.h / 2)}" width="${c.w}" height="${c.h}" fill="transparent" stroke="${on ? "none" : "var(--text-soft)"}" stroke-dasharray="2 2" ${ns}/>`;
+  }
+  // selection: outline, handles, dimensions
+  const sc = mine.find((c) => c.id === sel);
+  if (sc) {
+    const x0 = sc.cx - sc.w / 2, x1 = sc.cx + sc.w / 2, y0 = sc.cy - sc.h / 2, y1 = sc.cy + sc.h / 2;
+    s += `<rect x="${x0}" y="${Y(y1)}" width="${sc.w}" height="${sc.h}" fill="none" stroke="var(--accent)" stroke-width="1.5" ${ns} pointer-events="none"/>`;
+    const hs = px(8);
+    for (const [k, u, v] of [["sw", x0, y0], ["se", x1, y0], ["nw", x0, y1], ["ne", x1, y1]]) {
+      s += `<rect class="handle" data-corner="${k}" x="${u - hs / 2}" y="${Y(v) - hs / 2}" width="${hs}" height="${hs}" fill="var(--elevated)" stroke="var(--accent)" stroke-width="1.5" ${ns}/>`;
+    }
+    s += dimLine(0, sc.cy, x0, sc.cy, r2(x0), fh, px, "h");
+    s += dimLine(sc.cx, 0, sc.cx, y0, r2(y0), fh, px, "v");
+  }
+  // overall size, outside the face
+  s += dimLine(0, -px(16), fw, -px(16), r2(fw), fh, px, "h", true);
+  s += dimLine(-px(16), 0, -px(16), fh, r2(fh), fh, px, "v", true);
+
+  for (const g of guides) {
+    s += g.axis === "u"
+      ? `<line x1="${g.at}" x2="${g.at}" y1="${vb.y}" y2="${vb.y + vb.h}" stroke="var(--accent)" stroke-dasharray="3 3" ${ns}/>`
+      : `<line y1="${Y(g.at)}" y2="${Y(g.at)}" x1="${vb.x}" x2="${vb.x + vb.w}" stroke="var(--accent)" stroke-dasharray="3 3" ${ns}/>`;
+  }
+  svg.innerHTML = s;
+}
+
+function dimLine(u0, v0, u1, v1, label, fh, px, dir, muted) {
+  if (Math.hypot(u1 - u0, v1 - v0) < 0.01) return "";
+  const col = muted ? "var(--text-soft)" : "var(--accent)";
+  const fs = px(10.5), t = px(4);
+  const Y = (v) => fh - v;
+  const ns = `vector-effect="non-scaling-stroke"`;
+  let s = `<line x1="${u0}" y1="${Y(v0)}" x2="${u1}" y2="${Y(v1)}" stroke="${col}" stroke-width="1" ${ns} pointer-events="none"/>`;
+  const ticks = dir === "h" ? [[u0, v0], [u1, v1]].map(([u, v]) => `M${u} ${Y(v) - t}V${Y(v) + t}`) : [[u0, v0], [u1, v1]].map(([u, v]) => `M${u - t} ${Y(v)}H${u + t}`);
+  s += `<path d="${ticks.join("")}" stroke="${col}" ${ns} pointer-events="none"/>`;
+  const mu = (u0 + u1) / 2, mv = (v0 + v1) / 2;
+  const txt = `font-family="var(--mono)" font-size="${fs}" fill="${col}" pointer-events="none"`;
+  s += dir === "h"
+    ? `<text x="${mu}" y="${Y(mv) - px(5)}" text-anchor="middle" ${txt}>${label}</text>`
+    : `<text x="${mu - px(5)}" y="${Y(mv)}" text-anchor="end" dominant-baseline="middle" ${txt}>${label}</text>`;
+  return s;
+}
+
+/** Board + connectors as seen on this face. */
+function boardSilhouette(f, fh, ns, top) {
+  const B = L.board, Y = (v) => fh - v;
+  const proj = (x0, x1, y0, y1, z0, z1) => {
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (const x of [x0, x1]) for (const y of [y0, y1]) for (const z of [z0, z1]) {
+      const [u, v] = worldToFace(f, [x, y, z]);
+      u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+    }
+    return { u0, u1, v0, v1 };
+  };
+  const st = `stroke="var(--sage)" stroke-width="1" ${ns}`;
+  let s = "";
+  if (top) {
+    s += `<path d="${polyPath([roundedRectPoly(L.bx, L.by, B.w, B.d, B.r)], fh)}" fill="var(--sage-soft)" ${st}/>`;
+    for (const [hx, hy] of B.holes) s += `<circle cx="${L.bx + hx}" cy="${Y(L.by + hy)}" r="${B.holeDia / 2}" fill="var(--elevated)" ${st}/>`;
+    for (const p of B.ports) {
+      const b = portBox(p, B);
+      s += `<rect x="${L.bx + b.x0}" y="${Y(L.by + b.y1)}" width="${b.x1 - b.x0}" height="${b.y1 - b.y0}" fill="none" stroke-dasharray="2 2" ${st}/>`;
+    }
+  } else {
+    const r = proj(L.bx, L.bx + B.w, L.by, L.by + B.d, L.bz, L.boardTop);
+    s += `<rect x="${r.u0}" y="${Y(r.v1)}" width="${r.u1 - r.u0}" height="${r.v1 - r.v0}" fill="var(--sage-soft)" ${st}/>`;
+    for (const [hx, hy] of B.holes) {
+      const q = proj(L.bx + hx - L.standoffDia / 2, L.bx + hx + L.standoffDia / 2, L.by + hy, L.by + hy, L.floor, L.bz);
+      s += `<rect x="${q.u0}" y="${Y(q.v1)}" width="${q.u1 - q.u0}" height="${q.v1 - q.v0}" fill="none" stroke="var(--text-soft)" ${ns}/>`;
+    }
+    for (const p of B.ports) {
+      if (p.edge !== face) continue;
+      const pf = portOnFace(p, L);
+      s += pf.circle
+        ? `<circle cx="${pf.cx}" cy="${Y(pf.cy)}" r="${pf.h / 2}" fill="none" ${st}/>`
+        : `<rect x="${pf.cx - pf.w / 2}" y="${Y(pf.cy + pf.h / 2)}" width="${pf.w}" height="${pf.h}" rx="0.4" fill="none" ${st}/>`;
+    }
+  }
+  return s;
+}
+
+// ---- pointer interaction
+function svgPoint(e) {
+  const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+  return [p.x, faceSize(face, L).h - p.y];
+}
+let drag = null;
+svg.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  const [u, v] = svgPoint(e);
+  const handle = e.target.closest(".handle");
+  const cutEl = e.target.closest(".cut");
+  if (handle && sel) {
+    const c = resolved(sel);
+    drag = { kind: "resize", id: sel, corner: handle.dataset.corner, start: { ...c } };
+  } else if (cutEl) {
+    sel = cutEl.dataset.cut;
+    const c = resolved(sel);
+    drag = { kind: "move", id: sel, u0: u, v0: v, cx: c.cx, cy: c.cy, moved: false };
+    renderFoot();
+  } else {
+    sel = null;
+    update({ geometry: false });
+    return;
+  }
+  svg.setPointerCapture(e.pointerId);
+  document.body.classList.add("dragging");
+  update({ geometry: false });
+});
+svg.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const [u, v] = svgPoint(e);
+  const free = e.altKey;
+  if (drag.kind === "move") {
+    let cx = drag.cx + (u - drag.u0), cy = drag.cy + (v - drag.v0);
+    if (!free) [cx, cy] = snapCenter(drag.id, snapTo(cx, 0.5), snapTo(cy, 0.5));
+    else guides = [];
+    setCenter(rawCut(drag.id), cx, cy);
+    drag.moved = true;
+  } else {
+    resizeTo(drag, free ? u : snapTo(u, 0.5), free ? v : snapTo(v, 0.5));
+  }
+  update();
+});
+const endDrag = () => {
+  if (!drag) return;
+  drag = null; guides = [];
+  document.body.classList.remove("dragging");
+  commit();
+  update({ geometry: false });
+};
+svg.addEventListener("pointerup", endDrag);
+svg.addEventListener("pointercancel", endDrag);
+svg.addEventListener("dblclick", (e) => {
+  if (e.target.closest(".cut, .handle")) return;
+  const [u, v] = svgPoint(e);
+  addCutout("circle", snapTo(u, 0.5), snapTo(v, 0.5));
+});
+
+/** Snap a centre to the face centre, this face's ports and the other cutouts. */
+function snapCenter(id, cx, cy) {
+  const { w: fw, h: fh } = faceSize(face, L);
+  const T = 6 / scale;
+  const us = [fw / 2], vs = [fh / 2];
+  for (const p of L.board.ports) {
+    const pf = portOnFace(p, L);
+    if (pf.face === face) { us.push(pf.cx); vs.push(pf.cy); }
+  }
+  for (const c of cuts) if (c.face === face && c.id !== id) { us.push(c.cx); vs.push(c.cy); }
+  guides = [];
+  const near = (val, list) => list.reduce((best, t) => (Math.abs(t - val) < T && (best == null || Math.abs(t - val) < Math.abs(best - val)) ? t : best), null);
+  const su = near(cx, us), sv = near(cy, vs);
+  if (su != null) { cx = su; guides.push({ axis: "u", at: su }); }
+  if (sv != null) { cy = sv; guides.push({ axis: "v", at: sv }); }
+  return [cx, cy];
+}
+
+function portCenter(raw) {
+  const p = L.board.ports.find((q) => q.id === raw.port);
+  return p ? portOnFace(p, L) : { cx: 0, cy: 0 };
+}
+function setCenter(raw, cx, cy) {
+  if (raw.port) {
+    const pc = portCenter(raw);
+    raw.dx = r2(cx - pc.cx); raw.dy = r2(cy - pc.cy);
+    if (!raw.dx) delete raw.dx;
+    if (!raw.dy) delete raw.dy;
+  } else { raw.x = r2(cx); raw.y = r2(cy); }
+}
+
+function resizeTo(d, u, v) {
+  const raw = rawCut(d.id), c = d.start;
+  if (c.shape === "circle") {
+    raw.w = r2(Math.max(1, 2 * Math.max(Math.abs(u - c.cx), Math.abs(v - c.cy))));
+    return;
+  }
+  const ax = d.corner.includes("w") ? c.cx + c.w / 2 : c.cx - c.w / 2;
+  const ay = d.corner.includes("s") ? c.cy + c.h / 2 : c.cy - c.h / 2;
+  raw.w = r2(Math.max(1, Math.abs(u - ax)));
+  raw.h = r2(Math.max(1, Math.abs(v - ay)));
+  setCenter(raw, (u + ax) / 2, (v + ay) / 2);
+}
+
+function addCutout(shape, u, v) {
+  const { w: fw, h: fh } = faceSize(face, L);
+  const size = { rect: [12, 8], slot: [14, 4], circle: [6, 6], vent: [Math.min(40, fw * 0.5), Math.min(16, fh * 0.35)] }[shape];
+  const c = { id: uid(), face, shape, x: r2(u ?? fw / 2), y: r2(v ?? fh / 2), w: size[0] };
+  if (shape !== "circle") c.h = size[1];
+  if (shape === "rect") c.r = 1;
+  if (shape === "vent") { c.slot = 2; c.gap = 2; }
+  doc.cutouts.push(c);
+  sel = c.id;
+  commit(); update();
+}
+document.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => addCutout(b.dataset.add)));
+
+function removeSelected() {
+  if (!sel) return;
+  doc.cutouts = doc.cutouts.filter((c) => c.id !== sel);
+  sel = null;
+  commit(); renderInspector(); update();
+}
+function duplicateSelected() {
+  const c = resolved(sel);
+  if (!c) return;
+  const copy = { id: uid(), face: c.face, shape: c.shape, x: r2(c.cx + 3), y: r2(c.cy - 3), w: c.w, h: c.h, r: c.r };
+  if (c.shape === "vent") { copy.slot = c.slot || 2; copy.gap = c.gap || 2; }
+  doc.cutouts.push(copy);
+  sel = copy.id;
+  commit(); update();
+}
+
+// ---- footer: the selected cutout's numbers
+function renderFoot() {
+  const foot = $("foot");
+  const c = resolved(sel);
+  if (!c || c.face !== face) {
+    foot.innerHTML = `<span class="hint">Drag cutouts to move, corners to resize. Double-click the face to add a hole. Option disables snapping.</span>`;
+    return;
+  }
+  const raw = rawCut(sel);
+  const shapes = [["rect", "square", "Rectangle"], ["slot", "pill", "Slot"], ["circle", "circle", "Round"], ["vent", "columns", "Vent"]];
+  const fld = (key, label, val, cls = "") => `<label class="foot-fld ${cls}"><span>${label}</span><input class="field" data-k="${key}" type="${key === "label" ? "text" : "number"}" step="${key === "label" ? "" : "0.5"}" value="${esc(String(val ?? ""))}"></label>`;
+  let h = `<div class="seg-toggle">${shapes.map(([k, ic, t]) => `<button class="seg-toggle__btn${c.shape === k ? " is-active" : ""}" data-shape="${k}" title="${t}"><span class="mi mi-sm ph ph-${ic}"></span></button>`).join("")}</div>`;
+  h += fld("cx", "X", r2(c.cx)) + fld("cy", "Y", r2(c.cy));
+  h += fld("w", c.shape === "circle" ? "Ø" : "W", r2(c.w));
+  if (c.shape !== "circle") h += fld("h", "H", r2(c.h));
+  if (c.shape === "rect") h += fld("r", "Radius", r2(c.r));
+  if (c.shape === "vent") h += fld("slot", "Slot", c.slot || 2) + fld("gap", "Gap", c.gap || 2);
+  h += fld("label", "Label", raw.label ?? (c.linked ? c.label : ""), "wide");
+  if (c.linked) {
+    const custom = ["dx", "dy", "w", "h", "r", "shape"].some((k) => raw[k] != null);
+    h += `<span class="link-note"><span class="mi mi-sm ph ph-link"></span>Follows ${esc(c.label)}</span>`;
+    if (custom) h += `<button class="btn btn-ghost" data-act="reset" title="Back to the port's own position and size">Reset</button>`;
+  }
+  h += `<button class="btn btn-icon btn-ghost" data-act="del" title="Delete (⌫)" style="margin-left:auto"><span class="mi mi-sm ph ph-trash"></span></button>`;
+  foot.innerHTML = h;
+}
+$("foot").addEventListener("click", (e) => {
+  const raw = rawCut(sel);
+  if (!raw) return;
+  const sb = e.target.closest("[data-shape]");
+  if (sb) {
+    const c = resolved(sel);
+    raw.shape = sb.dataset.shape;
+    if (raw.shape === "circle") raw.w = r2(Math.min(c.w, c.h));
+    else if (c.shape === "circle") { raw.w = c.w; raw.h = c.w; }
+    if (raw.shape === "vent") { raw.slot ??= 2; raw.gap ??= 2; }
+    commit(); update(); renderFoot();
+    return;
+  }
+  const act = e.target.closest("[data-act]")?.dataset.act;
+  if (act === "del") removeSelected();
+  if (act === "reset") { for (const k of ["dx", "dy", "w", "h", "r", "shape"]) delete raw[k]; commit(); update(); renderFoot(); }
+});
+$("foot").addEventListener("input", (e) => {
+  const k = e.target.dataset.k, raw = rawCut(sel), c = resolved(sel);
+  if (!k || !raw) return;
+  if (k === "label") { raw.label = e.target.value; update({ geometry: false }); return; }
+  const n = parseFloat(e.target.value);
+  if (!Number.isFinite(n)) return;
+  if (k === "cx") setCenter(raw, n, c.cy);
+  else if (k === "cy") setCenter(raw, c.cx, n);
+  else if (k === "w" || k === "h") raw[k] = Math.max(0.5, n);
+  else raw[k] = Math.max(0, n);
+  update();
+});
+$("foot").addEventListener("change", () => { commit(); renderFoot(); });
+
+// ---- keyboard
+document.addEventListener("keydown", (e) => {
+  const typing = !!e.target.closest?.("input, textarea, select");
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.key.toLowerCase() === "z" && !typing) {
+    e.preventDefault();
+    if (e.shiftKey) { if (hIdx < history.length - 1) restore(hIdx + 1); }
+    else if (hIdx > 0) restore(hIdx - 1);
+    return;
+  }
+  if (typing) { if (e.key === "Escape") e.target.blur(); return; }
+  if (mod && e.key.toLowerCase() === "d" && sel) { e.preventDefault(); duplicateSelected(); return; }
+  if ((e.key === "Backspace" || e.key === "Delete") && sel) { e.preventDefault(); removeSelected(); return; }
+  if (e.key === "Escape" && sel) { sel = null; update({ geometry: false }); return; }
+  const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
+  if (arrows[e.key] && sel) {
+    e.preventDefault();
+    const c = resolved(sel), step = e.shiftKey ? 5 : 0.5;
+    setCenter(rawCut(sel), c.cx + arrows[e.key][0] * step, c.cy + arrows[e.key][1] * step);
+    update();
+    clearTimeout(nudgeTimer); nudgeTimer = setTimeout(commit, 400);
+  }
+});
+let nudgeTimer;
+
+// ---------------------------------------------------------------- inspector
+const hintEls = {};
+function numField(label, get, set, { step = 0.5, min = 0 } = {}) {
+  const wrap = document.createElement("label");
+  wrap.className = "fld";
+  wrap.innerHTML = `<span>${label}</span><input class="field" type="number" step="${step}" min="${min}">`;
+  const input = wrap.querySelector("input");
+  input.value = get();
+  input.addEventListener("input", () => {
+    const n = parseFloat(input.value);
+    if (Number.isFinite(n) && n >= min) { set(n); update(); }
+  });
+  input.addEventListener("change", () => { commit(); input.value = get(); });
+  return wrap;
+}
+function sec(title, ...kids) {
+  const s = document.createElement("div");
+  s.className = "insp-sec";
+  const h = document.createElement("div");
+  h.className = "sec-head";
+  h.innerHTML = `<span class="label">${title}</span>`;
+  s.appendChild(h);
+  for (const k of kids) if (k) s.appendChild(k);
+  return s;
+}
+function row(...kids) { const r = document.createElement("div"); r.className = "row2"; kids.forEach((k) => r.appendChild(k)); return r; }
+function hint(key) { const p = document.createElement("p"); p.className = "hint"; hintEls[key] = p; return p; }
+function html(str) { const t = document.createElement("template"); t.innerHTML = str.trim(); return t.content.firstChild; }
+
+function renderInspector() {
+  const ins = $("inspector");
+  ins.innerHTML = "";
+  const box = doc.box, lid = doc.lid;
+  const B = resolveBoard(doc.board);
+  const custom = doc.board.preset === "custom";
+
+  // Board
+  const pick = html(`<select class="field">${BOARD_ORDER.map((k) => `<option value="${k}"${k === doc.board.preset ? " selected" : ""}>${k === "custom" ? "Custom board" : BOARDS[k].name}</option>`).join("")}</select>`);
+  pick.addEventListener("change", () => setPreset(pick.value));
+  const boardSec = sec("Board", pick);
+  if (custom) {
+    const b = doc.board;
+    const setB = (k) => (n) => { b[k] = n; };
+    boardSec.appendChild(row(numField("Width", () => B.w, setB("w")), numField("Depth", () => B.d, setB("d"))));
+    boardSec.appendChild(row(numField("Thickness", () => B.t, setB("t"), { step: 0.1 }), numField("Corner radius", () => B.r, setB("r"))));
+    boardSec.appendChild(numField("Mounting hole Ø", () => B.holeDia, setB("holeDia"), { step: 0.1 }));
+    const ta = html(`<label class="fld"><span>Mounting holes (x, y per line)</span><textarea class="field" spellcheck="false"></textarea></label>`);
+    const area = ta.querySelector("textarea");
+    area.value = B.holes.map(([x, y]) => `${x}, ${y}`).join("\n");
+    area.addEventListener("input", () => {
+      b.holes = area.value.split("\n").map((l) => l.split(/[,\s]+/).filter(Boolean).map(Number)).filter((p) => p.length === 2 && p.every(Number.isFinite));
+      update();
+    });
+    area.addEventListener("change", commit);
+    boardSec.appendChild(ta);
+  } else {
+    const ed = html(`<button class="btn btn-ghost" title="Copy this preset into editable dimensions">Edit dimensions</button>`);
+    ed.addEventListener("click", () => {
+      doc.board = { preset: "custom", portMargin: doc.board.portMargin, ...structuredClone(BOARDS[doc.board.preset]) };
+      delete doc.board.name;
+      commit(); renderInspector(); update();
+    });
+    boardSec.querySelector(".sec-head").appendChild(ed);
+  }
+  if (B.ports.length) {
+    const list = document.createElement("div");
+    list.style.cssText = "display:flex;flex-direction:column;gap:7px";
+    for (const p of B.ports) {
+      const on = doc.cutouts.some((c) => c.port === p.id);
+      const r = html(`<label class="port-row"><span class="toggle-button"><input type="checkbox"${on ? " checked" : ""}><span class="toggle-button__track"><span class="toggle-button__thumb"></span></span></span>${esc(p.label)}<span class="edge">${p.edge}</span></label>`);
+      r.querySelector("input").addEventListener("change", (e) => {
+        if (e.target.checked) doc.cutouts.push({ id: uid(), port: p.id });
+        else doc.cutouts = doc.cutouts.filter((c) => c.port !== p.id);
+        if (sel && !rawCut(sel)) sel = null;
+        commit(); update();
+      });
+      list.appendChild(r);
+    }
+    boardSec.appendChild(html(`<span class="fld"><span>Port cutouts</span></span>`));
+    boardSec.appendChild(list);
+    boardSec.appendChild(numField("Port margin (around each connector)", () => doc.board.portMargin, (n) => { doc.board.portMargin = n; }, { step: 0.25 }));
+  }
+  boardSec.appendChild(html(`<p class="hint">Preset positions are approximate: check your board with calipers before a tight print.</p>`));
+  ins.appendChild(boardSec);
+
+  // Box
+  const setX = (k) => (n) => { box[k] = n; };
+  ins.appendChild(sec("Box · mm",
+    row(numField("Wall", () => box.wall, setX("wall"), { step: 0.2, min: 0.8 }), numField("Floor", () => box.floor, setX("floor"), { step: 0.2, min: 0.8 })),
+    row(numField("Clearance", () => box.clearance, setX("clearance")), numField("Corner radius", () => box.radius, setX("radius"))),
+    hint("clearance"),
+    numField("Inside height", () => box.height, setX("height"), { min: 2 }),
+    hint("height"),
+    row(numField("Standoff height", () => box.standoff, setX("standoff")), numField("Standoff Ø", () => box.standoffDia, setX("standoffDia"))),
+    numField("Standoff screw hole Ø", () => box.standoffHole, setX("standoffHole"), { step: 0.1 }),
+  ));
+
+  // Lid
+  const styles = [["screw", "Screw"], ["slide", "Slide"], ["lip", "Press-fit"]];
+  const tabs = html(`<div class="pill-tabs">${styles.map(([k, t]) => `<button class="pill-tab${lid.style === k ? " is-active" : ""}" data-style="${k}">${t}</button>`).join("")}</div>`);
+  tabs.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-style]");
+    if (!b) return;
+    lid.style = b.dataset.style;
+    commit(); renderInspector(); update();
+  });
+  const setL = (k) => (n) => { lid[k] = n; };
+  const lidSec = sec("Lid", tabs, row(numField("Thickness", () => lid.thickness, setL("thickness"), { step: 0.2, min: 0.6 }), numField("Fit gap", () => lid.fit, setL("fit"), { step: 0.05 })));
+  if (lid.style === "screw") {
+    const scr = html(`<label class="fld"><span>Screws</span><select class="field">${[2, 2.5, 3].map((d) => `<option value="${d}"${+lid.screw === d ? " selected" : ""}>M${d}</option>`).join("")}</select></label>`);
+    scr.querySelector("select").addEventListener("change", (e) => { lid.screw = +e.target.value; commit(); update(); });
+    const cs = html(`<label class="port-row"><span class="toggle-button"><input type="checkbox"${lid.countersink ? " checked" : ""}><span class="toggle-button__track"><span class="toggle-button__thumb"></span></span></span>Countersunk heads</label>`);
+    cs.querySelector("input").addEventListener("change", (e) => { lid.countersink = e.target.checked; commit(); update(); });
+    lidSec.append(scr, cs, html(`<p class="hint">Four self-tapping screws into corner bosses.</p>`));
+  } else if (lid.style === "lip") {
+    lidSec.append(numField("Lip depth", () => lid.lipHeight, setL("lipHeight"), { min: 1 }), html(`<p class="hint">An inset skirt that presses into the walls. Tighten with a smaller fit gap.</p>`));
+  } else {
+    lidSec.append(html(`<p class="hint">Slides in from the front along grooves in the walls; the front cap doubles as the pull.</p>`));
+  }
+  ins.appendChild(lidSec);
+
+  // Size
+  const sizeSec = sec("Print", hint("size"));
+  ins.appendChild(sizeSec);
+  syncHints();
+}
+
+function syncHints() {
+  if (!L || !hintEls.size) return;
+  const h = hintEls;
+  h.clearance.textContent = L.clearanceBumped ? `Raised to ${L.clearance} mm so the screw bosses clear the board.` : "Gap between the board (and its connectors) and the walls.";
+  const low = doc.box.height < L.minHeight;
+  h.height.className = "hint" + (low ? " warn" : "");
+  h.height.textContent = low ? `The tallest connector needs at least ${L.minHeight} mm.` : `Floor to lid. The tallest connector needs ${L.minHeight} mm.`;
+  h.size.innerHTML = `<span class="size-readout">${r2(L.W)} × ${r2(L.D)} × ${r2(L.H)} mm</span><br>Two parts: the base (open side up) and the lid (${L.style === "slide" ? "flat" : "top face down"}). Neither needs supports.`;
+}
+
+function setPreset(preset) {
+  const margin = doc.board.portMargin ?? 1;
+  doc.board = { preset, portMargin: margin };
+  if (preset === "custom") Object.assign(doc.board, { w: 60, d: 40, t: 1.6, r: 2, holeDia: 3, holes: [[3.5, 3.5], [56.5, 3.5], [3.5, 36.5], [56.5, 36.5]] });
+  doc.cutouts = doc.cutouts.filter((c) => !c.port).concat(defaultPortCutouts(resolveBoard(doc.board)));
+  if (preset !== "custom" && /case$/.test(doc.name)) doc.name = BOARDS[preset].name + " case";
+  $("name").value = doc.name;
+  sel = null;
+  commit(); renderInspector(); update();
+  needsFit = true;
+}
+
+$("name").addEventListener("input", (e) => { doc.name = e.target.value; scheduleSave(); });
+$("name").addEventListener("change", commit);
+
+// ---------------------------------------------------------------- 3D preview
+const canvas = $("view");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 1, 10000);
+camera.up.set(0, 0, 1);
+const controls = new OrbitControls(camera, canvas);
+controls.addEventListener("change", render);
+const hemi = new THREE.HemisphereLight(0xffffff, 0xc9c1b2, 2.1);
+hemi.position.set(0, 0, 1);
+const sun = new THREE.DirectionalLight(0xffffff, 1.7);
+sun.position.set(0.7, -1, 1.5);
+const back = new THREE.DirectionalLight(0xffffff, 0.6);
+back.position.set(-1, 0.9, 0.4);
+scene.add(hemi, sun, back);
+
+const model = new THREE.Group();
+scene.add(model);
+const matBase = new THREE.MeshStandardMaterial({ color: 0xf1ece3, roughness: 0.82, metalness: 0, side: THREE.DoubleSide });
+const matLid = new THREE.MeshStandardMaterial({ color: 0xe7e0d3, roughness: 0.82, metalness: 0, side: THREE.DoubleSide });
+const matEdge = new THREE.LineBasicMaterial({ color: 0x2a2a28, transparent: true, opacity: 0.32 });
+const matPcb = new THREE.MeshStandardMaterial({ color: 0x6f7d6a, roughness: 0.7 });
+const matPort = new THREE.MeshStandardMaterial({ color: 0xb8b3a8, roughness: 0.35, metalness: 0.6 });
+const cssColor = (name, fallback) => {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  try { return new THREE.Color().setStyle(/^#|^rgb\(/.test(v) ? v : fallback); } catch { return new THREE.Color(fallback); }
+};
+const accent = cssColor("--accent", "#6e6154");
+const matHi = new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
+const matHiLine = new THREE.LineBasicMaterial({ color: accent });
+const matSelLine = new THREE.LineBasicMaterial({ color: 0xa85a4a });
+
+const baseGroup = new THREE.Group(), lidGroup = new THREE.Group(), boardGroup = new THREE.Group(), hiGroup = new THREE.Group();
+model.add(baseGroup, lidGroup, boardGroup, hiGroup);
+let baseMesh = null, lidMesh = null, lidLift = 0, needsFit = true;
+
+function disposeGroup(g) {
+  for (const o of [...g.children]) { o.geometry?.dispose(); g.remove(o); }
+}
+
+/** Indexed manifold mesh → flat-ish shading: normals averaged only across soft edges. */
+function creased({ positions: P, indices: I }, angle = 32) {
+  const nt = I.length / 3, nv = P.length / 3;
+  const fn = new Float32Array(nt * 3);
+  for (let t = 0; t < nt; t++) {
+    const a = I[t * 3] * 3, b = I[t * 3 + 1] * 3, c = I[t * 3 + 2] * 3;
+    const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+    const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+    let x = uy * vz - uz * vy, y = uz * vx - ux * vz, z = ux * vy - uy * vx;
+    const l = Math.hypot(x, y, z) || 1;
+    fn[t * 3] = x / l; fn[t * 3 + 1] = y / l; fn[t * 3 + 2] = z / l;
+  }
+  const start = new Uint32Array(nv + 1);
+  for (const v of I) start[v + 1]++;
+  for (let i = 0; i < nv; i++) start[i + 1] += start[i];
+  const fill = start.slice(0, nv), adj = new Uint32Array(I.length);
+  for (let i = 0; i < I.length; i++) adj[fill[I[i]]++] = (i / 3) | 0;
+  const cos = Math.cos((angle * Math.PI) / 180);
+  const pos = new Float32Array(nt * 9), nor = new Float32Array(nt * 9);
+  for (let t = 0; t < nt; t++) {
+    for (let k = 0; k < 3; k++) {
+      const v = I[t * 3 + k], o = (t * 3 + k) * 3;
+      pos[o] = P[v * 3]; pos[o + 1] = P[v * 3 + 1]; pos[o + 2] = P[v * 3 + 2];
+      let x = 0, y = 0, z = 0;
+      for (let j = start[v]; j < start[v + 1]; j++) {
+        const f = adj[j];
+        if (fn[f * 3] * fn[t * 3] + fn[f * 3 + 1] * fn[t * 3 + 1] + fn[f * 3 + 2] * fn[t * 3 + 2] >= cos) { x += fn[f * 3]; y += fn[f * 3 + 1]; z += fn[f * 3 + 2]; }
+      }
+      const l = Math.hypot(x, y, z) || 1;
+      nor[o] = x / l; nor[o + 1] = y / l; nor[o + 2] = z / l;
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+  return g;
+}
+
+function partMesh(group, mesh, mat) {
+  disposeGroup(group);
+  const g = creased(mesh);
+  const m = new THREE.Mesh(g, mat);
+  group.add(m, new THREE.LineSegments(new THREE.EdgesGeometry(g, 28), matEdge));
+  return m;
+}
+
+function buildBoard() {
+  disposeGroup(boardGroup);
+  const B = L.board;
+  const shape = new THREE.Shape();
+  const pts = roundedRectPoly(0, 0, B.w, B.d, B.r);
+  shape.setFromPoints(pts.map(([x, y]) => new THREE.Vector2(x, y)));
+  for (const [hx, hy] of B.holes) { const p = new THREE.Path(); p.absarc(hx, hy, B.holeDia / 2, 0, Math.PI * 2, true); shape.holes.push(p); }
+  const pcb = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: B.t, bevelEnabled: false, curveSegments: 16 }), matPcb);
+  pcb.position.set(L.bx, L.by, L.bz);
+  boardGroup.add(pcb);
+  for (const p of B.ports) {
+    const b = portBox(p, B);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0), matPort);
+    // Underside parts hang below the PCB: z is measured from the board top.
+    m.position.set(L.bx + (b.x0 + b.x1) / 2, L.by + (b.y0 + b.y1) / 2, L.boardTop + (b.z0 + b.z1) / 2);
+    boardGroup.add(m);
+  }
+  boardGroup.visible = view.board;
+}
+
+let wasm = null, buildQueued = false;
+function schedule3D() {
+  if (buildQueued) return;
+  buildQueued = true;
+  requestAnimationFrame(() => { buildQueued = false; build3D(); });
+}
+function build3D() {
+  if (!wasm || !L) return;
+  try {
+    const parts = buildParts(wasm, L, cuts);
+    baseMesh = partMesh(baseGroup, parts.base, matBase);
+    lidMesh = partMesh(lidGroup, parts.lid, matLid);
+    buildBoard();
+    model.position.set(-L.W / 2, -L.D / 2, 0);
+    lidLift = view.explode ? liftHeight() : 0;
+    lidGroup.position.z = lidLift;
+    lidGroup.visible = view.lid;
+    if (statusEl.dataset.err) { statusEl.textContent = ""; delete statusEl.dataset.err; }
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = "Geometry error: " + (e.message || e);
+    statusEl.dataset.err = "1";
+  }
+  if (needsFit) { fitCamera(); needsFit = false; }
+  updateHighlight();
+}
+
+const liftHeight = () => Math.max(18, L.H * 0.8);
+
+function updateHighlight() {
+  if (!L) return;
+  disposeGroup(hiGroup);
+  if (face === "top" && !view.lid) return render();     // nothing there to point at
+  const f = faceBasis(face, L), { w, h } = faceSize(face, L);
+  const off = 0.15 * f.out;
+  const lifted = (u, v) => {
+    const p = faceToWorld(f, u, v, off);
+    // the top face rides with the lid when it's lifted
+    if (face === "top") p[2] += lidLift;
+    return new THREE.Vector3(...p);
+  };
+  const corners = [[0, 0], [w, 0], [w, h], [0, h]].map(([u, v]) => lifted(u, v));
+  const plane = new THREE.BufferGeometry().setFromPoints([corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]]);
+  hiGroup.add(new THREE.Mesh(plane, matHi));
+  hiGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(corners), matHiLine));
+  const c = resolved(sel);
+  if (c && c.face === face) {
+    for (const poly of cutoutPolys(c)) hiGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(poly.map(([u, v]) => lifted(u, v))), matSelLine));
+  }
+  render();
+}
+
+function render() { renderer.render(scene, camera); }
+
+function resize3D() {
+  const r = $("view-pane").getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height;
+  camera.updateProjectionMatrix();
+  render();
+}
+new ResizeObserver(() => { resize3D(); if (L) draw2D(); }).observe(document.body);
+
+const VIEW_DIR = {
+  front: [0.45, -1, 0.6], back: [-0.45, 1, 0.6], left: [-1, -0.45, 0.6], right: [1, 0.45, 0.6],
+  top: [0.35, -0.7, 1.5], bottom: [0.35, -0.7, -1.3], home: [0.75, -1.2, 0.95],
+};
+function camDistance() {
+  const rad = 0.5 * Math.hypot(L.W, L.D, L.H + (view.explode ? liftHeight() : 0));
+  const fov = (camera.fov * Math.PI) / 180;
+  return (rad / Math.sin(fov / 2)) * 1.08 / Math.min(1, camera.aspect);
+}
+function fitCamera(dirKey = "home") {
+  if (!L) return;
+  controls.target.set(0, 0, L.H / 2);
+  const d = new THREE.Vector3(...VIEW_DIR[dirKey]).normalize().multiplyScalar(camDistance());
+  camera.position.copy(controls.target).add(d);
+  camera.near = 1; camera.far = camDistance() * 20;
+  camera.updateProjectionMatrix();
+  controls.update();
+  render();
+}
+let camAnim = 0;
+function turnCameraTo(f) {
+  if (!L) return;
+  const target = new THREE.Vector3(0, 0, L.H / 2);
+  const from = camera.position.clone().sub(controls.target);
+  const dist = from.length();
+  const to = new THREE.Vector3(...VIEW_DIR[f]).normalize().multiplyScalar(dist);
+  const t0 = performance.now(), id = ++camAnim;
+  const step = (now) => {
+    if (id !== camAnim) return;
+    const k = Math.min(1, (now - t0) / 380), e = 1 - Math.pow(1 - k, 3);
+    const dir = from.clone().lerp(to, e).normalize().multiplyScalar(dist);
+    controls.target.copy(target);
+    camera.position.copy(target).add(dir);
+    controls.update();
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// click (not drag) on the model → pick face + cutout
+let downAt = null;
+canvas.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+canvas.addEventListener("pointerup", (e) => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4 || !L) return;
+  const r = canvas.getBoundingClientRect();
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  const targets = [baseMesh, view.lid ? lidMesh : null].filter(Boolean);
+  const hit = ray.intersectObjects(targets, false)[0];
+  if (!hit) return;
+  const p = model.worldToLocal(hit.point.clone());
+  if (hit.object === lidMesh) p.z -= lidLift;
+  const f = nearestFace([p.x, p.y, p.z], L);
+  const [u, v] = worldToFace(faceBasis(f, L), [p.x, p.y, p.z]);
+  const c = cuts.find((q) => q.face === f && Math.abs(u - q.cx) <= q.w / 2 + 0.6 && Math.abs(v - q.cy) <= q.h / 2 + 0.6);
+  sel = c ? c.id : null;
+  setFace(f);
+});
+
+function setToggle(btn, on) {
+  const ic = btn.querySelector(".mi");
+  ic.classList.toggle("ph-fill", on);
+  ic.classList.toggle("ph", !on);
+}
+$("t-lid").onclick = () => { view.lid = !view.lid; setToggle($("t-lid"), view.lid); lidGroup.visible = view.lid; updateHighlight(); };
+$("t-board").onclick = () => { view.board = !view.board; setToggle($("t-board"), view.board); boardGroup.visible = view.board; draw2D(); render(); };
+$("t-home").onclick = () => fitCamera();
+$("t-explode").onclick = () => {
+  view.explode = !view.explode;
+  setToggle($("t-explode"), view.explode);
+  if (view.explode && !view.lid) { view.lid = true; setToggle($("t-lid"), true); lidGroup.visible = true; }
+  const from = lidLift, to = view.explode ? liftHeight() : 0, t0 = performance.now();
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / 260), e = 1 - Math.pow(1 - k, 3);
+    lidLift = from + (to - from) * e;
+    lidGroup.position.z = lidLift;
+    updateHighlight();
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+};
+
+// ---------------------------------------------------------------- export
+const slug = (s) => (s || "enclosure").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "enclosure";
+function b64(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+$("export").onclick = async () => {
+  if (!wasm) return;
+  const parts = buildParts(wasm, L, cuts);
+  const files = [
+    [`${slug(doc.name)}-base.stl`, toSTL(parts.base, doc.name + " base")],
+    [`${slug(doc.name)}-lid.stl`, toSTL(lidForPrint(parts.lid, L), doc.name + " lid")],
+  ];
+  if (!hasTauri) {
+    for (const [name, bytes] of files) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([bytes], { type: "model/stl" }));
+      a.download = name; a.click();
+    }
+    return;
+  }
+  let root = projectRoot;
+  if (!root) root = (await invoke("get_active_project"))?.path;
+  if (!root) { toast("Open a project to export into it"); return; }
+  const dir = `${root}/models`;
+  try {
+    for (const [name, bytes] of files) {
+      const path = `${dir}/${name}`;
+      try { await invoke("write_image", { path, dataBase64: b64(bytes) }); }
+      catch { await invoke("fs_new_folder", { dir: root, name: "models" }); await invoke("write_image", { path, dataBase64: b64(bytes) }); }
+    }
+    const first = `${dir}/${files[0][0]}`;
+    statusEl.innerHTML = `Exported base + lid → models/ <a id="reveal">Reveal</a>`;
+    $("reveal").onclick = () => invoke("reveal_in_finder", { path: first });
+    toast("Exported STL");
+  } catch (e) { toast("Export failed: " + e); }
+};
+
+// ---------------------------------------------------------------- save / load
+let booted = false, saveTimer = null, saving = false, saveAgain = false, lastSaved = "";
+const snapshot = () => JSON.stringify({ ...doc, savedAt: undefined });
+function buildDoc() { return { ...doc, kind: "enclosure", version: 1, savedAt: new Date().toISOString() }; }
+function scheduleSave() {
+  if (!booted || !hasTauri || snapshot() === lastSaved) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(autoSave, 700);
+}
+async function autoSave() {
+  if (saving) { saveAgain = true; return; }
+  saving = true;
+  const snap = snapshot();
+  try {
+    const content = JSON.stringify(buildDoc(), null, 2);
+    if (activePath) await invoke("overwrite_artifact", { path: activePath, content });
+    else {
+      activePath = await invoke("save_artifact", { kind: "enclosure", name: (doc.name || "Untitled enclosure").replace(/[/\\]/g, "-").replace(/^\./, ""), content });
+      deriveProjectRoot(activePath);
+    }
+    lastSaved = snap;
+  } catch (e) { statusEl.textContent = "Not saved: " + e; }
+  saving = false;
+  if (saveAgain) { saveAgain = false; autoSave(); }
+}
+function deriveProjectRoot(p) { const m = p.match(/^(.*)\/artifacts\//); projectRoot = m ? m[1] : null; }
+
+function adopt(data) {
+  doc = normalize(data);
+  if (sel && !rawCut(sel)) sel = null;
+  $("name").value = doc.name;
+}
+
+function initWatch() {
+  if (!hasTauri) return;
+  listen("fs-changed", async () => {
+    if (!activePath || saving || snapshot() !== lastSaved) return;   // local edits win
+    let data;
+    try { data = JSON.parse(await invoke("read_artifact", { path: activePath })); } catch { return; }
+    const probe = JSON.stringify({ ...normalize(data), savedAt: undefined });
+    if (probe === lastSaved) return;
+    adopt(data);
+    lastSaved = snapshot();
+    commit(); renderInspector(); update();
+    statusEl.textContent = "Reloaded from disk " + new Date().toLocaleTimeString();
+  });
+}
+
+async function boot() {
+  const path = new URLSearchParams(location.search).get("artifact");
+  if (path && hasTauri) {
+    try { adopt(JSON.parse(await invoke("read_artifact", { path }))); activePath = path; deriveProjectRoot(path); }
+    catch (e) { statusEl.textContent = "Couldn't load: " + e; }
+  }
+  $("name").value = doc.name;
+  renderInspector();
+  resize3D();
+  update();
+  commit();
+  lastSaved = snapshot();
+  booted = true;
+  initWatch();
+  if (window.__TAURI__) import("../devinspect.js").then((m) => m.initDevInspect()).catch(() => {});
+  statusEl.textContent = "Loading geometry kernel…";
+  try {
+    wasm = await loadManifold();
+    statusEl.textContent = "";
+    build3D();
+  } catch (e) { statusEl.textContent = "Couldn't load manifold: " + e; }
+}
+boot();
+</script>
+</body>
+</html>

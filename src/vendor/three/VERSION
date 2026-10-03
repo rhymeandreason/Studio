@@ -1,0 +1,1 @@
+three.js r186 (npm three@0.186.1), unmodified: build/three.module.js + three.core.js, examples/jsm/controls/OrbitControls.js. OrbitControls imports bare 'three' — pages map it with an importmap.

@@ -6,6 +6,7 @@
   { "file": "brand-explorer.html", "name": "Brand Explorer" },
   { "file": "slides.html", "name": "Slides" },
   { "file": "diagram.html", "name": "Diagram" },
+  { "file": "enclosure.html", "name": "Enclosure" },
   { "file": "theme-editor.html", "name": "Theme Editor" },
 { "file": "code-editor.html", "name": "Code Editor" },
   { "file": "markdown-editor.html", "name": "Markdown Editor" },

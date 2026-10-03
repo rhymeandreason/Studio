@@ -20,7 +20,7 @@ non-destructive image editor), notes, workspace, and artifacts.
   (`@import`ed by styles.css, linked by tools); shared component CSS + `<studio-*>`
   web components in `src/kit/`.
 - Vendored & offline (never CDN): `src/vendor/` — `marked`, `coloris`,
-  `motion-one`, Phosphor icons (`vendor/phosphor/`, stock regular + fill CSS/woff2).
+  `motion-one`, `three` + `manifold` (Enclosure), Phosphor icons (`vendor/phosphor/`, stock regular + fill CSS/woff2).
 - Native Swift helpers via `build.rs`, run as subprocesses: `bgremove` (Vision),
   `qlthumb`, `pbimage`, `winbounds` / `winowner` (CGWindowListCopyWindowInfo),
   `screenrec` (ScreenCaptureKit rect → .mov) + `webarea` (AX: a browser's page
@@ -71,6 +71,10 @@ dev:watch` restores Tauri's stock reload-everything watcher.
   renderer in `src/deck/`, Slides + Theme editor tools) — [docs/slides.md](docs/slides.md)
 - **Diagrams** (`diagram` artifacts: templated concept diagrams, SVG renderer
   in `src/diagram/`, embeddable live in slides) — [docs/diagrams.md](docs/diagrams.md)
+- **Enclosure** (parametric 3D-printable cases for Pi/Arduino/custom boards:
+  per-face 2D cutout editor + three.js preview, manifold-3d CSG → base + lid
+  STL; `enclosure` artifacts) — `src/tools/enclosure.html` + `src/enclosure/`.
+  [docs/enclosure.md](docs/enclosure.md)
 - **Video editor** (multi-clip edits as `videos/*.json`, text-animation +
   shader-background registries in `src/video/`, native export) —
   [docs/video.md](docs/video.md)

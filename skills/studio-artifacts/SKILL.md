@@ -1,6 +1,6 @@
 ---
 name: studio-artifacts
-description: Create or edit Studio design artifacts — brand kits (font pairings + color palettes), slide decks/presentations, diagrams (flow, compare, 2x2 matrix, venn, timeline, hierarchy), and other design specs stored as JSON under a project's artifacts/ folder. Use when asked to generate, brainstorm, or modify brand kits, palettes, presentations/slides, diagrams, or design directions for a Studio project.
+description: Create or edit Studio design artifacts — brand kits (font pairings + color palettes), slide decks/presentations, diagrams (flow, compare, 2x2 matrix, venn, timeline, hierarchy), 3D-printable electronics enclosures (Raspberry Pi / Arduino cases with port cutouts), and other design specs stored as JSON under a project's artifacts/ folder. Use when asked to generate, brainstorm, or modify brand kits, palettes, presentations/slides, diagrams, enclosures, or design directions for a Studio project.
 ---
 
 # Studio design artifacts
@@ -257,3 +257,60 @@ Rules:
 - Keep labels short (2–4 words) and put elaboration in `detail`/`points`;
   diagrams are for slides and should read at a glance.
 - `savedAt` = current ISO 8601 timestamp; `version` = 1.
+
+### enclosure — a 3D-printable electronics case (Raspberry Pi, Arduino, custom board)
+- **Path:** `artifacts/enclosure/<slug>.json`
+
+Edited in the **Enclosure** tool: a 2D editor per face plus a live 3D preview,
+which exports a base and a lid as STL files into `models/`. Everything is in mm.
+The tool works out the box size from the board, its connectors and the wall
+settings, so only write the parameters below.
+
+```json
+{
+  "kind": "enclosure",
+  "version": 1,
+  "name": "Pi 5 desk case",
+  "board": { "preset": "pi5", "portMargin": 1 },
+  "box": { "wall": 2, "floor": 2, "clearance": 1, "height": 24, "radius": 3, "standoff": 4, "standoffDia": 6, "standoffHole": 2.2 },
+  "lid": { "style": "screw", "thickness": 2, "fit": 0.2, "screw": 2.5, "countersink": true, "lipHeight": 3 },
+  "cutouts": [
+    { "id": "a1", "port": "usbc" },
+    { "id": "a2", "port": "hdmi0", "w": 12, "h": 8, "dy": 0.5 },
+    { "id": "a3", "face": "top", "shape": "vent", "x": 49, "y": 34, "w": 40, "h": 16, "slot": 2, "gap": 2 },
+    { "id": "a4", "face": "left", "shape": "circle", "x": 20, "y": 14, "w": 5, "label": "LED" }
+  ],
+  "savedAt": "2026-10-03T18:00:00Z"
+}
+```
+
+Rules:
+- `board.preset`: `pi5`, `pi4`, `zero2w`, `uno`, or `custom`. A custom board
+  adds `w`, `d`, `t` (PCB thickness), `r` (corner radius), `holeDia`,
+  `holes: [[x, y], …]` and optional `ports` in the same shape as the presets
+  in `src/enclosure/boards.js` (origin = the board's front-left corner seen from
+  above; `edge` is `front|back|left|right|top`; `at` = centre along that edge;
+  `z` = bottom of the connector above the board's top surface; `w`/`h`;
+  `overhang` past the edge).
+  Preset port ids — pi5: `usbc hdmi0 hdmi1 usb-a usb-b eth sd gpio`; pi4 adds
+  `audio`; zero2w: `hdmi usb pwr sd csi gpio`; uno: `usb dc`.
+- `box.height` is the inside height, from the floor to the underside of the lid.
+- `lid.style`: `screw` (corner bosses, self-tapping screws of size `screw` mm),
+  `slide` (slides in from the front along grooves), or `lip` (press-fit
+  skirt `lipHeight` deep). `fit` is the gap between the lid and the walls.
+- **Cutouts** come in two kinds:
+  - *Port-linked* `{ id, port }`: these follow the connector automatically.
+    Optional `dx`/`dy` offsets, `w`/`h`/`r`/`shape` overrides; without them the
+    size is the connector plus `board.portMargin` on each side.
+  - *Free* `{ id, face, shape, x, y, w, h?, r? }`: `face` is
+    `front|back|left|right|top|bottom`. `x`,`y` = the cutout's **centre**, in mm,
+    measured on that face **as seen from outside**, from the face's bottom-left
+    outer corner. `top` and `bottom` are both measured as seen from above
+    (x = left→right, y = front→back). `shape`: `rect` (corner radius `r`),
+    `slot` (rounded ends), `circle` (`w` = diameter), `vent` (grille of slots,
+    `slot` width + `gap`; the slots run across the shorter side).
+- Face sizes: front/back = outer width × total height, left/right = outer
+  depth × total height, top/bottom = outer width × outer depth. If you need
+  exact numbers, open the tool: it shows the outer size in its title bar.
+- Give each cutout a short unique `id`. Keep the user's existing cutouts and
+  offsets when editing.

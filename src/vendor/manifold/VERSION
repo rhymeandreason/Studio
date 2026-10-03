@@ -1,0 +1,1 @@
+manifold-3d 3.5.4 (npm), unmodified. manifold.js finds manifold.wasm next to itself via import.meta.url.
