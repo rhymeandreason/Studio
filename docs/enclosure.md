@@ -8,7 +8,10 @@ each face. You get a base and a lid as STL files.
 - Artifact: `artifacts/enclosure/<name>.json`. The format is documented for Claude in
   `skills/studio-artifacts/SKILL.md`; change the saved shape → update the skill.
 - Export: `models/<name>-base.stl` + `models/<name>-lid.stl` in the project
-  (binary STL, already oriented for printing).
+  (binary STL, already oriented for printing), then opens both in Bambu Studio
+  (`SLICER` in `model.js`, via the generic `open_with` command). The artifact
+  records them as `exports: { files, at }`, and its Artifacts-panel card gets an
+  "Open in Bambu Studio" button.
 
 ## Modules (`src/enclosure/`)
 
@@ -63,7 +66,11 @@ number comes from `layout()`, so the 2D view, the 3D view and the STL all agree.
   Double-click empty face = add a Ø6 round hole. Arrow keys nudge (Shift = 5 mm),
   R rotates 90° (swaps W/H), ⌘D duplicates, ⌫ deletes, ⌘Z / ⇧⌘Z undo/redo.
 - Selection dimensions (distance from the left and bottom edges) are drawn in
-  the 2D view; exact numbers are in the footer fields.
+  the 2D view; click one to type the distance (Enter applies, Tab jumps to the
+  other, Esc cancels). Centre/size numbers are in the footer fields.
+- "From Outer / Inner" (pane bar) moves the origin of every position number —
+  edge dimensions, their inputs, footer X/Y — to the inside of the walls/floor.
+  View preference in localStorage; the artifact always stores outer-face coords.
 - Autosaves to the artifact after the first edit; reloads live when Claude edits the file
   (unless there are unsaved local edits), like the Diagram tool.
 

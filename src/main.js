@@ -31,7 +31,7 @@ import {
   scheduleWorkspaceSave,
   addRow,
 } from "./workspace.js";
-import { renderArtifacts, artifactsSelection, deleteArtifactsSelection, clearArtifactsSelection } from "./artifacts.js";
+import { renderArtifacts, artifactsSelection, deleteArtifactsSelection, duplicateArtifactsSelection, clearArtifactsSelection } from "./artifacts.js";
 import { renderGitPanel } from "./git.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -2616,6 +2616,7 @@ function initNotes() {
   panelKeymaps.artifacts = {
     Delete: deleteArtifactsSelection,
     Backspace: deleteArtifactsSelection,
+    "Mod+d": duplicateArtifactsSelection,
     Escape: clearArtifactsSelection,
   };
   installKeyDispatcher({

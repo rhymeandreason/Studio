@@ -28,12 +28,18 @@
   .pane-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--hairline); flex-wrap: wrap; }
   .pill-tab sup { font-size: 9px; color: var(--text-soft); margin-left: 2px; }
   .pill-tab.is-active sup { color: var(--text-muted); }
+  .pane-bar--tabs { border-bottom: none; padding-bottom: 2px; }
+  .pane-bar--sub { padding-top: 6px; padding-bottom: 8px; }
+  .measure { display: flex; align-items: center; gap: 6px; }
   .add-btns { display: flex; gap: 2px; margin-left: auto; }
   .face-stage { flex: 1 1 auto; min-height: 0; position: relative; }
   #face-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
   #face-svg .cut { cursor: grab; }
   body.dragging, body.dragging #face-svg .cut { cursor: grabbing; }
   #face-svg .handle { cursor: nwse-resize; }
+  #face-svg .dim-edit { cursor: text; }
+  #face-svg .dim-edit:hover { fill: var(--text); }
+  .dim-input { position: absolute; width: 72px; height: 26px; font-family: var(--mono); font-size: 12px; text-align: center; padding: 0 6px; z-index: 2; box-shadow: var(--shadow-md); }
   #face-svg .handle[data-corner="ne"], #face-svg .handle[data-corner="sw"] { cursor: nesw-resize; }
   .face-foot { border-top: 1px solid var(--hairline); padding: 10px 12px; min-height: 58px; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
   .face-foot .hint { align-self: center; }
@@ -75,8 +81,14 @@
 
   <div id="main">
     <section class="face-pane">
-      <div class="pane-bar">
+      <div class="pane-bar pane-bar--tabs">
         <div class="pill-tabs" id="face-tabs"></div>
+      </div>
+      <div class="pane-bar pane-bar--sub">
+        <div class="measure" title="Where position numbers are measured from">
+          <span class="text-xs text-muted">From</span>
+          <div class="pill-tabs" id="measure"><button class="pill-tab" data-m="out">Outer</button><button class="pill-tab" data-m="in">Inner</button></div>
+        </div>
         <div class="add-btns">
           <button class="btn btn-icon btn-ghost" data-add="rect" title="Add rectangle"><span class="mi mi-sm ph ph-square"></span></button>
           <button class="btn btn-icon btn-ghost" data-add="slot" title="Add slot"><span class="mi mi-sm ph ph-pill"></span></button>
@@ -109,7 +121,7 @@ import { hasTauri, invoke, listen, esc, toast } from "../kit/app.js";
 import { BOARDS, BOARD_ORDER } from "../enclosure/boards.js";
 import {
   FACES, FACE_LABEL, newEnclosure, normalize, resolveBoard, defaultPortCutouts, layout, faceSize, faceBasis,
-  faceToWorld, worldToFace, nearestFace, portOnFace, portBox, resolveCutouts, cutoutPolys, roundedRectPoly, polyPath, uid,
+  faceToWorld, worldToFace, nearestFace, portOnFace, portBox, resolveCutouts, cutoutPolys, roundedRectPoly, polyPath, uid, SLICER,
 } from "../enclosure/model.js";
 import { loadManifold, buildParts, lidForPrint, toSTL } from "../enclosure/geometry.js";
 
@@ -123,6 +135,12 @@ if (window.__TAURI__) {
 let doc = newEnclosure("pi5");
 let L = null, cuts = [];
 let face = "front", sel = null;
+// Position numbers measure from the outer face edge, or from the inside of the
+// walls/floor. A per-machine view preference, not part of the artifact.
+let measureInner = false;
+try { measureInner = localStorage.getItem("enclosure.measureFrom") === "inner"; } catch {}
+/** Origin (u, v) on the current face that position numbers are measured from. */
+const origin = () => (!measureInner ? [0, 0] : face === "top" || face === "bottom" ? [L.wall, L.wall] : [L.wall, L.floor]);
 let activePath = null, projectRoot = null;
 const view = { lid: true, explode: false, board: true };
 const $ = (id) => document.getElementById(id);
@@ -163,6 +181,18 @@ function update({ geometry = true } = {}) {
 }
 
 // ---------------------------------------------------------------- face tabs
+function renderMeasure() {
+  for (const b of document.querySelectorAll("#measure [data-m]")) b.classList.toggle("is-active", (b.dataset.m === "in") === measureInner);
+}
+$("measure").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-m]");
+  if (!b) return;
+  measureInner = b.dataset.m === "in";
+  try { localStorage.setItem("enclosure.measureFrom", measureInner ? "inner" : "outer"); } catch {}
+  renderMeasure(); renderFoot(); draw2D();
+});
+renderMeasure();
+
 function renderTabs() {
   const counts = Object.fromEntries(FACES.map((f) => [f, 0]));
   for (const c of cuts) counts[c.face]++;
@@ -214,23 +244,26 @@ function draw2D() {
   s += `<clipPath id="fc"><path d="${body}"/></clipPath>`;
   s += `<g clip-path="url(#fc)" stroke="var(--hairline)" stroke-width="1" ${ns}>${grid.replaceAll("<line ", `<line ${ns} `)}</g>`;
 
-  // structure hints
+  // structure: solid plastic (walls seen edge-on, floor, lid) is hatched like
+  // a cross-section; the inside of the box stays clear.
   const dash = `fill="none" stroke="var(--text-soft)" stroke-dasharray="4 3" ${ns}`;
+  const hp = px(6);
+  s += `<pattern id="hatch" width="${hp}" height="${hp}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">` +
+    `<rect width="${hp}" height="${hp}" fill="var(--surface)"/><line x1="0" y1="0" x2="0" y2="${hp}" stroke="var(--text-soft)" stroke-width="${px(1.5)}"/></pattern>`;
+  const inner = top
+    ? polyPath([roundedRectPoly(L.wall, L.wall, L.iw, L.id, Math.max(0.5, L.radius - L.wall))], fh)
+    : (() => { const topIn = L.style === "slide" ? L.z0 : L.baseH; return `M${L.wall} ${Y(L.floor)}H${fw - L.wall}V${Y(topIn)}H${L.wall}Z`; })();
+  s += `<path d="${body}${inner}" fill="url(#hatch)" fill-rule="evenodd"/>`;
+  s += `<path d="${inner}" fill="none" stroke="var(--text-muted)" ${ns}/>`;
   if (top) {
-    s += `<path d="${polyPath([roundedRectPoly(L.wall, L.wall, L.iw, L.id, Math.max(0.5, L.radius - L.wall))], fh)}" ${dash}/>`;
-    if (face === "top" && L.style === "screw") for (const [x, y] of L.bosses) s += `<circle cx="${x}" cy="${Y(y)}" r="${L.screw.clear}" fill="none" stroke="var(--text-muted)" ${ns}/>`;
+    if (face === "top" && L.style === "screw") for (const [x, y] of L.bosses) s += `<circle cx="${x}" cy="${Y(y)}" r="${L.screw.clear}" fill="var(--elevated)" stroke="var(--text-muted)" ${ns}/>`;
+  } else if (L.style !== "slide") {
+    s += `<line x1="0" x2="${fw}" y1="${Y(L.baseH)}" y2="${Y(L.baseH)}" stroke="var(--text)" ${ns}/>`;     // lid seam
+  } else if (face === "front") {
+    const g = L.grooveDepth;
+    s += `<rect x="${L.wall - g}" y="0" width="${fw - 2 * (L.wall - g)}" height="${L.H - L.z0}" fill="none" stroke="var(--text)" ${ns}/>`;
   } else {
-    const iu0 = L.wall, iu1 = fw - L.wall, topIn = L.style === "slide" ? L.z0 : L.baseH;
-    s += `<rect x="${iu0}" y="${Y(topIn)}" width="${iu1 - iu0}" height="${topIn - L.floor}" ${dash}/>`;
-    if (L.style !== "slide") {
-      s += `<rect x="0" y="0" width="${fw}" height="${L.H - L.baseH}" fill="var(--surface)" opacity=".7"/>`;
-      s += `<line x1="0" x2="${fw}" y1="${Y(L.baseH)}" y2="${Y(L.baseH)}" stroke="var(--text-muted)" ${ns}/>`;
-    } else if (face === "front") {
-      const g = L.grooveDepth;
-      s += `<rect x="${L.wall - g}" y="0" width="${fw - 2 * (L.wall - g)}" height="${L.H - L.z0}" fill="var(--surface)" opacity=".7" stroke="var(--text-muted)" ${ns}/>`;
-    } else {
-      s += `<rect x="${L.wall - L.grooveDepth}" y="${Y(L.z0 + L.lidT + L.fit)}" width="${fw - 2 * (L.wall - L.grooveDepth)}" height="${L.lidT + L.fit}" ${dash}/>`;
-    }
+    s += `<rect x="${L.wall - L.grooveDepth}" y="${Y(L.z0 + L.lidT + L.fit)}" width="${fw - 2 * (L.wall - L.grooveDepth)}" height="${L.lidT + L.fit}" ${dash}/>`;
   }
 
   // board silhouette
@@ -255,8 +288,9 @@ function draw2D() {
     for (const [k, u, v] of [["sw", x0, y0], ["se", x1, y0], ["nw", x0, y1], ["ne", x1, y1]]) {
       s += `<rect class="handle" data-corner="${k}" x="${u - hs / 2}" y="${Y(v) - hs / 2}" width="${hs}" height="${hs}" fill="var(--elevated)" stroke="var(--accent)" stroke-width="1.5" ${ns}/>`;
     }
-    s += dimLine(0, sc.cy, x0, sc.cy, r2(x0), fh, px, "h");
-    s += dimLine(sc.cx, 0, sc.cx, y0, r2(y0), fh, px, "v");
+    const [ou, ov] = origin();
+    s += dimLine(ou, sc.cy, x0, sc.cy, r2(x0 - ou), fh, px, "h", false, "u");
+    s += dimLine(sc.cx, ov, sc.cx, y0, r2(y0 - ov), fh, px, "v", false, "v");
   }
   // overall size, outside the face
   s += dimLine(0, -px(16), fw, -px(16), r2(fw), fh, px, "h", true);
@@ -270,7 +304,8 @@ function draw2D() {
   svg.innerHTML = s;
 }
 
-function dimLine(u0, v0, u1, v1, label, fh, px, dir, muted) {
+/** `edit` ("u" | "v") makes the label a click-to-type distance from the face edge. */
+function dimLine(u0, v0, u1, v1, label, fh, px, dir, muted, edit) {
   if (Math.hypot(u1 - u0, v1 - v0) < 0.01) return "";
   const col = muted ? "var(--text-soft)" : "var(--accent)";
   const fs = px(10.5), t = px(4);
@@ -280,7 +315,7 @@ function dimLine(u0, v0, u1, v1, label, fh, px, dir, muted) {
   const ticks = dir === "h" ? [[u0, v0], [u1, v1]].map(([u, v]) => `M${u} ${Y(v) - t}V${Y(v) + t}`) : [[u0, v0], [u1, v1]].map(([u, v]) => `M${u - t} ${Y(v)}H${u + t}`);
   s += `<path d="${ticks.join("")}" stroke="${col}" ${ns} pointer-events="none"/>`;
   const mu = (u0 + u1) / 2, mv = (v0 + v1) / 2;
-  const txt = `font-family="var(--mono)" font-size="${fs}" fill="${col}" pointer-events="none"`;
+  const txt = `font-family="var(--mono)" font-size="${fs}" fill="${col}" ` + (edit ? `class="dim-edit" data-dim="${edit}"` : `pointer-events="none"`);
   s += dir === "h"
     ? `<text x="${mu}" y="${Y(mv) - px(5)}" text-anchor="middle" ${txt}>${label}</text>`
     : `<text x="${mu - px(5)}" y="${Y(mv)}" text-anchor="end" dominant-baseline="middle" ${txt}>${label}</text>`;
@@ -334,6 +369,8 @@ let drag = null;
 svg.addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
   const [u, v] = svgPoint(e);
+  const dimEl = e.target.closest("[data-dim]");
+  if (dimEl) { e.preventDefault(); openDimEdit(dimEl.dataset.dim); return; }
   const handle = e.target.closest(".handle");
   const cutEl = e.target.closest(".cut");
   if (handle && sel) {
@@ -353,6 +390,8 @@ svg.addEventListener("pointerdown", (e) => {
   document.body.classList.add("dragging");
   update({ geometry: false });
 });
+// Keep mousedown's default focus change from instantly blurring the dimension input.
+svg.addEventListener("mousedown", (e) => { if (e.target.closest("[data-dim]")) e.preventDefault(); });
 svg.addEventListener("pointermove", (e) => {
   if (!drag) return;
   const [u, v] = svgPoint(e);
@@ -382,6 +421,44 @@ svg.addEventListener("dblclick", (e) => {
   const [u, v] = svgPoint(e);
   addCutout("circle", snapTo(u, 0.5), snapTo(v, 0.5));
 });
+
+// ---- click a selection dimension → type the distance from the face edge
+let dimInput = null;
+function openDimEdit(axis) {
+  closeDimEdit(false);
+  const label = svg.querySelector(`[data-dim="${axis}"]`), c = resolved(sel);
+  if (!label || !c) return;
+  const stage = svg.parentElement, r = label.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+  const input = document.createElement("input");
+  input.className = "field dim-input";
+  input.type = "number"; input.step = "0.5";
+  const [ou, ov] = origin();
+  input.value = r2(axis === "u" ? c.cx - c.w / 2 - ou : c.cy - c.h / 2 - ov);
+  input.style.left = `${r.left - sr.left + r.width / 2 - 36}px`;
+  input.style.top = `${r.top - sr.top + r.height / 2 - 13}px`;
+  input.dataset.axis = axis;
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); closeDimEdit(true); }
+    else if (e.key === "Escape") { e.preventDefault(); closeDimEdit(false); }
+    else if (e.key === "Tab") { e.preventDefault(); closeDimEdit(true); openDimEdit(axis === "u" ? "v" : "u"); }
+  });
+  input.addEventListener("blur", () => closeDimEdit(true));
+  stage.appendChild(input);
+  dimInput = input;
+  input.focus(); input.select();
+}
+function closeDimEdit(apply) {
+  const input = dimInput;
+  if (!input) return;
+  dimInput = null;
+  const n = parseFloat(input.value), c = resolved(sel), raw = rawCut(sel);
+  input.remove();
+  if (!apply || !Number.isFinite(n) || !c) return;
+  const [ou, ov] = origin();
+  if (input.dataset.axis === "u") setCenter(raw, n + ou + c.w / 2, c.cy);
+  else setCenter(raw, c.cx, n + ov + c.h / 2);
+  commit(); update();
+}
 
 /** Snap a centre to the face centre, this face's ports and the other cutouts. */
 function snapCenter(id, cx, cy) {
@@ -475,7 +552,8 @@ function renderFoot() {
   const shapes = [["rect", "square", "Rectangle"], ["slot", "pill", "Slot"], ["circle", "circle", "Round"], ["vent", "columns", "Vent"]];
   const fld = (key, label, val, cls = "") => `<label class="foot-fld ${cls}"><span>${label}</span><input class="field" data-k="${key}" type="${key === "label" ? "text" : "number"}" step="${key === "label" ? "" : "0.5"}" value="${esc(String(val ?? ""))}"></label>`;
   let h = `<div class="seg-toggle">${shapes.map(([k, ic, t]) => `<button class="seg-toggle__btn${c.shape === k ? " is-active" : ""}" data-shape="${k}" title="${t}"><span class="mi mi-sm ph ph-${ic}"></span></button>`).join("")}</div>`;
-  h += fld("cx", "X", r2(c.cx)) + fld("cy", "Y", r2(c.cy));
+  const [ou, ov] = origin();
+  h += fld("cx", "X", r2(c.cx - ou)) + fld("cy", "Y", r2(c.cy - ov));
   h += fld("w", c.shape === "circle" ? "Ø" : "W", r2(c.w));
   if (c.shape !== "circle") h += fld("h", "H", r2(c.h));
   if (c.shape !== "circle") h += `<button class="btn btn-icon btn-ghost" data-act="rotate" title="Rotate 90° (R)"><span class="mi mi-sm ph ph-arrow-clockwise"></span></button>`;
@@ -514,8 +592,9 @@ $("foot").addEventListener("input", (e) => {
   if (k === "label") { raw.label = e.target.value; update({ geometry: false }); return; }
   const n = parseFloat(e.target.value);
   if (!Number.isFinite(n)) return;
-  if (k === "cx") setCenter(raw, n, c.cy);
-  else if (k === "cy") setCenter(raw, c.cx, n);
+  const [ou, ov] = origin();
+  if (k === "cx") setCenter(raw, n + ou, c.cy);
+  else if (k === "cy") setCenter(raw, c.cx, n + ov);
   else if (k === "w" || k === "h") raw[k] = Math.max(0.5, n);
   else raw[k] = Math.max(0, n);
   update();
@@ -985,10 +1064,15 @@ $("export").onclick = async () => {
       try { await invoke("write_image", { path, dataBase64: b64(bytes) }); }
       catch { await invoke("fs_new_folder", { dir: root, name: "models" }); await invoke("write_image", { path, dataBase64: b64(bytes) }); }
     }
-    const first = `${dir}/${files[0][0]}`;
-    statusEl.innerHTML = `Exported base + lid → models/ <a id="reveal">Reveal</a>`;
-    $("reveal").onclick = () => invoke("reveal_in_finder", { path: first });
-    toast("Exported STL");
+    const paths = files.map(([name]) => `${dir}/${name}`);
+    // Remember the export on the artifact so the Artifacts panel can reopen it.
+    doc.exports = { files: files.map(([name]) => `models/${name}`), at: new Date().toISOString() };
+    scheduleSave();
+    statusEl.innerHTML = `Exported base + lid → models/ <a id="slicer">Open in ${SLICER.label}</a> <a id="reveal">Reveal</a>`;
+    const openSlicer = () => invoke("open_with", { app: SLICER.app, paths }).catch((e) => toast(`Couldn't open ${SLICER.label}: ${e}`));
+    $("slicer").onclick = openSlicer;
+    $("reveal").onclick = () => invoke("reveal_in_finder", { path: paths[0] });
+    openSlicer();
   } catch (e) { toast("Export failed: " + e); }
 };
 

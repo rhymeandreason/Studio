@@ -314,3 +314,5 @@ Rules:
   exact numbers, open the tool: it shows the outer size in its title bar.
 - Give each cutout a short unique `id`. Keep the user's existing cutouts and
   offsets when editing.
+- `exports: { files: ["models/…-base.stl", …], at }` is written by the tool when
+  the user exports STLs. Preserve it; don't generate it.

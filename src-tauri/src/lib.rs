@@ -2667,6 +2667,21 @@ fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Open files with a named application: `open -a <app> <paths…>`. Generic
+/// (the Enclosure tool uses it to hand its STLs to Bambu Studio).
+#[tauri::command]
+fn open_with(app: String, paths: Vec<String>) -> Result<(), String> {
+    if paths.is_empty() {
+        return Err("No files.".into());
+    }
+    Command::new("open")
+        .args(["-a", app.trim()])
+        .args(&paths)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Full-size preview of a file in a separate window, like Finder's spacebar
 /// Quick Look. Uses the native `qlmanage -p` panel (any file type).
 #[tauri::command]
@@ -6399,6 +6414,7 @@ pub fn run() {
             edited_thumb,
             save_edited_thumb,
             open_path,
+            open_with,
             open_in_chrome,
             quicklook_preview,
             app_icon,

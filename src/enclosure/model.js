@@ -21,6 +21,9 @@ export const SHAPES = ["rect", "slot", "circle", "vent"];
 export const DEFAULT_BOX = { wall: 2, floor: 2, clearance: 1, height: 24, radius: 3, standoff: 4, standoffDia: 6, standoffHole: 2.2 };
 export const DEFAULT_LID = { style: "screw", thickness: 2, fit: 0.2, screw: 2.5, countersink: true, lipHeight: 3 };
 
+/** The slicer Studio hands exported STLs to (`open -a <SLICER>`). */
+export const SLICER = { app: "BambuStudio", label: "Bambu Studio" };
+
 export const uid = () => Math.random().toString(36).slice(2, 8);
 
 /** A fresh enclosure for a preset, with a cutout for every default-on port. */
@@ -51,6 +54,7 @@ export function normalize(doc) {
     box: { ...DEFAULT_BOX, ...(d.box || {}) },
     lid: { ...DEFAULT_LID, ...(d.lid || {}) },
     cutouts: Array.isArray(d.cutouts) ? d.cutouts.map((c) => ({ id: c.id || uid(), ...c })) : [],
+    ...(d.exports ? { exports: d.exports } : {}),
   };
 }
 

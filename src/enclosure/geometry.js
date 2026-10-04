@@ -122,9 +122,12 @@ function meshOut(m) {
   return { positions, indices: new Uint32Array(mesh.triVerts) };
 }
 
-/** Lid flipped / dropped onto the print bed; base is already print-ready. */
-export function lidForPrint(lid, L) {
+/** Lid flipped / dropped onto the print bed and set beside the base (both
+ *  STLs share one origin, so a slicer opening them together keeps them apart).
+ *  The base is already print-ready. */
+export function lidForPrint(lid, L, gap = 10) {
   const p = new Float32Array(lid.positions);
+  for (let i = 0; i < p.length; i += 3) p[i] += L.W + gap;
   if (L.style === "slide") {
     for (let i = 2; i < p.length; i += 3) p[i] -= L.z0;
   } else {

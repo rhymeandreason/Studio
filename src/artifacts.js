@@ -7,8 +7,10 @@ import { state } from "./state.js";
 import { el, mi } from "./dom.js";
 import { createSelection } from "./selection.js";
 import { toast } from "./kit/app.js";
+import { openContextMenu } from "./kit/context-menu.js";
 import { renderDiagram } from "./diagram/render.js";
 import { enclosureSvg } from "./enclosure/preview.js";
+import { SLICER } from "./enclosure/model.js";
 import { createShaderRenderer } from "./video/shaders.js";
 
 const { invoke, convertFileSrc } = window.__TAURI__.core;
@@ -45,9 +47,38 @@ export async function deleteArtifactsSelection() {
   renderArtifacts();
 }
 
+/** Copy each selected artifact next to itself as "<name> copy" and select the
+ *  copies. Per-file export records (an enclosure's STLs) stay with the original. */
+export async function duplicateArtifactsSelection() {
+  const ids = artifactsSelection.get().filter((id) => !id.startsWith(VIDEO_ID_PREFIX));
+  if (!ids.length) return;
+  const made = [];
+  for (const path of ids) {
+    try {
+      const data = JSON.parse(await invoke("read_artifact", { path }));
+      const dest = await invoke("fs_duplicate", { path });
+      data.name = `${data.name || "Untitled"} copy`;
+      delete data.exports;
+      data.savedAt = new Date().toISOString();
+      await invoke("overwrite_artifact", { path: dest, content: JSON.stringify(data, null, 2) });
+      made.push(dest);
+    } catch (e) {
+      toast(`Couldn't duplicate: ${e}`);
+    }
+  }
+  await renderArtifacts();
+  if (made.length) {
+    artifactsSelection.clear();
+    made.forEach((p) => artifactsSelection.toggle(p, true));
+  }
+}
+
 export function clearArtifactsSelection() {
   artifactsSelection.clear();
 }
+
+// Enclosure cards whose STL list is open (survives the panel's re-renders).
+const expandedExports = new Set();
 
 // Editor tool per artifact kind (open-on-artifact via ?artifact=<path>).
 const EDITOR = {
@@ -346,11 +377,64 @@ function artifactCard(item) {
       el("span", "artifact-card__meta", { textContent: `${n} slide${n === 1 ? "" : "s"}` }),
     );
   }
+  // Enclosures: reopen the last exported STLs in the slicer.
+  const stls = item.kind === "enclosure" && Array.isArray(data.exports?.files) ? data.exports.files : [];
   foot.appendChild(info);
   if (!isSwatch) foot.appendChild(actionBtn("arrow-square-out", "Open", open, true));
   card.appendChild(foot);
+  if (stls.length) {
+    // Second row: the exported files + hand-off to the slicer.
+    const root = item.path.replace(/\/artifacts\/.*$/, "");
+    const toSlicer = (files) => invoke("open_with", { app: SLICER.app, paths: files.map((f) => `${root}/${f}`) })
+      .catch((err) => toast(`Couldn't open ${SLICER.label}: ${err}`));
+    const row = el("div", "artifact-card__exports");
+    const label = `${stls.length} STL${stls.length === 1 ? "" : "s"} · models/`;
+    row.appendChild(actionBtn("printer", `Open in ${SLICER.label}`, (e) => { e.stopPropagation(); toSlicer(stls); }, true));
+    card.appendChild(row);
+    if (stls.length > 1) {
+      // Several files: the label toggles a list of them, each openable alone.
+      const toggle = el("button", "artifact-card__stl-toggle", { type: "button", title: "Show files" });
+      const list = el("div", "artifact-card__stl-list");
+      const sync = () => {
+        const open = expandedExports.has(item.path);
+        toggle.innerHTML = `${label}${mi(open ? "caret-up" : "caret-down")}`;
+        list.hidden = !open;
+      };
+      toggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!expandedExports.delete(item.path)) expandedExports.add(item.path);
+        sync();
+      });
+      toggle.addEventListener("dblclick", (e) => e.stopPropagation());
+      for (const f of stls) {
+        const r = el("div", "artifact-card__stl");
+        r.appendChild(el("span", "artifact-card__meta artifact-card__stl-name", { textContent: f.split("/").pop(), title: f }));
+        const reveal = el("button", "artifact-card__stl-btn", { type: "button", title: "Reveal in Finder", innerHTML: mi("folder-simple") });
+        reveal.addEventListener("click", (e) => { e.stopPropagation(); invoke("reveal_in_finder", { path: `${root}/${f}` }); });
+        const print = el("button", "artifact-card__stl-btn", { type: "button", title: `Open in ${SLICER.label}`, innerHTML: mi("printer") });
+        print.addEventListener("click", (e) => { e.stopPropagation(); toSlicer([f]); });
+        r.append(reveal, print);
+        r.addEventListener("dblclick", (e) => e.stopPropagation());
+        list.appendChild(r);
+      }
+      row.prepend(toggle);
+      sync();
+      card.appendChild(list);
+    } else {
+      row.prepend(el("span", "artifact-card__meta", { textContent: label }));
+    }
+  }
 
   card.addEventListener("dblclick", open);
+  card.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (!artifactsSelection.has(item.path)) artifactsSelection.set(item.path);
+    const items = [];
+    if (EDITOR[item.kind]) items.push({ label: "Open", icon: "arrow-square-out", run: open });
+    items.push({ label: "Duplicate", icon: "copy", run: duplicateArtifactsSelection });
+    items.push("-", { label: "Delete", icon: "trash", run: deleteArtifactsSelection });
+    openContextMenu(e.clientX, e.clientY, items);
+  });
   return card;
 }
 
