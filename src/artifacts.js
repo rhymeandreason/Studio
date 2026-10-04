@@ -366,11 +366,45 @@ function artifactCard(item) {
 
   const foot = el("div", "artifact-card__foot");
   const info = el("div", "artifact-card__info");
-  info.appendChild(
-    el("span", "artifact-card__name", {
-      textContent: isSwatch ? hexToRgb(data.value) || item.name : item.name,
-    }),
-  );
+  const nameEl = el("span", "artifact-card__name", {
+    textContent: isSwatch ? hexToRgb(data.value) || item.name : item.name,
+  });
+  info.appendChild(nameEl);
+
+  // Inline rename: swaps the name for an input. Changes the artifact's `name`
+  // (what every card and editor shows), not its file — an open editor window
+  // keeps saving to the same path.
+  const startRename = () => {
+    const input = el("input", "field artifact-card__rename", { value: item.name, spellcheck: false });
+    for (const ev of ["click", "dblclick", "pointerdown", "contextmenu"]) input.addEventListener(ev, (e) => e.stopPropagation());
+    let done = false;
+    const finish = async (save) => {
+      if (done) return;
+      done = true;
+      const name = input.value.trim();
+      input.replaceWith(nameEl);
+      if (!save || !name || name === item.name) return;
+      nameEl.textContent = name;
+      try {
+        const fresh = JSON.parse(await invoke("read_artifact", { path: item.path }));
+        fresh.name = name;
+        fresh.savedAt = new Date().toISOString();
+        await invoke("overwrite_artifact", { path: item.path, content: JSON.stringify(fresh, null, 2) });
+        renderArtifacts();
+      } catch (e) {
+        nameEl.textContent = item.name;
+        toast(`Couldn't rename: ${e}`);
+      }
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); finish(true); }
+      else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener("blur", () => finish(true));
+    nameEl.replaceWith(input);
+    input.focus();
+    input.select();
+  };
   if (item.kind === "presentation") {
     const n = Array.isArray(data.slides) ? data.slides.length : 0;
     info.appendChild(
@@ -431,6 +465,7 @@ function artifactCard(item) {
     if (!artifactsSelection.has(item.path)) artifactsSelection.set(item.path);
     const items = [];
     if (EDITOR[item.kind]) items.push({ label: "Open", icon: "arrow-square-out", run: open });
+    if (!isSwatch) items.push({ label: "Rename", icon: "pencil-simple", run: startRename });
     items.push({ label: "Duplicate", icon: "copy", run: duplicateArtifactsSelection });
     items.push("-", { label: "Delete", icon: "trash", run: deleteArtifactsSelection });
     openContextMenu(e.clientX, e.clientY, items);

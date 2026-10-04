@@ -3187,6 +3187,7 @@ td.ntable__total-cell {
 .artifact-card__info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .artifact-card__name { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .artifact-card__meta { font-size: 11px; color: var(--text-muted); }
+.artifact-card__rename { height: 24px; font-size: 13px; padding: 0 6px; margin: -3px 0 -3px -7px; width: calc(100% + 7px); }
 .artifact__preview {
     height: 120px;
     padding: 14px;
