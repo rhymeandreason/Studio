@@ -100,6 +100,38 @@ canvas over the bubble's colored fill.
 Swift helper, a capability/permission change, a global shortcut, a tray icon.
 A pure-HTML tool (new, renamed, resized, retinted) never does.
 
+**Planned — read this if your tool needs native code.** Studio is the author's
+all-day app, so the goal is that new tools don't need a restart.
+Done: the live `Tools.json` registry, CSS swapped in place, dev dependencies at
+opt-level 3. Next, in order:
+
+1. **Generic native helpers. Do this *instead of* adding the next per-tool
+   Swift helper.** Today each helper is compiled by `build.rs` and gets its
+   own command (`person_mask`, `web_area`, the color picker…), so every new
+   native capability is a Rust change + restart. Replace that with two
+   generic commands: `helper_run(name, args, stdin)` for one-shot helpers and
+   a streaming `helper_pipe(name)` for long-running ones (the `personseg`
+   pattern). Compile `src-tauri/swift/*.swift` with a script (`npm run
+   helpers`) into a helpers dir resolved by name at call time. A new helper
+   is then a `.swift` file + compile, no restart. Accept bare names only,
+   never paths (tool windows could otherwise launch anything). It's
+   CLAUDE.md's "dumb generic proxy" rule (`instagram_fetch`) applied to
+   helpers.
+2. **Installed release shell with live pages.** Do this once a stretch
+   passes without `lib.rs` changes. A plain `tauri build` would *freeze* the
+   pages (`frontendDist` is compiled into the binary), so every tool edit
+   would mean a rebuild — worse than dev. Instead: release Rust, with the
+   webviews loading `src/` from the checkout via a custom protocol. That
+   gives optimized Rust, launch at login and no `tauri dev` terminal, with
+   pages still live; Rust changes ship when you choose to rebuild. Rust work
+   then runs a dev copy alongside under its own identifier
+   (`com.studio.app.dev`) with global shortcuts and the Dock off, so the two
+   don't fight over Option+Space, tray icons and the `~/Projects` watcher.
+   Needs the helpers bundled (BACKLOG → Packaging).
+3. **Hot-reload `TrayItems.json`** — same pattern as `refresh_tools_tray`
+   (see the end of *Configuring icon + order* below). Low value: it rarely
+   changes.
+
 Release builds have no checkout: `src/tools/` and `Tools.json` are bundled as
 Tauri resources (`bundle.resources` in `src-tauri/tauri.conf.json`) and read
 from `resource_dir()` instead, fixed at build time.
