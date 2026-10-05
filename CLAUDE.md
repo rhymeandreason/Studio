@@ -32,8 +32,11 @@ non-destructive image editor), notes, workspace, and artifacts.
 icon. Editing `src/` is live; Rust changes need a restart. `dev` runs
 `tauri dev --no-watch` and Studio watches `src/` itself (dev builds only,
 `start_dev_frontend_watcher` → `dev-file-changed` → `src/kit/dev-reload.js`) so
-a changed file reloads only the windows that actually loaded it. `npm run
-dev:watch` restores Tauri's stock reload-everything watcher.
+a changed file reloads only the windows that actually loaded it (a CSS-only
+change swaps the stylesheet in place, no reload). `npm run dev:watch` restores
+Tauri's stock reload-everything watcher. **Tools are registered in
+`Tools.json`** (menu + window size/tint/kind; `src-tauri/src/tools.rs`), read
+live in dev — adding a tool needs no restart, so don't put per-tool config in Rust.
 
 ## Subsystems (detail in each doc)
 - **Design system** ( — tokens, kit classes, `<studio-*>` components) —
@@ -116,7 +119,7 @@ dev:watch` restores Tauri's stock reload-everything watcher.
   so the watcher drops their echo — use it for any new autosave; the tray only
   rebuilds for top-level or `workspace.json` changes.
 - **`TrayItems.json`** (repo root) overrides the tray icon order/icons defined
-  in `tool_style`/`tray_item_order` in `lib.rs` — if it exists it *replaces*
+  in `tray_item_order` in `lib.rs` — if it exists it *replaces*
   the code default wholesale, so adding a new tray icon in Rust also requires
   adding its `{ "id": ... }` entry here or it silently won't show.
 

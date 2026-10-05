@@ -131,7 +131,7 @@ online Task with that link as the primary action. If only a physical
 ## Surface: the persistent notification
 
 The genuinely new UI: a small **always-on-top** window (built with the existing
-`tool_style()` chrome system + `kit/window-chrome.js`) that appears at
+`Tools.json` / `build_tool_window` chrome system + `kit/window-chrome.js`) that appears at
 `start − leadMinutes` and **persists** until acted on. Buttons:
 
 - **Join / Go** — run the Task's `actions` (open URLs/apps/tools).

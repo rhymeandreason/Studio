@@ -34,3 +34,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26"
 objc = "0.2"
+
+# Dev builds are the daily driver: optimize dependencies (image, webp, tauri…)
+# so they run near release speed, while Studio's own crate stays fast to rebuild.
+[profile.dev.package."*"]
+opt-level = 3

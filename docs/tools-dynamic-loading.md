@@ -1,6 +1,9 @@
 # Tools: dynamic loading & categories (design notes)
 
-Status: **design discussion, not yet implemented.** Captures the thinking on
+Status: **design discussion, partly implemented** — step 2 (live list + watch)
+is done in its dev-only repo-dir form: `src-tauri/src/tools.rs` reads
+`Tools.json` + `src/tools/` from the checkout and rebuilds the wrench menu on
+change, and window traits moved into `Tools.json`. Captures the thinking on
 adding tools without an app rebuild, and on giving tools explicit categories.
 See [docs/tools.md](tools.md) for how tools work today.
 
@@ -323,6 +326,7 @@ Lowest-risk, highest-value first:
    `<studio-*>` — are tracked in [BACKLOG.md](../BACKLOG.md).)
 2. **Live-list + watch** the user tools dir and rebuild the Tools submenu — kills
    the restart for the listing half. (Works for static/save tools immediately.)
+   ✅ *Done for the repo dir in dev* (`tools::watch`); a user dir is still open.
 3. **`tool://` scheme** so user-dir tools load with IPC/save intact — and serve
    the design kit at a stable `/_kit/…` URL reachable from that origin.
 4. **`needs` declaration** in `Tools.json` to make categories first-class and gate

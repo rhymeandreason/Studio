@@ -81,5 +81,4 @@ and fit the schema without a migration (new optional fields on a note).
   `selectTab()` in `main.js`.
 - Pop-out: `initTabPopOut("plan-btn", "plan.html")` in `workspace.js`, capture
   phase so Option-click beats the generic tab handler.
-- Window style: the `"plan.html"` row in `tool_style()` — 350×760, project tint.
-- Listed in `Tools.json`.
+- Listed in `Tools.json`, whose `"window"` gives it 350×760, project tint.

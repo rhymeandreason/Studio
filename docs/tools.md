@@ -26,8 +26,8 @@ its own bar: mark the tool's top bar element with `data-window-bar`, and its
 leading group with `data-window-close` — window-chrome.js injects the close
 dot there and wires Cmd+W and window dragging. macOS rounds the corners; don't
 add a page-level border-radius. `file-directory.html` is the
-reference. A per-tool row in `tool_style` is only needed for a non-default
-window size or a project-colored tint.
+reference. A `"window"` block on the tool's `Tools.json` entry is only needed
+for a non-default window size or a project-colored tint.
 
 Then a local `<style>` for tool-specific overrides only — never rewrite what kit already provides. Endeavor to use the kit styles. Don't make override styles that are only a little different.
 
@@ -59,17 +59,17 @@ goes in `src/vendor/icons/` as an SVG with a `.mi-<name>` class in `tokens.css`:
 [`kit-gallery.html`](../src/tools/kit-gallery.html) (Tools → Design System) is the living reference. 
 
 **Headless tools.** A tool that has no UI of its own (the Color Picker — it *is*
-macOS's sampler loupe) is listed in `tool_is_headless()` in `lib.rs`: its window
+macOS's sampler loupe) has `"kind": "headless"` in its `Tools.json` window: its window
 is built with `visible(false)`, so the page skips the window chrome entirely,
 does its work, and closes itself. Re-launching while one is running is a no-op.
 
 **Floating tools.** A tool that is just a shape on the desktop (the Camera
 Bubble — a FaceTime-style camera circle/square/portrait for screencasts) is
-listed in `FLOATING_TOOLS` in `lib.rs`: `apply_tool_chrome` builds it
+`"kind": "floating"` in its `Tools.json` window: `apply_tool_chrome` builds it
 borderless, transparent, shadowless, always on top and on every Space, with no
 kit window chrome. The page paints its own shape + CSS shadow and sizes/moves
 the native window around it (`setSize` + `setPosition`). Like headless tools,
-closing really closes it (`is_disposable_tool_label`) — for the camera that's
+closing really closes it (`tools::is_disposable_label`) — for the camera that's
 what turns the green light off. Its Tab background replacement sends small
 frames through `person_mask` (`personseg.rs`, a raw-bytes pipe) to the
 long-running `personseg` Swift helper (Vision) and composites the mask in a
@@ -81,14 +81,12 @@ canvas over the bubble's colored fill.
   (plain HTML + inline `<style>`/`<script>`, no build step).
 - **Add it to [`Tools.json`](../Tools.json)** (`{ "file": "my-tool.html",
   "name": "My Tool" }`) — that file exists, so it's the whole list: a tool
-  not in it won't show anywhere. Then quit and relaunch `npm run tauri dev`
-  (the list is copied into the bundle at build time; a reload won't pick it up).
-  It has to be the `tauri dev` process itself: if only the Studio binary
-  restarts, it keeps reading the stale copy in `src-tauri/target/debug/Tools.json`.
-  Spotlight re-reads that copy each time it opens, but the wrench menu is
-  built once at startup.
+  not in it won't show anywhere. **No restart:** in dev, Studio reads
+  `Tools.json` and `src/tools/` straight from the checkout and watches them
+  (`tools::watch`), rebuilding the wrench menu as soon as the list changes.
 - It appears under the **wrench (🔧) tray icon's** dropdown menu (🔧 *name*)
-  and in Spotlight.
+  and is available to Spotlight (which shows its own curated `PINNED` subset —
+  add the file there too if it belongs in the launcher).
 - Clicking it opens the file in its **own native window**, loaded via
   `tauri://localhost/tools/<file>` (the same `tauri://` protocol the main
   window uses, since `src/` is `frontendDist`) — not a browser tab and not
@@ -98,34 +96,50 @@ canvas over the bubble's colored fill.
   `Origin: null`, which Tauri's IPC rejects with "Origin header not valid
   URL", so `invoke()` (and thus `save_tool_export`) can't be called.
 
-`src/tools/` is also bundled as a Tauri resource (`bundle.resources` in
-`src-tauri/tauri.conf.json`, alongside `Tools.json`) so the Rust side can
-list available tools via `resource_dir()`. **Adding/editing tools requires a
-rebuild/restart of Studio** — there's no live FSEvents refresh like the
-project list has.
+**What still needs a restart:** only Rust — a new `#[tauri::command]`, a new
+Swift helper, a capability/permission change, a global shortcut, a tray icon.
+A pure-HTML tool (new, renamed, resized, retinted) never does.
 
-Implementation: `scan_tools` / `open_tool_window` in
-[`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs).
+Release builds have no checkout: `src/tools/` and `Tools.json` are bundled as
+Tauri resources (`bundle.resources` in `src-tauri/tauri.conf.json`) and read
+from `resource_dir()` instead, fixed at build time.
 
-## Choosing which tools show (`Tools.json`)
+Implementation: [`src-tauri/src/tools.rs`](../src-tauri/src/tools.rs) (the
+registry: `listed`, `style`, `watch`) and `open_tool_window` /
+`refresh_tools_tray` in [`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs).
 
-[`Tools.json`](../Tools.json) at the root of the Studio project lists which
-tools appear and in what order. **It exists, so every new tool must be added
-here** — the scan-everything fallback only applies when the file is missing.
+## The tool registry (`Tools.json`)
+
+[`Tools.json`](../Tools.json) at the root of the Studio project is the one
+place a tool is registered: which tools appear, in what order, and how each
+one's window is built. Rust has no per-tool table. **It exists, so every new
+tool must be added here** — the scan-everything fallback only applies when
+the file is missing.
 
 ```json
 [
   { "file": "bento-grid.html", "name": "Bento Grid" },
-  { "file": "unit-converter.html", "name": "Unit Converter" }
+  { "file": "plan.html", "name": "Plan", "window": { "w": 350, "h": 760, "tint": "project" } },
+  { "file": "camera-bubble.html", "name": "Camera Bubble", "window": { "w": 232, "h": 232, "kind": "floating" } },
+  { "file": "code-preview.html", "menu": false, "window": { "tint": "project" } }
 ]
 ```
 
 - `file` — filename relative to `src/tools/` (required).
 - `name` — label shown in the tray menu (optional; defaults to the filename
   without `.html`).
-- Entries are shown in the order listed. Files not in the list are hidden.
-- If `Tools.json` is missing or invalid, Studio falls back to scanning all
-  `*.html` files in `tools/`.
+- `menu` — `false` keeps a tool out of the wrench menu and Spotlight while
+  its `window` still applies (tools opened from elsewhere: Code Preview, the
+  Dock's popovers, Git Pulse). Default `true`.
+- `window` — all optional: `w` / `h` (logical px, default 900×640), `tint`
+  (`"paper"` default, or `"project"` for the active project's color — see
+  below), `kind` (`"normal"` default, `"headless"`, `"floating"`).
+- Menu entries are shown in the order listed. Files not in the list are hidden.
+- A save that doesn't parse (a stray comma, `"tint": "Project"`) is logged to
+  the `tauri dev` terminal and the last good version is kept. `cargo test
+  tools::` checks the checked-in file parses and every `file` exists.
+- If `Tools.json` is missing, Studio falls back to scanning all `*.html`
+  files in `tools/`.
 
 
 
@@ -173,12 +187,12 @@ windows in `src-tauri/capabilities/tools.json`.
 
 ## Window style (title bar / chrome)
 
-**One source of truth.** A tool's window size + tint come from the
-`tool_style(filename)` table in `src-tauri/src/lib.rs` (`ToolStyle { w, h,
-tint }`). Every tool window is built through `build_tool_window()` (=
-`apply_tool_chrome()` + `.build()` + `hide_traffic_lights()`), so the chrome
-can't drift between builders. To resize or retint a tool, edit *one* table
-entry — never the builders.
+**One source of truth.** A tool's window size + tint + kind come from its
+`"window"` in `Tools.json` (read by `tools::style`). Every tool window is
+built through `build_tool_window()` (= `apply_tool_chrome()` + `.build()` +
+`hide_traffic_lights()`), so the chrome can't drift between builders. To
+resize or retint a tool, edit its `Tools.json` entry — never the builders.
+Takes effect the next time the window is built (close it, reopen).
 
 The chrome is the same for all tools: **native frame, custom bar.**
 `title_bar_style(Overlay)` + `hidden_title(true)` keep the real NSWindow
@@ -191,10 +205,10 @@ Spotlight, Mode switcher, task-notify, the Dock — stay borderless:
 
 ### Custom bar — the recipe
 
-1. **Rust:** only if the tool needs a non-default size or `Tint::Project`,
-   add its arm to `tool_style()`. The builders pass the resolved color as
-   `?color=`. Build any new tool window via `build_tool_window`, not
-   `.build()`, or the traffic lights show.
+1. **`Tools.json`:** only if the tool needs a non-default size or the
+   project tint, give its entry a `"window"`. The builders pass the resolved
+   color as `?color=`. (Rust: build any new tool window via
+   `build_tool_window`, not `.build()`, or the traffic lights show.)
 
 2. **HTML:** link `../kit/window-chrome.css` after kit.css, `import
    "../kit/window-chrome.js"` in the module script, and mark the top bar
@@ -220,7 +234,7 @@ Spotlight, Mode switcher, task-notify, the Dock — stay borderless:
    window background, a tinted card) paints its washi tint instead, and only
    small accents (dots, accent text) use the vivid color directly.
 
-4. **Test in the running app** (restart for any Rust change): no traffic
+4. **Test in the running app** (restart only for a Rust change): no traffic
    lights, draggable bar, close dot + Cmd+W, native corners + shadow, tint
    matches the project.
 
@@ -368,7 +382,7 @@ overview), and `"daily-notes"` — can be reordered and given custom icons via
   `["studio", "ram", "daily-notes"]` with default icons.
 
 Implementation: `tray_item_order` / `tray_item_icon` in
-[`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs). Like `Tools.json`,
+[`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs). Unlike `Tools.json`,
 changes require a rebuild/restart of Studio — they're read once at startup
 from the bundled resource copy, and tray icons are created during app
 setup. Quitting and relaunching `npm run tauri dev` re-copies resources, so

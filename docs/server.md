@@ -3,8 +3,8 @@
 A per-project tool window that starts/stops the repo's dev server and shows an
 oscilloscope waveform while it's running. Replaces the old inline Start/Stop
 buttons on the Workspace repo card. Files: `src/tools/server.html` (the window),
-plus the `server_status` / `dev_pid_alive` / `repo_dev_url` commands and the
-`server.html` `tool_style` row in `src-tauri/src/lib.rs`.
+plus the `server_status` / `dev_pid_alive` / `repo_dev_url` commands in
+`src-tauri/src/lib.rs` and its `Tools.json` entry (window size + tint).
 
 ## Opening it
 

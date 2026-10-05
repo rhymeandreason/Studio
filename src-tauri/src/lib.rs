@@ -5,6 +5,7 @@ mod instagram;
 mod patchmatch;
 mod personseg;
 mod screens;
+mod tools;
 
 use dock::{
     dock_open_settings, dock_set_volume, dock_status, dock_toggle_mute, dock_toggle_wifi,
@@ -408,91 +409,6 @@ fn scan_projects(app: &AppHandle) -> Vec<Project> {
     projects
 }
 
-/// `tools/` — single-file HTML utilities bundled with Studio (see
-/// `bundle.resources` in `tauri.conf.json`), opened in their own window.
-fn tools_dir(app: &AppHandle) -> Option<PathBuf> {
-    app.path().resource_dir().ok().map(|d| d.join("tools"))
-}
-
-/// One entry in `~/Projects/Tools/Tools.json`.
-#[derive(Deserialize)]
-struct ToolEntry {
-    file: String,
-    #[serde(default)]
-    name: Option<String>,
-}
-
-/// `Tools.json`, bundled with Studio (see `tauri.conf.json` →
-/// `bundle.resources`) — explicit list/order of tools to show in the tray.
-/// `file` paths within it are resolved relative to `~/Projects/Tools/`.
-/// Missing/unreadable file falls back to `None` (scan all *.html).
-fn read_tools_manifest(app: &AppHandle) -> Option<Vec<ToolEntry>> {
-    let dir = app.path().resource_dir().ok()?;
-    let text = std::fs::read_to_string(dir.join("Tools.json")).ok()?;
-    serde_json::from_str(&text).ok()
-}
-
-/// Tools to show in the tray: from `Tools.json` if present (in the order
-/// listed there), otherwise every *.html file in ~/Projects/Tools, sorted by
-/// name.
-fn scan_tools(app: &AppHandle) -> Vec<Project> {
-    let Some(dir) = tools_dir(app) else {
-        return Vec::new();
-    };
-
-    if let Some(entries) = read_tools_manifest(app) {
-        return entries
-            .into_iter()
-            .filter_map(|entry| {
-                let path = dir.join(&entry.file);
-                if !path.is_file() {
-                    return None;
-                }
-                let name = entry.name.unwrap_or_else(|| {
-                    Path::new(&entry.file)
-                        .file_stem()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or(&entry.file)
-                        .to_string()
-                });
-                Some(Project {
-                    name,
-                    path: path.to_string_lossy().to_string(),
-                    modified: 0,
-                    ..Default::default()
-                })
-            })
-            .collect();
-    }
-
-    let mut tools = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_file() {
-                continue;
-            }
-            if path.extension().and_then(|e| e.to_str()) != Some("html") {
-                continue;
-            }
-            let Some(stem) = path.file_stem().and_then(|n| n.to_str()) else {
-                continue;
-            };
-            if stem.starts_with('.') {
-                continue;
-            }
-            tools.push(Project {
-                name: stem.to_string(),
-                path: path.to_string_lossy().to_string(),
-                modified: 0,
-                ..Default::default()
-            });
-        }
-    }
-    tools.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    tools
-}
-
 #[derive(serde::Serialize)]
 struct SpotlightTool {
     name: String,
@@ -502,17 +418,10 @@ struct SpotlightTool {
 /// Tool list for the Spotlight launcher: name + bare filename (so the
 /// frontend can pass it straight to `open_tool`).
 #[tauri::command]
-fn list_tools(app: AppHandle) -> Vec<SpotlightTool> {
-    scan_tools(&app)
+fn list_tools() -> Vec<SpotlightTool> {
+    tools::listed()
         .into_iter()
-        .map(|p| SpotlightTool {
-            name: p.name,
-            file: Path::new(&p.path)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or_default()
-                .to_string(),
-        })
+        .map(|t| SpotlightTool { name: t.name, file: t.file })
         .collect()
 }
 
@@ -622,111 +531,19 @@ fn toggle_mode_switcher_window(app: &AppHandle) {
     }
 }
 
-/// Where a tool window's tint comes from. All tool windows share the minimal
-/// custom chrome (no native title bar / traffic lights; the page paints its
-/// own draggable bar + close dot + rounded corners via `src/kit/window-chrome.js`,
-/// reading `?color=` for its tint) — only the tint source varies.
-enum Tint {
-    /// The active project's accent / git color (passed in as `color`).
-    Project,
-    /// The Runes paper background — for global, project-less tools (no
-    /// `?color=` is passed; the bar falls back to `var(--bg)`).
-    Paper,
-}
-
-struct ToolStyle {
-    w: f64,
-    h: f64,
-    tint: Tint,
-}
-
-/// Per-tool window style table. Every tool defaults to the minimal custom
-/// chrome (no native bar; the page paints its own via the kit window-chrome —
-/// link `kit/window-chrome.css`, import `kit/window-chrome.js`, mark its top
-/// bar `data-window-bar`). Rows below only override size/tint. Spotlight /
-/// Mode switcher / Task cards have their own bespoke invisible windows and
-/// never come through here.
-/// Tools with no UI of their own: their window is built invisible and the page
-/// closes it when its work is done (the Color Picker *is* the macOS sampler
-/// loupe, so a Studio window next to it would be noise).
-fn tool_is_headless(filename: &str) -> bool {
-    HEADLESS_TOOLS.contains(&filename)
-}
-
-const HEADLESS_TOOLS: &[&str] = &["color-picker.html"];
-
-/// Tools that are just a floating shape on the desktop (the Camera Bubble):
-/// built borderless, transparent, shadowless and always-on-top on every Space,
-/// with no window chrome — the page paints its own shape (and shadow) and
-/// sizes the window around it.
-fn tool_is_floating(filename: &str) -> bool {
-    FLOATING_TOOLS.contains(&filename)
-}
-
-const FLOATING_TOOLS: &[&str] = &["camera-bubble.html"];
-
-/// True for the window label of a headless or floating tool
-/// (`tool-color-picker`, `tool-camera-bubble`). Those windows are throwaway —
-/// one per run — so `CloseRequested` must let them actually close instead of
-/// hiding them like every other menu-bar window: a hidden headless leftover
-/// would make the next launch a no-op, and a hidden Camera Bubble would keep
-/// the camera (and its green light) on.
-fn is_disposable_tool_label(label: &str) -> bool {
-    HEADLESS_TOOLS.iter().chain(FLOATING_TOOLS).any(|f| {
-        let stem: String = Path::new(f)
-            .file_stem()
-            .and_then(|n| n.to_str())
-            .unwrap_or_default()
-            .chars()
-            .map(|c| if c.is_alphanumeric() { c } else { '-' })
-            .collect();
-        label == format!("tool-{stem}")
-    })
-}
-
-fn tool_style(filename: &str) -> ToolStyle {
-    let s = |w, h, tint| ToolStyle { w, h, tint };
-    match filename {
-        "code-editor.html" => s(900.0, 640.0, Tint::Project),
-        // A writing surface: narrower, taller, one centered column.
-        "markdown-editor.html" => s(760.0, 720.0, Tint::Project),
-        "code-preview.html" => s(900.0, 640.0, Tint::Project),
-        "daily-notes.html" => s(300.0, 600.0, Tint::Paper),
-        "ram-overview.html" => s(380.0, 440.0, Tint::Paper),
-        "file-directory.html" => s(350.0, 640.0, Tint::Paper),
-        // A vertical run of weeks: same skinny column as File Directory.
-        "plan.html" => s(350.0, 760.0, Tint::Project),
-        // Both opened from the Studio Dock strip: narrow, list-shaped.
-        "projects.html" => s(260.0, 460.0, Tint::Paper),
-        "system-controls.html" => s(260.0, 400.0, Tint::Paper),
-        "tasks.html" => s(800.0, 800.0, Tint::Paper),
-        "modes.html" => s(320.0, 480.0, Tint::Paper),
-        "git-pulse.html" => s(820.0, 600.0, Tint::Paper),
-        // Tall and narrow: a vertical timeline of commits.
-        "git-history.html" => s(360.0, 780.0, Tint::Project),
-        "server.html" => s(240.0, 440.0, Tint::Project),
-        "browser-frame.html" => s(280.0, 330.0, Tint::Paper),
-        "daily-briefing.html" => s(1080.0, 760.0, Tint::Paper),
-        "mycelium.html" => s(1100.0, 760.0, Tint::Paper),
-        "instagram-saved.html" => s(1000.0, 720.0, Tint::Paper),
-        // A 200px circle + the page's shadow margin; the page resizes itself.
-        "camera-bubble.html" => s(232.0, 232.0, Tint::Paper),
-        _ => s(900.0, 640.0, Tint::Paper),
-    }
-}
-
 /// Apply a tool's window style (size + chrome) to its builder. Tool windows
 /// keep the NATIVE macOS frame — system corner radius, shadow, resize edges —
 /// but with an Overlay title bar (the page runs under it and paints its own
 /// tinted bar + close dot via kit/window-chrome.js) and no title text. The
 /// traffic lights are hidden after build: use `build_tool_window`, not
-/// `.build()`. Same recipe as the main window.
+/// `.build()`. Same recipe as the main window. Size, tint and kind come from
+/// the tool's `Tools.json` entry (`tools::style`).
 fn apply_tool_chrome<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
     builder: tauri::webview::WebviewWindowBuilder<'a, R, M>,
     filename: &str,
 ) -> tauri::webview::WebviewWindowBuilder<'a, R, M> {
-    let st = tool_style(filename);
-    if tool_is_floating(filename) {
+    let st = tools::style(filename);
+    if st.kind == tools::Kind::Floating {
         return builder
             .inner_size(st.w, st.h)
             .decorations(false)
@@ -747,7 +564,7 @@ fn apply_tool_chrome<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
         .hidden_title(true)
         // Headless tools (Color Picker) never paint: keep the window off-screen
         // for its lifetime rather than flashing an empty frame.
-        .visible(!tool_is_headless(filename))
+        .visible(st.kind != tools::Kind::Headless)
         // Finder-style: a click into an inactive tool window both focuses it and
         // acts (e.g. starts a file drag) in one motion, instead of the first
         // click being swallowed just to focus.
@@ -763,7 +580,7 @@ fn build_tool_window<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
 ) -> tauri::Result<tauri::WebviewWindow<R>> {
     let win = apply_tool_chrome(builder, filename).build()?;
     #[cfg(target_os = "macos")]
-    if !tool_is_floating(filename) {
+    if !tools::is_floating(filename) {
         hide_traffic_lights(&win);
     }
     Ok(win)
@@ -1059,7 +876,7 @@ fn project_path_for_file(app: &AppHandle, file: &str) -> Option<String> {
 ///   `TrayIconEvent::Click`); an already-open window toggles visibility
 ///   instead of focusing.
 /// - `color`: explicit tint override; `None` resolves it from the tool's
-///   `tool_style` tint (active project accent, or none for paper tools). The
+///   `Tools.json` tint (active project accent, or none for paper tools). The
 ///   color rides the URL so the page can paint its own bar on first frame.
 ///
 /// Loads via the app's tauri://localhost protocol (the tool's HTML lives in
@@ -1107,24 +924,17 @@ fn open_tool_window(
     let Some(filename) = Path::new(path).file_name().and_then(|n| n.to_str()) else {
         return;
     };
-    let stem: String = Path::new(filename)
-        .file_stem()
-        .and_then(|n| n.to_str())
-        .unwrap_or("tool")
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '-' })
-        .collect();
     let q = query.filter(|q| !q.is_empty());
     let label = match &q {
-        Some(q) => format!("tool-{stem}-{}", tool_hash(q)),
-        None => format!("tool-{stem}"),
+        Some(q) => format!("{}-{}", tools::label_for(filename), tool_hash(q)),
+        None => tools::label_for(filename),
     };
     track_tool_window(&label, filename, q.clone(), "plain");
 
     if let Some(win) = app.get_webview_window(&label) {
         // A headless tool's window only exists while it's running, and showing
         // it would put an empty frame on screen — leave the run alone.
-        if tool_is_headless(filename) {
+        if tools::is_headless(filename) {
             return;
         }
         if let Some(rect) = near {
@@ -1141,9 +951,9 @@ fn open_tool_window(
     }
 
     let color = color.filter(|c| !c.is_empty()).unwrap_or_else(|| {
-        match tool_style(filename).tint {
-            Tint::Project => active_git_color_hex(app).unwrap_or_default(),
-            Tint::Paper => String::new(),
+        match tools::style(filename).tint {
+            tools::Tint::Project => active_git_color_hex(app).unwrap_or_default(),
+            tools::Tint::Paper => String::new(),
         }
     });
     let mut parts: Vec<String> = Vec::new();
@@ -1415,9 +1225,9 @@ fn build_tasks_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Res
     Ok(())
 }
 
-/// Build the Tools tray icon: a wrench dropdown with the built-in Scheduled
-/// Tasks / Video Editor windows, then any user tools from `scan_tools()`.
-fn build_tools_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Result<()> {
+/// The wrench dropdown: the built-in Scheduled Tasks / Video Editor windows,
+/// then the tools `Tools.json` lists.
+fn tools_tray_menu(app: &AppHandle, listed: &[tools::ListedTool]) -> tauri::Result<Menu<Wry>> {
     let mut items: Vec<Box<dyn IsMenuItem<Wry>>> = Vec::new();
     items.push(Box::new(MenuItem::with_id(
         app,
@@ -1433,7 +1243,7 @@ fn build_tools_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Res
         true,
         None::<&str>,
     )?));
-    for t in &scan_tools(app) {
+    for t in listed {
         items.push(Box::new(MenuItem::with_id(
             app,
             format!("{TOOL_PREFIX}{}", t.path),
@@ -1443,7 +1253,18 @@ fn build_tools_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Res
         )?));
     }
     let refs: Vec<&dyn IsMenuItem<Wry>> = items.iter().map(|b| b.as_ref()).collect();
-    let menu = Menu::with_items(app, &refs)?;
+    Menu::with_items(app, &refs)
+}
+
+/// The tool list the wrench menu was last built from — so `refresh_tools_tray`
+/// only rebuilds when what's listed actually changed, not on every tool save.
+static TOOLS_MENU_LIST: Mutex<Vec<tools::ListedTool>> = Mutex::new(Vec::new());
+
+/// Build the Tools tray icon (the wrench dropdown).
+fn build_tools_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Result<()> {
+    let listed = tools::listed();
+    let menu = tools_tray_menu(app, &listed)?;
+    *TOOLS_MENU_LIST.lock().unwrap() = listed;
 
     let icon = match icon {
         Some(icon) => icon,
@@ -1474,6 +1295,20 @@ fn build_tools_tray(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Res
         })
         .build(app)?;
     Ok(())
+}
+
+/// Rebuild the wrench menu if `Tools.json` / `src/tools/` now list something
+/// different (dev: called by `tools::watch`, so a new tool shows up live).
+fn refresh_tools_tray(app: &AppHandle) {
+    let listed = tools::listed();
+    let mut last = TOOLS_MENU_LIST.lock().unwrap();
+    if *last == listed {
+        return;
+    }
+    if let (Some(tray), Ok(menu)) = (app.tray_by_id("tools-tray"), tools_tray_menu(app, &listed)) {
+        let _ = tray.set_menu(Some(menu));
+        *last = listed;
+    }
 }
 
 /// Refresh the tray menu to reflect the current project list and active project.
@@ -6549,7 +6384,7 @@ pub fn run() {
                 }
                 // A headless/floating tool window exists only for the length of
                 // one run and closes itself at the end: let it go for real.
-                if is_disposable_tool_label(window.label()) {
+                if tools::is_disposable_label(window.label()) {
                     return;
                 }
                 // Other windows live in the menu bar — hide, don't quit Studio.
@@ -6570,6 +6405,9 @@ pub fn run() {
             }
 
             let handle = app.handle().clone();
+
+            // Where Tools.json + src/tools live — before any tray or tool window.
+            tools::init(&handle);
 
             // Unplugging a display: pull Studio's windows back on screen.
             screens::start_display_watcher(handle.clone());
@@ -6613,6 +6451,14 @@ pub fn run() {
             // Dev only: reload just the windows that loaded the changed file.
             #[cfg(debug_assertions)]
             start_dev_frontend_watcher(&handle);
+
+            // Dev only: a tool added to (or dropped from) Tools.json shows up in
+            // the wrench menu without a restart.
+            #[cfg(debug_assertions)]
+            {
+                let h = handle.clone();
+                tools::watch(move || refresh_tools_tray(&h));
+            }
 
             // Periodically run any due scheduled `claude -p` tasks.
             start_scheduler(&handle);
