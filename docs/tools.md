@@ -165,7 +165,8 @@ the file is missing.
   Dock's popovers, Git Pulse). Default `true`.
 - `window` — all optional: `w` / `h` (logical px, default 900×640), `tint`
   (`"paper"` default, or `"project"` for the active project's color — see
-  below), `kind` (`"normal"` default, `"headless"`, `"floating"`).
+  below), `kind` (`"normal"` default, `"headless"`, `"floating"`), `onTop`
+  (`true` floats above every app's windows, focused or not).
 - Menu entries are shown in the order listed. Files not in the list are hidden.
 - A save that doesn't parse (a stray comma, `"tint": "Project"`) is logged to
   the `tauri dev` terminal and the last good version is kept. `cargo test
@@ -473,19 +474,15 @@ webview window can do.
 
 ## Always-on-top / floating tools
 
-A tool can float above all other windows by calling `setAlwaysOnTop(true)` from
-JS — no Rust change needed:
+A tool floats above all other windows — focused or not — with `"onTop": true`
+in its `Tools.json` window (Window Size does this):
 
-```js
-if (window.__TAURI__) {
-  const { getCurrentWindow } = window.__TAURI__.window;
-  getCurrentWindow().setAlwaysOnTop(true);
-  getCurrentWindow().setResizable(false);
-}
+```json
+{ "file": "window-size.html", "name": "Window Size", "window": { "onTop": true } }
 ```
 
-The `core:window:allow-set-always-on-top` permission is already granted to all
-`tool-*` windows in `src-tauri/capabilities/tools.json`.
+Not from JS: `setAlwaysOnTop()` needs `core:window:allow-set-always-on-top`,
+which `tool-*` windows aren't granted, so the call fails silently.
 
 **Caveat:** always-on-top windows sit at `NSFloatingWindowLevel`, so they appear
 first in the macOS compositor's window Z-order even when another window has

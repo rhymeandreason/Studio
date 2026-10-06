@@ -565,6 +565,7 @@ fn apply_tool_chrome<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
         // Headless tools (Color Picker) never paint: keep the window off-screen
         // for its lifetime rather than flashing an empty frame.
         .visible(st.kind != tools::Kind::Headless)
+        .always_on_top(st.on_top)
         // Finder-style: a click into an inactive tool window both focuses it and
         // acts (e.g. starts a file drag) in one motion, instead of the first
         // click being swallowed just to focus.

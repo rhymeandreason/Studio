@@ -34,8 +34,8 @@ fn yes() -> bool {
     true
 }
 
-/// `"window": { "w": 350, "h": 640, "tint": "project", "kind": "floating" }` —
-/// every field optional.
+/// `"window": { "w": 350, "h": 640, "tint": "project", "kind": "floating",
+/// "onTop": true }` — every field optional.
 #[derive(Deserialize, Clone, Default)]
 pub struct WindowSpec {
     pub w: Option<f64>,
@@ -44,6 +44,9 @@ pub struct WindowSpec {
     pub tint: Tint,
     #[serde(default)]
     pub kind: Kind,
+    /// Float above every app's windows, focused or not (Window Size).
+    #[serde(default, rename = "onTop")]
+    pub on_top: bool,
 }
 
 /// Where a tool window's tint comes from. All tool windows share the minimal
@@ -80,6 +83,7 @@ pub struct ToolStyle {
     pub h: f64,
     pub tint: Tint,
     pub kind: Kind,
+    pub on_top: bool,
 }
 
 /// A menu-listed tool, resolved against the tools dir.
@@ -201,6 +205,7 @@ pub fn style(file: &str) -> ToolStyle {
         h: spec.h.unwrap_or(640.0),
         tint: spec.tint,
         kind: spec.kind,
+        on_top: spec.on_top,
     }
 }
 

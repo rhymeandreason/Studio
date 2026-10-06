@@ -13,7 +13,7 @@
   { "file": "image-editor.html", "name": "Image Editor" },
   { "file": "git-history.html", "name": "Git History", "window": { "w": 360, "h": 780, "tint": "project" } },
   { "file": "server.html", "name": "Server", "window": { "w": 240, "h": 440, "tint": "project" } },
-  { "file": "window-size.html", "name": "Window Size" },
+  { "file": "window-size.html", "name": "Window Size", "window": { "onTop": true } },
   { "file": "browser-frame.html", "name": "Browser Record", "window": { "w": 280, "h": 330 } },
   { "file": "camera-bubble.html", "name": "Camera Bubble", "window": { "w": 232, "h": 232, "kind": "floating" } },
   { "file": "file-directory.html", "name": "File Directory", "window": { "w": 350, "h": 640 } },
