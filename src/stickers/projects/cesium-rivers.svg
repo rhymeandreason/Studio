@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Cesium Rivers: a salmon leaping out of a free-flowing river -->
+  <defs>
+    <pattern id="salmon" width="2.8" height="2.8" patternUnits="userSpaceOnUse"><rect width="2.8" height="2.8" fill="#e8705a"/><circle cx="1.4" cy="1.4" r="0.5" fill="#fff" opacity="0.45"/></pattern>
+    <clipPath id="f"><path d="M-15 0C-10-6.5 1-8 10-4 13-2.5 15-1 16.5 0 15 1 13 2.5 10 4 1 8-10 6.5-15 0Z"/></clipPath>
+    <pattern id="water" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(0)"><rect width="3" height="3" fill="#4cc9f0"/><rect width="1.1" height="3" fill="#fff" opacity="0.5"/></pattern>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M3 35C10 31 16 38 24 35S38 31 45 35V41C38 37.5 31 42 24 41S10 37.5 3 41Z"/>
+    <g transform="translate(25 22) rotate(-28)"><path d="M-15 0C-10-6.5 1-8 10-4 13-2.5 15-1 16.5 0 15 1 13 2.5 10 4 1 8-10 6.5-15 0Z"/><path d="M-13.5 0-21-6.5C-20-2.5-20 2.5-21 6.5Z"/><path d="M-2-6.5 3-10.5 5-5.5Z"/></g>
+    <circle cx="40" cy="28" r="1.3"/><circle cx="38.5" cy="11" r="1.1"/>
+  </g>
+  <path d="M3 35C10 31 16 38 24 35S38 31 45 35V41C38 37.5 31 42 24 41S10 37.5 3 41Z" fill="url(#water)"/>
+  <g transform="translate(25 22) rotate(-28)">
+    <path d="M-2-6.5 3-10.5 5-5.5Z" fill="#a8534a"/>
+    <path d="M-13.5 0-21-6.5C-20-2.5-20 2.5-21 6.5Z" fill="#a8534a"/>
+    <path d="M-15 0C-10-6.5 1-8 10-4 13-2.5 15-1 16.5 0 15 1 13 2.5 10 4 1 8-10 6.5-15 0Z" fill="url(#salmon)"/>
+    <path d="M-16 1C-6 5 4 5.2 17 1V9H-16Z" fill="#f6d7c8" clip-path="url(#f)"/>
+    <path d="M9.5-3.6Q8 0 9.5 3.6" fill="none" stroke="#a8534a" stroke-width=".9" stroke-linecap="round"/>
+    <circle cx="12.3" cy="-1" r="1.2" fill="#2f2628"/><circle cx="12.7" cy="-1.4" r=".4" fill="#fff"/>
+  </g>
+  <g fill="#a9dff2"><circle cx="40" cy="28" r="1.3"/><circle cx="38.5" cy="11" r="1.1"/></g>
+</svg>

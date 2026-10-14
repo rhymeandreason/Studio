@@ -263,4 +263,34 @@ svg("2058", "2058: a retro-future diary with a ringed-planet clasp",
     <ellipse cx="24" cy="31" rx="8" ry="2.2" fill="none" stroke="#ea8048" stroke-width="1.4" transform="rotate(-18 24 31)"/>
     <path d="M19.8 29.1A4.4 4.4 0 0 1 28.2 29.3" fill="#f2b541"/>
   </g>'''])
+# Atlas 2058: a city skyline with the tide rising over it
+towers = '<rect x="9" y="20" width="7" height="20"/><rect x="15" y="11" width="8" height="29"/><rect x="22.5" y="16" width="6.5" height="24"/><rect x="28.5" y="7" width="7" height="33"/><rect x="35" y="18" width="5.5" height="22"/>'
+tide = "M5 30Q9 27 13 30T21 30T29 30T37 30T45 30V42Q45 44 43 44H7Q5 44 5 42Z"
+wins = "".join(f'<rect x="{x}" y="{y}" width="1.4" height="1.8"/>' for x, ys in [(17.5, (14, 18, 22)), (19.8, (14, 22)), (31, (10, 14, 18, 22)), (33, (10, 18)), (11.5, (23,)), (25, (19, 23)), (37, (21,))] for y in ys)
+svg("atlas-2058", "Atlas 2058: a city skyline with the tide rising over it",
+    [stripes("city", "#34507a", "#fff", .18, 2.6, .8, 90), stripes("city2", "#5a7bb0", "#fff", .22, 2.6, .8, 90), stripes("sea", "#43e8a0", "#fff", .45, 3, 1.1, 45)],
+    [towers, '<rect x="31.4" y="3" width="1.2" height="5"/>', f'<path d="{tide}"/>'],
+    [f'<g fill="url(#city)">{towers}</g>', '<g fill="url(#city2)"><rect x="9" y="20" width="6" height="20"/><rect x="22.5" y="16" width="6" height="24"/><rect x="35.5" y="18" width="5" height="22"/></g>', f'<rect x="31.4" y="3" width="1.2" height="5" fill="{INK}"/><circle cx="32" cy="3" r="1.1" fill="#e0573f"/>',
+     f'<g fill="#f2c233">{wins}</g>',
+     f'<path d="{tide}" fill="url(#sea)"/>',
+     '<path d="M5 30Q9 27 13 30T21 30T29 30T37 30T45 30" fill="none" stroke="#fffaf0" stroke-width="1.3" stroke-linecap="round"/>',
+     '<path d="M10 36Q13 34.5 16 36M27 38Q30 36.5 33 38" fill="none" stroke="#fffaf0" stroke-width=".9" stroke-linecap="round" opacity=".8"/>'])
+
+# Cesium Rivers: a salmon leaping out of a free-flowing river
+fish = "M-15 0C-10-6.5 1-8 10-4 13-2.5 15-1 16.5 0 15 1 13 2.5 10 4 1 8-10 6.5-15 0Z"
+tail = "M-13.5 0-21-6.5C-20-2.5-20 2.5-21 6.5Z"
+river = "M3 35C10 31 16 38 24 35S38 31 45 35V41C38 37.5 31 42 24 41S10 37.5 3 41Z"
+svg("cesium-rivers", "Cesium Rivers: a salmon leaping out of a free-flowing river",
+    [dots("salmon", "#e8705a", "#fff", .45, 2.8, .5), f'<clipPath id="f"><path d="{fish}"/></clipPath>', stripes("water", "#4cc9f0", "#fff", .5, 3, 1.1, 0)],
+    [f'<path d="{river}"/>', f'<g transform="translate(25 22) rotate(-28)"><path d="{fish}"/><path d="{tail}"/><path d="M-2-6.5 3-10.5 5-5.5Z"/></g>', '<circle cx="40" cy="28" r="1.3"/><circle cx="38.5" cy="11" r="1.1"/>'],
+    [f'<path d="{river}" fill="url(#water)"/>',
+     f'''<g transform="translate(25 22) rotate(-28)">
+    <path d="M-2-6.5 3-10.5 5-5.5Z" fill="#a8534a"/>
+    <path d="{tail}" fill="#a8534a"/>
+    <path d="{fish}" fill="url(#salmon)"/>
+    <path d="M-16 1C-6 5 4 5.2 17 1V9H-16Z" fill="#f6d7c8" clip-path="url(#f)"/>
+    <path d="M9.5-3.6Q8 0 9.5 3.6" fill="none" stroke="#a8534a" stroke-width=".9" stroke-linecap="round"/>
+    <circle cx="12.3" cy="-1" r="1.2" fill="{INK}"/><circle cx="12.7" cy="-1.4" r=".4" fill="#fff"/>
+  </g>''',
+     '<g fill="#a9dff2"><circle cx="40" cy="28" r="1.3"/><circle cx="38.5" cy="11" r="1.1"/></g>'])
 print("wrote", len([f for f in os.listdir(OUT) if f.endswith(".svg")]), "stickers to", OUT)

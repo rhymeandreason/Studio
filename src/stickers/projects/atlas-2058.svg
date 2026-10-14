@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Atlas 2058: a city skyline with the tide rising over it -->
+  <defs>
+    <pattern id="city" width="2.6" height="2.6" patternUnits="userSpaceOnUse" patternTransform="rotate(90)"><rect width="2.6" height="2.6" fill="#34507a"/><rect width="0.8" height="2.6" fill="#fff" opacity="0.18"/></pattern>
+    <pattern id="city2" width="2.6" height="2.6" patternUnits="userSpaceOnUse" patternTransform="rotate(90)"><rect width="2.6" height="2.6" fill="#5a7bb0"/><rect width="0.8" height="2.6" fill="#fff" opacity="0.22"/></pattern>
+    <pattern id="sea" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="3" fill="#43e8a0"/><rect width="1.1" height="3" fill="#fff" opacity="0.45"/></pattern>
+  </defs>
+  <g fill="#fffdf8" stroke="#fffdf8" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="9" y="20" width="7" height="20"/><rect x="15" y="11" width="8" height="29"/><rect x="22.5" y="16" width="6.5" height="24"/><rect x="28.5" y="7" width="7" height="33"/><rect x="35" y="18" width="5.5" height="22"/>
+    <rect x="31.4" y="3" width="1.2" height="5"/>
+    <path d="M5 30Q9 27 13 30T21 30T29 30T37 30T45 30V42Q45 44 43 44H7Q5 44 5 42Z"/>
+  </g>
+  <g fill="url(#city)"><rect x="9" y="20" width="7" height="20"/><rect x="15" y="11" width="8" height="29"/><rect x="22.5" y="16" width="6.5" height="24"/><rect x="28.5" y="7" width="7" height="33"/><rect x="35" y="18" width="5.5" height="22"/></g>
+  <g fill="url(#city2)"><rect x="9" y="20" width="6" height="20"/><rect x="22.5" y="16" width="6" height="24"/><rect x="35.5" y="18" width="5" height="22"/></g>
+  <rect x="31.4" y="3" width="1.2" height="5" fill="#2f2628"/><circle cx="32" cy="3" r="1.1" fill="#e0573f"/>
+  <g fill="#f2c233"><rect x="17.5" y="14" width="1.4" height="1.8"/><rect x="17.5" y="18" width="1.4" height="1.8"/><rect x="17.5" y="22" width="1.4" height="1.8"/><rect x="19.8" y="14" width="1.4" height="1.8"/><rect x="19.8" y="22" width="1.4" height="1.8"/><rect x="31" y="10" width="1.4" height="1.8"/><rect x="31" y="14" width="1.4" height="1.8"/><rect x="31" y="18" width="1.4" height="1.8"/><rect x="31" y="22" width="1.4" height="1.8"/><rect x="33" y="10" width="1.4" height="1.8"/><rect x="33" y="18" width="1.4" height="1.8"/><rect x="11.5" y="23" width="1.4" height="1.8"/><rect x="25" y="19" width="1.4" height="1.8"/><rect x="25" y="23" width="1.4" height="1.8"/><rect x="37" y="21" width="1.4" height="1.8"/></g>
+  <path d="M5 30Q9 27 13 30T21 30T29 30T37 30T45 30V42Q45 44 43 44H7Q5 44 5 42Z" fill="url(#sea)"/>
+  <path d="M5 30Q9 27 13 30T21 30T29 30T37 30T45 30" fill="none" stroke="#fffaf0" stroke-width="1.3" stroke-linecap="round"/>
+  <path d="M10 36Q13 34.5 16 36M27 38Q30 36.5 33 38" fill="none" stroke="#fffaf0" stroke-width=".9" stroke-linecap="round" opacity=".8"/>
+</svg>
