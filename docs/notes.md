@@ -18,4 +18,6 @@ A **text** note additionally gets `note.mdFile` (project-relative) and becomes a
 
 **Layout:** `layoutBento()` measures card heights and sets row-spans — re-pack on any height change, and after the panel becomes visible (hidden elements measure 0).
 
+**Tables:** the thin handles on a column's top edge and a row's left edge click to select (Delete removes; a selected column offers the Total toggle) and drag to reorder (`startTableDrag()`). Totals are stored as column indices, so `moveTableColumn()` remaps them. A table in the modal is rebuilt by hand after a move, since `renderNotes()` only redraws the grid.
+
 **Copy/paste:** Studio-native payload via app-cache sidecar (the `note-clipboard` store via `read_store`/`save_store`) keyed to clipboard text — WebKit strips custom HTML flavors.

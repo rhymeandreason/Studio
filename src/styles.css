@@ -2078,7 +2078,7 @@ textarea.notecard__title::placeholder {
     left: 0;
     right: 0;
     height: 8px;
-    cursor: pointer;
+    cursor: grab;
 }
 
 .ntable__col-handle:hover {
@@ -2096,11 +2096,32 @@ textarea.notecard__title::placeholder {
     left: 0;
     bottom: 0;
     width: 8px;
-    cursor: pointer;
+    cursor: grab;
 }
 
 .ntable__row-handle:hover {
     background: var(--sage-soft);
+}
+
+.ntable .is-reorder-source {
+    opacity: 0.4;
+}
+
+/* Appended to body so neither the card nor the modal clips it. */
+.ntable__drop-line {
+    position: fixed;
+    z-index: 10000;
+    background: var(--accent);
+    border-radius: 1px;
+    pointer-events: none;
+}
+
+.ntable__drop-line--col {
+    width: 2px;
+}
+
+.ntable__drop-line--row {
+    height: 2px;
 }
 
 .ntable tr.is-row-selected td {

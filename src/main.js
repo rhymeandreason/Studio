@@ -1978,6 +1978,101 @@ function buildChecklist(note) {
   return card;
 }
 
+function moveItem(arr, from, to) {
+  const [item] = arr.splice(from, 1);
+  arr.splice(to, 0, item);
+}
+
+// Move a column with its cells; `totals` holds column indices, so remap them.
+function moveTableColumn(note, from, to) {
+  const order = note.columns.map((_, i) => i);
+  moveItem(order, from, to);
+  moveItem(note.columns, from, to);
+  note.rows.forEach((r) => {
+    // Older rows can be shorter than the header; pad so cells can't shift.
+    while (r.length < order.length) r.push("");
+    moveItem(r, from, to);
+  });
+  if (note.totals) note.totals = note.totals.map((i) => order.indexOf(i));
+}
+
+// Drag a col/row handle to reorder. Below the threshold it stays a click, which
+// the handle's own click listener treats as select.
+function startTableDrag(e, note, table, axis, from) {
+  if (e.button !== 0) return;
+  e.stopPropagation(); // the card behind has its own drag
+  e.preventDefault();
+  const isCol = axis === "col";
+  const items = isCol
+    ? [...table.querySelectorAll("thead th")]
+    : [...table.querySelectorAll("tbody tr")];
+  const sourceCells = isCol
+    ? [...table.querySelectorAll(`tr > :nth-child(${from + 1})`)]
+    : [...items[from].children];
+  const startX = e.clientX;
+  const startY = e.clientY;
+  let active = false;
+  let gap = from;
+  let line = null;
+
+  const onMove = (ev) => {
+    if (!active) {
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return;
+      active = true;
+      state.draggingNoteId = note.id;
+      document.body.classList.add("note-dragging");
+      window.getSelection()?.removeAllRanges();
+      sourceCells.forEach((c) => c.classList.add("is-reorder-source"));
+      line = el("div", `ntable__drop-line ntable__drop-line--${axis}`);
+      document.body.append(line);
+    }
+    // Insertion gap: how many items' midpoints the pointer has passed.
+    const rects = items.map((it) => it.getBoundingClientRect());
+    gap = rects.filter((r) =>
+      isCol ? ev.clientX > r.left + r.width / 2 : ev.clientY > r.top + r.height / 2,
+    ).length;
+    const tr = table.getBoundingClientRect();
+    if (isCol) {
+      const x = gap < rects.length ? rects[gap].left : rects[gap - 1].right;
+      line.style.cssText = `left:${x - 1}px;top:${tr.top}px;height:${tr.height}px`;
+    } else {
+      const y = gap < rects.length ? rects[gap].top : rects[gap - 1].bottom;
+      line.style.cssText = `left:${tr.left}px;top:${y - 1}px;width:${tr.width}px`;
+    }
+  };
+
+  const finish = (ev) => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", finish);
+    if (!active) return;
+    state.draggingNoteId = null;
+    document.body.classList.remove("note-dragging");
+    sourceCells.forEach((c) => c.classList.remove("is-reorder-source"));
+    line.remove();
+    // The click that follows a drag must not select a handle or close the modal.
+    const swallow = (c) => c.stopPropagation();
+    window.addEventListener("click", swallow, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener("click", swallow, true), 0);
+
+    if (ev.type === "pointercancel") return;
+    const to = from < gap ? gap - 1 : gap; // account for the removed item
+    if (to === from) return;
+    clearColSelection();
+    clearRowSelection();
+    if (isCol) moveTableColumn(note, from, to);
+    else moveItem(note.rows, from, to);
+    renderNotes();
+    // The modal holds its own copy of the card, which renderNotes doesn't touch.
+    if (table.closest("#note-modal")) openNoteModal(note);
+    scheduleNotesSave();
+  };
+
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", finish);
+  window.addEventListener("pointercancel", finish);
+}
+
 function buildTable(note) {
   const card = el("div", "notecard");
   card.append(noteHeader(note));
@@ -1993,6 +2088,9 @@ function buildTable(note) {
     thEls.push(th);
 
     const handle = el("div", "ntable__col-handle");
+    handle.addEventListener("pointerdown", (e) =>
+      startTableDrag(e, note, table, "col", ci),
+    );
     handle.addEventListener("click", (e) => {
       e.stopPropagation();
       clearColSelection();
@@ -2045,6 +2143,9 @@ function buildTable(note) {
       if (ci === 0) {
         td.style.position = "relative";
         const handle = el("div", "ntable__row-handle");
+        handle.addEventListener("pointerdown", (e) =>
+          startTableDrag(e, note, table, "row", ri),
+        );
         handle.addEventListener("click", (e) => {
           e.stopPropagation();
           clearRowSelection();
