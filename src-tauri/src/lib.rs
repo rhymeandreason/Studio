@@ -3654,6 +3654,13 @@ fn store_spec(name: &str) -> Option<(StoreDir, &'static str, &'static str)> {
         ),
         // Tasks settings (origin address, travel mode, buffer).
         "tasks-config" => (StoreDir::Config, "tasks-config.json", "{}"),
+        // Deadlines — opportunities with a due date + link, global across
+        // projects (src/deadlines.js). In the Projects root so Claude finds it.
+        "deadlines" => (
+            StoreDir::ProjectsRoot,
+            "deadlines.json",
+            r#"{ "version": 1, "items": [] }"#,
+        ),
         // Studio-native note clipboard sidecar (interaction-spec §7.3):
         // WebKit sanitizes clipboard HTML on write, so the rich payload is
         // stashed here and matched against the system clipboard on paste.

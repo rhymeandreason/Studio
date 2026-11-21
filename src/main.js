@@ -13,6 +13,8 @@ import { state } from "./state.js";
 import { initDevInspect } from "./devinspect.js";
 import { brandIconFor } from "./brand-icons.js";
 import { openContextMenu } from "./kit/context-menu.js";
+import { toast } from "./kit/app.js";
+import { deadlineFromNote, addDeadline } from "./deadlines.js";
 import {
   loadMedia,
   loadMediaIfStale,
@@ -2447,6 +2449,13 @@ function openNoteMenu(e, note) {
               setSelectedNoteStyle("bodyFont", v),
             ),
           },
+          {
+            // Opportunities with a due date live in one global list (the
+            // Tasks window), not scattered across projects. deadlines.js.
+            label: "Add to Deadlines",
+            icon: "flag",
+            run: () => addNoteToDeadlines(note),
+          },
           "-",
           {
             // A linked note's .md already exists — converting again would
@@ -2464,6 +2473,20 @@ function openNoteMenu(e, note) {
       run: deleteNotesSelection,
     },
   ]);
+}
+
+async function addNoteToDeadlines(note) {
+  const item = deadlineFromNote(note, state.activeProject?.name || "");
+  try {
+    const { item: saved, existed } = await addDeadline(invoke, item);
+    const when = saved.due
+      ? new Date(saved.due + "T00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })
+      : "no date — set it in Tasks";
+    toast(`${existed ? "Already in" : "Added to"} Deadlines · ${when}`, 2600);
+  } catch (e) {
+    toast("Couldn't save the deadline");
+    console.warn(e);
+  }
 }
 
 function setSelectedNoteStyle(key, value) {

@@ -1,6 +1,6 @@
 ---
 name: studio-tasks
-description: Create, edit, or enrich Studio Tasks — calendar-driven or manual meeting/reminder notifications that pop a persistent card at a lead time and open links/apps/tools. Use when asked to add a Task, change a notification lead time, attach links or context to a meeting, set up a "leave now" alert for an in-person event, or otherwise manage Studio's Tasks.
+description: Create, edit, or enrich Studio Tasks — calendar-driven or manual meeting/reminder notifications that pop a persistent card at a lead time and open links/apps/tools. Use when asked to add a Task, change a notification lead time, attach links or context to a meeting, set up a "leave now" alert for an in-person event, or otherwise manage Studio's Tasks. Also covers Deadlines — opportunities (grants, open calls, residencies) with a due date and link, kept in ~/Projects/deadlines.json and shown in the Tasks window.
 ---
 
 # Studio Tasks
@@ -98,3 +98,30 @@ When the user asks you to "set up" or "get ready for" a meeting:
 
 After writing a file, the change is picked up automatically — tell the user it's
 set and when the card will fire.
+
+## Deadlines (same window, separate store)
+
+Opportunities with a due date — grants, open calls, residencies, fellowships —
+live in ONE global list: **`~/Projects/deadlines.json`**. The Tasks window shows
+them in its right-hand Deadlines column (upcoming by date with a countdown, then
+"No date yet", then folded Passed / Done) and re-reads the file live, so edit it
+directly. They do not fire notifications.
+
+```jsonc
+{ "version": 1, "items": [
+  { "id": "dl-…",                // any unique string
+    "title": "Mozilla AI Fellowship 2027",
+    "due": "2026-12-17",          // local date YYYY-MM-DD, or null if unknown
+    "url": "https://…",           // the application / call page
+    "memo": "Letter of intent",   // short note, optional ("" if none)
+    "project": "The Lab",         // project folder name it came from, optional
+    "noteId": "nmw8d35b3ywb1",    // source note id in that project's notes.json, optional
+    "done": false,                // true once applied / submitted
+    "createdAt": "2026-11-21T…Z" }
+] }
+```
+
+When the user mentions an opportunity with a deadline (or asks to collect them
+from notes), add an item here rather than a Task. Keep `due` null rather than
+guessing a date; strip tracking params (`utm_*`) from URLs.
+

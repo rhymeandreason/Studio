@@ -450,6 +450,207 @@ border: 1 px solid var(--hairline);
       flex: 0 0 auto;
     }
 
+    /* ---- Two columns: schedule (meetings) | deadlines ------------------- */
+    #main {
+      flex-direction: row;
+    }
+
+    #schedule {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #deadlines {
+      flex: 0 0 300px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border-left: 1px solid var(--hairline);
+    }
+
+    /* Narrow window: stack, deadlines first, and let the whole pane scroll. */
+    @media (max-width: 640px) {
+      #main { flex-direction: column; overflow-y: auto; }
+      #deadlines { flex: 0 0 auto; border-left: 0; border-bottom: 1px solid var(--hairline); order: -1; }
+      #list, #dlList { overflow: visible; }
+    }
+
+    .dl-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 14px 16px 6px 20px;
+    }
+
+    .dl-head h2 {
+      margin: 0 auto 0 0;
+      font-size: 16px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    #dlList {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 4px 16px 24px;
+    }
+
+    .dl-section {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin: 18px 4px 6px;
+      font-weight: 600;
+    }
+
+    details.dl-fold > summary {
+      cursor: pointer;
+      list-style: none;
+    }
+
+    details.dl-fold > summary::-webkit-details-marker { display: none; }
+
+    details.dl-fold > summary::before {
+      content: "▸";
+      display: inline-block;
+      width: 12px;
+      transition: transform var(--dur-fast, .15s) var(--ease-standard, ease);
+    }
+
+    details.dl-fold[open] > summary::before { transform: rotate(90deg); }
+
+    .dl {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 10px 10px 10px 8px;
+      border-radius: var(--radius, 8px);
+      cursor: pointer;
+      transition: background var(--dur-fast, .15s) var(--ease-standard, ease);
+    }
+
+    .dl:hover { background: var(--card); }
+
+    /* Date block: month over a big day, countdown under. */
+    .dl-date {
+      flex: 0 0 44px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .dl-date .mon {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .dl-date .day {
+      font-size: 22px;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    .dl-date .left {
+      font-size: 10px;
+      margin-top: 4px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .dl-date.nodate .day { font-size: 16px; color: var(--text-muted); }
+
+    /* Urgency: ≤3 days loud, ≤14 days warm. */
+    .dl.soon .dl-date .day,
+    .dl.soon .dl-date .left { color: var(--rose); }
+    .dl.near .dl-date .left { color: var(--accent); }
+    .dl.past, .dl.done { opacity: 0.55; }
+    .dl.done .dl-title { text-decoration: line-through; }
+
+    .dl-body { flex: 1 1 auto; min-width: 0; }
+
+    .dl-title {
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.3;
+    }
+
+    .dl-memo {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .dl-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .dl-link,
+    .dl-proj {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      text-decoration: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .dl-link { background: var(--accent-soft); color: var(--accent); }
+    .dl-link:hover { text-decoration: underline; }
+    .dl-proj { background: var(--sage-soft); color: var(--sage); }
+
+    .dl-check {
+      flex: 0 0 auto;
+      margin-top: 4px;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity var(--dur-fast, .15s);
+    }
+
+    .dl:hover .dl-check, .dl-check:checked { opacity: 1; }
+
+    /* Inline editor (also the add form). */
+    .dl-edit {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px;
+      margin: 4px 0 8px;
+      background: var(--elevated);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-lg, 12px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .dl-edit .field { flex: 1 1 100%; }
+    .dl-edit input[type="date"] { flex: 1 1 auto; width: auto; }
+    .dl-edit .grow { flex: 1 1 auto; }
+    .dl-edit .del { color: var(--rose); }
+
+    #dlEmpty {
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 20px 4px;
+      line-height: 1.5;
+    }
+
   </style>
 </head>
 
@@ -464,6 +665,7 @@ border: 1 px solid var(--hairline);
   </header>
 
   <div id="main">
+  <section id="schedule">
   <div id="settingsForm">
     <input class="field" id="cfgOrigin" placeholder="Home / origin address (for in-person travel time)" />
     <select class="field" id="cfgMode">
@@ -489,6 +691,15 @@ border: 1 px solid var(--hairline);
   <div id="list">
     <div id="empty">Loading…</div>
   </div>
+  </section>
+
+  <aside id="deadlines">
+    <div class="dl-head">
+      <h2>Deadlines</h2>
+      <button class="btn btn-ghost btn-icon" id="dlAddBtn" title="Add deadline"><span class="mi ph ph-plus"></span></button>
+    </div>
+    <div id="dlList"></div>
+  </aside>
   </div>
 
   <script type="module">
@@ -497,7 +708,8 @@ border: 1 px solid var(--hairline);
       genId
     } from "../dom.js";
 
-    import { hasTauri, invoke } from "../kit/app.js";
+    import { hasTauri, invoke, listen } from "../kit/app.js";
+    import { loadDeadlines, saveDeadlines, daysLeft, dueDate } from "../deadlines.js";
 
     // Default lead time (minutes) for a calendar-derived online meeting.
     const DEFAULT_LEAD = 2;
@@ -1152,6 +1364,185 @@ border: 1 px solid var(--hairline);
       document.getElementById("cfgOrigin").value = config.origin || "";
       document.getElementById("cfgMode").value = config.mode || "driving";
       document.getElementById("cfgBuffer").value = config.buffer ?? 5;
+    }
+
+
+    // ---- Deadlines (global opportunities list; src/deadlines.js) ---------
+
+    let deadlines = [];
+    let dlEditing = null; // id being edited, or "new"
+    const monFmt = new Intl.DateTimeFormat(undefined, { month: "short" });
+
+    function openLink(url) {
+      // open_path (the `open` command) — tool windows lack opener:allow-open-url.
+      invoke("open_path", { path: url }).catch((e) => console.warn(e));
+    }
+
+    function hostOf(url) {
+      try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
+    }
+
+    function leftLabel(n) {
+      if (n === 0) return "today";
+      if (n === 1) return "tomorrow";
+      if (n > 1 && n < 60) return `${n} days`;
+      if (n >= 60) return `${Math.round(n / 30)} mo`;
+      if (n === -1) return "yesterday";
+      return `${-n}d ago`;
+    }
+
+    async function persistDeadlines() {
+      await saveDeadlines(invoke, deadlines);
+    }
+
+    function dlRow(d) {
+      if (dlEditing === d.id) return dlEditor(d);
+      const n = daysLeft(d.due);
+      const row = el("div", "dl");
+      if (d.done) row.classList.add("done");
+      else if (n !== null && n < 0) row.classList.add("past");
+      else if (n !== null && n <= 3) row.classList.add("soon");
+      else if (n !== null && n <= 14) row.classList.add("near");
+
+      const date = el("div", "dl-date" + (d.due ? "" : " nodate"));
+      if (d.due) {
+        const dd = dueDate(d.due);
+        date.append(
+          el("div", "mon", { textContent: monFmt.format(dd) }),
+          el("div", "day", { textContent: dd.getDate() }),
+          el("div", "left", { textContent: d.done ? "done" : leftLabel(n) }));
+      } else {
+        date.append(el("div", "day", { textContent: "—" }));
+      }
+
+      const body = el("div", "dl-body");
+      body.appendChild(el("div", "dl-title", { textContent: d.title }));
+      if (d.memo) body.appendChild(el("div", "dl-memo", { textContent: d.memo }));
+      const meta = el("div", "dl-meta");
+      if (d.url) {
+        const a = el("a", "dl-link", { href: "#", title: d.url });
+        a.innerHTML = '<span class="mi mi-sm ph ph-arrow-square-out"></span>';
+        a.append(hostOf(d.url));
+        a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); openLink(d.url); });
+        meta.appendChild(a);
+      }
+      if (d.project) meta.appendChild(el("span", "dl-proj", { textContent: d.project }));
+      if (meta.childNodes.length) body.appendChild(meta);
+
+      const check = el("input", "dl-check", { type: "checkbox", checked: !!d.done, title: d.done ? "Mark not done" : "Mark done (applied / submitted)" });
+      check.addEventListener("click", (e) => e.stopPropagation());
+      check.addEventListener("change", async () => {
+        d.done = check.checked;
+        await persistDeadlines();
+        renderDeadlines();
+      });
+
+      row.append(date, body, check);
+      row.addEventListener("click", () => { dlEditing = d.id; renderDeadlines(); });
+      return row;
+    }
+
+    // Inline editor for one deadline (d = null → a new one).
+    function dlEditor(d) {
+      const box = el("div", "dl-edit");
+      const title = el("input", "field", { placeholder: "Opportunity", value: d?.title || "" });
+      const url = el("input", "field", { placeholder: "Link", value: d?.url || "" });
+      const memo = el("input", "field", { placeholder: "Note (optional) — e.g. letter of intent", value: d?.memo || "" });
+      const due = el("input", "field", { type: "date", value: d?.due || "" });
+      const save = el("button", "btn btn-primary", { textContent: d ? "Save" : "Add" });
+      const cancel = el("button", "btn btn-ghost", { textContent: "Cancel" });
+      const spacer = el("span", "grow");
+      box.append(title, url, memo, due, spacer);
+      if (d) {
+        const del = el("button", "btn btn-ghost btn-icon del", { title: "Delete deadline" });
+        del.innerHTML = '<span class="mi ph ph-trash"></span>';
+        del.addEventListener("click", async () => {
+          deadlines = deadlines.filter((x) => x.id !== d.id);
+          dlEditing = null;
+          await persistDeadlines();
+          renderDeadlines();
+        });
+        box.appendChild(del);
+      }
+      box.append(cancel, save);
+
+      const commit = async () => {
+        const t = title.value.trim();
+        if (!t) { title.focus(); return; }
+        const fields = { title: t, url: url.value.trim(), memo: memo.value.trim(), due: due.value || null };
+        if (d) Object.assign(d, fields);
+        else deadlines.push({ id: "dl-" + genId(), ...fields, project: "", noteId: "", done: false, createdAt: new Date().toISOString() });
+        dlEditing = null;
+        await persistDeadlines();
+        renderDeadlines();
+      };
+      save.addEventListener("click", commit);
+      cancel.addEventListener("click", () => { dlEditing = null; renderDeadlines(); });
+      box.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") commit();
+        if (e.key === "Escape") { dlEditing = null; renderDeadlines(); }
+      });
+      requestAnimationFrame(() => title.focus());
+      return box;
+    }
+
+    function renderDeadlines() {
+      const list = document.getElementById("dlList");
+      list.innerHTML = "";
+      if (dlEditing === "new") list.appendChild(dlEditor(null));
+
+      const byDue = (a, b) => (a.due || "").localeCompare(b.due || "");
+      const upcoming = deadlines.filter((d) => !d.done && d.due && daysLeft(d.due) >= 0).sort(byDue);
+      const undated = deadlines.filter((d) => !d.done && !d.due);
+      const passed = deadlines.filter((d) => !d.done && d.due && daysLeft(d.due) < 0).sort(byDue).reverse();
+      const done = deadlines.filter((d) => d.done).sort(byDue).reverse();
+
+      if (!deadlines.length && dlEditing !== "new") {
+        list.appendChild(el("div", "", { id: "dlEmpty",
+          textContent: "No deadlines yet. Add one with +, or right-click a note in any project → Add to Deadlines." }));
+        return;
+      }
+      for (const d of upcoming) list.appendChild(dlRow(d));
+      const group = (label, items, fold) => {
+        if (!items.length) return;
+        if (!fold) {
+          list.appendChild(el("div", "dl-section", { textContent: label }));
+          for (const d of items) list.appendChild(dlRow(d));
+          return;
+        }
+        const det = el("details", "dl-fold");
+        // Keep a fold open while one of its rows is being edited.
+        det.open = items.some((d) => d.id === dlEditing);
+        det.appendChild(el("summary", "dl-section", { textContent: `${label} · ${items.length}` }));
+        for (const d of items) det.appendChild(dlRow(d));
+        list.appendChild(det);
+      };
+      group("No date yet", undated, false);
+      group("Passed", passed, true);
+      group("Done", done, true);
+    }
+
+    async function refreshDeadlines() {
+      if (!hasTauri) return;
+      // Don't yank an open editor out from under the user.
+      if (dlEditing) return;
+      deadlines = await loadDeadlines(invoke);
+      renderDeadlines();
+    }
+
+    document.getElementById("dlAddBtn").addEventListener("click", () => {
+      dlEditing = dlEditing === "new" ? null : "new";
+      renderDeadlines();
+    });
+
+    if (hasTauri) {
+      refreshDeadlines();
+      // Notes' "Add to Deadlines" (main window) or Claude editing
+      // ~/Projects/deadlines.json shows up here live.
+      listen("fs-changed", refreshDeadlines);
+      window.addEventListener("focus", refreshDeadlines);
+      // Countdowns roll over at midnight.
+      setInterval(() => { if (!dlEditing) renderDeadlines(); }, 30 * 60 * 1000);
     }
 
     if (hasTauri) {

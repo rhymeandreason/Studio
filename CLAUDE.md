@@ -49,6 +49,9 @@ live in dev — adding a tool needs no restart, so don't put per-tool config in 
   between weeks; main-window tab + pop-out tool) — `src/tools/plan.html`.
   [docs/plan.md](docs/plan.md)
 - **Workspace** (per-project launchpad) — `workspace.js`. [docs/workspace.md](docs/workspace.md)
+- **Deadlines** (global list of opportunities with a due date + link,
+  `~/Projects/deadlines.json`; a column in the Tasks window, captured from any
+  note's right-click menu) — `src/deadlines.js`. [docs/deadlines.md](docs/deadlines.md)
 - **Server** (per-project dev-server start/stop tool with a running-state
   oscilloscope) — `src/tools/server.html`. [docs/server.md](docs/server.md)
 - **Artifacts** (schema'd JSON design files under `artifacts/<kind>/`; Claude
